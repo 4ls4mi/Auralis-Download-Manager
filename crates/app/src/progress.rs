@@ -622,6 +622,7 @@ impl Progress {
                         settings.wallpaper_dim,
                         settings.wallpaper_glass,
                         crate::wallpaper::Target::Progress,
+                        settings.wallpaper_download_mode,
                     );
                     // The window's width, laid out from the right in a right-to-left
                     // interface (the title bar; the layout under it has its own).
