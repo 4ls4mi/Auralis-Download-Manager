@@ -560,6 +560,7 @@ pub fn show(
     icons: &mut ShellIcons,
     // The Status cell's tip for row `i` (asked for the row under the pointer only).
     status_tip: &dyn Fn(usize) -> String,
+    wallpaper_glass: Option<u8>,
 ) -> ListResponse {
     let mut out = ListResponse::default();
     // `outer` and everything below are English (the main window's layout): each part is made where
@@ -582,7 +583,15 @@ pub fn show(
         outer.bottom() - 1.0,
     );
     winui::solid(&p, screen(outer), FRAME());
-    fill(&p, l + 1.0, t + 1.0, r - 1.0, b - 1.0, BG());
+    if let Some(opacity) = wallpaper_glass {
+        // Real wallpaper remains visible behind a protective dark glass table,
+        // never directly behind unoutlined text.
+        let alpha = (f32::from(opacity.clamp(58, 98)) * 2.55).round() as u8;
+        fill(&p, l + 1.0, t + 1.0, r - 1.0, b - 1.0,
+            Color32::from_rgba_unmultiplied(11, 18, 21, alpha));
+    } else {
+        fill(&p, l + 1.0, t + 1.0, r - 1.0, b - 1.0, BG());
+    }
     let (cl, ct, cr, cb) = (l + 2.0, t + 2.0, r - 2.0, b - 2.0);
     let font = winui::tahoma();
     // Status at its default width follows the font and the language (#736): a few words to
@@ -1068,6 +1077,42 @@ pub fn show(
                 } else {
                     TEXT()
                 };
+                // V2: status appears in a subtle colored rounded capsule while
+                // remaining a real sortable/filterable Status cell.
+                if *c == 3 && crate::theme::current().id.as_ref() == "plexo"
+                    && !s.is_empty() && !sel && !picked
+                {
+                    let accent = match row.status_group {
+                        "Downloading" => crate::theme::colors().accent,
+                        "Complete" => crate::theme::colors().success,
+                        "Error" => crate::theme::colors().error,
+                        "Stopped" => crate::theme::colors().warning,
+                        _ => crate::theme::colors().muted,
+                    };
+                    let max_w = (x1 - tx - 3.0).max(0.0);
+                    let width = (winui::text_width_font(&clip, font.clone(), &s) + 18.0)
+                        .min(max_w);
+                    if width > 19.0 {
+                        let capsule = Rect::from_min_size(
+                            pos2(tx - 5.0, top + 2.0), egui::vec2(width, row_h() - 4.0)
+                        );
+                        clip.rect_filled(
+                            winui::rect(capsule), (row_h() - 4.0) * 0.5,
+                            Color32::from_rgba_unmultiplied(
+                                accent.r(), accent.g(), accent.b(), 33,
+                            ),
+                        );
+                        clip.rect_stroke(winui::rect(capsule),
+                            (row_h() - 4.0) * 0.5,
+                            egui::Stroke::new(0.7,
+                                Color32::from_rgba_unmultiplied(
+                                    accent.r(), accent.g(), accent.b(), 105,
+                                )),
+                            egui::StrokeKind::Inside);
+                        text_font(&clip, font.clone(), tx, top + 12.0, &s, accent);
+                        continue;
+                    }
+                }
                 text_font(&clip, font.clone(), tx, top + 12.0, &s, ink);
             }
         }
