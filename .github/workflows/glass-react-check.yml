@@ -1,0 +1,39 @@
+# Rapid Windows-only compile test for the new React visual layer.
+# Separate from the much longer original Rust + Tauri installer build.
+name: Mister Hybrid Glass React Check
+on:
+  push:
+    branches: ["feature/tauri-glass-windows"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ui:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: glass-ui
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install frontend
+        run: |
+          npm install --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { throw "npm install failed" }
+      - name: Check React and TypeScript
+        run: |
+          npm run build
+          if ($LASTEXITCODE -ne 0) { throw "React/TypeScript compile failed" }
+      - name: Upload frontend
+        uses: actions/upload-artifact@v4
+        with:
+          name: mister-hybrid-glass-ui-compiled
+          path: glass-ui/dist/
+          if-no-files-found: error
+          retention-days: 7
