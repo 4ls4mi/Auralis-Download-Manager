@@ -321,6 +321,9 @@ pub struct Progress {
     force: bool,
     /// The bar and the segment map between figures.
     glide: Glide,
+    /// Live throughput history for the Zajil-inspired miniature graph.
+    throughput_samples: std::collections::VecDeque<f32>,
+    last_throughput_sample: Option<f64>,
     /// Deferred rename on Download status: initialised from `Item::rename_on_complete`, saved
     /// by clicking Confirm, pressing Enter, or leaving the box idle for 3 seconds.
     rename_init: bool,
@@ -398,6 +401,8 @@ impl Progress {
             turn_off: 0,
             force: false,
             glide: Glide::default(),
+            throughput_samples: std::collections::VecDeque::with_capacity(60),
+            last_throughput_sample: None,
             rename_init: false,
             rename_text: String::new(),
             rename_saved: None,
@@ -483,6 +488,21 @@ impl Progress {
     pub fn show(&mut self, ctx: &egui::Context, item: &Item, snap: Option<&Snapshot>) -> Action {
         crate::crash::window("progress");
         let frac = item.fraction();
+        // Draw a real measured history from the download's current item rate.
+        // Pause, retry and stopped states contribute zero rather than invented traffic.
+        let now = ctx.input(|i| i.time);
+        if self.last_throughput_sample.is_none_or(|last| now - last >= 0.25) {
+            self.last_throughput_sample = Some(now);
+            if self.throughput_samples.len() >= 60 {
+                self.throughput_samples.pop_front();
+            }
+            let rate = if item.status == Status::Downloading && !item.past_last_byte() {
+                (item.rate() / (1024.0 * 1024.0)) as f32
+            } else {
+                0.0
+            };
+            self.throughput_samples.push_back(if rate.is_finite() { rate.max(0.0) } else { 0.0 });
+        }
         let title = window_title(frac, &item.file_name);
         // The bar and the segment map glide between the figures (the text shows them as they
         // are): frames come faster for that only while the download runs and its figures move.
@@ -508,7 +528,7 @@ impl Progress {
         };
         let drop = self.status_drop();
         let body = if self.details {
-            [548.0, 412.0 + drop + torrent_drop(item)]
+            [548.0, 412.0 + drop + torrent_drop(item) + if item.torrent.is_some() { 0.0 } else { crate::hybrid_progress::EXTRA_HEIGHT }]
         } else {
             [548.0, 241.0 + drop]
         };
@@ -535,7 +555,7 @@ impl Progress {
             .with_resizable(cfg!(windows))
             .with_icon(crate::app_icon())
             .with_maximize_button(false);
-        if let Some(p) = crate::dialogs::place(ctx, key, [548.0, 412.0 + drop]) {
+        if let Some(p) = crate::dialogs::place(ctx, key, [548.0, 412.0 + drop + if self.details && item.torrent.is_none() { crate::hybrid_progress::EXTRA_HEIGHT } else { 0.0 }]) {
             builder = builder.with_position(p);
         }
         // Minimize hides it in the notification area when asked (and a tray can bring it back).
@@ -724,7 +744,12 @@ impl Progress {
         let bar = r(lower, 17.0, 180.0, 513.0, 16.0);
         match finishing_fraction(snap) {
             Some(f) => winui::meter_in(&p, bar, f as f32, crate::theme::colors().accent),
-            None => winui::meter(&p, bar, drawn.0 as f32),
+            None => crate::hybrid_progress::graph_bar(
+                &p,
+                bar,
+                drawn.0 as f32,
+                &self.throughput_samples,
+            ),
         }
 
         let mut action = if hide { Action::Hide } else { Action::None };
@@ -846,8 +871,20 @@ impl Progress {
                 crate::i18n::t("Start positions and download progress by connections"),
                 winui::TEXT(),
             );
-            segment_bar(&p, lower, item, drawn.1);
-            connections(ui, &p, lower, snap);
+            crate::hybrid_progress::chunk_matrix(
+                ui,
+                &p,
+                lower,
+                item.size,
+                item.downloaded,
+                snap,
+            );
+            connections(
+                ui,
+                &p,
+                lower + vec2(0.0, crate::hybrid_progress::EXTRA_HEIGHT),
+                snap,
+            );
         }
         action
     }
