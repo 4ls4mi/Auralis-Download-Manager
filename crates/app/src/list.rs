@@ -586,8 +586,18 @@ pub fn show(
         outer.right() - 1.0,
         outer.bottom() - 1.0,
     );
-    winui::solid(&p, screen(outer), FRAME());
-    if let Some(opacity) = wallpaper_glass {
+    let glass = crate::glass_ui::active();
+    if glass {
+        crate::glass_ui::panel(&p, screen(outer), 13.0, 149);
+    } else {
+        winui::solid(&p, screen(outer), FRAME());
+    }
+    if glass {
+        // The list canvas is translucent; individual card surfaces provide
+        // the actual readability protection, without hiding the wallpaper.
+        fill(&p, l + 1.0, t + 1.0, r - 1.0, b - 1.0,
+            Color32::from_rgba_unmultiplied(8, 13, 18, 32));
+    } else if let Some(opacity) = wallpaper_glass {
         // Real wallpaper remains visible behind a protective dark glass table,
         // never directly behind unoutlined text.
         let alpha = (f32::from(opacity.clamp(58, 98)) * 2.55).round() as u8;
@@ -603,7 +613,7 @@ pub fn show(
         fill(&p, l + 1.0, t + 1.0, r - 1.0, b - 1.0, BG());
     }
     let (cl, ct, cr, cb) = (l + 2.0, t + 2.0, r - 2.0, b - 2.0);
-    let font = winui::tahoma();
+    let font = if glass { winui::segoe() } else { winui::tahoma() };
     // Status at its default width follows the font and the language (#736): a few words to
     // measure, kept by egui from frame to frame.
     if st.status_fits {
@@ -774,7 +784,12 @@ pub fn show(
     let cols = spans(st);
     let p_all = p.clone();
     let p = p.with_clip_rect(screen(header));
-    fill(&p, cl, ct, rr, ct + header_h() - 1.0, HEADER_BG());
+    if glass {
+        p.rect_filled(screen(header), 11.0,
+            Color32::from_rgba_unmultiplied(19, 31, 38, 175));
+    } else {
+        fill(&p, cl, ct, rr, ct + header_h() - 1.0, HEADER_BG());
+    }
     for (c, x0, x1) in &cols {
         let hovered = hresp
             .hover_pos()
@@ -859,7 +874,9 @@ pub fn show(
             *x0..=*x1,
             ct..=ct + header_h(),
         )));
-        text_font(&clip, font.clone(), x0 + 6.0, ct + 15.0, &label, TEXT());
+        text_font(&clip, font.clone(), x0 + 12.0,
+            ct + if glass { header_h() / 2.0 + 4.0 } else { 15.0 },
+            &label, if glass { crate::glass_ui::muted() } else { TEXT() });
     }
 
     // ---- body ------------------------------------------------------------------------------
@@ -989,6 +1006,17 @@ pub fn show(
         if let Some(row) = rows.get(idx) {
             let picked = selected.get(idx).copied().unwrap_or(false);
             expose_row(idx, row, picked);
+            if glass {
+                let card = Rect::from_min_max(
+                    pos2(cl + 4.0, top + 3.0),
+                    pos2(rr - 5.0, top + row_h() - 4.0)
+                );
+                if picked {
+                    crate::glass_ui::selected(&bp, screen(card), 10.0);
+                } else {
+                    crate::glass_ui::inset(&bp, screen(card), 10.0);
+                }
+            }
             let sel = picked && st.focused;
             // The focused row's dotted outline only once the keyboard is in use, as every
             // control's focus (winui::keyboard_in_use).
@@ -997,7 +1025,7 @@ pub fn show(
                 // The row above its grid line; the focused row has a dotted outline (every other
                 // pixel), in the fill's inverse on a selected row. Both modes alike.
                 let (right, bottom) = (last_right - 1.0, top + row_h() - 2.0);
-                if sel {
+                if sel && !glass {
                     fill(&bp, cl, top, right, bottom, SELECTED());
                 }
                 if has_focus {
@@ -1008,7 +1036,7 @@ pub fn show(
                     };
                     dotted(&bp, cl, top, right, bottom, dot);
                 }
-            } else if picked {
+            } else if picked && !glass {
                 // Unfocused (Find, Properties, a menu has the keys): still shown, in the inactive
                 // selection grey, as Explorer shows it, so what a command acts on stays visible.
                 let bottom = top + row_h() - 2.0;
@@ -1024,8 +1052,9 @@ pub fn show(
             for (c, x0, x1) in &cols {
                 // The file-type icon sits in the File Name column, wherever it is.
                 let mut tx = if *c == 0 {
-                    icons.paint_in(ui, &bp, row.icon.clone(), pos2(x0 + 4.0, top));
-                    x0 + 22.0
+                    icons.paint_in(ui, &bp, row.icon.clone(),
+                        pos2(x0 + 9.0, top + if glass { 13.0 } else { 0.0 }));
+                    x0 + if glass { 34.0 } else { 22.0 }
                 } else {
                     x0 + 6.0
                 };
