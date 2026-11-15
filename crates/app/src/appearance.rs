@@ -5,11 +5,12 @@ use crate::{settings::Settings, wallpaper, winui};
 use egui::{Color32, Sense, Ui, vec2};
 
 fn wallpaper_button(ui: &mut Ui, key: &'static str, title: &'static str) {
-    if ui.button("Choose image…").clicked() {
+    if ui.button("Choose wallpaper (image or video)…").clicked() {
         let dialog_title = title.to_owned();
         winui::start_pick(ui.ctx(), key, move || {
             winui::file_dialog(&dialog_title)
-                .add_filter("Wallpaper images", &["png", "jpg", "jpeg", "webp"])
+                .add_filter("Images", &["png", "jpg", "jpeg", "webp"])
+                .add_filter("Videos (FFmpeg)", &["mp4", "webm", "mov", "mkv", "m4v"])
                 .pick_file()
         });
     }
@@ -62,6 +63,14 @@ fn preview(ui: &mut Ui, path: &str, s: &Settings, target: wallpaper::Target) {
 
 fn wallpaper_file_ok(path: &str) -> bool {
     !path.is_empty() && std::path::Path::new(path).is_file()
+}
+
+fn video_help(ui: &mut Ui, path: &str) {
+    if wallpaper::is_video(path) && !wallpaper::video_decoder_available() {
+        ui.colored_label(Color32::from_rgb(255, 180, 105),
+            "Video playback requires FFmpeg installed and available on Windows PATH.");
+        ui.label("Your video selection stays saved. Install FFmpeg, then restart Mister Hybrid.");
+    }
 }
 
 pub fn show(ctx: &egui::Context, open: &mut bool, settings: &mut Settings) -> bool {
@@ -132,6 +141,7 @@ pub fn show(ctx: &egui::Context, open: &mut bool, settings: &mut Settings) -> bo
                         }
                     });
             });
+            video_help(ui, &settings.wallpaper_main);
             preview(ui, &settings.wallpaper_main, settings, wallpaper::Target::Main);
             ui.add_space(8.0);
 
@@ -172,6 +182,7 @@ pub fn show(ctx: &egui::Context, open: &mut bool, settings: &mut Settings) -> bo
                         });
                 });
             }
+            video_help(ui, download_path);
             preview(ui, download_path, settings, wallpaper::Target::Progress);
             ui.separator();
 
@@ -195,12 +206,20 @@ pub fn show(ctx: &egui::Context, open: &mut bool, settings: &mut Settings) -> bo
                     settings.wallpaper_glass = 73;
                     wallpaper::clear();
                 }
-                ui.small("PNG, JPG or WebP • images are loaded locally");
+                ui.small("PNG, JPG, WebP, MP4, WebM, MOV or MKV • local files only");
             });
+            ui.small("Video wallpapers play silently at a capped frame rate. FFmpeg must be on Windows PATH.");
         });
     let changed = *settings != before;
     if changed {
-        wallpaper::clear();
+        // Opacity/dim changes don't tear down a playing video. Only a changed
+        // media path or blur requires loading a different texture/decoder.
+        if before.wallpaper_main != settings.wallpaper_main
+            || before.wallpaper_download != settings.wallpaper_download
+            || before.wallpaper_blur != settings.wallpaper_blur
+        {
+            wallpaper::clear();
+        }
         ctx.request_repaint();
     }
     changed
