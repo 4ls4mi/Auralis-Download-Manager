@@ -8654,6 +8654,7 @@ impl App {
             self.settings.wallpaper_dim,
             self.settings.wallpaper_glass,
             crate::wallpaper::Target::Main,
+            self.settings.wallpaper_main_mode,
         );
         // The client area, laid out from the right in a right-to-left interface (winui).
         let _surface = winui::Surface::enter(full.min.x, full.max.x);
