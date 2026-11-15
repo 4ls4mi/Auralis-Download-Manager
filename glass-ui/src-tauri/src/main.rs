@@ -170,6 +170,23 @@ fn suffix(path: &Path) -> Option<String> {
 /// Read validated live options from the same headless process that handles
 /// downloads. Never edit downloads.json from the WebView or a second process.
 #[tauri::command]
+async fn queue_action(name: String, action: String) -> ApiResult<mdm_ipc::api::ActAnswer> {
+    if name.is_empty() || name.len() > 256
+        || !matches!(action.as_str(), "start_queue" | "stop_queue") {
+        return Err("Unknown queue operation".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let reply = send_ipc(&mdm_ipc::Command {
+            action: Some(action),
+            queue: Some(name),
+            ..Default::default()
+        })?;
+        serde_json::from_str(&reply)
+            .map_err(|_| format!("Queue action failed: {reply}"))
+    }).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
 async fn glass_settings() -> ApiResult<serde_json::Value> {
     tauri::async_runtime::spawn_blocking(|| {
         let reply = send_ipc(&mdm_ipc::Command {
@@ -297,7 +314,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             boot_engine, dashboard_snapshot, download_action,
-            add_download, select_wallpaper, glass_settings, update_glass_setting
+            add_download, select_wallpaper, queue_action, glass_settings, update_glass_setting
         ])
         .run(tauri::generate_context!())
         .expect("error starting Mister Hybrid glass desktop");
