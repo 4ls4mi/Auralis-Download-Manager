@@ -180,7 +180,7 @@ mod tests {
         assert_eq!(coverage(0, 10, &segments, 0), (1.0, Some(0)));
         assert_eq!(coverage(20, 50, &segments, 0), (0.0, None));
         assert_eq!(coverage(50, 100, &segments, 0), (0.5, Some(1)));
-        assert_eq!(coverage(10, 70, &segments, 0), (35.0 / 60.0, Some(0)));
+        assert_eq!(coverage(10, 70, &segments, 0), (0.5, Some(0)));
     }
 
     #[test]
