@@ -22,7 +22,13 @@ function Invoke-GlassIpc([hashtable] $command) {
         $writer = [System.IO.StreamWriter]::new($stream, [System.Text.UTF8Encoding]::new($false))
         $writer.AutoFlush = $true
         $reader = [System.IO.StreamReader]::new($stream, [System.Text.Encoding]::UTF8)
-        $json = @{ token = $endpoint.token; cmd = $command } | ConvertTo-Json -Depth 10 -Compress
+        # MDM IPC uses #[serde(flatten)] Command, so send the fields at
+        # the TOP LEVEL beside token, never a nested "cmd" object.
+        $payload = @{ token = $endpoint.token }
+        foreach ($entry in $command.GetEnumerator()) {
+            $payload[$entry.Key] = $entry.Value
+        }
+        $json = $payload | ConvertTo-Json -Depth 10 -Compress
         $writer.WriteLine($json)
         $line = $reader.ReadLine()
         if ([string]::IsNullOrWhiteSpace($line)) { throw "Empty IPC reply" }
