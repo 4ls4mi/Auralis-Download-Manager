@@ -1,8 +1,8 @@
 *{box-sizing:border-box}
-:root{font-family:"Segoe UI Variable","Segoe UI",Inter,Arial,sans-serif;color:#e8f6ff;background:#07121c;font-synthesis:none;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;--accent:#05e6d2;--accent-rgb:5,230,210;--accent-secondary:#4d9fed}
-html,body,#root{width:100%;height:100%;margin:0;overflow:hidden}
+:root{font-family:"Segoe UI Variable","Segoe UI",Inter,Arial,sans-serif;color:#e8f6ff;background:transparent;font-synthesis:none;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;--accent:#05e6d2;--accent-rgb:5,230,210;--accent-secondary:#4d9fed}
+html,body,#root{width:100%;height:100%;margin:0;overflow:hidden;background:transparent}
 button,input{font:inherit}button{cursor:pointer}button:disabled{opacity:.35;cursor:not-allowed}button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
-.application{height:100vh;width:100%;position:relative;overflow:hidden;color:#e7f4fd;background:#07121b}
+.application{height:100vh;width:100%;position:relative;overflow:hidden;color:#e7f4fd;background:transparent}
 .wallpaper-root{position:absolute;inset:0;z-index:0;overflow:hidden;pointer-events:none;background:linear-gradient(135deg,#081824,#17465b 54%,#141b36)}
 .wallpaper-image,.wallpaper-root video{width:100%;height:100%;position:absolute;inset:-1%;width:102%;height:102%;object-fit:cover;background-size:cover;background-position:center;filter:blur(var(--wall-blur,2px));transform:scale(1.02)}
 .wallpaper-mask{position:absolute;inset:0;background:#06111b60}
@@ -133,3 +133,121 @@ button:active:not(:disabled){transform:scale(.975)}
 @media(max-width:1200px){.workspace{grid-template-columns:175px minmax(360px,1fr) minmax(330px,.85fr);gap:8px}.app-shell{padding-left:8px;padding-right:8px}.toolbar{padding:8px}.toolbar-actions{gap:4px}.toolbar-actions button{width:35px;height:35px}.toolbar-actions .toolbar-add{padding:0 10px}.table-columns,.download-row{gap:5px;grid-template-columns:minmax(110px,1.35fr) minmax(82px,1fr) minmax(53px,.6fr) 41px 95px}.table-title{padding:18px 12px 10px}.file-icon{width:36px;min-width:36px}.sidebar{padding-left:6px;padding-right:6px}.state{padding:7px;min-width:88px;font-size:9px}.detail-panel{padding:12px 10px}}
 @media(max-height:700px){.app-title{height:50px;min-height:50px}.workspace{gap:7px}.toolbar{min-height:58px}.statusbar{min-height:70px}.download-row{min-height:57px}.detail-panel{gap:8px}.detail-section{padding:9px}.graph{height:75px}.color-blocks i{height:6px}.quick-stats>div{padding:7px}.footer{font-size:9px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}}
+
+/* V0.2 — Main dashboard is deliberately ONLY a download list.
+   All detailed progress, graphs and color-flow chunks live in dedicated
+   download-* Tauri windows, never in a forced right-hand inspector. */
+.application:not(.detail-only) .workspace{
+  grid-template-columns:220px minmax(0,1fr);
+}
+.application:not(.detail-only) .download-table{flex:1;min-height:0}
+.application:not(.detail-only) .download-row,
+.application:not(.detail-only) .table-columns{
+  grid-template-columns:minmax(260px,2fr) minmax(160px,1.2fr) minmax(80px,.6fr) minmax(75px,.5fr) minmax(118px,.7fr);
+  gap:14px;
+}
+.application:not(.detail-only) .file-name strong{font-size:13px}
+.application:not(.detail-only) .download-row{min-height:69px}
+.application:not(.detail-only) .mini-bars{height:12px}
+
+/* Desktop glass means NO image, NO video and NO opaque root fill.
+   A transparent Tauri WebView2 window passes these clear pixels through
+   to Windows. Acrylic is toggled separately and may vary by OS/driver. */
+.application.desktop-glass{background:transparent!important}
+.application.desktop-glass:after{
+  background:radial-gradient(ellipse at 12% 7%,rgba(var(--accent-rgb),.04),transparent 45%);
+}
+.application.desktop-glass .glass{
+  background:rgba(6,15,26,var(--panel-opacity,.76));
+  border-top-color:rgba(239,252,255,.48);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.12),
+             0 17px 34px rgba(0,0,0,.30);
+}
+.solid-wallpaper{
+  position:absolute;inset:0;z-index:0;pointer-events:none;
+  background:radial-gradient(ellipse at 22% 8%,#153441 0%,transparent 45%),
+             linear-gradient(125deg,#07131c,#111d2d 65%,#071b24);
+}
+.application.desktop-glass .wallpaper-root,
+.application.desktop-glass .solid-wallpaper{display:none!important}
+
+/* Restored ORIGINAL Settings and Tools controls. Actual functionality opens
+   original MDM's real dialogs through its local IPC, not substitute mockups. */
+.toolbar{overflow:visible;z-index:4}
+.toolbar-actions{position:relative;flex-wrap:wrap}
+.toolbar-actions button.toolbar-settings,
+.toolbar-actions button.toolbar-tools{
+  width:auto;min-width:110px;padding:0 11px;gap:7px;
+  font-size:11px;white-space:nowrap;
+  color:#ddf1fa;border-color:rgba(var(--accent-rgb),.22)
+}
+.toolbar-actions button.toolbar-settings svg{color:var(--accent)}
+.toolbar-actions button.toolbar-tools{min-width:81px}
+.tools-wrap{position:relative;align-self:center}
+.tools-menu{
+  position:absolute;top:calc(100% + 13px);right:0;z-index:100;
+  width:330px;max-height:min(520px,75vh);overflow-y:auto;
+  border:1px solid rgba(193,239,250,.32);border-radius:13px;
+  padding:8px;background:rgba(8,23,36,.97);
+  backdrop-filter:blur(24px) saturate(150%);
+  box-shadow:0 21px 56px rgba(0,0,0,.57);
+  scrollbar-width:thin;
+}
+.tools-menu-title{
+  font-size:9px;letter-spacing:.12em;color:#9edace;
+  padding:9px 10px 12px;border-bottom:1px solid rgba(203,228,244,.13);
+  margin-bottom:4px;
+}
+.toolbar-actions .tools-menu button{
+  display:flex;justify-content:space-between;align-items:center;
+  width:100%;min-height:33px;height:auto;padding:8px 10px;
+  border:0;border-radius:7px;background:transparent;
+  text-align:left;color:#ebf7fd;font-size:11px;gap:10px
+}
+.tools-menu button:hover{background:rgba(var(--accent-rgb),.17)!important}
+.tools-menu button small{font-size:9px;color:#83b2c2}
+.sidebar .nav-bottom .original-settings-link{
+  border:1px solid rgba(var(--accent-rgb),.27);
+  background:rgba(var(--accent-rgb),.10);
+  color:#b9f5ec
+}
+.sidebar .nav-bottom .original-settings-link svg{color:var(--accent)}
+.nav-bottom{gap:1px}
+.nav-bottom button{min-height:36px}
+
+/* Wallpaper mode picker is explicit about desktop transparency and
+   independent main/detail window backgrounds. */
+.wall-mode-option{display:flex;flex-direction:column;align-items:stretch;gap:11px}
+.wall-source-heading{display:flex;flex-direction:column;gap:3px;max-width:100%}
+.wall-source-heading strong{font-size:12px}
+.wall-source-heading small{color:#98bed0;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.background-modes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.background-modes button{
+  padding:9px 6px;font-size:10px;
+  border-radius:8px;border:1px solid rgba(162,208,225,.22);
+  background:rgba(5,12,22,.30);color:#c9dfea;
+}
+.background-modes .chosen-mode{
+  color:var(--accent);border-color:rgba(var(--accent-rgb),.7);
+  background:rgba(var(--accent-rgb),.15);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08);
+}
+.wall-source-buttons{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.wall-source-buttons .secondary-button{font-size:10px;padding:9px 12px}
+.toggle-row{display:flex;align-items:center;gap:10px;font-size:11px;color:#d3e9f5;margin:12px 0}
+.toggle-row input{accent-color:var(--accent);width:16px;height:16px}
+.appearance-modal{max-height:85vh;overflow-y:auto}
+@media(max-width:1320px){
+  .application:not(.detail-only) .workspace{grid-template-columns:180px minmax(0,1fr)}
+  .application:not(.detail-only) .download-row,
+  .application:not(.detail-only) .table-columns{
+    grid-template-columns:minmax(145px,1.7fr) minmax(95px,1fr) minmax(70px,.6fr) minmax(48px,.4fr) minmax(95px,.8fr);
+    gap:7px;
+  }
+  .plexo-label{display:none}
+}
+@media(max-width:1050px){
+  .toolbar-actions button.toolbar-settings span{display:none}
+  .toolbar-actions button.toolbar-settings{min-width:42px;width:42px}
+  .application:not(.detail-only) .workspace{grid-template-columns:160px minmax(0,1fr)}
+}
