@@ -1157,9 +1157,10 @@ pub fn show(
                 } else {
                     TEXT()
                 };
-                // V4: highly legible status capsule and a live activity dot.
-                // Never hide the pill merely because the row is selected.
-                if *c == 3 && glass && !s.is_empty() {
+                // V4.1: state is always shown even if the native Status cell
+                // contains only "7.22%" (the percentage belongs in Progress).
+                // A selected row must not hide or recolor the state capsule.
+                if *c == STATUS && glass {
                     // Real transfer state, not just the numeric percentage:
                     // the percentage lives beside the segmented name progress.
                     let state_text = match row.status_group {
@@ -1168,7 +1169,7 @@ pub fn show(
                         "Complete" => "Completed",
                         "Error" => "Error",
                         "Waiting" => "Waiting",
-                        _ => s.as_str(),
+                        _ => if row.status_group.is_empty() { "Waiting" } else { row.status_group },
                     };
                     let accent = match row.status_group {
                         "Downloading" => crate::glass_ui::accent(),
