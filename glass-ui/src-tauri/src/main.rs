@@ -114,8 +114,14 @@ fn show_main(app: &AppHandle) {
 
 #[tauri::command]
 async fn boot_engine(app: AppHandle) -> ApiResult<String> {
-    tauri::async_runtime::spawn_blocking(move || boot_existing_engine(&app))
-        .await.map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || {
+        let boot = boot_existing_engine(&app)?;
+        let browser = register_browser_host(&app);
+        match browser {
+            Ok(_) => Ok(format!("{boot} • browser extension host registered")),
+            Err(err) => Ok(format!("{boot} • browser helper needs attention: {err}")),
+        }
+    }).await.map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -169,6 +175,112 @@ fn suffix(path: &Path) -> Option<String> {
 
 /// Read validated live options from the same headless process that handles
 /// downloads. Never edit downloads.json from the WebView or a second process.
+
+fn native_host_candidates(app: &AppHandle) -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    if let Ok(dir) = app.path().resource_dir() {
+        paths.push(dir.join("misterdownloadmanager-nmhost.exe"));
+        paths.push(dir.join("resources/misterdownloadmanager-nmhost.exe"));
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            paths.push(dir.join("misterdownloadmanager-nmhost.exe"));
+            paths.push(dir.join("resources/misterdownloadmanager-nmhost.exe"));
+        }
+    }
+    paths
+}
+
+fn register_browser_host(app: &AppHandle) -> ApiResult<String> {
+    let host = native_host_candidates(app).into_iter().find(|p| p.is_file())
+        .ok_or_else(|| "MDM browser native-messaging helper was not included in this installation".to_string())?;
+    // Reuse the original signed extension's host identifier, allowed origins,
+    // Chromium/Firefox manifests and Windows registry logic. Register for the
+    // current user only; do not overwrite other applications' registry keys.
+    let output = ProcessCommand::new(&host).arg("--register")
+        .stdin(Stdio::null()).output()
+        .map_err(|e| format!("Could not launch the original MDM browser helper: {e}"))?;
+    if !output.status.success() {
+        return Err(format!("Browser host registration failed: {}",
+            String::from_utf8_lossy(&output.stderr)));
+    }
+    Ok(format!("MDM browser integration registered: {}",
+        host.to_string_lossy()))
+}
+
+#[tauri::command]
+async fn browser_integration(app: AppHandle, repair: bool) -> ApiResult<String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        if repair { register_browser_host(&app) }
+        else {
+            let host = native_host_candidates(&app).into_iter().find(|p| p.is_file())
+                .ok_or_else(|| "Browser helper is missing from the Glass package".to_string())?;
+            Ok(format!("Original MDM browser helper installed at {}. Choose repair if your extension is disconnected.",host.display()))
+        }
+    }).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn bulk_action(action: String) -> ApiResult<mdm_ipc::api::ActAnswer> {
+    if !matches!(action.as_str(), "stop-all" | "delete-completed") {
+        return Err("Unsupported download bulk action".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let reply = send_ipc(&mdm_ipc::Command {
+            action: Some("glass-bulk".into()),
+            category: Some(action),
+            ..Default::default()
+        })?;
+        let result: serde_json::Value = serde_json::from_str(&reply)
+            .map_err(|_| format!("Invalid bulk response: {reply}"))?;
+        if result.get("error").is_some() { return Err(result.to_string()); }
+        serde_json::from_value(result).map_err(|e| e.to_string())
+    }).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn file_operation(id: u64, operation: String, value: Option<String>) -> ApiResult<serde_json::Value> {
+    if !matches!(operation.as_str(), "details" | "redownload" | "speed-limit" |
+        "open" | "folder") {
+        return Err("Unsupported file operation".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        // Read the current path and URL from backend by ID, never trust file
+        // paths supplied by web content or browser/clipboard input.
+        if operation == "open" || operation == "folder" {
+            let downloads = request_snapshot()?;
+            let file = downloads.downloads.iter().find(|d| d.id == id)
+                .ok_or_else(|| "Download no longer exists".to_string())?;
+            let path = PathBuf::from(&file.path);
+            let target = if operation == "folder" {
+                if path.is_dir() { path.clone() }
+                else { path.parent().ok_or("Download has no folder")?.to_path_buf() }
+            } else {
+                if file.status != "Complete" {
+                    return Err("The download is not complete yet".into());
+                }
+                if !path.exists() {
+                    return Err("The downloaded file cannot be found".into());
+                }
+                path
+            };
+            open::that(&target).map_err(|e| format!("Windows could not open {}: {e}",target.display()))?;
+            return Ok(serde_json::json!({"ok":true}));
+        }
+        let reply = send_ipc(&mdm_ipc::Command {
+            action: Some("glass-item".into()),
+            category: Some(operation),
+            ids: vec![id],
+            queue: value,
+            ..Default::default()
+        })?;
+        let data: serde_json::Value = serde_json::from_str(&reply)
+            .map_err(|_| format!("Invalid native download response: {reply}"))?;
+        if data.get("error").is_some() { return Err(data.to_string()) };
+        Ok(data)
+    }).await.map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 async fn queue_action(name: String, action: String) -> ApiResult<mdm_ipc::api::ActAnswer> {
     if name.is_empty() || name.len() > 256
@@ -314,7 +426,8 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             boot_engine, dashboard_snapshot, download_action,
-            add_download, select_wallpaper, queue_action, glass_settings, update_glass_setting
+            add_download, select_wallpaper, queue_action, glass_settings, update_glass_setting,
+            browser_integration, bulk_action, file_operation
         ])
         .run(tauri::generate_context!())
         .expect("error starting Mister Hybrid glass desktop");
