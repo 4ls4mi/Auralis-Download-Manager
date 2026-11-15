@@ -15,7 +15,7 @@ const COLUMNS: usize = 48;
 const ROWS: usize = 4;
 const CELLS: usize = COLUMNS * ROWS;
 /// The additional vertical room needed between the matrix and connections.
-pub const EXTRA_HEIGHT: f32 = 136.0;
+pub const EXTRA_HEIGHT: f32 = 296.0;
 
 const BACKGROUND: Color32 = Color32::from_rgb(24, 29, 33);
 const PANEL_EDGE: Color32 = Color32::from_rgb(54, 67, 73);
@@ -30,7 +30,7 @@ fn using_plexo() -> bool {
 }
 fn background() -> Color32 {
     if using_plexo() {
-        crate::theme::colors().window
+        Color32::from_rgba_unmultiplied(15, 27, 33, 156)
     } else {
         BACKGROUND
     }
@@ -97,13 +97,15 @@ pub fn detail_metrics(
     let c = crate::theme::colors();
     for (i, (label, value)) in values.iter().enumerate() {
         let rect = crate::winui::r(origin, 17.0 + i as f32 * 129.0, 242.0, 125.0, 48.0);
-        painter.rect_filled(rect, 7.0, background());
-        painter.rect_stroke(
-            rect,
-            7.0,
-            Stroke::new(1.0, panel_edge()),
-            StrokeKind::Inside,
-        );
+        if using_plexo() {
+            crate::glass_ui::panel(painter, rect, 9.0, 166);
+        } else {
+            painter.rect_filled(rect, 7.0, background());
+            painter.rect_stroke(
+                rect, 7.0, Stroke::new(1.0, panel_edge()),
+                StrokeKind::Inside,
+            );
+        }
         painter.text(
             pos2(rect.left() + 9.0, rect.top() + 13.0),
             egui::Align2::LEFT_CENTER,
@@ -148,6 +150,53 @@ pub fn segment_legend(painter: &Painter, origin: Pos2) {
             egui::FontId::proportional(10.0),
             crate::theme::colors().muted,
         );
+    }
+}
+
+/// An actual speed-history chart in the detailed download window.
+/// No line is drawn until real measurements are available.
+pub fn speed_chart(p: &Painter, origin: Pos2, rates: &VecDeque<f32>) {
+    if !using_plexo() {
+        return;
+    }
+    let outer = crate::winui::r(origin, 17.0, 414.0, 513.0, 143.0);
+    crate::glass_ui::panel(p, outer, 10.0, 166);
+    p.text(
+        pos2(outer.left() + 15.0, outer.top() + 17.0),
+        egui::Align2::LEFT_CENTER,
+        "LIVE TRANSFER SPEED",
+        egui::FontId::proportional(11.0),
+        crate::glass_ui::muted(),
+    );
+    let inner = Rect::from_min_max(
+        pos2(outer.left() + 15.0, outer.top() + 32.0),
+        pos2(outer.right() - 15.0, outer.bottom() - 14.0),
+    );
+    for i in 0..4 {
+        let y = inner.top() + i as f32 * inner.height() / 3.0;
+        p.line_segment(
+            [pos2(inner.left(), y), pos2(inner.right(), y)],
+            Stroke::new(1.0, Color32::from_rgba_unmultiplied(134, 179, 187, 28)),
+        );
+    }
+    if rates.len() < 2 {
+        return;
+    }
+    let max = rates.iter().copied().filter(|v| v.is_finite())
+        .fold(0.2_f32, f32::max);
+    let mut previous = None;
+    for (i, speed) in rates.iter().enumerate() {
+        let x = inner.left() + i as f32 / (rates.len() - 1) as f32 * inner.width();
+        let y = inner.bottom()
+            - (speed.max(0.0) / max).clamp(0.0, 1.0) * (inner.height() - 3.0);
+        let at = pos2(x, y);
+        if let Some(before) = previous {
+            p.line_segment([before, at],
+                Stroke::new(4.0, Color32::from_rgba_unmultiplied(36, 212, 195, 48)));
+            p.line_segment([before, at],
+                Stroke::new(1.7, crate::glass_ui::accent()));
+        }
+        previous = Some(at);
     }
 }
 
