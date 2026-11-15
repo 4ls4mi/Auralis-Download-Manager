@@ -1,6 +1,7 @@
 #![windows_subsystem = "windows"]
 
 mod app;
+mod glass_ui;
 mod appearance;
 
 mod batch;
