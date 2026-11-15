@@ -603,8 +603,13 @@ impl Progress {
             {
                 return Action::Hide;
             }
+            let progress_base = if crate::glass_ui::active() {
+                egui::Color32::TRANSPARENT
+            } else {
+                winui::BG()
+            };
             let action = egui::CentralPanel::no_frame()
-                .frame(egui::Frame::new().fill(winui::BG()))
+                .frame(egui::Frame::new().fill(progress_base))
                 .show(ui, |ui| {
                     let o = ui.max_rect().min;
                     if crate::glass_ui::active() {
