@@ -24,9 +24,9 @@ radius = 8
 "radius.popup" = 9
 border = 1
 "focus-line" = 2
-"list.row" = 22
-"list.header" = 28
-"font.ui" = 12
+"list.row" = 50
+"list.header" = 38
+"font.ui" = 13
 "font.ui.bold" = 13
 
 [seeds.light]
