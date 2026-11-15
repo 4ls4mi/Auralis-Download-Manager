@@ -1034,8 +1034,9 @@ pub fn show(
                 // Plexo-style progress tiles: a genuine completed byte fraction,
                 // with no invented Ethernet ownership.
                 let plexo = crate::theme::current().id.as_ref() == "plexo";
-                if *c == STATUS && plexo && x1 - x0 >= 165.0 {
-                    if let Some(fraction) = row.progress_fraction {
+                if *c == STATUS && plexo && x1 - x0 >= 165.0
+                    && let Some(fraction) = row.progress_fraction
+                {
                         let filled = (fraction.clamp(0.0, 1.0) * 14.0).round() as usize;
                         let color = match row.status_group {
                             "Complete" => crate::theme::colors().success,
@@ -1057,7 +1058,6 @@ pub fn show(
                             bp.rect_filled(winui::rect(rect), 1.5, fill_color);
                         }
                         tx = *x0 + 104.0;
-                    }
                 }
                 let cell = Rect::from_min_max(pos2(*x0, top), pos2(*x1 - 1.0, top + row_h()));
                 if *c == SOURCE {
