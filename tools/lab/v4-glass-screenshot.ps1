@@ -14,7 +14,7 @@ New-Item -ItemType Directory -Force $qa | Out-Null
 $photo = Join-Path $qa "colorful-test-wallpaper.png"
 
 # A deterministic, high-contrast synthetic wallpaper. No network or copyrighted assets.
-$bmp = New-Object System.Drawing.Bitmap(960, 540)
+$bmp = [System.Drawing.Bitmap]::new(960, 540)
 $g = [System.Drawing.Graphics]::FromImage($bmp)
 try {
     for ($y = 0; $y -lt 540; $y += 3) {
@@ -53,7 +53,7 @@ function Capture([string]$name, [string]$wallpaper) {
     $json = @{ next_id=1; items=@(); version=2; settings=$settings } |
         ConvertTo-Json -Depth 10
     [System.IO.File]::WriteAllText((Join-Path $data "downloads.json"), $json,
-        (New-Object System.Text.UTF8Encoding($false)))
+        ([System.Text.UTF8Encoding]::new($false)))
     $env:MDM_OFFSCREEN = "1"
     $env:MDM_OFFSCREEN_AT = "40,40"
     $env:MDM_DATA_DIR = $data
