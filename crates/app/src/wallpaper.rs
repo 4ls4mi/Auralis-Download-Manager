@@ -111,6 +111,8 @@ struct Cached {
 struct Wallpapers {
     main: Option<Cached>,
     progress: Option<Cached>,
+    main_failed: Option<(String, u8)>,
+    progress_failed: Option<(String, u8)>,
 }
 
 static CACHE: LazyLock<Mutex<Wallpapers>> = LazyLock::new(|| Mutex::new(Wallpapers::default()));
@@ -291,21 +293,25 @@ pub fn paint(
         return None;
     }
     let mut cache = CACHE.lock().unwrap_or_else(|err| err.into_inner());
-    let slot = match target {
-        Target::Main => &mut cache.main,
-        Target::Progress => &mut cache.progress,
+    let (slot, failed) = match target {
+        Target::Main => (&mut cache.main, &mut cache.main_failed),
+        Target::Progress => (&mut cache.progress, &mut cache.progress_failed),
     };
-    if slot
-        .as_ref()
-        .is_none_or(|s| s.path != path || s.blur != blur)
-    {
-        *slot = load(ui.ctx(), path, blur, target);
-    }
-    let Some(loaded) = slot.as_mut() else {
-        // This would previously fail without any reason or notification.
-        tracing::warn!(path, "Wallpaper decoding failed (or media unsupported)");
+    let unchanged_failure = failed.as_ref()
+        .is_some_and(|(previous, previous_blur)| previous == path && *previous_blur == blur);
+    if unchanged_failure {
         return None;
-    };
+    }
+    if slot.as_ref().is_none_or(|s| s.path != path || s.blur != blur) {
+        *slot = load(ui.ctx(), path, blur, target);
+        if slot.is_none() {
+            *failed = Some((path.to_owned(), blur));
+            tracing::warn!(path, "Wallpaper failed to load; inspect Appearance & Wallpapers");
+            return None;
+        }
+        *failed = None;
+    }
+    let loaded = slot.as_mut()?;
     if let Some(stream) = &mut loaded.video {
         // Never decode video or wait for a frame on the UI thread.
         // A bounded queue drops excess frames when the window is busy.
