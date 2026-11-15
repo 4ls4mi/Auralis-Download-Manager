@@ -441,7 +441,7 @@ impl Default for Settings {
             branches: [true, false, false, false],
             view: None,
             dark_mode_support: true,
-            always_dark: false,
+            always_dark: true,
             theme: "plexo".into(),
             wallpaper_main: String::new(),
             wallpaper_download: String::new(),
