@@ -45,6 +45,7 @@ mod pacfetch;
 mod palette;
 mod playlistdlg;
 mod progress;
+mod hybrid_progress;
 mod properties;
 mod queue;
 mod quota;
