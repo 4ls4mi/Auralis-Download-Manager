@@ -3,7 +3,7 @@
 //! Real translucency is provided by alpha-blended egui surfaces above a
 //! cached, pre-blurred local wallpaper. This is *in-app* frosted glass: it
 //! does not pretend to blur other Windows desktop applications.
-use egui::{Color32, Painter, Pos2, Rect, Stroke, StrokeKind, pos2};
+use egui::{Color32, Painter, Rect, Stroke, StrokeKind, pos2};
 
 pub fn active() -> bool {
     crate::theme::current().id.as_ref() == "plexo"
@@ -86,16 +86,6 @@ pub fn text() -> Color32 {
 
 pub fn muted() -> Color32 {
     Color32::from_rgb(172, 193, 198)
-}
-
-pub fn text_at(p: &Painter, at: Pos2, size: f32, content: &str, color: Color32) {
-    p.text(
-        at,
-        egui::Align2::LEFT_CENTER,
-        content,
-        egui::FontId::proportional(size),
-        color,
-    );
 }
 
 #[cfg(test)]
