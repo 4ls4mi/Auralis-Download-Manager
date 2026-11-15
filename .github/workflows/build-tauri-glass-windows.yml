@@ -1,0 +1,90 @@
+# Separate Windows x64 Tauri/React frontend. Original egui app is a bundled hidden backend.
+name: Mister Hybrid Glass Windows x64
+
+on:
+  push:
+    branches: ["feature/tauri-glass-windows"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mister-hybrid-glass-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout custom fork
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Rust stable Windows target
+        shell: pwsh
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add x86_64-pc-windows-msvc
+
+      - name: Install Windows native build dependencies
+        shell: pwsh
+        run: |
+          choco install nasm --version 2.16.3 --no-progress -y
+          "C:\Program Files\NASM" >> $env:GITHUB_PATH
+          choco install nsis --no-progress -y
+
+      - name: Verify original engine and build companion executable
+        shell: pwsh
+        run: |
+          cargo build --release --target x86_64-pc-windows-msvc -p mdm-app
+          if ($LASTEXITCODE -ne 0) { throw "Original MDM Rust backend compilation failed" }
+          New-Item -ItemType Directory -Force glass-ui/src-tauri/resources,glass-ui/src-tauri/icons | Out-Null
+          Copy-Item target/x86_64-pc-windows-msvc/release/misterdownloadmanager.exe glass-ui/src-tauri/resources/mdm-legacy.exe
+          Copy-Item crates/app/assets/icons/app/mdm.ico glass-ui/src-tauri/icons/icon.ico
+
+      - name: Install frontend dependencies
+        shell: pwsh
+        working-directory: glass-ui
+        run: |
+          npm install --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { throw "npm install failed" }
+
+      - name: Compile React frontend and TypeScript checks
+        shell: pwsh
+        working-directory: glass-ui
+        run: |
+          npm run build
+          if ($LASTEXITCODE -ne 0) { throw "frontend build failed" }
+
+      - name: Build Tauri Windows NSIS installer
+        shell: pwsh
+        working-directory: glass-ui
+        run: |
+          npm run tauri -- build --bundles nsis
+          if ($LASTEXITCODE -ne 0) { throw "Tauri Windows packaging failed" }
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: mister-hybrid-glass-windows-x64
+          path: glass-ui/src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload compiled frontend for visual review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mister-hybrid-glass-react-frontend
+          path: glass-ui/dist/
+          if-no-files-found: warn
+          retention-days: 14
