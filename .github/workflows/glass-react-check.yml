@@ -3,7 +3,7 @@
 name: Mister Hybrid Glass React Check
 on:
   push:
-    branches: ["feature/tauri-unified-windows"]
+    branches: ["feature/crystal-parity-windows"]
   workflow_dispatch:
 permissions:
   contents: read
