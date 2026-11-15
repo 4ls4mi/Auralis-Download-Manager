@@ -194,7 +194,7 @@ pub fn chunk_matrix(
     painter.rect_filled(outer, 7.0, background());
     painter.rect_stroke(outer, 7.0, Stroke::new(1.0, panel_edge()), StrokeKind::Inside);
     let _hover = ui
-        .interact(outer, ui.id().with("hybrid-range-matrix"), egui::Sense::hover())
+        .interact(outer, ui.scope_id().with("hybrid-range-matrix"), egui::Sense::hover())
         .on_hover_text("Byte-range progress (192 visual samples). Colors identify download segments, not network adapters.");
 
     let Some(total) = total_bytes.filter(|n| *n > 0) else {
