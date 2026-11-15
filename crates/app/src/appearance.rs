@@ -9,6 +9,7 @@ fn wallpaper_button(ui: &mut Ui, key: &'static str, title: &'static str) {
         let dialog_title = title.to_owned();
         winui::start_pick(ui.ctx(), key, move || {
             winui::file_dialog(&dialog_title)
+                .add_filter("All wallpapers", &["png", "jpg", "jpeg", "webp", "mp4", "webm", "mov", "mkv", "m4v"])
                 .add_filter("Images", &["png", "jpg", "jpeg", "webp"])
                 .add_filter("Videos (FFmpeg)", &["mp4", "webm", "mov", "mkv", "m4v"])
                 .pick_file()
@@ -35,6 +36,7 @@ fn preview(ui: &mut Ui, path: &str, s: &Settings, target: wallpaper::Target) {
         },
     );
     let center = rect.shrink(11.0);
+    let loaded = contrast.is_some();
     if let Some(contrast) = contrast {
         painter.rect_filled(center, 7.0, contrast.glass);
         painter.rect_stroke(
@@ -54,10 +56,19 @@ fn preview(ui: &mut Ui, path: &str, s: &Settings, target: wallpaper::Target) {
         painter.text(
             center.center(),
             egui::Align2::CENTER_CENTER,
-            "No wallpaper selected — charcoal glass theme",
+            if path.is_empty() { "No wallpaper selected — charcoal glass theme" }
+            else { "Wallpaper failed to load — check file and decoder" },
             egui::FontId::proportional(13.0),
             Color32::from_rgb(220, 237, 238),
         );
+    }
+    if !path.is_empty() {
+        if let Some(reason) = wallpaper::diagnose(path) {
+            ui.colored_label(Color32::from_rgb(255, 177, 109), reason);
+        } else if loaded {
+            ui.colored_label(Color32::from_rgb(106, 227, 198),
+                "Wallpaper selected and loaded in preview.");
+        }
     }
 }
 
@@ -129,6 +140,11 @@ pub fn show(ctx: &egui::Context, open: &mut bool, settings: &mut Settings) -> bo
                 }
             }
             ui.horizontal(|ui| {
+                ui.label("File path:");
+                ui.add(egui::TextEdit::singleline(&mut settings.wallpaper_main)
+                    .desired_width(340.0).hint_text("Choose a file or paste a local path"));
+            });
+            ui.horizontal(|ui| {
                 ui.label("Image fit:");
                 egui::ComboBox::from_id_salt("main-wallpaper-fit")
                     .selected_text(["Fill (crop)", "Fit (whole image)", "Stretch"]
@@ -182,6 +198,18 @@ pub fn show(ctx: &egui::Context, open: &mut bool, settings: &mut Settings) -> bo
                         });
                 });
             }
+            if !settings.wallpaper_download_inherit {
+                ui.horizontal(|ui| {
+                    ui.label("File path:");
+                    ui.add(egui::TextEdit::singleline(&mut settings.wallpaper_download)
+                        .desired_width(340.0).hint_text("Choose a file or paste a local path"));
+                });
+            }
+            let download_path = wallpaper::progress_path(
+                &settings.wallpaper_main,
+                &settings.wallpaper_download,
+                settings.wallpaper_download_inherit,
+            );
             video_help(ui, download_path);
             preview(ui, download_path, settings, wallpaper::Target::Progress);
             ui.separator();
