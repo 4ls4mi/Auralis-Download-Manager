@@ -3,7 +3,7 @@ name: Mister Hybrid Glass Windows x64
 
 on:
   push:
-    branches: ["feature/tauri-unified-windows"]
+    branches: ["feature/crystal-parity-windows"]
   workflow_dispatch:
 
 permissions:
@@ -45,10 +45,11 @@ jobs:
       - name: Verify original engine and build companion executable
         shell: pwsh
         run: |
-          cargo build --release --target x86_64-pc-windows-msvc -p mdm-app
+          cargo build --release --target x86_64-pc-windows-msvc -p mdm-app -p mdm-nmhost
           if ($LASTEXITCODE -ne 0) { throw "Original MDM Rust backend compilation failed" }
           New-Item -ItemType Directory -Force glass-ui/src-tauri/resources,glass-ui/src-tauri/icons | Out-Null
           Copy-Item target/x86_64-pc-windows-msvc/release/misterdownloadmanager.exe glass-ui/src-tauri/resources/mdm-legacy.exe
+          Copy-Item target/x86_64-pc-windows-msvc/release/misterdownloadmanager-nmhost.exe glass-ui/src-tauri/resources/misterdownloadmanager-nmhost.exe
           Copy-Item crates/app/assets/icons/app/mdm.ico glass-ui/src-tauri/icons/icon.ico
 
       - name: Headless Rust runtime integration smoke test
