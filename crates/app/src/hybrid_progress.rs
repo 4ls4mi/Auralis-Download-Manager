@@ -15,7 +15,7 @@ const COLUMNS: usize = 48;
 const ROWS: usize = 4;
 const CELLS: usize = COLUMNS * ROWS;
 /// The additional vertical room needed between the matrix and connections.
-pub const EXTRA_HEIGHT: f32 = 64.0;
+pub const EXTRA_HEIGHT: f32 = 136.0;
 
 const BACKGROUND: Color32 = Color32::from_rgb(24, 29, 33);
 const PANEL_EDGE: Color32 = Color32::from_rgb(54, 67, 73);
@@ -24,6 +24,78 @@ const TEAL: Color32 = Color32::from_rgb(70, 193, 180);
 const AMBER: Color32 = Color32::from_rgb(222, 164, 64);
 const BLUE: Color32 = Color32::from_rgb(133, 159, 217);
 
+
+/// The visual palette follows the selected application skin.
+fn using_plexo() -> bool { crate::theme::current().id.as_ref() == "plexo" }
+fn background() -> Color32 {
+    if using_plexo() { crate::theme::colors().window } else { BACKGROUND }
+}
+fn panel_edge() -> Color32 {
+    if using_plexo() { crate::theme::colors().list_frame } else { PANEL_EDGE }
+}
+fn empty() -> Color32 {
+    if using_plexo() { crate::theme::colors().piece_missing } else { EMPTY }
+}
+fn teal() -> Color32 {
+    if using_plexo() { crate::theme::colors().accent } else { TEAL }
+}
+fn amber() -> Color32 {
+    if using_plexo() { crate::theme::colors().warning } else { AMBER }
+}
+fn blue() -> Color32 {
+    if using_plexo() { crate::theme::colors().link } else { BLUE }
+}
+
+/// Four metric cards use the same charcoal glass surfaces and text hierarchy
+/// as the download chunk grid, without replacing the app's action buttons.
+pub fn detail_metrics(
+    painter: &Painter,
+    origin: Pos2,
+    rate: &str,
+    downloaded: &str,
+    remaining: &str,
+    connections: usize,
+) {
+    let values = [
+        ("DOWNLOAD SPEED", rate.to_string()),
+        ("DOWNLOADED", downloaded.to_string()),
+        ("TIME LEFT", if remaining.is_empty() { "—".into() } else { remaining.into() }),
+        ("CONNECTIONS", connections.to_string()),
+    ];
+    let c = crate::theme::colors();
+    for (i, (label, value)) in values.iter().enumerate() {
+        let rect = crate::winui::r(
+            origin, 17.0 + i as f32 * 129.0, 242.0, 125.0, 48.0
+        );
+        painter.rect_filled(rect, 7.0, background());
+        painter.rect_stroke(rect, 7.0, Stroke::new(1.0, panel_edge()), StrokeKind::Inside);
+        painter.text(
+            pos2(rect.left() + 9.0, rect.top() + 13.0), egui::Align2::LEFT_CENTER,
+            *label, egui::FontId::proportional(9.5), c.muted,
+        );
+        let text = if value.chars().count() > 18 {
+            format!("{}…", value.chars().take(17).collect::<String>())
+        } else { value.to_string() };
+        painter.text(
+            pos2(rect.left() + 9.0, rect.top() + 32.0), egui::Align2::LEFT_CENTER,
+            text, egui::FontId::proportional(12.0), c.text,
+        );
+    }
+}
+
+/// Captioned indication of the segment colours (NOT the Ethernet adapter IDs).
+pub fn segment_legend(painter: &Painter, origin: Pos2) {
+    let labels = [("SEGMENT A", teal()), ("SEGMENT B", amber()), ("SEGMENT C", blue())];
+    for (i, (name, color)) in labels.iter().enumerate() {
+        let x = origin.x + 22.0 + i as f32 * 144.0;
+        let y = origin.y + 392.0;
+        painter.rect_filled(Rect::from_min_size(pos2(x, y - 6.0), vec2(8.0, 8.0)), 2.0, *color);
+        painter.text(pos2(x + 13.0, y - 2.0),
+            egui::Align2::LEFT_CENTER, *name, egui::FontId::proportional(10.0),
+            crate::theme::colors().muted);
+    }
+}
+
 /// A small throughput waveform within the existing status page's progress track.
 /// The highlighted region is *file completion*; peaks are measured transfer rate.
 pub fn graph_bar(p: &Painter, rect: Rect, completion: f32, rates: &VecDeque<f32>) {
@@ -31,14 +103,14 @@ pub fn graph_bar(p: &Painter, rect: Rect, completion: f32, rates: &VecDeque<f32>
         return;
     }
     let fraction = completion.clamp(0.0, 1.0);
-    p.rect_filled(rect, 3.0, BACKGROUND);
+    p.rect_filled(rect, 5.0, background());
     let inner = rect.shrink(1.0);
     let filled_width = inner.width() * fraction;
     if filled_width > 0.0 {
         p.rect_filled(
             Rect::from_min_size(inner.min, vec2(filled_width, inner.height())),
             2.0,
-            Color32::from_rgb(33, 80, 75),
+            Color32::from_rgb(19, 77, 73),
         );
     }
 
@@ -58,7 +130,7 @@ pub fn graph_bar(p: &Painter, rect: Rect, completion: f32, rates: &VecDeque<f32>
                 - (value / peak).clamp(0.0, 1.0) * (inner.height() - 4.0).max(0.0);
             let point = pos2(x, y);
             if let Some(prev) = previous {
-                let color = if (prev.x + point.x) * 0.5 <= right { TEAL } else {
+                let color = if (prev.x + point.x) * 0.5 <= right { teal() } else {
                     Color32::from_rgb(97, 117, 125)
                 };
                 p.line_segment([prev, point], Stroke::new(1.8, color));
@@ -71,9 +143,9 @@ pub fn graph_bar(p: &Painter, rect: Rect, completion: f32, rates: &VecDeque<f32>
     let marker = inner.left() + filled_width;
     p.line_segment(
         [pos2(marker, inner.top()), pos2(marker, inner.bottom())],
-        Stroke::new(1.4, AMBER),
+        Stroke::new(1.4, amber()),
     );
-    p.rect_stroke(rect, 3.0, Stroke::new(1.0, PANEL_EDGE), StrokeKind::Inside);
+    p.rect_stroke(rect, 5.0, Stroke::new(1.0, panel_edge()), StrokeKind::Inside);
 }
 
 /// Fraction of a given byte interval already received, plus its first contributing
@@ -118,9 +190,9 @@ pub fn chunk_matrix(
     downloaded: u64,
     snap: Option<&Snapshot>,
 ) {
-    let outer = crate::winui::r(origin, 17.0, 249.0, 513.0, 61.0);
-    painter.rect_filled(outer, 5.0, BACKGROUND);
-    painter.rect_stroke(outer, 5.0, Stroke::new(1.0, PANEL_EDGE), StrokeKind::Inside);
+    let outer = crate::winui::r(origin, 17.0, 319.0, 513.0, 63.0);
+    painter.rect_filled(outer, 7.0, background());
+    painter.rect_stroke(outer, 7.0, Stroke::new(1.0, panel_edge()), StrokeKind::Inside);
     let _hover = ui
         .interact(outer, ui.id().with("hybrid-range-matrix"), egui::Sense::hover())
         .on_hover_text("Byte-range progress (192 visual samples). Colors identify download segments, not network adapters.");
@@ -152,13 +224,13 @@ pub fn chunk_matrix(
             outer.top() + pad_y + row as f32 * (tile_height + gap_y),
         );
         let tile = Rect::from_min_size(pos, vec2(tile_width, tile_height));
-        painter.rect_filled(tile, 1.5, EMPTY);
+        painter.rect_filled(tile, 1.5, empty());
         if progress > 0.0 {
             let color = match segment_index.map(|n| n % 3) {
-                Some(0) => TEAL,
-                Some(1) => AMBER,
-                Some(_) => BLUE,
-                None => TEAL,
+                Some(0) => teal(),
+                Some(1) => amber(),
+                Some(_) => blue(),
+                None => teal(),
             };
             let fill = Rect::from_min_size(pos, vec2(tile_width * progress, tile_height));
             painter.rect_filled(fill, 1.5, color);
