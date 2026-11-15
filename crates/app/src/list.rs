@@ -385,6 +385,10 @@ impl ListState {
 }
 
 pub struct Row {
+    /// Byte completion, used for a real mini chunk meter in the Status column.
+    pub progress_fraction: Option<f32>,
+    /// Observed speeds (MB/s), oldest first; never synthesized.
+    pub rate_history: Vec<f32>,
     /// What the Status filter sees: Downloading, Stopped, Waiting, Complete or Error.
     pub status_group: &'static str,
     pub icon: IconKey,
@@ -600,6 +604,9 @@ pub fn show(
         st.widths[STATUS] = status_width(crate::i18n::code(), &crate::i18n::percent(1.0, 0), |s| {
             winui::text_width_font(&p, font.clone(), s)
         });
+        if crate::theme::current().id.as_ref() == "plexo" {
+            st.widths[STATUS] = st.widths[STATUS].max(177.0);
+        }
     }
     // A CJK interface's 12 px headers get a little more room in columns the user hasn't resized
     // (#837: Korean "Time left" was ellipsized at its Latin-era default width). Applied before
@@ -1010,7 +1017,7 @@ pub fn show(
             }
             for (c, x0, x1) in &cols {
                 // The file-type icon sits in the File Name column, wherever it is.
-                let tx = if *c == 0 {
+                let mut tx = if *c == 0 {
                     icons.paint_in(ui, &bp, row.icon.clone(), pos2(x0 + 4.0, top));
                     x0 + 22.0
                 } else {
@@ -1023,6 +1030,34 @@ pub fn show(
                         IconKey::Silk("page_white_stack"),
                         pos2(x0 + 2.0, top),
                     );
+                }
+                // Plexo-style progress tiles: a genuine completed byte fraction,
+                // with no invented Ethernet ownership.
+                let plexo = crate::theme::current().id.as_ref() == "plexo";
+                if *c == STATUS && plexo && x1 - x0 >= 165.0 {
+                    if let Some(fraction) = row.progress_fraction {
+                        let filled = (fraction.clamp(0.0, 1.0) * 14.0).round() as usize;
+                        let color = match row.status_group {
+                            "Complete" => crate::theme::colors().success,
+                            "Stopped" => crate::theme::colors().warning,
+                            "Error" => crate::theme::colors().error,
+                            _ => crate::theme::colors().accent,
+                        };
+                        for segment in 0..14usize {
+                            let rx = *x0 + 5.0 + segment as f32 * 6.4;
+                            let rect = Rect::from_min_size(
+                                pos2(rx, top + (row_h() - 9.0) * 0.5),
+                                egui::vec2(5.3, 9.0),
+                            );
+                            let fill_color = if segment < filled {
+                                color
+                            } else {
+                                crate::theme::colors().piece_missing
+                            };
+                            bp.rect_filled(winui::rect(rect), 1.5, fill_color);
+                        }
+                        tx = *x0 + 104.0;
+                    }
                 }
                 let cell = Rect::from_min_max(pos2(*x0, top), pos2(*x1 - 1.0, top + row_h()));
                 if *c == SOURCE {
@@ -1043,7 +1078,10 @@ pub fn show(
                     continue;
                 }
                 let value = cell_text(*c, &row.cells[*c]);
-                let s = winui::ellipsize(&bp, &font, &value, x1 - tx - 3.0);
+                let speed_graph = plexo && *c == 5 && row.rate_history.len() >= 2
+                    && x1 - tx >= 145.0;
+                let available = x1 - tx - 3.0 - if speed_graph { 56.0 } else { 0.0 };
+                let s = winui::ellipsize(&bp, &font, &value, available);
                 // A cut cell shows its whole text on hover (Windows' list label tip); the
                 // Status cell shows the download's recent events.
                 if resp
@@ -1114,6 +1152,24 @@ pub fn show(
                     }
                 }
                 text_font(&clip, font.clone(), tx, top + 12.0, &s, ink);
+                if speed_graph {
+                    let maximum = row.rate_history.iter().copied()
+                        .filter(|v| v.is_finite()).fold(0.01_f32, f32::max);
+                    let n = row.rate_history.len();
+                    let mut previous = None;
+                    for (j, rate) in row.rate_history.iter().enumerate() {
+                        let x = *x1 - 56.0 + j as f32 / (n - 1) as f32 * 48.0;
+                        let y = top + row_h() - 5.0
+                            - (rate.max(0.0) / maximum).clamp(0.0, 1.0)
+                                * (row_h() - 10.0).max(0.0);
+                        let point = winui::rect(Rect::from_min_size(pos2(x, y), egui::Vec2::ZERO)).min;
+                        if let Some(prev) = previous {
+                            clip.line_segment([prev, point], egui::Stroke::new(
+                                1.1, crate::theme::colors().accent));
+                        }
+                        previous = Some(point);
+                    }
+                }
             }
         }
         // The grid line is the item's own last row (top + 16), so icons are not clipped; in
@@ -1770,6 +1826,8 @@ mod tests {
         cells[0] = name.into();
         cells[SOURCE] = source.into();
         Row {
+            progress_fraction: None,
+            rate_history: Vec::new(),
             status_group: status,
             icon: IconKey::Silk("page_white"),
             queued,
