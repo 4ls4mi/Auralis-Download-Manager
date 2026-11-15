@@ -52,6 +52,8 @@ warning = "#FFCF73"
 success = "#5EE1C7"
 
 [light]
+# High-contrast (AAA) muted labels on the optional light variant.
+"text.muted" = "#465154"
 "selection.text" = "#132324"
 "selection.muted" = "#425A5A"
 "chip.web" = "#D4F5EB"
