@@ -1071,7 +1071,7 @@ pub fn show(
                 if *c == 0 && glass && let Some(fraction) = row.progress_fraction {
                     let track = Rect::from_min_size(
                         pos2(*x0 + 34.0, top + 36.0),
-                        egui::vec2((x1 - x0 - 50.0).max(0.0), 5.0),
+                        egui::vec2((x1 - x0 - 94.0).max(0.0), 5.0),
                     );
                     if track.width() > 24.0 {
                         bp.rect_filled(screen(track), 3.0,
@@ -1095,6 +1095,10 @@ pub fn show(
                                 pos2(left, track.top()), egui::vec2(w, 5.0))),
                                 1.5, accent);
                         }
+                        bp.text(pos2(*x1 - 12.0, track.center().y),
+                            egui::Align2::RIGHT_CENTER,
+                            format!("{:.0}%", fraction.clamp(0.0, 1.0) * 100.0),
+                            egui::FontId::proportional(10.0), accent);
                     }
                 }
                 let cell = Rect::from_min_max(pos2(*x0, top), pos2(*x1 - 1.0, top + row_h()));
@@ -1156,6 +1160,16 @@ pub fn show(
                 // V4: highly legible status capsule and a live activity dot.
                 // Never hide the pill merely because the row is selected.
                 if *c == 3 && glass && !s.is_empty() {
+                    // Real transfer state, not just the numeric percentage:
+                    // the percentage lives beside the segmented name progress.
+                    let state_text = match row.status_group {
+                        "Downloading" => "Downloading",
+                        "Stopped" => "Paused",
+                        "Complete" => "Completed",
+                        "Error" => "Error",
+                        "Waiting" => "Waiting",
+                        _ => s.as_str(),
+                    };
                     let accent = match row.status_group {
                         "Downloading" => crate::glass_ui::accent(),
                         "Complete" => crate::theme::colors().success,
@@ -1164,7 +1178,7 @@ pub fn show(
                         _ => crate::theme::colors().muted,
                     };
                     let max_w = (x1 - tx - 3.0).max(0.0);
-                    let width = (winui::text_width_font(&clip, font.clone(), &s) + 36.0)
+                    let width = (winui::text_width_font(&clip, font.clone(), state_text) + 36.0)
                         .min(max_w);
                     if width > 37.0 {
                         let capsule = Rect::from_min_size(
@@ -1190,7 +1204,7 @@ pub fn show(
                         }
                         clip.circle_filled(dot, 3.6, accent);
                         text_font(&clip, font.clone(), tx + 16.0,
-                            top + row_h() * 0.5 + 5.0, &s, accent);
+                            top + row_h() * 0.5 + 5.0, state_text, accent);
                         continue;
                     }
                 }
