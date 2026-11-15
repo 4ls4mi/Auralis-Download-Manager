@@ -5885,6 +5885,92 @@ impl App {
                 code: Some(ipc::api::API_OFF.into()),
             });
         }
+        // The Tauri shell uses a strict, local-only extension to the existing
+        // automation API. Never expose configuration or backend identity to
+        // paired remote clients, nor accept writes from the legacy GUI process.
+        let glass_owned = self.headless
+            && std::env::var_os("MDM_GLASS_HEADLESS").is_some_and(|v| v == "1");
+        if !cmd.remote && cmd.query.as_deref() == Some("glass-backend") {
+            return serde_json::json!({
+                "headless": self.headless,
+                "glass": glass_owned,
+                "ipc": "local-authenticated",
+            }).to_string();
+        }
+        if !cmd.remote && cmd.query.as_deref() == Some("glass-settings") {
+            if !glass_owned {
+                return line(&ErrorAnswer { error: "glass backend not active".into(), code: None });
+            }
+            return serde_json::json!({
+                "max_connections": self.settings.max_connections,
+                "speed_limit_on": self.settings.speed_limit_on,
+                "speed_limit_kb": self.settings.speed_limit_kb,
+                "global_limit_on": self.settings.global_limit_on,
+                "global_limit_kb": self.settings.global_limit_kb,
+                "start_immediately": self.settings.start_immediately,
+                "only_add_to_queue": self.settings.only_add_to_queue,
+                "confirm_delete": self.settings.confirm_delete,
+                "torrent_keep_sharing": self.settings.torrent_keep_sharing,
+                "torrent_dht": self.settings.torrent_dht,
+                "torrent_lsd": self.settings.torrent_lsd,
+                "proxy_from_browser": self.settings.proxy_from_browser,
+                "capture_opened": self.settings.capture_opened,
+                "show_progress": self.settings.show_progress,
+                "show_complete": self.settings.show_complete,
+                "net_adapter": self.settings.net_adapter,
+                "category_dirs": self.settings.category_dirs,
+            }).to_string();
+        }
+        if !cmd.remote && cmd.action.as_deref() == Some("glass-setting") {
+            if !glass_owned {
+                return line(&ErrorAnswer { error: "glass backend not active".into(), code: None });
+            }
+            // Reuse authenticated IPC's existing text fields: category is the
+            // exact setting name, queue is its value. No file can be edited
+            // directly by the frontend while downloads run.
+            let key = cmd.category.as_deref().unwrap_or("");
+            let value = cmd.queue.as_deref().unwrap_or("");
+            let bool_value = match value {
+                "true" => Some(true),
+                "false" => Some(false),
+                _ => None,
+            };
+            let changed = match key {
+                "max_connections" => value.parse::<u32>()
+                    .ok().filter(|n| (1..=128).contains(n))
+                    .map(|n| { self.settings.max_connections = n; }),
+                "speed_limit_kb" => value.parse::<u64>()
+                    .ok().filter(|n| *n <= 10_000_000)
+                    .map(|n| { self.settings.speed_limit_kb = n; }),
+                "global_limit_kb" => value.parse::<u64>()
+                    .ok().filter(|n| *n <= 10_000_000)
+                    .map(|n| { self.settings.global_limit_kb = n; }),
+                "speed_limit_on" => bool_value.map(|n| { self.settings.speed_limit_on = n; }),
+                "global_limit_on" => bool_value.map(|n| { self.settings.global_limit_on = n; }),
+                "start_immediately" => bool_value.map(|n| { self.settings.start_immediately = n; }),
+                "only_add_to_queue" => bool_value.map(|n| { self.settings.only_add_to_queue = n; }),
+                "confirm_delete" => bool_value.map(|n| { self.settings.confirm_delete = n; }),
+                "torrent_keep_sharing" => bool_value.map(|n| { self.settings.torrent_keep_sharing = n; }),
+                "torrent_dht" => bool_value.map(|n| { self.settings.torrent_dht = n; }),
+                "torrent_lsd" => bool_value.map(|n| { self.settings.torrent_lsd = n; }),
+                "proxy_from_browser" => bool_value.map(|n| { self.settings.proxy_from_browser = n; }),
+                "capture_opened" => bool_value.map(|n| { self.settings.capture_opened = n; }),
+                "net_adapter" if value.len() <= 256 => {
+                    self.settings.net_adapter = value.into();
+                    Some(())
+                }
+                _ => None,
+            };
+            return if changed.is_some() {
+                self.dirty = true;
+                serde_json::json!({ "saved": true, "key": key }).to_string()
+            } else {
+                line(&ErrorAnswer {
+                    error: format!("invalid or unsupported Glass setting: {key}"),
+                    code: Some("invalid-setting".into()),
+                })
+            };
+        }
         if let Some(action @ ("start_queue" | "stop_queue")) = cmd.action.as_deref() {
             let at = cmd
                 .queue
