@@ -15,7 +15,7 @@ pub fn configure(opacity_percent: u8) {
 
 fn scaled_alpha(base: u8) -> u8 {
     ((f32::from(base) * f32::from(GLASS_PERCENT.load(Ordering::Relaxed)) / 73.0)
-        .round() as u16).clamp(30, 239) as u8
+        .round() as u16 * 83 / 100).clamp(30, 218) as u8
 }
 
 pub fn active() -> bool {
@@ -33,20 +33,20 @@ pub fn backdrop(p: &Painter, rect: Rect) {
         return;
     }
     let p = p.with_clip_rect(rect);
-    p.rect_filled(rect, 0.0, Color32::from_rgb(8, 12, 15));
+    p.rect_filled(rect, 0.0, Color32::from_rgb(11, 17, 20));
     let min = rect.min;
     let max = rect.max;
     let lights = [
-        (pos2(min.x + rect.width() * 0.12, max.y + 20.0), 65_u8, 165_u8, 154_u8),
+        (pos2(min.x + rect.width() * 0.12, max.y + 20.0), 32_u8, 128_u8, 124_u8),
         (pos2(max.x - rect.width() * 0.05, min.y + rect.height() * 0.38),
-            172_u8, 94_u8, 62_u8),
+            139_u8, 87_u8, 56_u8),
         (pos2(min.x + rect.width() * 0.42, min.y - 35.0),
             47_u8, 94_u8, 100_u8),
     ];
     for (center, r, g, b) in lights {
-        for step in (1..=23).rev() {
-            let radius = (step as f32 / 23.0) * rect.width().max(rect.height()) * 0.62;
-            p.circle_filled(center, radius, rgba(r, g, b, 2));
+        for step in (1..=36).rev() {
+            let radius = (step as f32 / 36.0) * rect.width().max(rect.height()) * 0.54;
+            p.circle_filled(center, radius, rgba(r, g, b, 3));
         }
     }
 }
