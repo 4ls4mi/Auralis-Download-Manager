@@ -1,0 +1,66 @@
+# Mister Hybrid V2: build/test the redesigned Windows fork.
+# Never tags or publishes this as an official release.
+name: Mister Hybrid V3 Windows
+
+on:
+  push:
+    branches: ["feature/plexo-glass-v3"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer revision supersedes earlier unverified development builds.
+concurrency:
+  group: mister-hybrid-v3-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout V2 source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Rust toolchain
+        run: |
+          rustup show active-toolchain
+          rustup target add x86_64-pc-windows-msvc
+
+      - name: NASM
+        shell: pwsh
+        run: |
+          choco install nasm --version 2.16.3 --no-progress -y
+          "C:\Program Files\NASM" >> $env:GITHUB_PATH
+
+      - name: Inno Setup 6
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup --no-progress -y
+          }
+
+      - name: Format Rust sources
+        run: cargo fmt --all
+
+      - name: Desktop tests and theme validation
+        run: cargo test -p mdm-app --target x86_64-pc-windows-msvc
+
+      - name: Build Windows installer and portable ZIP
+        shell: pwsh
+        run: ./tools/installer/build.ps1 -Arch x64
+
+      - name: Smoke test Windows download executables
+        run: python tools/installer/smoke.py target/x86_64-pc-windows-msvc/release x64
+
+      - name: Upload installer, portable ZIP and checksums
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: mister-hybrid-v3-windows-x64
+          path: target/dist/*
+          if-no-files-found: warn
+          retention-days: 14
