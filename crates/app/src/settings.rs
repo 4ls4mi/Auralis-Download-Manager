@@ -121,8 +121,12 @@ pub struct Settings {
     pub theme: String,
     /// Custom wallpaper for the main window (an empty string disables it).
     pub wallpaper_main: String,
+    /// Background fit: 0 = Fill/crop, 1 = Fit/letterbox, 2 = Stretch.
+    pub wallpaper_main_mode: u8,
     /// Optional custom wallpaper for download progress windows.
     pub wallpaper_download: String,
+    /// Separate fit mode for the detailed download window.
+    pub wallpaper_download_mode: u8,
     /// Reuse the main wallpaper for progress windows unless overridden.
     pub wallpaper_download_inherit: bool,
     /// Wallpaper blur amount in pixels, processed once when an image is selected.
@@ -446,7 +450,9 @@ impl Default for Settings {
             always_dark: true,
             theme: "plexo".into(),
             wallpaper_main: String::new(),
+            wallpaper_main_mode: 0,
             wallpaper_download: String::new(),
+            wallpaper_download_mode: 0,
             wallpaper_download_inherit: true,
             wallpaper_blur: 9,
             wallpaper_dim: 39,
