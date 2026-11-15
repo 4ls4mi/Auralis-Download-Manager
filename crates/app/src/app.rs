@@ -1876,7 +1876,7 @@ impl App {
         if crate::theme::current().id.as_ref() == "plexo" {
             let card = egui::Rect::from_min_size(
                 pos2(o.x + 5.0, o.y + h - STRIP_H + 2.0),
-                vec2((w - 10.0).max(0.0), STRIP_H - 4.0),
+                egui::vec2((w - 10.0).max(0.0), STRIP_H - 4.0),
             );
             crate::wallpaper::glass_panel(
                 p, card, self.settings.wallpaper_glass, 8.0
