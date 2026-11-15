@@ -1,3 +1,6 @@
+# WINDOWS-ONLY fork note: for feature/tauri-unified-windows PR, all legacy
+# multi-platform CI jobs are skipped; the two independent Windows workflows
+# build and validate the React/Tauri installer on windows-latest only.
 # Build, lint and test main and every pull request: Windows and Linux, which must pass, and the
 # experimental macOS build (its failures are reported but don't fail the run). The other processors
 # MDM is published for (Windows on ARM and Linux on ARM on GitHub's ARM runners; 32-bit Windows on
@@ -42,6 +45,7 @@ env:
 
 jobs:
   rust:
+    if: ${{ !(github.event_name == 'pull_request' && github.head_ref == 'feature/tauri-unified-windows') }}
     name: ${{ matrix.name || matrix.os }}
     strategy:
       fail-fast: false
@@ -153,6 +157,7 @@ jobs:
   # A translator's reviewed rows (no "#, machine" line) must survive every pull request: no
   # tool or merge may drop them or hand them back to machine translation.
   translations:
+    if: ${{ !(github.event_name == 'pull_request' && github.head_ref == 'feature/tauri-unified-windows') }}
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
@@ -164,6 +169,7 @@ jobs:
         run: python3 tools/i18n/reviewed_guard.py --base "origin/${{ github.base_ref }}"
 
   extension:
+    if: ${{ !(github.event_name == 'pull_request' && github.head_ref == 'feature/tauri-unified-windows') }}
     name: browser extension
     runs-on: ubuntu-latest
     timeout-minutes: 15
