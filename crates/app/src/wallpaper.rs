@@ -84,7 +84,7 @@ fn load(ctx: &egui::Context, path: &str, blur: u8, target: Target) -> Option<Cac
         return None;
     }
     let mut reader = image::ImageReader::open(location).ok()?.with_guessed_format().ok()?;
-    reader.limits(image::io::Limits::default());
+    reader.limits(image::Limits::default());
     let img = reader.decode().ok()?;
     let img = img.thumbnail(MAX_WIDTH, MAX_HEIGHT).to_rgba8();
     let (width, height) = img.dimensions();
