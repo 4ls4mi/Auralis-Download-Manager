@@ -291,6 +291,8 @@ enum Cmd {
     ToggleDarkMode,
     /// View → Always dark (#60).
     ToggleAlwaysDark,
+    /// V2 settings: Plexo theme, glass opacity and independent window wallpapers.
+    Appearance,
     /// View → Theme → a theme (#45): a built-in's id or a theme file's name.
     Theme(&'static str),
     /// View → Theme → Open themes folder.
@@ -910,6 +912,7 @@ pub struct App {
     speed_settings: Option<dialogs::SpeedSettings>,
     scheduler: Option<crate::scheduler::Scheduler>,
     options: Option<crate::options::OptionsDialog>,
+    appearance_open: bool,
     /// Downloads to finish off once stopped: Download File Info was cancelled after an early
     /// start (`None`: the download and its data go), or its file was given another place
     /// (`Some((dest, start))`: the data so far goes, it starts over there when `start`).
@@ -1642,6 +1645,7 @@ impl App {
             speed_settings: None,
             scheduler: None,
             options: None,
+            appearance_open: false,
             category_dlg: None,
             category_for_file_info: false,
             grabber: None,
@@ -6742,6 +6746,10 @@ impl App {
                 self.theme_checked = None;
                 self.dirty = true;
             }
+            Cmd::Appearance => {
+                self.appearance_open = true;
+                ctx.request_repaint();
+            }
             Cmd::ToggleAlwaysDark => {
                 self.settings.always_dark = !self.settings.always_dark;
                 self.theme_checked = None;
@@ -7558,6 +7566,7 @@ impl App {
                 ),
                 Sep,
                 I("&Options", Cmd::Options, true, false),
+                I("Appearance & Wallpapers...", Cmd::Appearance, true, false),
             ],
             3 => vec![
                 I(
@@ -8510,6 +8519,14 @@ impl App {
     fn paint(&mut self, ui: &mut Ui) {
         let ctx = ui.ctx().clone();
         let full = ui.max_rect();
+        crate::wallpaper::paint(
+            ui, full,
+            &self.settings.wallpaper_main,
+            self.settings.wallpaper_blur,
+            self.settings.wallpaper_dim,
+            self.settings.wallpaper_glass,
+            crate::wallpaper::Target::Main,
+        );
         // The client area, laid out from the right in a right-to-left interface (winui).
         let _surface = winui::Surface::enter(full.min.x, full.max.x);
         // A style theme's title bar, drawn above the layout (Windows; #45), mirrored right to
@@ -9473,6 +9490,17 @@ impl App {
         }
         if let Some(path) = winui::picked(ctx, "app-theme-file") {
             self.add_theme_file(&path, ctx);
+        }
+        if let Some(path) = winui::picked(ctx, "app-wallpaper-main") {
+            self.settings.wallpaper_main = path.to_string_lossy().into_owned();
+            crate::wallpaper::clear();
+            self.dirty = true;
+        }
+        if let Some(path) = winui::picked(ctx, "app-wallpaper-progress") {
+            self.settings.wallpaper_download = path.to_string_lossy().into_owned();
+            self.settings.wallpaper_download_inherit = false;
+            crate::wallpaper::clear();
+            self.dirty = true;
         }
         if let Some(target) = winui::picked(ctx, "app-move-rename")
             && let Some(id) = self.move_rename_for.take()
@@ -10671,7 +10699,9 @@ impl App {
         }
         if let Some(d) = &mut self.options {
             d.snoozed_until = self.snooze.until(unix_now());
-            match d.show(ctx, &self.downloads) {
+            let result = d.show(ctx, &self.downloads);
+            let appearance_requested = std::mem::take(&mut d.appearance_requested);
+            match result {
                 Outcome::Open => {}
                 Outcome::Closed => {
                     // Cancel: categories the dialog added, changed or restored are undone, and
@@ -10687,6 +10717,10 @@ impl App {
                     self.options = None;
                     self.apply_options(new);
                 }
+            }
+            if appearance_requested {
+                self.options = None;
+                self.appearance_open = true;
             }
         }
         if let Some(mut s) = self.scheduler.take() {
@@ -10843,7 +10877,7 @@ impl App {
                         p.rename_guard = None;
                     }
                 }
-                actions.push((p.id, p.show(ctx, item, item.snap.as_ref())));
+                actions.push((p.id, p.show(ctx, item, item.snap.as_ref(), &self.settings)));
             }
         }
         for (id, a) in actions {
@@ -11256,6 +11290,11 @@ impl App {
         chrome::tell_screen_readers(&ctx);
         crate::crash::step(crate::crash::Step::Dialogs);
         self.dialogs(&ctx);
+        if self.appearance_open {
+            if crate::appearance::show(&ctx, &mut self.appearance_open, &mut self.settings) {
+                self.dirty = true;
+            }
+        }
         crate::crash::frame_end();
         crate::renderer::frame_done(&ctx);
     }
