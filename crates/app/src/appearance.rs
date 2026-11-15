@@ -68,8 +68,8 @@ fn wallpaper_file_ok(path: &str) -> bool {
 fn video_help(ui: &mut Ui, path: &str) {
     if wallpaper::is_video(path) && !wallpaper::video_decoder_available() {
         ui.colored_label(Color32::from_rgb(255, 180, 105),
-            "Video playback requires FFmpeg installed and available on Windows PATH.");
-        ui.label("Your video selection stays saved. Install FFmpeg, then restart Mister Hybrid.");
+            "Video playback needs FFmpeg. Install it using Mister’s video Helpers, or use one on Windows PATH.");
+        ui.label("Your video selection stays saved. Restart Mister Hybrid after installing FFmpeg.");
     }
 }
 
@@ -208,7 +208,7 @@ pub fn show(ctx: &egui::Context, open: &mut bool, settings: &mut Settings) -> bo
                 }
                 ui.small("PNG, JPG, WebP, MP4, WebM, MOV or MKV • local files only");
             });
-            ui.small("Video wallpapers play silently at a capped frame rate. FFmpeg must be on Windows PATH.");
+            ui.small("Video wallpapers play silently at a capped frame rate, using Mister’s FFmpeg helper when installed.");
         });
     let changed = *settings != before;
     if changed {
