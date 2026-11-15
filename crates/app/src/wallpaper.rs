@@ -54,13 +54,21 @@ impl Contrast {
         let darkening = dim_percent.min(95) as f32 / 100.0;
         let level = (darkening + if bright_image { 0.36 } else { 0.21 }).clamp(0.45, 0.93);
         let glass_alpha = (glass_percent.clamp(58, 98) as f32 * 2.55).round() as u8;
-        let dark_alpha = (level * 255.0).round() as u8;
-        let _ = dark_alpha; // kept separately from the surface's alpha
+        let _level = level;
+        // On a bright wallpaper with light dimming, labels *directly on the
+        // image* switch to dark ink on a light protective plate. The rest of
+        // the dark application always uses its high-contrast charcoal cards.
+        let light_plate = brightness * (1.0 - darkening * 0.4) > 0.60;
         Self {
-            ink: Color32::from_rgb(244, 250, 251),
-            stroke: if bright_image { Color32::from_rgb(1, 8, 10) }
-                else { Color32::from_rgb(13, 23, 28) },
-            glass: Color32::from_rgba_unmultiplied(11, 17, 20, glass_alpha),
+            ink: if light_plate { Color32::from_rgb(13, 25, 28) }
+                else { Color32::from_rgb(244, 250, 251) },
+            stroke: if light_plate { Color32::from_rgb(251, 253, 254) }
+                else { Color32::from_rgb(1, 8, 10) },
+            glass: if light_plate {
+                Color32::from_rgba_unmultiplied(241, 248, 249, glass_alpha)
+            } else {
+                Color32::from_rgba_unmultiplied(11, 17, 20, glass_alpha)
+            },
             bright_image,
         }
     }
@@ -198,5 +206,7 @@ mod tests {
         assert!(bright.bright_image);
         assert!(!dark.bright_image);
         assert!(bright.glass.a() >= 148);
+        let minimally_dimmed = Contrast::for_wallpaper(0.95, 20, 85);
+        assert_eq!(minimally_dimmed.ink, egui::Color32::from_rgb(13, 25, 28));
     }
 }
