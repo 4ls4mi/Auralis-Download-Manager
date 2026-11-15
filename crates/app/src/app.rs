@@ -8596,6 +8596,7 @@ impl App {
     fn paint(&mut self, ui: &mut Ui) {
         let ctx = ui.ctx().clone();
         let full = ui.max_rect();
+        crate::glass_ui::backdrop(&ui.painter_at(full), full);
         crate::wallpaper::paint(
             ui,
             full,
