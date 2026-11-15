@@ -5917,6 +5917,8 @@ impl App {
                 "capture_opened": self.settings.capture_opened,
                 "show_progress": self.settings.show_progress,
                 "show_complete": self.settings.show_complete,
+                "advanced_integration": self.settings.advanced_integration,
+                "double_click_open": self.settings.double_click_open,
                 "net_adapter": self.settings.net_adapter,
                 "category_dirs": self.settings.category_dirs,
             }).to_string();
@@ -5955,6 +5957,10 @@ impl App {
                 "torrent_lsd" => bool_value.map(|n| { self.settings.torrent_lsd = n; }),
                 "proxy_from_browser" => bool_value.map(|n| { self.settings.proxy_from_browser = n; }),
                 "capture_opened" => bool_value.map(|n| { self.settings.capture_opened = n; }),
+                "show_complete" => bool_value.map(|n| { self.settings.show_complete = n; }),
+                "show_progress" => bool_value.map(|n| { self.settings.show_progress = n; }),
+                "advanced_integration" => bool_value.map(|n| { self.settings.advanced_integration = n; }),
+                "double_click_open" => bool_value.map(|n| { self.settings.double_click_open = n; }),
                 "net_adapter" if value.len() <= 256 => {
                     self.settings.net_adapter = value.into();
                     Some(())
@@ -5970,6 +5976,89 @@ impl App {
                     code: Some("invalid-setting".into()),
                 })
             };
+        }
+        // Unified Windows glass frontend: real backend commands. Only the
+        // authenticated local GUI process may invoke these actions. The paired
+        // remote-control API never gets these capabilities.
+        if !cmd.remote && glass_owned
+            && cmd.action.as_deref() == Some("glass-bulk") {
+            let action = cmd.category.as_deref().unwrap_or("");
+            let ids: Vec<u64> = match action {
+                "stop-all" => self.items.iter()
+                    .filter(|it| it.live.is_some()).map(|it| it.id).collect(),
+                "delete-completed" => self.items.iter()
+                    .filter(|it| it.status == Status::Complete && it.live.is_none())
+                    .map(|it| it.id).collect(),
+                _ => return line(&ErrorAnswer {
+                    error: "invalid bulk command".into(), code: Some("invalid-action".into()),
+                }),
+            };
+            return line(&self.act(if action == "stop-all" { "pause" } else { "remove" }, &ids)
+                .unwrap_or_default());
+        }
+        if !cmd.remote && glass_owned
+            && cmd.action.as_deref() == Some("glass-item") {
+            let id = match cmd.ids.as_slice() {
+                [id] => *id,
+                _ => return line(&ErrorAnswer { error: "select one file".into(), code: None }),
+            };
+            match cmd.category.as_deref().unwrap_or("") {
+                "redownload" => {
+                    if !self.items.iter().any(|it| it.id == id && it.live.is_none()) {
+                        return line(&ErrorAnswer { error: "pause this download first".into(), code: None });
+                    }
+                    self.redownload(id);
+                    return serde_json::json!({ "ok": true }).to_string();
+                }
+                "speed-limit" => {
+                    let value = cmd.queue.as_deref().unwrap_or("");
+                    let limit = match value {
+                        "off" => None,
+                        v => match v.parse::<u64>().ok()
+                            .filter(|kb| (1..=10_000_000).contains(kb))
+                            .and_then(|kb| kb.checked_mul(1024)) {
+                            Some(bytes) => Some(bytes),
+                            None => return line(&ErrorAnswer {
+                                error: "speed limit must be 1..10000000 KB/s or off".into(),
+                                code: Some("invalid-setting".into()),
+                            }),
+                        }
+                    };
+                    let mut helper = false;
+                    if let Some(it) = self.item(id) {
+                        if let Some(live) = it.live.as_ref() {
+                            live.dl.set_speed_limit(limit);
+                            helper = live.dl.is_helper();
+                        }
+                        it.own_limit = limit;
+                        self.dirty = true;
+                    } else {
+                        return line(&ErrorAnswer { error: "download not found".into(), code: None });
+                    }
+                    if helper {
+                        self.helper_own.insert(id, limit);
+                        self.reapply_helper_limits();
+                    }
+                    return serde_json::json!({ "ok": true }).to_string();
+                }
+                "details" => {
+                    let Some(it) = self.items.iter().find(|it| it.id == id) else {
+                        return line(&ErrorAnswer { error: "download not found".into(), code: None });
+                    };
+                    return serde_json::json!({
+                        "id": id,
+                        "own_limit_kb": it.own_limit.map(|n| n / 1024),
+                        "file": it.file_name,
+                        "status": format!("{:?}", it.status),
+                        "is_torrent": it.torrent.is_some(),
+                        "url": it.url.to_string(),
+                        "path": it.dest.to_string_lossy(),
+                    }).to_string();
+                }
+                _ => return line(&ErrorAnswer {
+                    error: "unknown download command".into(), code: Some("invalid-action".into()),
+                })
+            }
         }
         if let Some(action @ ("start_queue" | "stop_queue")) = cmd.action.as_deref() {
             let at = cmd
