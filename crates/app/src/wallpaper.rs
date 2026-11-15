@@ -4,7 +4,9 @@
 use std::path::Path;
 use std::sync::{LazyLock, Mutex};
 
-use egui::{Color32, ColorImage, Painter, Rect, Stroke, TextureHandle, TextureOptions, Ui, pos2, vec2};
+use egui::{
+    Color32, ColorImage, Painter, Rect, Stroke, TextureHandle, TextureOptions, Ui, pos2, vec2,
+};
 
 /// Cap decoded texture dimensions to avoid a multi-hundred-MB GPU allocation.
 const MAX_WIDTH: u32 = 2048;
@@ -60,10 +62,16 @@ impl Contrast {
         // the dark application always uses its high-contrast charcoal cards.
         let light_plate = brightness * (1.0 - darkening * 0.4) > 0.60;
         Self {
-            ink: if light_plate { Color32::from_rgb(13, 25, 28) }
-                else { Color32::from_rgb(244, 250, 251) },
-            stroke: if light_plate { Color32::from_rgb(251, 253, 254) }
-                else { Color32::from_rgb(1, 8, 10) },
+            ink: if light_plate {
+                Color32::from_rgb(13, 25, 28)
+            } else {
+                Color32::from_rgb(244, 250, 251)
+            },
+            stroke: if light_plate {
+                Color32::from_rgb(251, 253, 254)
+            } else {
+                Color32::from_rgb(1, 8, 10)
+            },
             glass: if light_plate {
                 Color32::from_rgba_unmultiplied(241, 248, 249, glass_alpha)
             } else {
@@ -83,7 +91,10 @@ fn load(ctx: &egui::Context, path: &str, blur: u8, target: Target) -> Option<Cac
     if std::fs::metadata(location).ok()?.len() > MAX_FILE {
         return None;
     }
-    let mut reader = image::ImageReader::open(location).ok()?.with_guessed_format().ok()?;
+    let mut reader = image::ImageReader::open(location)
+        .ok()?
+        .with_guessed_format()
+        .ok()?;
     reader.limits(image::Limits::default());
     let img = reader.decode().ok()?;
     let img = img.thumbnail(MAX_WIDTH, MAX_HEIGHT).to_rgba8();
@@ -97,8 +108,8 @@ fn load(ctx: &egui::Context, path: &str, blur: u8, target: Target) -> Option<Cac
     for y in (0..height).step_by((height / 32).max(1) as usize) {
         for x in (0..width).step_by((width / 32).max(1) as usize) {
             let px = img.get_pixel(x, y).0;
-            let luma = (0.2126 * px[0] as f64 + 0.7152 * px[1] as f64
-                + 0.0722 * px[2] as f64) / 255.0;
+            let luma =
+                (0.2126 * px[0] as f64 + 0.7152 * px[1] as f64 + 0.0722 * px[2] as f64) / 255.0;
             brightness += luma;
             count += 1;
         }
@@ -110,14 +121,17 @@ fn load(ctx: &egui::Context, path: &str, blur: u8, target: Target) -> Option<Cac
         img
     };
     let pixels = img.as_raw();
-    let color_image = ColorImage::from_rgba_unmultiplied(
-        [width as usize, height as usize],
-        pixels,
-    );
+    let color_image = ColorImage::from_rgba_unmultiplied([width as usize, height as usize], pixels);
     let name = format!("hybrid-wallpaper-{target:?}-{path}-blur{blur}");
     let texture = ctx.load_texture(name, color_image, TextureOptions::LINEAR);
-    Some(Cached { path: path.into(), blur, texture, width: width as f32,
-        height: height as f32, brightness })
+    Some(Cached {
+        path: path.into(),
+        blur,
+        texture,
+        width: width as f32,
+        height: height as f32,
+        brightness,
+    })
 }
 
 /// Renders an aspect-fill wallpaper and contrast-correct dark overlay.
@@ -135,8 +149,14 @@ pub fn paint(
         return None;
     }
     let mut cache = CACHE.lock().unwrap_or_else(|err| err.into_inner());
-    let slot = match target { Target::Main => &mut cache.main, Target::Progress => &mut cache.progress };
-    if slot.as_ref().is_none_or(|s| s.path != path || s.blur != blur) {
+    let slot = match target {
+        Target::Main => &mut cache.main,
+        Target::Progress => &mut cache.progress,
+    };
+    if slot
+        .as_ref()
+        .is_none_or(|s| s.path != path || s.blur != blur)
+    {
         *slot = load(ui.ctx(), path, blur, target);
     }
     let loaded = slot.as_ref()?;
@@ -154,8 +174,7 @@ pub fn paint(
     // Darken whites more than blacks, preserving a uniformly legible
     // canvas for the dark UI. Every readable control has its own surface.
     let adaptive = if out.bright_image { 0.34 } else { 0.17 };
-    let alpha = ((dim_percent.min(95) as f32 / 100.0 + adaptive).clamp(0.35, 0.95)
-        * 255.0) as u8;
+    let alpha = ((dim_percent.min(95) as f32 / 100.0 + adaptive).clamp(0.35, 0.95) * 255.0) as u8;
     painter.rect_filled(rect, 0.0, Color32::from_black_alpha(alpha));
     Some(out)
 }
@@ -164,20 +183,43 @@ pub fn paint(
 pub fn outlined_label(painter: &Painter, rect: Rect, label: &str, contrast: Contrast) {
     let center = rect.center();
     let font = egui::FontId::proportional(13.0);
-    for offset in [vec2(-1.0, 0.0), vec2(1.0, 0.0), vec2(0.0, -1.0), vec2(0.0, 1.0)] {
-        painter.text(center + offset, egui::Align2::CENTER_CENTER,
-            label, font.clone(), contrast.stroke);
+    for offset in [
+        vec2(-1.0, 0.0),
+        vec2(1.0, 0.0),
+        vec2(0.0, -1.0),
+        vec2(0.0, 1.0),
+    ] {
+        painter.text(
+            center + offset,
+            egui::Align2::CENTER_CENTER,
+            label,
+            font.clone(),
+            contrast.stroke,
+        );
     }
-    painter.text(center, egui::Align2::CENTER_CENTER, label, font, contrast.ink);
+    painter.text(
+        center,
+        egui::Align2::CENTER_CENTER,
+        label,
+        font,
+        contrast.ink,
+    );
 }
 
 /// A translucent protective glass panel, tinted for Mister's charcoal theme.
 pub fn glass_panel(painter: &Painter, rect: Rect, opacity: u8, radius: f32) {
     let alpha = ((opacity.clamp(58, 98) as f32 / 100.0) * 255.0) as u8;
-    painter.rect_filled(rect, radius,
-        Color32::from_rgba_unmultiplied(14, 21, 24, alpha));
-    painter.rect_stroke(rect, radius, Stroke::new(1.0,
-        Color32::from_rgba_unmultiplied(85, 139, 145, 105)), egui::StrokeKind::Inside);
+    painter.rect_filled(
+        rect,
+        radius,
+        Color32::from_rgba_unmultiplied(14, 21, 24, alpha),
+    );
+    painter.rect_stroke(
+        rect,
+        radius,
+        Stroke::new(1.0, Color32::from_rgba_unmultiplied(85, 139, 145, 105)),
+        egui::StrokeKind::Inside,
+    );
 }
 
 /// The progress-window wallpaper is either a chosen separate image or the main one.
