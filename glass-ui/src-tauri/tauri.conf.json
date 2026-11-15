@@ -16,14 +16,15 @@
         "title": "Mister Hybrid Glass",
         "width": 1480,
         "height": 850,
-        "minWidth": 1024,
-        "minHeight": 640,
+        "minWidth": 720,
+        "minHeight": 520,
         "center": true,
         "decorations": false,
         "backgroundColor": "#00000000",
         "transparent": true,
         "shadow": false,
-        "noRedirectionBitmap": true
+        "noRedirectionBitmap": true,
+        "resizable": true
       }
     ],
     "security": {
@@ -45,7 +46,8 @@
       "icons/icon.ico"
     ],
     "resources": {
-      "resources/mdm-legacy.exe": "mdm-legacy.exe"
+      "resources/mdm-legacy.exe": "mdm-legacy.exe",
+      "resources/misterdownloadmanager-nmhost.exe": "misterdownloadmanager-nmhost.exe"
     }
   }
 }
