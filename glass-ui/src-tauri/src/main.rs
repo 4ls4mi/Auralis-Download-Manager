@@ -135,6 +135,34 @@ fn suffix(path: &Path) -> Option<String> {
     path.extension()?.to_str().map(|s| s.to_ascii_lowercase())
 }
 
+/// Opens the ORIGINAL application's Windows UI, preserving advanced tools
+/// that have not yet been ported into the new React frontend.
+/// The original app brings its main window to the front for any /show command.
+#[tauri::command]
+async fn open_original_window(page: String) -> ApiResult<String> {
+    const PAGES: &[&str] = &[
+        "main", "options:general", "options:types", "options:saveto",
+        "options:downloads", "options:connection", "options:proxy",
+        "options:logins", "options:sounds", "options:regional",
+        "options:panels", "scheduler", "speedlimit", "helpers",
+        "extension", "torrent-settings", "rss", "find",
+        "batch", "language", "shortcuts", "video-page",
+        "about", "addurl",
+    ];
+    if !PAGES.contains(&page.as_str()) {
+        return Err("Unknown original Mister Download Manager window".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let reply = send_ipc(&mdm_ipc::Command {
+            show: Some(page),
+            ..Default::default()
+        })?;
+        if reply == "ok" { Ok("Opened original MDM controls".into()) }
+        else { Err(format!("MDM could not open the requested window: {reply}")) }
+    })
+    .await.map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 async fn select_wallpaper(app: AppHandle, target: String) -> ApiResult<Option<String>> {
     if target != "main" && target != "details" {
@@ -169,7 +197,7 @@ fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             boot_engine, dashboard_snapshot, download_action,
-            add_download, select_wallpaper
+            add_download, select_wallpaper, open_original_window
         ])
         .run(tauri::generate_context!())
         .expect("error starting Mister Hybrid glass desktop");
