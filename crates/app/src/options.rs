@@ -187,6 +187,8 @@ pub struct OptionsDialog {
     s: Settings,
     /// The settings it opened with: OK applies only what changed from them.
     pub from: Settings,
+    /// Settings -> Appearance opens the dedicated wallpaper and theme editor.
+    pub appearance_requested: bool,
     page: usize,
     /// The browsers check list's scroll and selection.
     browser_rows: winui::RowList,
@@ -317,6 +319,7 @@ impl OptionsDialog {
             hours: s.limits_hours.to_string(),
             s,
             page: 0,
+            appearance_requested: false,
             category: 0,
             exc_rows: Default::default(),
             login_rows: Default::default(),
@@ -377,6 +380,15 @@ impl OptionsDialog {
                     REMOTE_PAGE => self.remote_page(ui, o),
                     8 => self.sounds(ui, o),
                     _ => self.regional(ui, o),
+                }
+                if winui::button_light(
+                    ui,
+                    r(o, 20.0, 477.0, 131.0, 21.0),
+                    "Appearance...",
+                    ButtonKind::Normal,
+                    false,
+                ).clicked() {
+                    self.appearance_requested = true;
                 }
                 let ok = winui::button_light(
                     ui,
