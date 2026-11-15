@@ -705,7 +705,7 @@ fn place_to_take(item: &Item, items: &[Item]) -> Option<PathBuf> {
 }
 
 /// The status strip's height, under the list and the Categories pane.
-const STRIP_H: f32 = 22.0;
+const STRIP_H: f32 = 40.0;
 
 impl Cmd {
     /// The key that runs this command anywhere in the main window, as the shortcuts list writes
@@ -1114,6 +1114,9 @@ pub struct App {
     theme_files_seen: u64,
     /// When `logic`'s every-2-seconds work last ran (crash state, torrents, #174).
     ticked: Option<Instant>,
+    /// 90 real aggregate-speed readings, sampled at 0.5-second intervals.
+    speed_samples: std::collections::VecDeque<f32>,
+    speed_sampled_at: Option<Instant>,
     /// The main window's caption matches the mode.
     caption_set: bool,
     /// Windows: whether the main window's title bar is ours (a style theme's, #45), as applied
@@ -1747,6 +1750,8 @@ impl App {
             theme_list: crate::themefile::list_in(None, None),
             theme_files_seen: 0,
             ticked: None,
+            speed_samples: std::collections::VecDeque::with_capacity(90),
+            speed_sampled_at: None,
             caption_set: false,
             // The system's title bar is the frame's own: nothing to apply for it.
             drawn_frame: Some(false),
@@ -1865,6 +1870,55 @@ impl App {
     /// how fast in all (beyond IDM, which has no status bar).
     fn status_strip(&self, ui: &Ui, o: Pos2, w: f32, h: f32, shown: usize) {
         let p = ui.painter();
+        if crate::theme::current().id.as_ref() == "plexo" {
+            let card = egui::Rect::from_min_size(
+                pos2(o.x + 5.0, o.y + h - STRIP_H + 2.0),
+                vec2((w - 10.0).max(0.0), STRIP_H - 4.0),
+            );
+            crate::wallpaper::glass_panel(
+                p, card, self.settings.wallpaper_glass, 8.0
+            );
+            let c = crate::theme::colors();
+            let label = crate::i18n::tn(shown as u64,
+                "{n} download", "{n} downloads");
+            p.text(
+                pos2(card.left() + 12.0, card.center().y), egui::Align2::LEFT_CENTER,
+                label, egui::FontId::proportional(12.0), c.text,
+            );
+            // Real measured speed history, not a decorative animation.
+            let graph = egui::Rect::from_min_max(
+                pos2(card.left() + 155.0, card.top() + 7.0),
+                pos2((card.right() - 198.0).max(card.left() + 180.0),
+                    card.bottom() - 7.0),
+            );
+            let peak = self.speed_samples.iter().copied()
+                .filter(|s| s.is_finite())
+                .fold(0.01_f32, f32::max);
+            if self.speed_samples.len() >= 2 {
+                let mut before = None;
+                let last = (self.speed_samples.len() - 1) as f32;
+                for (i, rate) in self.speed_samples.iter().enumerate() {
+                    let x = graph.left() + i as f32 / last * graph.width();
+                    let y = graph.bottom() - (rate.max(0.0) / peak).clamp(0.0, 1.0)
+                        * graph.height();
+                    let point = pos2(x, y);
+                    if let Some(previous) = before {
+                        p.line_segment([previous, point],
+                            egui::Stroke::new(1.6, c.accent));
+                    }
+                    before = Some(point);
+                }
+            }
+            let total_speed: f64 = self.items.iter().filter(|it| it.live.is_some())
+                .map(|it| it.rate()).sum();
+            let text = model::rate(total_speed);
+            p.text(
+                pos2(card.right() - 12.0, card.center().y),
+                egui::Align2::RIGHT_CENTER, text,
+                egui::FontId::proportional(12.0), c.accent,
+            );
+            return;
+        }
         let top = o.y + h - STRIP_H;
         // Centred in the band it reads as: the strip and the 5 px gap above it, under the panes.
         let baseline = winui::baseline_in(top - 5.0, STRIP_H + 5.0);
@@ -11148,6 +11202,14 @@ impl App {
         self.debrid_tick();
         crate::crash::step(crate::crash::Step::Downloads);
         self.poll(ctx);
+        if self.speed_sampled_at.is_none_or(|last| last.elapsed() >= Duration::from_millis(500)) {
+            self.speed_sampled_at = Some(Instant::now());
+            let bytes_per_second: f64 = self.items.iter().filter(|it| it.live.is_some())
+                .map(|it| it.rate()).sum();
+            if self.speed_samples.len() >= 90 { self.speed_samples.pop_front(); }
+            let mb_s = (bytes_per_second / 1048576.0) as f32;
+            self.speed_samples.push_back(if mb_s.is_finite() { mb_s.max(0.0) } else { 0.0 });
+        }
         crate::crash::step(crate::crash::Step::RemoteTorrents);
         self.poll_remote_torrents();
         // What failed in any window, told here (dialogs::tell).
