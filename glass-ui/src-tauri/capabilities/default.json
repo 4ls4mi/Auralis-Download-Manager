@@ -4,7 +4,10 @@
   "description": "Local packaged interface: restricted native commands and window controls only.",
   "windows": [
     "main",
-    "download-*"
+    "download-*",
+    "settings",
+    "scheduler",
+    "add-*"
   ],
   "permissions": [
     "core:default",
@@ -14,6 +17,11 @@
     "core:window:allow-start-dragging",
     "core:webview:allow-create-webview-window",
     "core:window:allow-set-effects",
-    "core:window:allow-set-focus"
+    "core:window:allow-set-focus",
+    "core:window:allow-set-size",
+    "core:window:allow-set-position",
+    "core:window:allow-unminimize",
+    "core:window:allow-show",
+    "core:window:allow-start-resize-dragging"
   ]
 }
