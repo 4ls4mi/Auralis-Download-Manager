@@ -9642,14 +9642,18 @@ impl App {
         }
         if let Some(path) = winui::picked(ctx, "app-wallpaper-main") {
             self.settings.wallpaper_main = path.to_string_lossy().into_owned();
+            tracing::info!(path = %self.settings.wallpaper_main, "main wallpaper selected");
             crate::wallpaper::clear();
             self.dirty = true;
+            ctx.request_repaint();
         }
         if let Some(path) = winui::picked(ctx, "app-wallpaper-progress") {
             self.settings.wallpaper_download = path.to_string_lossy().into_owned();
             self.settings.wallpaper_download_inherit = false;
+            tracing::info!(path = %self.settings.wallpaper_download, "progress wallpaper selected");
             crate::wallpaper::clear();
             self.dirty = true;
+            ctx.request_repaint();
         }
         if let Some(target) = winui::picked(ctx, "app-move-rename")
             && let Some(id) = self.move_rename_for.take()
@@ -11471,8 +11475,15 @@ impl App {
             }
         }
         crate::crash::step(crate::crash::Step::MainWindow);
+        // In Plexo mode, an opaque CentralPanel base would hide any wallpaper
+        // behind it. The dark backdrop is painted explicitly by self.paint.
+        let background = if crate::glass_ui::active() {
+            egui::Color32::TRANSPARENT
+        } else {
+            chrome::WINDOW_BG()
+        };
         egui::CentralPanel::no_frame()
-            .frame(egui::Frame::new().fill(chrome::WINDOW_BG()))
+            .frame(egui::Frame::new().fill(background))
             .show(ui, |ui| self.paint(ui));
         // A menu opened from the keyboard, said to screen readers (#328).
         chrome::tell_screen_readers(&ctx);
