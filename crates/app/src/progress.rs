@@ -879,9 +879,14 @@ impl Progress {
                 ui,
                 &p,
                 lower.x + 137.0,
-                lower.y + 242.0,
+                lower.y + 310.0,
                 crate::i18n::t("Start positions and download progress by connections"),
                 winui::TEXT(),
+            );
+            crate::hybrid_progress::detail_metrics(
+                &p, lower, &crate::model::rate(item.rate()),
+                &crate::model::size3(item.downloaded),
+                &item.time_left(), snap.map_or(0, |s| s.connections.len()),
             );
             crate::hybrid_progress::chunk_matrix(
                 ui,
@@ -891,6 +896,7 @@ impl Progress {
                 item.downloaded,
                 snap,
             );
+            crate::hybrid_progress::segment_legend(&p, lower);
             connections(
                 ui,
                 &p,
