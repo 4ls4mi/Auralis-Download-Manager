@@ -440,6 +440,9 @@
 #. text in the Options window
 #. Options → Network adapter: the first choice: no adapter is chosen, the system picks one for each connection
 	Any (the system chooses)	Any (the system chooses)
+#. button in the Options window
+#. the trailing ... means it opens a window: keep it
+	Appearance...	Appearance...
 #. text in the Scheduler window
 	April	April
 #. window title in extracting archives (a download's log, the Archive password window); text in extracting archives (a download's log, the Archive password window); text in the Link grabber window
@@ -5135,6 +5138,9 @@ menu	Adwaita	Adwaita
 #. View → Theme: a style theme's name (Windows 7's glassy look), a name: keep "Aero" as written
 menu	Aero	Aero
 #. menu command in the main window
+#. the trailing ... means it opens a window: keep it
+menu	Appearance & Wallpapers...	Appearance & Wallpapers...
+#. menu command in the main window
 #. View → Draw with: a greyed note under the choices; the choice takes effect when MDM is started again
 menu	Applies the next time MDM starts	Applies the next time MDM starts
 #. menu command in the main window
@@ -5354,6 +5360,8 @@ menu	OpenGL's first frame didn't show within 10 seconds	OpenGL's first frame did
 #. menu command in the main window
 #. View → Draw with: a greyed note; why MDM no longer draws with OpenGL: MDM crashed or was closed while starting with it
 menu	OpenGL's last start ended before its first frame	OpenGL's last start ended before its first frame
+#. menu command in the main window
+menu	Plexo Dark Glass	Plexo Dark Glass
 #. menu command in the main window
 #. what double-clicking a download does — noun: show its properties
 #. noun: opens the download's Properties window
