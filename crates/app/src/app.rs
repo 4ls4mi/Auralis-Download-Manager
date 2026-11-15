@@ -11375,10 +11375,10 @@ impl App {
         chrome::tell_screen_readers(&ctx);
         crate::crash::step(crate::crash::Step::Dialogs);
         self.dialogs(&ctx);
-        if self.appearance_open {
-            if crate::appearance::show(&ctx, &mut self.appearance_open, &mut self.settings) {
-                self.dirty = true;
-            }
+        if self.appearance_open
+            && crate::appearance::show(&ctx, &mut self.appearance_open, &mut self.settings)
+        {
+            self.dirty = true;
         }
         crate::crash::frame_end();
         crate::renderer::frame_done(&ctx);
