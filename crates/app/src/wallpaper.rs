@@ -32,6 +32,34 @@ pub fn is_video(path: &str) -> bool {
     })
 }
 
+/// A user-facing reason for a failed wallpaper selection, never a silent blank.
+/// Image decoding is still carried out by the cached loader, not this check.
+pub fn diagnose(path: &str) -> Option<String> {
+    if path.is_empty() {
+        return None;
+    }
+    let file = Path::new(path);
+    let metadata = match std::fs::metadata(file) {
+        Ok(m) if m.is_file() => m,
+        Ok(_) => return Some("Wallpaper is not a regular file.".into()),
+        Err(err) => return Some(format!("Wallpaper file cannot be accessed: {err}")),
+    };
+    if is_video(path) {
+        if !video_decoder_available() {
+            return Some("No FFmpeg helper available; use Options → Helpers or install FFmpeg.".into());
+        }
+        return None;
+    }
+    let ext = file.extension().map(|v| v.to_string_lossy().to_ascii_lowercase());
+    if !matches!(ext.as_deref(), Some("png" | "jpg" | "jpeg" | "webp")) {
+        return Some("Unsupported image type. Choose PNG, JPG, WebP or a supported video.".into());
+    }
+    if metadata.len() > MAX_FILE {
+        return Some(format!("Image is too large (limit {} MB).", MAX_FILE / 1024 / 1024));
+    }
+    None
+}
+
 fn ffmpeg_binary() -> Option<std::path::PathBuf> {
     FFMPEG_BINARY.get_or_init(|| {
         mdm_tools::tools_dir()
@@ -273,7 +301,11 @@ pub fn paint(
     {
         *slot = load(ui.ctx(), path, blur, target);
     }
-    let loaded = slot.as_mut()?;
+    let Some(loaded) = slot.as_mut() else {
+        // This would previously fail without any reason or notification.
+        tracing::warn!(path, "Wallpaper decoding failed (or media unsupported)");
+        return None;
+    };
     if let Some(stream) = &mut loaded.video {
         // Never decode video or wait for a frame on the UI thread.
         // A bounded queue drops excess frames when the window is busy.
