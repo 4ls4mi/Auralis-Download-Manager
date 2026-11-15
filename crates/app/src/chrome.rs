@@ -2031,6 +2031,176 @@ pub enum TreeEvent {
     Context(usize, Pos2),
 }
 
+/// Vertical glass navigation, preserving the real tree's filters and actions.
+/// No decorative or fake navigation: every interactive row retains its view.
+fn glass_categories(
+    ui: &mut Ui,
+    icons: &mut ShellIcons,
+    o: Pos2,
+    bottom: f32,
+    right: f32,
+    rows: &[TreeRow<'_>],
+    keys: bool,
+) -> Option<TreeEvent> {
+    let p = ui.painter().clone();
+    let y0 = o.y + pane_top() + MENU_H;
+    let rect = winui::rect(Rect::from_min_max(
+        pos2(o.x + 6.0, y0), pos2(right, bottom - 5.0),
+    ));
+    crate::glass_ui::panel(&p, rect, 13.0, 182);
+    let side = rect.left();
+    let top = rect.top();
+    p.text(
+        pos2(side + 17.0, top + 24.0), egui::Align2::LEFT_CENTER,
+        "MISTER HYBRID", egui::FontId::proportional(15.0),
+        crate::glass_ui::text(),
+    );
+    p.text(
+        pos2(side + 17.0, top + 43.0), egui::Align2::LEFT_CENTER,
+        "DOWNLOAD MANAGER", egui::FontId::proportional(9.0),
+        crate::glass_ui::muted(),
+    );
+    let close = Rect::from_min_size(pos2(rect.right() - 29.0, top + 12.0), vec2(19.0, 19.0));
+    let close_resp = ui.interact(close, egui::Id::unique("glass-cat-close"), winui::pointer_only())
+        .on_hover_text(crate::i18n::t("Close"));
+    p.text(close.center(), egui::Align2::CENTER_CENTER, "×",
+        egui::FontId::proportional(16.0), crate::glass_ui::muted());
+    if close_resp.clicked() {
+        return Some(TreeEvent::Close);
+    }
+    p.line_segment([pos2(side + 16.0, top + 59.0),
+        pos2(rect.right() - 16.0, top + 59.0)],
+        Stroke::new(1.0, Color32::from_rgba_unmultiplied(141, 181, 185, 48)));
+    let area = Rect::from_min_max(
+        pos2(side + 9.0, top + 69.0),
+        pos2(rect.right() - 9.0, rect.bottom() - 33.0),
+    );
+    let mut event = None;
+    let tree = ui.interact(winui::rect(area), egui::Id::unique("glass-tree"),
+        winui::pointer_only());
+    winui::expose(&tree, egui::Role::Tree, crate::i18n::t("Categories"), true, None);
+    let rows_ui = ui.new_child(egui::UiBuilder::new().accessibility_parent(tree.id));
+    let height = |r: &TreeRow<'_>| if r.level == 0 { 37.0 } else { 29.0 };
+    let total: f32 = rows.iter().map(height).sum();
+    let max_scroll = (total - area.height()).max(0.0);
+    let scroll_key = egui::Id::unique("glass-tree-scroll");
+    let mut scroll = ui.ctx().data(|d| d.get_temp::<f32>(scroll_key))
+        .unwrap_or_default();
+    if ui.rect_contains_pointer(winui::rect(area)) {
+        scroll -= ui.input(|i| i.smooth_scroll_delta.y);
+    }
+    scroll = scroll.clamp(0.0, max_scroll);
+    ui.ctx().data_mut(|d| d.insert_temp(scroll_key, scroll));
+    let cp = p.with_clip_rect(winui::rect(area));
+    let mut y = area.top() - scroll;
+    let mut selected_at = None;
+    for (k, row) in rows.iter().enumerate() {
+        let h = height(row);
+        let slot = Rect::from_min_size(
+            pos2(area.left() + 2.0, y + 2.0),
+            vec2((area.width() - 4.0).max(0.0), (h - 4.0).max(0.0)),
+        );
+        y += h;
+        if slot.bottom() < area.top() || slot.top() > area.bottom() {
+            continue;
+        }
+        let body = winui::rect(slot.intersect(area));
+        let resp = rows_ui.interact(body, egui::Id::unique(("glass-tree-row", k)),
+            winui::pointer_only());
+        let label = crate::i18n::t(&row.label);
+        let name = match row.count {
+            Some(n) => format!("{} {}", label, count_text(n)),
+            None => label.to_string(),
+        };
+        winui::expose(&resp, egui::Role::TreeItem, &name, true, None);
+        ui.ctx().accesskit_node_builder(resp.id, |node| {
+            node.set_level(row.level + 1);
+            node.set_selected(row.selected);
+            node.add_action(egui::accesskit::Action::ShowContextMenu);
+            if let Some(open) = row.expander {
+                node.set_expanded(open);
+                node.add_action(if open {
+                    egui::accesskit::Action::Collapse
+                } else {
+                    egui::accesskit::Action::Expand
+                });
+            }
+        });
+        let base = if row.level == 0 { slot.left() + 13.0 } else { slot.left() + 30.0 };
+        if row.selected {
+            crate::glass_ui::selected(&cp, slot, 9.0);
+            selected_at = Some((k, slot.left_bottom()));
+        } else if resp.hovered() {
+            crate::glass_ui::inset(&cp, slot, 9.0);
+        }
+        let icon_at = pos2(base, slot.center().y - 8.0);
+        icons.paint_in(ui, &cp, row.icon.clone(), icon_at);
+        let label_at = pos2(base + 23.0, slot.center().y);
+        cp.text(label_at, egui::Align2::LEFT_CENTER, label,
+            egui::FontId::proportional(if row.level == 0 { 12.5 } else { 11.5 }),
+            if row.selected { crate::glass_ui::text() } else { crate::glass_ui::muted() });
+        if let Some(n) = row.count {
+            let count = count_text(n);
+            let cap = Rect::from_center_size(
+                pos2(slot.right() - 21.0, slot.center().y), vec2(34.0, 19.0));
+            cp.rect_filled(cap, 9.0,
+                Color32::from_rgba_unmultiplied(37, 73, 78, 133));
+            cp.text(cap.center(), egui::Align2::CENTER_CENTER, &count,
+                egui::FontId::proportional(10.0), crate::glass_ui::text());
+        }
+        if let Some(open) = row.expander {
+            let x = slot.right() - 9.0;
+            let center = pos2(x, slot.center().y);
+            let d = if open { vec2(0.0, 3.0) } else { vec2(3.0, 0.0) };
+            cp.line_segment(
+                [center + vec2(-3.0, -2.0), center + d],
+                Stroke::new(1.2, crate::glass_ui::muted()));
+        }
+        let toggle = row.expander.is_some()
+            && resp.interact_pointer_pos().is_some_and(|pt| pt.x > slot.right() - 21.0);
+        if resp.clicked() {
+            event = Some(if toggle { TreeEvent::Toggle(k) } else { TreeEvent::Select(k) });
+        }
+        if resp.double_clicked() && row.expander.is_some() {
+            event = Some(TreeEvent::Toggle(k));
+        }
+        if resp.secondary_clicked() && let Some(at) = resp.interact_pointer_pos() {
+            event = Some(TreeEvent::Context(k, at));
+        }
+        let asked = ui.input(|input| (
+            input.has_accesskit_action_request(resp.id, egui::accesskit::Action::Expand),
+            input.has_accesskit_action_request(resp.id, egui::accesskit::Action::Collapse),
+            input.has_accesskit_action_request(resp.id, egui::accesskit::Action::ShowContextMenu),
+        ));
+        if (asked.0 && row.expander == Some(false)) || (asked.1 && row.expander == Some(true)) {
+            event = Some(TreeEvent::Toggle(k));
+        }
+        if asked.2 {
+            event = Some(TreeEvent::Context(k, slot.left_bottom()));
+        }
+        if keys && row.selected {
+            winui::focus_ring(&cp, slot);
+        }
+    }
+    if keys
+        && let Some((k, at)) = selected_at
+        && ui.input_mut(|i| i.consume_key(egui::Modifiers::SHIFT, egui::Key::F10)
+            || i.consume_key(egui::Modifiers::NONE, egui::Key::Menu))
+    {
+        event = Some(TreeEvent::Context(k, at));
+    }
+    if tree.secondary_clicked()
+        && let Some(k) = rows.iter().position(|r| r.selected)
+        && let Some(at) = tree.interact_pointer_pos()
+    {
+        event = Some(TreeEvent::Context(k, at));
+    }
+    p.text(pos2(side + 16.0, rect.bottom() - 16.0),
+        egui::Align2::LEFT_CENTER, "WINDOWS  •  HYBRID V3",
+        egui::FontId::proportional(9.0), crate::glass_ui::muted());
+    event
+}
+
 /// The Categories pane: frame x 6 .. `right` (IDM: 148, resizable by the splitter), caption, close "x", tree (rows 16 px, indent 19).
 pub fn categories(
     ui: &mut Ui,
@@ -2042,6 +2212,9 @@ pub fn categories(
     // The tree has the keys (its chosen node shows the focus).
     keys: bool,
 ) -> Option<TreeEvent> {
+    if crate::glass_ui::active() {
+        return glass_categories(ui, icons, o, bottom, right, rows, keys);
+    }
     let p = ui.painter().clone();
     let y0 = o.y + pane_top() + MENU_H; // frame top
     // Laid out in English (frame x 6 .. right); every part made where it is on screen — the pane
