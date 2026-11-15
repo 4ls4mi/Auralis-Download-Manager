@@ -24,26 +24,51 @@ const TEAL: Color32 = Color32::from_rgb(70, 193, 180);
 const AMBER: Color32 = Color32::from_rgb(222, 164, 64);
 const BLUE: Color32 = Color32::from_rgb(133, 159, 217);
 
-
 /// The visual palette follows the selected application skin.
-fn using_plexo() -> bool { crate::theme::current().id.as_ref() == "plexo" }
+fn using_plexo() -> bool {
+    crate::theme::current().id.as_ref() == "plexo"
+}
 fn background() -> Color32 {
-    if using_plexo() { crate::theme::colors().window } else { BACKGROUND }
+    if using_plexo() {
+        crate::theme::colors().window
+    } else {
+        BACKGROUND
+    }
 }
 fn panel_edge() -> Color32 {
-    if using_plexo() { crate::theme::colors().list_frame } else { PANEL_EDGE }
+    if using_plexo() {
+        crate::theme::colors().list_frame
+    } else {
+        PANEL_EDGE
+    }
 }
 fn empty() -> Color32 {
-    if using_plexo() { crate::theme::colors().piece_missing } else { EMPTY }
+    if using_plexo() {
+        crate::theme::colors().piece_missing
+    } else {
+        EMPTY
+    }
 }
 fn teal() -> Color32 {
-    if using_plexo() { crate::theme::colors().accent } else { TEAL }
+    if using_plexo() {
+        crate::theme::colors().accent
+    } else {
+        TEAL
+    }
 }
 fn amber() -> Color32 {
-    if using_plexo() { crate::theme::colors().warning } else { AMBER }
+    if using_plexo() {
+        crate::theme::colors().warning
+    } else {
+        AMBER
+    }
 }
 fn blue() -> Color32 {
-    if using_plexo() { crate::theme::colors().link } else { BLUE }
+    if using_plexo() {
+        crate::theme::colors().link
+    } else {
+        BLUE
+    }
 }
 
 /// Four metric cards use the same charcoal glass surfaces and text hierarchy
@@ -59,40 +84,70 @@ pub fn detail_metrics(
     let values = [
         ("DOWNLOAD SPEED", rate.to_string()),
         ("DOWNLOADED", downloaded.to_string()),
-        ("TIME LEFT", if remaining.is_empty() { "—".into() } else { remaining.into() }),
+        (
+            "TIME LEFT",
+            if remaining.is_empty() {
+                "—".into()
+            } else {
+                remaining.into()
+            },
+        ),
         ("CONNECTIONS", connections.to_string()),
     ];
     let c = crate::theme::colors();
     for (i, (label, value)) in values.iter().enumerate() {
-        let rect = crate::winui::r(
-            origin, 17.0 + i as f32 * 129.0, 242.0, 125.0, 48.0
-        );
+        let rect = crate::winui::r(origin, 17.0 + i as f32 * 129.0, 242.0, 125.0, 48.0);
         painter.rect_filled(rect, 7.0, background());
-        painter.rect_stroke(rect, 7.0, Stroke::new(1.0, panel_edge()), StrokeKind::Inside);
+        painter.rect_stroke(
+            rect,
+            7.0,
+            Stroke::new(1.0, panel_edge()),
+            StrokeKind::Inside,
+        );
         painter.text(
-            pos2(rect.left() + 9.0, rect.top() + 13.0), egui::Align2::LEFT_CENTER,
-            *label, egui::FontId::proportional(9.5), c.muted,
+            pos2(rect.left() + 9.0, rect.top() + 13.0),
+            egui::Align2::LEFT_CENTER,
+            *label,
+            egui::FontId::proportional(9.5),
+            c.muted,
         );
         let text = if value.chars().count() > 18 {
             format!("{}…", value.chars().take(17).collect::<String>())
-        } else { value.to_string() };
+        } else {
+            value.to_string()
+        };
         painter.text(
-            pos2(rect.left() + 9.0, rect.top() + 32.0), egui::Align2::LEFT_CENTER,
-            text, egui::FontId::proportional(12.0), c.text,
+            pos2(rect.left() + 9.0, rect.top() + 32.0),
+            egui::Align2::LEFT_CENTER,
+            text,
+            egui::FontId::proportional(12.0),
+            c.text,
         );
     }
 }
 
 /// Captioned indication of the segment colours (NOT the Ethernet adapter IDs).
 pub fn segment_legend(painter: &Painter, origin: Pos2) {
-    let labels = [("SEGMENT A", teal()), ("SEGMENT B", amber()), ("SEGMENT C", blue())];
+    let labels = [
+        ("SEGMENT A", teal()),
+        ("SEGMENT B", amber()),
+        ("SEGMENT C", blue()),
+    ];
     for (i, (name, color)) in labels.iter().enumerate() {
         let x = origin.x + 22.0 + i as f32 * 144.0;
         let y = origin.y + 392.0;
-        painter.rect_filled(Rect::from_min_size(pos2(x, y - 6.0), vec2(8.0, 8.0)), 2.0, *color);
-        painter.text(pos2(x + 13.0, y - 2.0),
-            egui::Align2::LEFT_CENTER, *name, egui::FontId::proportional(10.0),
-            crate::theme::colors().muted);
+        painter.rect_filled(
+            Rect::from_min_size(pos2(x, y - 6.0), vec2(8.0, 8.0)),
+            2.0,
+            *color,
+        );
+        painter.text(
+            pos2(x + 13.0, y - 2.0),
+            egui::Align2::LEFT_CENTER,
+            *name,
+            egui::FontId::proportional(10.0),
+            crate::theme::colors().muted,
+        );
     }
 }
 
@@ -126,11 +181,14 @@ pub fn graph_bar(p: &Painter, rect: Rect, completion: f32, rates: &VecDeque<f32>
         for (i, v) in rates.iter().enumerate() {
             let x = inner.left() + i as f32 / last * inner.width();
             let value = if v.is_finite() { v.max(0.0) } else { 0.0 };
-            let y = inner.bottom() - 2.0
+            let y = inner.bottom()
+                - 2.0
                 - (value / peak).clamp(0.0, 1.0) * (inner.height() - 4.0).max(0.0);
             let point = pos2(x, y);
             if let Some(prev) = previous {
-                let color = if (prev.x + point.x) * 0.5 <= right { teal() } else {
+                let color = if (prev.x + point.x) * 0.5 <= right {
+                    teal()
+                } else {
                     Color32::from_rgb(97, 117, 125)
                 };
                 p.line_segment([prev, point], Stroke::new(1.8, color));
@@ -145,7 +203,12 @@ pub fn graph_bar(p: &Painter, rect: Rect, completion: f32, rates: &VecDeque<f32>
         [pos2(marker, inner.top()), pos2(marker, inner.bottom())],
         Stroke::new(1.4, amber()),
     );
-    p.rect_stroke(rect, 5.0, Stroke::new(1.0, panel_edge()), StrokeKind::Inside);
+    p.rect_stroke(
+        rect,
+        5.0,
+        Stroke::new(1.0, panel_edge()),
+        StrokeKind::Inside,
+    );
 }
 
 /// Fraction of a given byte interval already received, plus its first contributing
@@ -192,7 +255,12 @@ pub fn chunk_matrix(
 ) {
     let outer = crate::winui::r(origin, 17.0, 319.0, 513.0, 63.0);
     painter.rect_filled(outer, 7.0, background());
-    painter.rect_stroke(outer, 7.0, Stroke::new(1.0, panel_edge()), StrokeKind::Inside);
+    painter.rect_stroke(
+        outer,
+        7.0,
+        Stroke::new(1.0, panel_edge()),
+        StrokeKind::Inside,
+    );
     let _hover = ui
         .interact(outer, ui.scope_id().with("hybrid-range-matrix"), egui::Sense::hover())
         .on_hover_text("Byte-range progress (192 visual samples). Colors identify download segments, not network adapters.");
@@ -205,10 +273,8 @@ pub fn chunk_matrix(
     let pad_y = 7.0;
     let gap_x = 2.0;
     let gap_y = 3.0;
-    let tile_width = (outer.width() - 2.0 * pad_x - (COLUMNS - 1) as f32 * gap_x)
-        / COLUMNS as f32;
-    let tile_height = (outer.height() - 2.0 * pad_y - (ROWS - 1) as f32 * gap_y)
-        / ROWS as f32;
+    let tile_width = (outer.width() - 2.0 * pad_x - (COLUMNS - 1) as f32 * gap_x) / COLUMNS as f32;
+    let tile_height = (outer.height() - 2.0 * pad_y - (ROWS - 1) as f32 * gap_y) / ROWS as f32;
 
     for index in 0..CELLS {
         let (first, last) = (
@@ -217,7 +283,11 @@ pub fn chunk_matrix(
         );
         let (progress, segment_index) = coverage(first, last, segments, downloaded);
         let column = index % COLUMNS;
-        let column = if crate::i18n::rtl() { COLUMNS - 1 - column } else { column };
+        let column = if crate::i18n::rtl() {
+            COLUMNS - 1 - column
+        } else {
+            column
+        };
         let row = index / COLUMNS;
         let pos = pos2(
             outer.left() + pad_x + column as f32 * (tile_width + gap_x),
@@ -246,8 +316,16 @@ mod tests {
     #[test]
     fn samples_real_received_intervals() {
         let segments = vec![
-            SegmentView { start: 0, cursor: 20, end: 50 },
-            SegmentView { start: 50, cursor: 75, end: 100 },
+            SegmentView {
+                start: 0,
+                cursor: 20,
+                end: 50,
+            },
+            SegmentView {
+                start: 50,
+                cursor: 75,
+                end: 100,
+            },
         ];
         assert_eq!(coverage(0, 10, &segments, 0), (1.0, Some(0)));
         assert_eq!(coverage(20, 50, &segments, 0), (0.0, None));
