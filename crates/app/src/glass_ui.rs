@@ -15,7 +15,7 @@ pub fn configure(opacity_percent: u8) {
 
 fn scaled_alpha(base: u8) -> u8 {
     ((f32::from(base) * f32::from(GLASS_PERCENT.load(Ordering::Relaxed)) / 73.0)
-        .round() as u16 * 83 / 100).clamp(30, 218) as u8
+        .round() as u16 * 67 / 100).clamp(24, 202) as u8
 }
 
 pub fn active() -> bool {
@@ -57,12 +57,20 @@ pub fn panel(p: &Painter, rect: Rect, radius: f32, opacity: u8) {
     if rect.width() <= 0.0 || rect.height() <= 0.0 {
         return;
     }
-    p.rect_filled(rect, radius, rgba(12, 20, 25, scaled_alpha(opacity)));
+    // Frosted charcoal, not an opaque navy card. The wallpaper stays visible
+    // through the plate while its borders catch a small amount of light.
+    p.rect_filled(rect, radius, rgba(11, 17, 20, scaled_alpha(opacity)));
     p.rect_stroke(
         rect,
         radius,
-        Stroke::new(1.0, rgba(119, 163, 170, 62)),
+        Stroke::new(1.0, rgba(191, 211, 216, 78)),
         StrokeKind::Inside,
+    );
+    let top = rect.top() + 1.5;
+    p.line_segment(
+        [pos2(rect.left() + radius + 5.0, top),
+         pos2(rect.right() - radius - 5.0, top)],
+        Stroke::new(0.8, rgba(228, 244, 247, 34)),
     );
 }
 
@@ -80,7 +88,7 @@ pub fn inset(p: &Painter, rect: Rect, radius: f32) {
 }
 
 pub fn selected(p: &Painter, rect: Rect, radius: f32) {
-    p.rect_filled(rect, radius, rgba(15, 116, 107, scaled_alpha(116)));
+    p.rect_filled(rect, radius, rgba(17, 64, 64, scaled_alpha(128)));
     p.rect_stroke(
         rect,
         radius,
