@@ -9,7 +9,7 @@ use crate::dialogs::display_path;
 use crate::model::{self, Item, Status, size3};
 // Laid out in English pixels: `fill` and `px` make each one where it is on screen (bars fill
 // from the right in a right-to-left interface), `text` starts at an English pen.
-use crate::winui::{self, ButtonKind, fill_l as fill, px_l as px, r, text};
+use crate::winui::{self, ButtonKind, fill_l as fill, r, text};
 
 use crate::winui::caption::CaptionButton;
 
@@ -486,15 +486,21 @@ impl Progress {
     }
 
     pub fn show(
-        &mut self, ctx: &egui::Context, item: &Item,
-        snap: Option<&Snapshot>, settings: &crate::settings::Settings,
+        &mut self,
+        ctx: &egui::Context,
+        item: &Item,
+        snap: Option<&Snapshot>,
+        settings: &crate::settings::Settings,
     ) -> Action {
         crate::crash::window("progress");
         let frac = item.fraction();
         // Draw a real measured history from the download's current item rate.
         // Pause, retry and stopped states contribute zero rather than invented traffic.
         let now = ctx.input(|i| i.time);
-        if self.last_throughput_sample.is_none_or(|last| now - last >= 0.25) {
+        if self
+            .last_throughput_sample
+            .is_none_or(|last| now - last >= 0.25)
+        {
             self.last_throughput_sample = Some(now);
             if self.throughput_samples.len() >= 60 {
                 self.throughput_samples.pop_front();
@@ -504,7 +510,8 @@ impl Progress {
             } else {
                 0.0
             };
-            self.throughput_samples.push_back(if rate.is_finite() { rate.max(0.0) } else { 0.0 });
+            self.throughput_samples
+                .push_back(if rate.is_finite() { rate.max(0.0) } else { 0.0 });
         }
         let title = window_title(frac, &item.file_name);
         // The bar and the segment map glide between the figures (the text shows them as they
@@ -531,7 +538,17 @@ impl Progress {
         };
         let drop = self.status_drop();
         let body = if self.details {
-            [548.0, 412.0 + drop + torrent_drop(item) + if item.torrent.is_some() { 0.0 } else { crate::hybrid_progress::EXTRA_HEIGHT }]
+            [
+                548.0,
+                412.0
+                    + drop
+                    + torrent_drop(item)
+                    + if item.torrent.is_some() {
+                        0.0
+                    } else {
+                        crate::hybrid_progress::EXTRA_HEIGHT
+                    },
+            ]
         } else {
             [548.0, 241.0 + drop]
         };
@@ -558,7 +575,20 @@ impl Progress {
             .with_resizable(cfg!(windows))
             .with_icon(crate::app_icon())
             .with_maximize_button(false);
-        if let Some(p) = crate::dialogs::place(ctx, key, [548.0, 412.0 + drop + if self.details && item.torrent.is_none() { crate::hybrid_progress::EXTRA_HEIGHT } else { 0.0 }]) {
+        if let Some(p) = crate::dialogs::place(
+            ctx,
+            key,
+            [
+                548.0,
+                412.0
+                    + drop
+                    + if self.details && item.torrent.is_none() {
+                        crate::hybrid_progress::EXTRA_HEIGHT
+                    } else {
+                        0.0
+                    },
+            ],
+        ) {
             builder = builder.with_position(p);
         }
         // Minimize hides it in the notification area when asked (and a tray can bring it back).
@@ -577,13 +607,18 @@ impl Progress {
                 .show(ui, |ui| {
                     let o = ui.max_rect().min;
                     let path = crate::wallpaper::progress_path(
-                        &settings.wallpaper_main, &settings.wallpaper_download,
+                        &settings.wallpaper_main,
+                        &settings.wallpaper_download,
                         settings.wallpaper_download_inherit,
                     );
                     crate::wallpaper::paint(
-                        ui, ui.max_rect(), path,
-                        settings.wallpaper_blur, settings.wallpaper_dim,
-                        settings.wallpaper_glass, crate::wallpaper::Target::Progress,
+                        ui,
+                        ui.max_rect(),
+                        path,
+                        settings.wallpaper_blur,
+                        settings.wallpaper_dim,
+                        settings.wallpaper_glass,
+                        crate::wallpaper::Target::Progress,
                     );
                     // The window's width, laid out from the right in a right-to-left
                     // interface (the title bar; the layout under it has its own).
@@ -756,12 +791,9 @@ impl Progress {
         let bar = r(lower, 17.0, 180.0, 513.0, 16.0);
         match finishing_fraction(snap) {
             Some(f) => winui::meter_in(&p, bar, f as f32, crate::theme::colors().accent),
-            None => crate::hybrid_progress::graph_bar(
-                &p,
-                bar,
-                drawn.0 as f32,
-                &self.throughput_samples,
-            ),
+            None => {
+                crate::hybrid_progress::graph_bar(&p, bar, drawn.0 as f32, &self.throughput_samples)
+            }
         }
 
         let mut action = if hide { Action::Hide } else { Action::None };
@@ -884,18 +916,14 @@ impl Progress {
                 winui::TEXT(),
             );
             crate::hybrid_progress::detail_metrics(
-                &p, lower, &crate::model::rate(item.rate()),
-                &crate::model::size3(item.downloaded),
-                &item.time_left(), snap.map_or(0, |s| s.connections.len()),
-            );
-            crate::hybrid_progress::chunk_matrix(
-                ui,
                 &p,
                 lower,
-                item.size,
-                item.downloaded,
-                snap,
+                &crate::model::rate(item.rate()),
+                &crate::model::size3(item.downloaded),
+                &item.time_left(),
+                snap.map_or(0, |s| s.connections.len()),
             );
+            crate::hybrid_progress::chunk_matrix(ui, &p, lower, item.size, item.downloaded, snap);
             crate::hybrid_progress::segment_legend(&p, lower);
             connections(
                 ui,
