@@ -11,7 +11,7 @@ permissions:
 
 concurrency:
   group: mister-hybrid-glass-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   windows:
@@ -50,6 +50,12 @@ jobs:
           New-Item -ItemType Directory -Force glass-ui/src-tauri/resources,glass-ui/src-tauri/icons | Out-Null
           Copy-Item target/x86_64-pc-windows-msvc/release/misterdownloadmanager.exe glass-ui/src-tauri/resources/mdm-legacy.exe
           Copy-Item crates/app/assets/icons/app/mdm.ico glass-ui/src-tauri/icons/icon.ico
+
+      - name: Headless Rust runtime integration smoke test
+        shell: pwsh
+        run: |
+          ./tools/lab/tauri-headless-smoke.ps1 -Backend target/x86_64-pc-windows-msvc/release/misterdownloadmanager.exe
+          if ($LASTEXITCODE -ne 0) { throw "Headless download backend smoke test failed" }
 
       - name: Install frontend dependencies
         shell: pwsh
