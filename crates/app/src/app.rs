@@ -1878,23 +1878,28 @@ impl App {
                 pos2(o.x + 5.0, o.y + h - STRIP_H + 2.0),
                 egui::vec2((w - 10.0).max(0.0), STRIP_H - 4.0),
             );
-            crate::wallpaper::glass_panel(
-                p, card, self.settings.wallpaper_glass, 8.0
-            );
+            crate::wallpaper::glass_panel(p, card, self.settings.wallpaper_glass, 8.0);
             let c = crate::theme::colors();
-            let label = crate::i18n::tn(shown as u64,
-                "{n} download", "{n} downloads");
+            let label = crate::i18n::tn(shown as u64, "{n} download", "{n} downloads");
             p.text(
-                pos2(card.left() + 12.0, card.center().y), egui::Align2::LEFT_CENTER,
-                label, egui::FontId::proportional(12.0), c.text,
+                pos2(card.left() + 12.0, card.center().y),
+                egui::Align2::LEFT_CENTER,
+                label,
+                egui::FontId::proportional(12.0),
+                c.text,
             );
             // Real measured speed history, not a decorative animation.
             let graph = egui::Rect::from_min_max(
                 pos2(card.left() + 155.0, card.top() + 7.0),
-                pos2((card.right() - 198.0).max(card.left() + 180.0),
-                    card.bottom() - 7.0),
+                pos2(
+                    (card.right() - 198.0).max(card.left() + 180.0),
+                    card.bottom() - 7.0,
+                ),
             );
-            let peak = self.speed_samples.iter().copied()
+            let peak = self
+                .speed_samples
+                .iter()
+                .copied()
                 .filter(|s| s.is_finite())
                 .fold(0.01_f32, f32::max);
             if self.speed_samples.len() >= 2 {
@@ -1902,23 +1907,28 @@ impl App {
                 let last = (self.speed_samples.len() - 1) as f32;
                 for (i, rate) in self.speed_samples.iter().enumerate() {
                     let x = graph.left() + i as f32 / last * graph.width();
-                    let y = graph.bottom() - (rate.max(0.0) / peak).clamp(0.0, 1.0)
-                        * graph.height();
+                    let y =
+                        graph.bottom() - (rate.max(0.0) / peak).clamp(0.0, 1.0) * graph.height();
                     let point = pos2(x, y);
                     if let Some(previous) = before {
-                        p.line_segment([previous, point],
-                            egui::Stroke::new(1.6, c.accent));
+                        p.line_segment([previous, point], egui::Stroke::new(1.6, c.accent));
                     }
                     before = Some(point);
                 }
             }
-            let total_speed: f64 = self.items.iter().filter(|it| it.live.is_some())
-                .map(|it| it.rate()).sum();
+            let total_speed: f64 = self
+                .items
+                .iter()
+                .filter(|it| it.live.is_some())
+                .map(|it| it.rate())
+                .sum();
             let text = model::rate(total_speed);
             p.text(
                 pos2(card.right() - 12.0, card.center().y),
-                egui::Align2::RIGHT_CENTER, text,
-                egui::FontId::proportional(12.0), c.accent,
+                egui::Align2::RIGHT_CENTER,
+                text,
+                egui::FontId::proportional(12.0),
+                c.accent,
             );
             return;
         }
@@ -2011,8 +2021,10 @@ impl App {
     fn row(&self, it: &Item, queued: &std::collections::HashSet<u64>) -> list::Row {
         list::Row {
             progress_fraction: it.fraction().map(|f| f as f32),
-            rate_history: self.per_item_speed.get(&it.id).map_or_else(Vec::new,
-                |samples| samples.iter().copied().collect()),
+            rate_history: self
+                .per_item_speed
+                .get(&it.id)
+                .map_or_else(Vec::new, |samples| samples.iter().copied().collect()),
             status_group: match it.status {
                 // i18n: a download's status (state it is in, not a command): being downloaded now
                 Status::Downloading => "Downloading",
@@ -7759,7 +7771,12 @@ impl App {
         items.push(Radio("Aqua", Cmd::Theme("aqua"), true, on("aqua")));
         // i18n: View → Theme: a style theme's name (a white canvas, emerald fills, 6-point corners), a name: keep "Emerald" as written
         items.push(Radio("Emerald", Cmd::Theme("emerald"), true, on("emerald")));
-        items.push(Radio("Plexo Dark Glass", Cmd::Theme("plexo"), true, on("plexo")));
+        items.push(Radio(
+            "Plexo Dark Glass",
+            Cmd::Theme("plexo"),
+            true,
+            on("plexo"),
+        ));
         let wal = crate::themefile::PYWAL;
         for e in self.theme_list.iter().filter(|e| e.path.is_some()) {
             if !files {
@@ -8580,7 +8597,8 @@ impl App {
         let ctx = ui.ctx().clone();
         let full = ui.max_rect();
         crate::wallpaper::paint(
-            ui, full,
+            ui,
+            full,
             &self.settings.wallpaper_main,
             self.settings.wallpaper_blur,
             self.settings.wallpaper_dim,
@@ -8915,8 +8933,7 @@ impl App {
             focus,
             &mut self.icons,
             &tip,
-            (!self.settings.wallpaper_main.is_empty())
-                .then_some(self.settings.wallpaper_glass),
+            (!self.settings.wallpaper_main.is_empty()).then_some(self.settings.wallpaper_glass),
         );
         if self.list.has_keys() {
             self.tree_keys = false;
@@ -11208,27 +11225,43 @@ impl App {
         self.debrid_tick();
         crate::crash::step(crate::crash::Step::Downloads);
         self.poll(ctx);
-        if self.speed_sampled_at.is_none_or(|last| last.elapsed() >= Duration::from_millis(500)) {
+        if self
+            .speed_sampled_at
+            .is_none_or(|last| last.elapsed() >= Duration::from_millis(500))
+        {
             self.speed_sampled_at = Some(Instant::now());
-            let bytes_per_second: f64 = self.items.iter().filter(|it| it.live.is_some())
-                .map(|it| it.rate()).sum();
-            if self.speed_samples.len() >= 90 { self.speed_samples.pop_front(); }
+            let bytes_per_second: f64 = self
+                .items
+                .iter()
+                .filter(|it| it.live.is_some())
+                .map(|it| it.rate())
+                .sum();
+            if self.speed_samples.len() >= 90 {
+                self.speed_samples.pop_front();
+            }
             let mb_s = (bytes_per_second / 1048576.0) as f32;
-            self.speed_samples.push_back(if mb_s.is_finite() { mb_s.max(0.0) } else { 0.0 });
-            let known: std::collections::HashSet<u64> =
-                self.items.iter().map(|it| it.id).collect();
+            self.speed_samples
+                .push_back(if mb_s.is_finite() { mb_s.max(0.0) } else { 0.0 });
+            let known: std::collections::HashSet<u64> = self.items.iter().map(|it| it.id).collect();
             self.per_item_speed.retain(|id, _| known.contains(id));
             for item in &self.items {
                 if item.live.is_none() && !self.per_item_speed.contains_key(&item.id) {
                     continue;
                 }
                 let history = self.per_item_speed.entry(item.id).or_default();
-                if history.len() >= 48 { history.pop_front(); }
+                if history.len() >= 48 {
+                    history.pop_front();
+                }
                 let per_second = if item.live.is_some() {
                     (item.rate() / 1048576.0) as f32
-                } else { 0.0 };
-                history.push_back(if per_second.is_finite() { per_second.max(0.0) }
-                    else { 0.0 });
+                } else {
+                    0.0
+                };
+                history.push_back(if per_second.is_finite() {
+                    per_second.max(0.0)
+                } else {
+                    0.0
+                });
             }
         }
         crate::crash::step(crate::crash::Step::RemoteTorrents);
