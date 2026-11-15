@@ -2163,7 +2163,42 @@ fn glass_categories(
             crate::glass_ui::inset(&cp, slot, 9.0);
         }
         let icon_at = pos2(base, slot.center().y - 8.0);
-        icons.paint_in(ui, &cp, row.icon.clone(), icon_at);
+        // Each navigation icon keeps its genuine theme SVG geometry but
+        // receives a semantic accent. This avoids monochrome Silk icons.
+        let hue = match row.label.as_ref() {
+            "All Downloads" => Color32::from_rgb(56, 209, 230),
+            "Downloading" => Color32::from_rgb(41, 226, 205),
+            "Stopped" => Color32::from_rgb(250, 182, 77),
+            "Finished" => Color32::from_rgb(45, 222, 164),
+            "Unfinished" => Color32::from_rgb(236, 182, 95),
+            "Queues" => Color32::from_rgb(136, 184, 248),
+            _ => Color32::from_rgb(157, 190, 206),
+        };
+        let icon_rect = Rect::from_min_size(icon_at, vec2(16.0, 16.0));
+        let colored = if let IconKey::Themed(need, _) = &row.icon {
+            if let Some((src, tint)) = crate::themeicons::source(
+                need, 16.0 * ui.ctx().pixels_per_point(), hue, true)
+            {
+                let icon_image = egui::Image::new(src);
+                if let Ok(egui::load::TexturePoll::Ready { texture }) =
+                    icon_image.load_for_size(ui.ctx(), icon_rect.size())
+                {
+                    cp.image(texture.id, icon_rect,
+                        Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), tint);
+                    true
+                } else { false }
+            } else { false }
+        } else { false };
+        if !colored {
+            icons.paint_in(ui, &cp, row.icon.clone(), icon_at);
+        }
+        if row.label.as_ref() == "Downloading" {
+            let wave = (ui.input(|i| i.time) as f32 * 4.0).sin() * 0.5 + 0.5;
+            cp.circle_stroke(icon_rect.center(), 10.0 + wave * 3.0,
+                Stroke::new(0.9, Color32::from_rgba_unmultiplied(
+                    hue.r(), hue.g(), hue.b(), (30.0 + wave * 60.0) as u8)));
+            ui.ctx().request_repaint_after(std::time::Duration::from_millis(90));
+        }
         let label_at = pos2(base + 23.0, slot.center().y);
         cp.text(label_at, egui::Align2::LEFT_CENTER, label,
             egui::FontId::proportional(if row.level == 0 { 12.5 } else { 11.5 }),
