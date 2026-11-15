@@ -163,6 +163,9 @@ fn load_video(ctx: &egui::Context, path: &str, blur: u8, target: Target) -> Opti
                         Ok(()) | Err(std::sync::mpsc::TrySendError::Full(_)) => (),
                         Err(std::sync::mpsc::TrySendError::Disconnected(_)) => break,
                     }
+                    // Rawvideo has no clock: throttle the decoder so a
+                    // looping wallpaper doesn't use a whole CPU core.
+                    std::thread::sleep(Duration::from_millis(83));
                 }
             }
             let _ = child.kill();
