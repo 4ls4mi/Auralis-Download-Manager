@@ -1554,7 +1554,7 @@ impl App {
         loaded: store::Loaded,
         start: crate::Start,
     ) -> Self {
-        let settings = loaded.settings;
+        let mut settings = loaded.settings;
         let mut queues = loaded.queues;
         if queues.len() < 2 {
             // The built-in queues' names are saved in English and translated where shown
@@ -1585,11 +1585,25 @@ impl App {
         if let Some(cols) = loaded.columns {
             list.apply(cols);
         }
+        if !settings.glass_layout_seen && settings.theme == "plexo" {
+            // Main grid starts with only the informative columns used in
+            // the approved concept. All other fields remain available through
+            // the existing column picker and saved layouts.
+            list.order = vec![0, 2, 3, 4, 5, 1, 9, 6, 8, 7, 10, 11, 12];
+            list.visible = [false; list::COLS];
+            for col in [0, 2, 3, 4, 5] {
+                list.visible[col] = true;
+            }
+            list.widths[0] = 290.0;
+            list.widths[2] = 94.0;
+            list.widths[3] = 180.0;
+            list.widths[4] = 93.0;
+            list.widths[5] = 110.0;
+        }
         let downloads = dirs::download_dir()
             .or_else(|| dirs::home_dir().map(|h| h.join("Downloads")))
             .unwrap_or_else(|| PathBuf::from("."));
         // The Categories pane as it was left, and the node shown (if it still exists).
-        let [all_open, unfinished_open, finished_open, queues_open] = settings.branches;
         let known = |c: Option<Category>| c.is_none_or(|c| Category::all().contains(&c));
         let view = match settings.view {
             Some(View::Queue(q)) if q < queues.len() => View::Queue(q),
@@ -1607,6 +1621,7 @@ impl App {
             settings.branches = [false, false, false, false];
             settings.glass_layout_seen = true;
         }
+        let [all_open, unfinished_open, finished_open, queues_open] = settings.branches;
         let show_categories = settings.show_categories;
         // Click'n'Load (#37): made here, listening only once `new` starts it (Options →
         // Archives and Link grabber turns it on).
