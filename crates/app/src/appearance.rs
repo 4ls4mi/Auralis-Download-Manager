@@ -176,11 +176,6 @@ pub fn show(ctx: &egui::Context, open: &mut bool, settings: &mut Settings) -> bo
                     }
                 }
             }
-            let download_path = wallpaper::progress_path(
-                &settings.wallpaper_main,
-                &settings.wallpaper_download,
-                settings.wallpaper_download_inherit,
-            );
             if !settings.wallpaper_download_inherit {
                 ui.horizontal(|ui| {
                     ui.label("Image fit:");
