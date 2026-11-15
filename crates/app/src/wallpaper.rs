@@ -173,8 +173,13 @@ pub fn paint(
 
     // Darken whites more than blacks, preserving a uniformly legible
     // canvas for the dark UI. Every readable control has its own surface.
-    let adaptive = if out.bright_image { 0.34 } else { 0.17 };
-    let alpha = ((dim_percent.min(95) as f32 / 100.0 + adaptive).clamp(0.35, 0.95) * 255.0) as u8;
+    // V3: a wallpaper must remain genuinely visible. The old formula
+    // darkened a normal wallpaper by 72–95% and then placed opaque
+    // legacy panels over it. Bright scenes are dimmed moderately;
+    // contrast is enforced by the tinted glass surfaces above them.
+    let factor = if out.bright_image { 0.72 } else { 0.50 };
+    let alpha = ((dim_percent.min(95) as f32 / 100.0 * factor)
+        .clamp(0.03, 0.69) * 255.0) as u8;
     painter.rect_filled(rect, 0.0, Color32::from_black_alpha(alpha));
     Some(out)
 }
@@ -208,7 +213,7 @@ pub fn outlined_label(painter: &Painter, rect: Rect, label: &str, contrast: Cont
 
 /// A translucent protective glass panel, tinted for Mister's charcoal theme.
 pub fn glass_panel(painter: &Painter, rect: Rect, opacity: u8, radius: f32) {
-    let alpha = ((opacity.clamp(58, 98) as f32 / 100.0) * 255.0) as u8;
+    let alpha = ((opacity.clamp(48, 95) as f32 / 100.0) * 255.0) as u8;
     painter.rect_filled(
         rect,
         radius,
