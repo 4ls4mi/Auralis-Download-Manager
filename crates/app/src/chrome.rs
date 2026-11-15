@@ -2190,9 +2190,14 @@ fn glass_categories(
             } else { false }
         } else { false };
         if !colored {
+            // Some theme assets are monochrome PNGs: a soft colored plate
+            // preserves the distinct category hue even for those fallbacks.
+            cp.rect_filled(icon_rect.expand(2.0), 5.0,
+                Color32::from_rgba_unmultiplied(
+                    hue.r(), hue.g(), hue.b(), 46));
             icons.paint_in(ui, &cp, row.icon.clone(), icon_at);
         }
-        if row.label.as_ref() == "Downloading" {
+        if row.label.as_ref() == "Downloading" && row.count.unwrap_or(0) > 0 {
             let wave = (ui.input(|i| i.time) as f32 * 4.0).sin() * 0.5 + 0.5;
             cp.circle_stroke(icon_rect.center(), 10.0 + wave * 3.0,
                 Stroke::new(0.9, Color32::from_rgba_unmultiplied(
