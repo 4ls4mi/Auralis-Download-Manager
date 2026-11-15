@@ -21,22 +21,38 @@ fn preview(ui: &mut Ui, path: &str, s: &Settings, target: wallpaper::Target) {
     let painter = ui.painter_at(rect);
     painter.rect_filled(rect, 9.0, Color32::from_rgb(22, 30, 34));
     let contrast = wallpaper::paint(
-        ui, rect, path, s.wallpaper_blur, s.wallpaper_dim, s.wallpaper_glass, target
+        ui,
+        rect,
+        path,
+        s.wallpaper_blur,
+        s.wallpaper_dim,
+        s.wallpaper_glass,
+        target,
     );
     let center = rect.shrink(11.0);
     if let Some(contrast) = contrast {
         painter.rect_filled(center, 7.0, contrast.glass);
-        painter.rect_stroke(center, 7.0,
+        painter.rect_stroke(
+            center,
+            7.0,
             egui::Stroke::new(1.0, crate::theme::colors().list_frame),
-            egui::StrokeKind::Inside);
-        wallpaper::outlined_label(&painter, center,
-            "Mister Hybrid • Readable over wallpaper", contrast);
+            egui::StrokeKind::Inside,
+        );
+        wallpaper::outlined_label(
+            &painter,
+            center,
+            "Mister Hybrid • Readable over wallpaper",
+            contrast,
+        );
     } else {
         wallpaper::glass_panel(&painter, center, s.wallpaper_glass, 7.0);
-        painter.text(center.center(), egui::Align2::CENTER_CENTER,
+        painter.text(
+            center.center(),
+            egui::Align2::CENTER_CENTER,
             "No wallpaper selected — charcoal glass theme",
             egui::FontId::proportional(13.0),
-            Color32::from_rgb(220, 237, 238));
+            Color32::from_rgb(220, 237, 238),
+        );
     }
 }
 
