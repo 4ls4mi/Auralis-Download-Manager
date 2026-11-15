@@ -3,8 +3,10 @@ import type { CSSProperties, ReactNode } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow, Effect, EffectState } from "@tauri-apps/api/window";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import NativeSettings from "./NativeSettings";
+import type { NativeTab } from "./NativeSettings";
 import {
-  Activity, AlertCircle, Archive, BarChart3, Check, CheckCircle2, Clock3,
+  Activity, AlertCircle, Archive, Check, CheckCircle2, Clock3,
   Download, ExternalLink, File, Film, Folder, FolderOpen, HardDrive, Image, ChevronDown,
   Link2, Maximize2, Minus, Music, Palette, Pause, Play, Plus, Search, Settings,
   Sparkles, Trash2, Video, X
@@ -84,6 +86,7 @@ export default function App(){
   const [chosen,setChosen]=useState<number|null>(detailId),[filter,setFilter]=useState("All Downloads"),[search,setSearch]=useState("");
   const [tab,setTab]=useState("General"),[settingTab,setSettingTab]=useState("Themes"),[settings,setSettings]=useState(false),[add,setAdd]=useState(false);
   const [toolsOpen,setToolsOpen]=useState(false);
+  const [nativeOpen,setNativeOpen]=useState(false),[nativeTab,setNativeTab]=useState<NativeTab>("General");
   const [input,setInput]=useState(""),[error,setError]=useState(""),[busy,setBusy]=useState(false);
   const [theme,setTheme]=useState(getSetting("theme","plexo")),[wallMain,setWallMain]=useState(getSetting("wall-main","")),[wallDetail,setWallDetail]=useState(getSetting("wall-detail",""));
   const [dim,setDim]=useState(Number(getSetting("dim","30"))),[blur,setBlur]=useState(Number(getSetting("blur","2"))),[opacity,setOpacity]=useState(Number(getSetting("opacity","55")));
@@ -149,10 +152,24 @@ export default function App(){
     try{const result=await invoke<{done:number[];skipped:{id:number;why:string}[]}>("download_action",{action,ids:[item.id]});if(result.skipped.length)setError(result.skipped.map(x=>x.why).join(", "));await refresh()}catch(e){setError(String(e))}finally{setBusy(false)}};
   const addLink=async()=>{if(!input.trim())return;setBusy(true);setError("");try{await invoke("add_download",{url:input.trim(),later:false});setAdd(false);setInput("");await refresh()}catch(e){setError(String(e))}finally{setBusy(false)}};
   const pickWall=async(target:"main"|"details")=>{try{const path=await invoke<string|null>("select_wallpaper",{target});if(path){if(target==="main"){setWallMain(path);setMainMode("wallpaper")}else{setWallDetail(path);setDetailMode("wallpaper")}}}catch(e){setError(String(e))}};
-  const openOriginal=async(page:string)=>{
+  const openOriginal=(page:string)=>{
     setToolsOpen(false);setError("");
-    try{await invoke("open_original_window",{page})}
-    catch(e){setError("Unable to open original Mister controls: "+String(e))}
+    if(page==="main"){
+      setError("The original egui window is intentionally disabled in this unified build. You are already in the main Mister Hybrid Glass interface.");
+      return;
+    }
+    let target:NativeTab="General";
+    if(page==="scheduler")target="Scheduler";
+    else if(page==="speedlimit" || page==="options:connection")target="Connection";
+    else if(page==="torrent-settings")target="Torrents";
+    else if(page==="options:saveto" || page==="options:downloads")target="Downloads";
+    else if(page==="options:types" || page==="extension" || page==="options:proxy"
+      || page==="options:logins" || page==="options:panels")target="Integration";
+    else if(page==="rss" || page==="find" || page==="batch" || page==="video-page"
+      || page==="helpers" || page==="shortcuts" || page==="language" || page==="about"){
+      setError("This advanced original tool is preserved in the Rust code but has not been migrated to the headless Glass frontend yet.");
+    }
+    setNativeTab(target);setNativeOpen(true);
   };
   function popout(id:number){
     const label="download-"+id;
@@ -187,14 +204,14 @@ export default function App(){
     <div className="app-shell"><header className="app-title" data-tauri-drag-region><Brand/><div className="top-badges"><span className={online?"connected":"disconnected"}>{online?"● ENGINE CONNECTED":"○ ENGINE OFFLINE"}</span><span>WINDOWS • TAURI + REACT</span></div><WindowButtons/></header>
     <div className="workspace"><Glass className="sidebar"><nav>{side.map(([label,Icon,n])=><button key={label} className={filter===label?"nav-current":""} onClick={()=>setFilter(label)}><Icon size={18}/><span>{label}</span><b>{n}</b></button>)}<div className="category-title">CATEGORIES</div>{data.categories.filter(c=>c.key!=="General").slice(0,7).map(c=><button key={c.key} className={filter==="category:"+c.key?"nav-current category-item":"category-item"} onClick={()=>setFilter("category:"+c.key)}><Folder size={16}/><span>{c.name}</span></button>)}</nav><div className="nav-bottom">
       <button className="original-settings-link" onClick={()=>void openOriginal("options:general")}><Settings size={17}/> Original MDM Settings</button>
-      <button onClick={()=>void openOriginal("main")}><ExternalLink size={17}/> Full Original MDM</button>
+      <button onClick={()=>{setNativeTab("Scheduler");setNativeOpen(true)}}><Activity size={17}/> Scheduler & Queues</button>
       <button onClick={()=>{setSettingTab("Wallpapers");setSettings(true)}}><Image size={17}/> Wallpapers</button><button onClick={()=>{setSettingTab("Themes");setSettings(true)}}><Palette size={17}/> Themes & Colors</button><button onClick={()=>{setSettingTab("Effects");setSettings(true)}}><Settings size={17}/> Appearance</button></div></Glass>
     <div className="dashboard-col"><Glass className="toolbar"><div className="toolbar-actions"><button className="toolbar-add" onClick={()=>setAdd(true)}><Plus size={20}/> Add URL</button><button title="Start download" disabled={!item||!online} onClick={()=>void take("start")}><Play size={20}/></button><button title="Pause download" disabled={!item||!online} onClick={()=>void take("pause")}><Pause size={20}/></button><button title="Remove download" disabled={!item||!online} onClick={()=>void take("remove")}><Trash2 size={19}/></button><div className="tool-separator"/><button title="Themes" onClick={()=>setSettings(true)}><Palette size={19}/></button>
       <button className="toolbar-settings" title="Open ALL original download manager settings" onClick={()=>void openOriginal("options:general")}><Settings size={18}/> <span>Original Options</span></button>
       <button disabled={!item} title="Open actual download popup" onClick={()=>item&&popout(item.id)}><ExternalLink size={19}/></button>
       <div className="tools-wrap"><button className="toolbar-tools" onClick={()=>setToolsOpen(!toolsOpen)}><span>Tools</span><ChevronDown size={15}/></button>
         {toolsOpen&&<div className="tools-menu">
-          <div className="tools-menu-title">ORIGINAL MISTER DOWNLOAD MANAGER TOOLS</div>
+          <div className="tools-menu-title">RUST ENGINE SETTINGS / TOOLS • MIGRATION IN PROGRESS</div>
           {ORIGINAL_TOOLS.map(tool=><button key={tool.page} onClick={()=>void openOriginal(tool.page)}><span>{tool.title}</span><small>{tool.section}</small></button>)}
         </div>}
       </div></div><span className="plexo-label"><Sparkles size={15}/> PLEXO GLASS</span></Glass>
@@ -202,7 +219,9 @@ export default function App(){
       <div className="table-body">{filtered.map(d=><button key={d.id} className={"download-row "+(item?.id===d.id?"row-current":"")} onClick={()=>{setChosen(d.id);setTab("General")}} onDoubleClick={()=>popout(d.id)} title="Double-click to open separate download window"><span className="file-name"><IconFor file={d.file}/><span><strong title={d.file}>{d.file}</strong><small>{human(d.downloaded)} of {human(d.size)}</small></span></span><span className="progress-column"><MiniBars percent={pct(d)}/><small>{pct(d).toFixed(0)}%</small></span><span>{d.status==="Downloading"?speed(d.speed):"—"}</span><span>{eta(d)}</span><Badge value={d.status}/></button>)}
       {!filtered.length&&<div className="empty-table"><FolderOpen size={38}/><strong>{!online?"Connecting to download engine":data.downloads.length?"No matching downloads":"Your downloads appear here"}</strong><p>{!online?notice:data.downloads.length?"Change the filter or search term.":"Click Add URL to start your first download."}</p>{online&&!data.downloads.length&&<button className="primary-button" onClick={()=>setAdd(true)}><Plus size={16}/> Add URL</button>}</div>}</div>
     </Glass><Glass className="statusbar"><div className="speed-stat"><Activity size={24}/><span><small>TOTAL SPEED</small><strong>{speed(data.speed)}</strong></span></div><Graph small values={history}/><div><small>ACTIVE</small><strong>{counts.active}</strong></div><div><small>COMPLETED</small><strong>{counts.completed}</strong></div></Glass></div></div>
-    <footer className="footer"><span className={online?"footer-online":""}>{error||notice}</span><span>V0.2 • Original Options restored • Download details in separate windows</span></footer></div>
+    <footer className="footer"><span className={online?"footer-online":""}>{error||notice}</span><span>V0.3 • One Glass tray • Headless Rust backend • Native engine options</span></footer></div>
+    {nativeOpen&&<NativeSettings initialTab={nativeTab} onClose={()=>setNativeOpen(false)}
+      queues={data.queues} refresh={refresh}/>}
     {add&&<div className="overlay" onMouseDown={e=>{if(e.currentTarget===e.target)setAdd(false)}}><Glass className="modal add-modal"><div className="modal-header"><h2><Link2 size={22}/> Add download</h2><button onClick={()=>setAdd(false)}><X size={20}/></button></div><p>Send a new file to the original Rust download engine.</p><label className="field">URL<input autoFocus value={input} placeholder="https://example.com/download.zip" onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")void addLink()}}/></label>{error&&<p className="error-message">{error}</p>}<div className="modal-actions"><button className="secondary-button" onClick={()=>setAdd(false)}>Cancel</button><button disabled={busy||!online} className="primary-button" onClick={()=>void addLink()}><Plus size={17}/> Download</button></div></Glass></div>}
     {settings&&<div className="overlay" onMouseDown={e=>{if(e.currentTarget===e.target)setSettings(false)}}><Glass className="modal appearance-modal"><div className="modal-header"><h2><Palette size={22}/> Themes & Appearance</h2><button onClick={()=>setSettings(false)}><X size={20}/></button></div><div className="setting-tabs">{["Themes","Wallpapers","Effects"].map(t=><button key={t} className={settingTab===t?"current":""} onClick={()=>setSettingTab(t)}>{t}</button>)}</div>
       {settingTab==="Themes"&&<><p>Change the accent color across panels, buttons, progress bars, and live graphs.</p><div className="theme-tiles">{themes.map(t=><button key={t.id} className={theme===t.id?"theme-picked":""} style={{"--tile-accent":t.color,"--tile-secondary":t.secondary} as CSSProperties} onClick={()=>setTheme(t.id)}><span className="theme-landscape"/><span>{t.name}</span>{theme===t.id&&<Check size={17}/>}</button>)}</div></>}
