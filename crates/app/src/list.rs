@@ -1153,50 +1153,44 @@ pub fn show(
                 } else {
                     TEXT()
                 };
-                // V2: status appears in a subtle colored rounded capsule while
-                // remaining a real sortable/filterable Status cell.
-                if *c == 3
-                    && crate::theme::current().id.as_ref() == "plexo"
-                    && !s.is_empty()
-                    && !sel
-                    && !picked
-                {
+                // V4: highly legible status capsule and a live activity dot.
+                // Never hide the pill merely because the row is selected.
+                if *c == 3 && glass && !s.is_empty() {
                     let accent = match row.status_group {
-                        "Downloading" => crate::theme::colors().accent,
+                        "Downloading" => crate::glass_ui::accent(),
                         "Complete" => crate::theme::colors().success,
                         "Error" => crate::theme::colors().error,
                         "Stopped" => crate::theme::colors().warning,
                         _ => crate::theme::colors().muted,
                     };
                     let max_w = (x1 - tx - 3.0).max(0.0);
-                    let width = (winui::text_width_font(&clip, font.clone(), &s) + 18.0).min(max_w);
-                    if width > 19.0 {
+                    let width = (winui::text_width_font(&clip, font.clone(), &s) + 36.0)
+                        .min(max_w);
+                    if width > 37.0 {
                         let capsule = Rect::from_min_size(
-                            pos2(tx - 5.0, top + (row_h() - 25.0) * 0.5),
-                            egui::vec2(width, 25.0),
+                            pos2(tx - 7.0, top + (row_h() - 29.0) * 0.5),
+                            egui::vec2(width, 29.0),
                         );
-                        clip.rect_filled(
-                            winui::rect(capsule),
-                            12.5,
-                            Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 33),
-                        );
-                        clip.rect_stroke(
-                            winui::rect(capsule),
-                            12.5,
-                            egui::Stroke::new(
-                                0.7,
+                        clip.rect_filled(winui::rect(capsule), 14.5,
+                            Color32::from_rgba_unmultiplied(
+                                accent.r(), accent.g(), accent.b(), if picked { 76 } else { 50 }));
+                        clip.rect_stroke(winui::rect(capsule), 14.5,
+                            egui::Stroke::new(1.0, Color32::from_rgba_unmultiplied(
+                                accent.r(), accent.g(), accent.b(), 151)),
+                            egui::StrokeKind::Inside);
+                        let dot = pos2(tx + 5.0, capsule.center().y);
+                        if row.status_group == "Downloading" {
+                            let phase = (ui.input(|i| i.time) as f32 * 3.5).sin() * 0.5 + 0.5;
+                            clip.circle_filled(dot, 5.0 + phase * 3.5,
                                 Color32::from_rgba_unmultiplied(
-                                    accent.r(),
-                                    accent.g(),
-                                    accent.b(),
-                                    105,
-                                ),
-                            ),
-                            egui::StrokeKind::Inside,
-                        );
-                        text_font(&clip, font.clone(), tx,
-                            top + if glass { row_h() * 0.5 + 5.0 } else { 12.0 },
-                            &s, accent);
+                                    accent.r(), accent.g(), accent.b(),
+                                    (18.0 + 47.0 * (1.0 - phase)) as u8));
+                            ui.ctx().request_repaint_after(
+                                std::time::Duration::from_millis(90));
+                        }
+                        clip.circle_filled(dot, 3.6, accent);
+                        text_font(&clip, font.clone(), tx + 16.0,
+                            top + row_h() * 0.5 + 5.0, &s, accent);
                         continue;
                     }
                 }
