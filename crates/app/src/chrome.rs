@@ -1695,12 +1695,91 @@ pub fn pane_top() -> f32 {
     70.0
 }
 
+/// A horizontal glass action rail matching the approved V3 mockup.
+/// Actions, dropdowns and keyboard/assistive semantics are unchanged.
+fn glass_toolbar(
+    ui: &mut Ui,
+    o: Pos2,
+    width: f32,
+    buttons: &[(Icon, &str, bool)],
+) -> Option<ToolbarEvent> {
+    let p = ui.painter().clone();
+    let top = o.y + MENU_H + 4.0;
+    let band = Rect::from_min_size(pos2(o.x + 8.0, top), vec2((width - 16.0).max(0.0), 58.0));
+    crate::glass_ui::panel(&p, winui::rect(band), 13.0, 145);
+    let gap = 6.0;
+    let primary = 116.0_f32.min((width * 0.23).max(62.0));
+    let spare = (width - 32.0 - primary - gap * buttons.len() as f32).max(0.0);
+    let compact = (spare / (buttons.len().saturating_sub(1).max(1)) as f32)
+        .clamp(22.0, 48.0);
+    let mut x = o.x + 18.0;
+    let mut answer = None;
+    for (i, (icon, label, enabled)) in buttons.iter().enumerate() {
+        let is_primary = i == 0;
+        let drop = matches!(icon, Icon::AddTorrent | Icon::StartQueue | Icon::StopQueue);
+        let w = if is_primary { primary } else { compact };
+        let button = winui::rect(Rect::from_min_size(
+            pos2(x, top + 9.0), vec2(w, 40.0)
+        ));
+        let r = ui.interact(button, egui::Id::unique(("tb-v3", i)), winui::pointer_only())
+            .on_hover_text(crate::i18n::tc("toolbar", label));
+        winui::expose(&r, egui::Role::Button,
+            crate::i18n::tc("toolbar", label), *enabled || drop, None);
+        let color = if is_primary && *enabled {
+            Color32::from_rgba_unmultiplied(19, 138, 127,
+                if r.hovered() { 239 } else { 193 })
+        } else if r.hovered() && *enabled {
+            Color32::from_rgba_unmultiplied(62, 91, 98, 186)
+        } else {
+            Color32::from_rgba_unmultiplied(27, 42, 49, 145)
+        };
+        p.rect_filled(button, 9.0, color);
+        p.rect_stroke(button, 9.0,
+            Stroke::new(1.0, Color32::from_rgba_unmultiplied(119, 175, 181,
+                if r.hovered() { 148 } else { 59 })),
+            egui::StrokeKind::Inside);
+        let icon_w = if is_primary { 22.0 } else { 25.0 };
+        let center = if is_primary {
+            pos2(button.left() + 17.0, button.center().y)
+        } else {
+            button.center()
+        };
+        icon.image(*enabled).paint_at(ui,
+            Rect::from_center_size(center, vec2(icon_w, icon_w)));
+        if is_primary && w > 83.0 {
+            p.text(pos2(button.left() + 34.0, button.center().y),
+                egui::Align2::LEFT_CENTER, crate::i18n::tc("toolbar", label),
+                egui::FontId::proportional(12.5),
+                crate::glass_ui::text());
+        }
+        if r.clicked() && (*enabled || drop) {
+            let arrow = drop && r.interact_pointer_pos()
+                .is_some_and(|at| winui::mx(at.x) > x + w - 13.0);
+            answer = Some(if arrow {
+                ToolbarEvent::Drop(i, pos2(winui::mx(x), button.bottom()))
+            } else {
+                ToolbarEvent::Click(i)
+            });
+        }
+        x += w + gap;
+    }
+    if width > 840.0 && x < o.x + width - 115.0 {
+        let at = pos2(o.x + width - 127.0, top + 29.0);
+        p.text(at, egui::Align2::LEFT_CENTER, "MISTER HYBRID V3",
+            egui::FontId::proportional(11.0), crate::glass_ui::muted());
+    }
+    answer
+}
+
 pub fn toolbar(
     ui: &mut Ui,
     o: Pos2,
     width: f32,
     buttons: &[(Icon, &str, bool)],
 ) -> Option<ToolbarEvent> {
+    if crate::glass_ui::active() {
+        return glass_toolbar(ui, o, width, buttons);
+    }
     let p = ui.painter().clone();
     let top = o.y + MENU_H;
     let c = crate::theme::colors();
