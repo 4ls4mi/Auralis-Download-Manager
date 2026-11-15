@@ -8855,6 +8855,8 @@ impl App {
             focus,
             &mut self.icons,
             &tip,
+            (!self.settings.wallpaper_main.is_empty())
+                .then_some(self.settings.wallpaper_glass),
         );
         if self.list.has_keys() {
             self.tree_keys = false;
