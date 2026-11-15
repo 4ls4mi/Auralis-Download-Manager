@@ -209,6 +209,24 @@ fn register_browser_host(app: &AppHandle) -> ApiResult<String> {
 }
 
 #[tauri::command]
+async fn add_torrent_file() -> ApiResult<Option<serde_json::Value>> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let picked = rfd::FileDialog::new().set_title("Add torrent — Mister Hybrid Glass")
+            .add_filter("BitTorrent", &["torrent"]).pick_file();
+        let Some(path) = picked else { return Ok(None) };
+        let reply = send_ipc(&mdm_ipc::Command {
+            action: Some("glass-torrent-file".into()),
+            dir: Some(path.to_string_lossy().into_owned()),
+            ..Default::default()
+        })?;
+        let result: serde_json::Value = serde_json::from_str(&reply)
+            .map_err(|_| format!("Invalid torrent response: {reply}"))?;
+        if result.get("error").is_some() { return Err(result.to_string()); }
+        Ok(Some(result))
+    }).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
 async fn browser_integration(app: AppHandle, repair: bool) -> ApiResult<String> {
     tauri::async_runtime::spawn_blocking(move || {
         if repair { register_browser_host(&app) }
@@ -427,7 +445,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             boot_engine, dashboard_snapshot, download_action,
             add_download, select_wallpaper, queue_action, glass_settings, update_glass_setting,
-            browser_integration, bulk_action, file_operation
+            browser_integration, bulk_action, file_operation, add_torrent_file
         ])
         .run(tauri::generate_context!())
         .expect("error starting Mister Hybrid glass desktop");
