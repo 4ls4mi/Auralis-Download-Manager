@@ -485,7 +485,10 @@ impl Progress {
         self.pending_rename.take()
     }
 
-    pub fn show(&mut self, ctx: &egui::Context, item: &Item, snap: Option<&Snapshot>) -> Action {
+    pub fn show(
+        &mut self, ctx: &egui::Context, item: &Item,
+        snap: Option<&Snapshot>, settings: &crate::settings::Settings,
+    ) -> Action {
         crate::crash::window("progress");
         let frac = item.fraction();
         // Draw a real measured history from the download's current item rate.
@@ -573,6 +576,15 @@ impl Progress {
                 .frame(egui::Frame::new().fill(winui::BG()))
                 .show(ui, |ui| {
                     let o = ui.max_rect().min;
+                    let path = crate::wallpaper::progress_path(
+                        &settings.wallpaper_main, &settings.wallpaper_download,
+                        settings.wallpaper_download_inherit,
+                    );
+                    crate::wallpaper::paint(
+                        ui, ui.max_rect(), path,
+                        settings.wallpaper_blur, settings.wallpaper_dim,
+                        settings.wallpaper_glass, crate::wallpaper::Target::Progress,
+                    );
                     // The window's width, laid out from the right in a right-to-left
                     // interface (the title bar; the layout under it has its own).
                     let _surface = winui::Surface::enter(o.x, o.x + shown[0]);
