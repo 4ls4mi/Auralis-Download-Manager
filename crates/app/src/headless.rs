@@ -97,7 +97,17 @@ pub fn main(args: Vec<String>) -> ExitCode {
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
     let mut loaded = crate::store::load();
     let s = &mut loaded.settings;
-    s.remote_on = !std::env::var("MDM_REMOTE").is_ok_and(|v| v.eq_ignore_ascii_case("off"));
+    // Glass owns all visible windows and the only tray icon. The backend
+    // must never expose the NAS/remote-control server on the network.
+    let glass_owned = std::env::var_os("MDM_GLASS_HEADLESS")
+        .is_some_and(|value| value == "1");
+    s.remote_on = !glass_owned
+        && !std::env::var("MDM_REMOTE").is_ok_and(|v| v.eq_ignore_ascii_case("off"));
+    if glass_owned {
+        // Authenticated IPC is confined to loopback and requires the per-session
+        // token. Only our Rust Tauri bridge sees the token, not the WebView.
+        s.automation_api = true;
+    }
     if let Some(p) = setting(&args, "port", "MDM_REMOTE_PORT") {
         match p.trim().parse::<u16>() {
             Ok(p) if p > 0 => s.remote_port = p,
