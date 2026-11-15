@@ -493,6 +493,7 @@ impl Progress {
         settings: &crate::settings::Settings,
     ) -> Action {
         crate::crash::window("progress");
+        crate::glass_ui::configure(settings.wallpaper_glass);
         let frac = item.fraction();
         // Draw a real measured history from the download's current item rate.
         // Pause, retry and stopped states contribute zero rather than invented traffic.
