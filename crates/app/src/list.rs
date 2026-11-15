@@ -591,8 +591,14 @@ pub fn show(
         // Real wallpaper remains visible behind a protective dark glass table,
         // never directly behind unoutlined text.
         let alpha = (f32::from(opacity.clamp(58, 98)) * 2.55).round() as u8;
-        fill(&p, l + 1.0, t + 1.0, r - 1.0, b - 1.0,
-            Color32::from_rgba_unmultiplied(11, 18, 21, alpha));
+        fill(
+            &p,
+            l + 1.0,
+            t + 1.0,
+            r - 1.0,
+            b - 1.0,
+            Color32::from_rgba_unmultiplied(11, 18, 21, alpha),
+        );
     } else {
         fill(&p, l + 1.0, t + 1.0, r - 1.0, b - 1.0, BG());
     }
@@ -1034,30 +1040,32 @@ pub fn show(
                 // Plexo-style progress tiles: a genuine completed byte fraction,
                 // with no invented Ethernet ownership.
                 let plexo = crate::theme::current().id.as_ref() == "plexo";
-                if *c == STATUS && plexo && x1 - x0 >= 165.0
+                if *c == STATUS
+                    && plexo
+                    && x1 - x0 >= 165.0
                     && let Some(fraction) = row.progress_fraction
                 {
-                        let filled = (fraction.clamp(0.0, 1.0) * 14.0).round() as usize;
-                        let color = match row.status_group {
-                            "Complete" => crate::theme::colors().success,
-                            "Stopped" => crate::theme::colors().warning,
-                            "Error" => crate::theme::colors().error,
-                            _ => crate::theme::colors().accent,
+                    let filled = (fraction.clamp(0.0, 1.0) * 14.0).round() as usize;
+                    let color = match row.status_group {
+                        "Complete" => crate::theme::colors().success,
+                        "Stopped" => crate::theme::colors().warning,
+                        "Error" => crate::theme::colors().error,
+                        _ => crate::theme::colors().accent,
+                    };
+                    for segment in 0..14usize {
+                        let rx = *x0 + 5.0 + segment as f32 * 6.4;
+                        let rect = Rect::from_min_size(
+                            pos2(rx, top + (row_h() - 9.0) * 0.5),
+                            egui::vec2(5.3, 9.0),
+                        );
+                        let fill_color = if segment < filled {
+                            color
+                        } else {
+                            crate::theme::colors().piece_missing
                         };
-                        for segment in 0..14usize {
-                            let rx = *x0 + 5.0 + segment as f32 * 6.4;
-                            let rect = Rect::from_min_size(
-                                pos2(rx, top + (row_h() - 9.0) * 0.5),
-                                egui::vec2(5.3, 9.0),
-                            );
-                            let fill_color = if segment < filled {
-                                color
-                            } else {
-                                crate::theme::colors().piece_missing
-                            };
-                            bp.rect_filled(winui::rect(rect), 1.5, fill_color);
-                        }
-                        tx = *x0 + 104.0;
+                        bp.rect_filled(winui::rect(rect), 1.5, fill_color);
+                    }
+                    tx = *x0 + 104.0;
                 }
                 let cell = Rect::from_min_max(pos2(*x0, top), pos2(*x1 - 1.0, top + row_h()));
                 if *c == SOURCE {
@@ -1078,8 +1086,8 @@ pub fn show(
                     continue;
                 }
                 let value = cell_text(*c, &row.cells[*c]);
-                let speed_graph = plexo && *c == 5 && row.rate_history.len() >= 2
-                    && x1 - tx >= 145.0;
+                let speed_graph =
+                    plexo && *c == 5 && row.rate_history.len() >= 2 && x1 - tx >= 145.0;
                 let available = x1 - tx - 3.0 - if speed_graph { 56.0 } else { 0.0 };
                 let s = winui::ellipsize(&bp, &font, &value, available);
                 // A cut cell shows its whole text on hover (Windows' list label tip); the
@@ -1117,8 +1125,11 @@ pub fn show(
                 };
                 // V2: status appears in a subtle colored rounded capsule while
                 // remaining a real sortable/filterable Status cell.
-                if *c == 3 && crate::theme::current().id.as_ref() == "plexo"
-                    && !s.is_empty() && !sel && !picked
+                if *c == 3
+                    && crate::theme::current().id.as_ref() == "plexo"
+                    && !s.is_empty()
+                    && !sel
+                    && !picked
                 {
                     let accent = match row.status_group {
                         "Downloading" => crate::theme::colors().accent,
@@ -1128,44 +1139,57 @@ pub fn show(
                         _ => crate::theme::colors().muted,
                     };
                     let max_w = (x1 - tx - 3.0).max(0.0);
-                    let width = (winui::text_width_font(&clip, font.clone(), &s) + 18.0)
-                        .min(max_w);
+                    let width = (winui::text_width_font(&clip, font.clone(), &s) + 18.0).min(max_w);
                     if width > 19.0 {
                         let capsule = Rect::from_min_size(
-                            pos2(tx - 5.0, top + 2.0), egui::vec2(width, row_h() - 4.0)
+                            pos2(tx - 5.0, top + 2.0),
+                            egui::vec2(width, row_h() - 4.0),
                         );
                         clip.rect_filled(
-                            winui::rect(capsule), (row_h() - 4.0) * 0.5,
-                            Color32::from_rgba_unmultiplied(
-                                accent.r(), accent.g(), accent.b(), 33,
-                            ),
-                        );
-                        clip.rect_stroke(winui::rect(capsule),
+                            winui::rect(capsule),
                             (row_h() - 4.0) * 0.5,
-                            egui::Stroke::new(0.7,
+                            Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 33),
+                        );
+                        clip.rect_stroke(
+                            winui::rect(capsule),
+                            (row_h() - 4.0) * 0.5,
+                            egui::Stroke::new(
+                                0.7,
                                 Color32::from_rgba_unmultiplied(
-                                    accent.r(), accent.g(), accent.b(), 105,
-                                )),
-                            egui::StrokeKind::Inside);
+                                    accent.r(),
+                                    accent.g(),
+                                    accent.b(),
+                                    105,
+                                ),
+                            ),
+                            egui::StrokeKind::Inside,
+                        );
                         text_font(&clip, font.clone(), tx, top + 12.0, &s, accent);
                         continue;
                     }
                 }
                 text_font(&clip, font.clone(), tx, top + 12.0, &s, ink);
                 if speed_graph {
-                    let maximum = row.rate_history.iter().copied()
-                        .filter(|v| v.is_finite()).fold(0.01_f32, f32::max);
+                    let maximum = row
+                        .rate_history
+                        .iter()
+                        .copied()
+                        .filter(|v| v.is_finite())
+                        .fold(0.01_f32, f32::max);
                     let n = row.rate_history.len();
                     let mut previous = None;
                     for (j, rate) in row.rate_history.iter().enumerate() {
                         let x = *x1 - 56.0 + j as f32 / (n - 1) as f32 * 48.0;
-                        let y = top + row_h() - 5.0
-                            - (rate.max(0.0) / maximum).clamp(0.0, 1.0)
-                                * (row_h() - 10.0).max(0.0);
-                        let point = winui::rect(Rect::from_min_size(pos2(x, y), egui::Vec2::ZERO)).min;
+                        let y = top + row_h()
+                            - 5.0
+                            - (rate.max(0.0) / maximum).clamp(0.0, 1.0) * (row_h() - 10.0).max(0.0);
+                        let point =
+                            winui::rect(Rect::from_min_size(pos2(x, y), egui::Vec2::ZERO)).min;
                         if let Some(prev) = previous {
-                            clip.line_segment([prev, point], egui::Stroke::new(
-                                1.1, crate::theme::colors().accent));
+                            clip.line_segment(
+                                [prev, point],
+                                egui::Stroke::new(1.1, crate::theme::colors().accent),
+                            );
                         }
                         previous = Some(point);
                     }
