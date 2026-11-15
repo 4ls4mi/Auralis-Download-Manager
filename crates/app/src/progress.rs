@@ -606,6 +606,9 @@ impl Progress {
                 .frame(egui::Frame::new().fill(winui::BG()))
                 .show(ui, |ui| {
                     let o = ui.max_rect().min;
+                    if crate::glass_ui::active() {
+                        crate::glass_ui::backdrop(&ui.painter_at(ui.max_rect()), ui.max_rect());
+                    }
                     let path = crate::wallpaper::progress_path(
                         &settings.wallpaper_main,
                         &settings.wallpaper_download,
@@ -764,6 +767,13 @@ impl Progress {
         if let Some(wait) = self.poll_rename_autosave(std::time::Instant::now()) {
             ui.ctx()
                 .request_repaint_after(wait + std::time::Duration::from_millis(15));
+        }
+        if crate::glass_ui::active() {
+            let bounds = Rect::from_min_size(
+                pos2(o.x + 10.0, o.y + 2.0),
+                vec2(528.0, 220.0),
+            );
+            crate::glass_ui::panel(&p, bounds, 12.0, 117);
         }
         let hide = self.tabs(ui, o);
         let hide_tab = match self.tab {
@@ -925,6 +935,7 @@ impl Progress {
             );
             crate::hybrid_progress::chunk_matrix(ui, &p, lower, item.size, item.downloaded, snap);
             crate::hybrid_progress::segment_legend(&p, lower);
+            crate::hybrid_progress::speed_chart(&p, lower, &self.throughput_samples);
             connections(
                 ui,
                 &p,
@@ -2332,7 +2343,11 @@ fn helper_line(why: &mdm_tools::streams::Helper) -> String {
 /// The connections table (spec "Connections table"): N. · Downloaded · Info.
 fn connections(ui: &mut Ui, p: &egui::Painter, o: Pos2, snap: Option<&Snapshot>) {
     let outer = r(o, 17.0, 273.0, 513.0, 128.0);
-    winui::solid(p, outer, winui::FIELD_EDGE());
+    if crate::glass_ui::active() {
+        crate::glass_ui::panel(p, outer, 9.0, 157);
+    } else {
+        winui::solid(p, outer, winui::FIELD_EDGE());
+    }
     fill(
         p,
         o.x + 18.0,
@@ -2340,7 +2355,11 @@ fn connections(ui: &mut Ui, p: &egui::Painter, o: Pos2, snap: Option<&Snapshot>)
         o.x + 528.0,
         o.y + 399.0,
         // Every list's background (IDM's light one is mauve, #beb4be: the only one of its kind).
-        winui::FIELD(),
+        if crate::glass_ui::active() {
+            Color32::from_rgba_unmultiplied(14, 25, 31, 111)
+        } else {
+            winui::FIELD()
+        },
     );
     fill(
         p,
@@ -2348,7 +2367,11 @@ fn connections(ui: &mut Ui, p: &egui::Painter, o: Pos2, snap: Option<&Snapshot>)
         o.y + 275.0,
         o.x + 510.0,
         o.y + 298.0,
-        winui::LIST_HEADER(),
+        if crate::glass_ui::active() {
+            Color32::from_rgba_unmultiplied(24, 46, 53, 158)
+        } else {
+            winui::LIST_HEADER()
+        },
     );
     // Listed by connection number, like IDM (the engine reports them in arrival order).
     let mut conns: Vec<_> = snap
