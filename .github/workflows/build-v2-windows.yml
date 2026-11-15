@@ -10,6 +10,11 @@ on:
 permissions:
   contents: read
 
+# A newer revision supersedes earlier unverified development builds.
+concurrency:
+  group: mister-hybrid-v2-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: windows-latest
