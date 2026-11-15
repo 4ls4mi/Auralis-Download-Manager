@@ -2268,58 +2268,13 @@ fn finishing_fraction(snap: Option<&Snapshot>) -> Option<f64> {
 /// The columns a segment fills in the segment bar, from its start column's right to its end's
 /// left, `total` bytes across `width` columns: a finished segment reaches the next one's start
 /// column, so a finished download leaves no gap (#736). None when it fills none.
+#[cfg(test)]
 fn segment_columns(start: u64, done: f64, total: u64, width: f64) -> Option<(f32, f32)> {
     let col = |v: f64| (v / total as f64 * width).floor();
     let first = col(start as f64);
     let end = col((start as f64 + done).min(total as f64));
     let last = (end - 1.0).min(width - 1.0);
     (last > first).then_some(((first + 1.0) as f32, last as f32))
-}
-
-/// The custom-drawn segment bar (spec "Segment bar"): 13-row gradients, red start columns;
-/// `segments`: each one's start and bytes done, as drawn ([`Glide`]).
-fn segment_bar(p: &egui::Painter, o: Pos2, item: &Item, segments: &[(u64, f64)]) {
-    let (x0, y0) = (o.x + 17.0, o.y + 249.0);
-    let border = crate::theme::colors().segment_border;
-    fill(p, x0, y0, x0 + 512.0, y0, border);
-    fill(p, x0, y0 + 14.0, x0 + 512.0, y0 + 14.0, border);
-    fill(p, x0, y0, x0, y0 + 14.0, border);
-    fill(p, x0 + 512.0, y0, x0 + 512.0, y0 + 14.0, border);
-    for (x, y) in [
-        (x0, y0),
-        (x0 + 512.0, y0),
-        (x0, y0 + 14.0),
-        (x0 + 512.0, y0 + 14.0),
-    ] {
-        px(p, x, y, crate::theme::colors().segment_corner);
-    }
-    // Paint a run of columns [a, b] with one of the three row profiles.
-    let run = |a: f32, b: f32, which: usize| {
-        if b < a {
-            return;
-        }
-        for (row, cols) in seg_rows().enumerate() {
-            let c = match which {
-                0 => cols.0,
-                1 => cols.1,
-                _ => cols.2,
-            };
-            fill(p, a, y0 + 1.0 + row as f32, b, y0 + 1.0 + row as f32, c);
-        }
-    };
-    let ix = o.x + 18.0;
-    run(ix, ix + 510.0, 0);
-    let Some(total) = item.size.filter(|t| *t > 0) else {
-        return;
-    };
-    let col = |v: f64| (v / total as f64 * 511.0).floor() as f32;
-    for &(start, done) in segments {
-        let sx = ix + col(start as f64);
-        if let Some((a, b)) = segment_columns(start, done, total, 511.0) {
-            run(ix + a, ix + b, 1);
-        }
-        run(sx, sx, 2);
-    }
 }
 
 /// Why yt-dlp downloads a video itself rather than MDM's engine (#769), as one short line.
