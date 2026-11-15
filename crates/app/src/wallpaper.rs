@@ -293,9 +293,17 @@ pub fn paint(
         return None;
     }
     let mut cache = CACHE.lock().unwrap_or_else(|err| err.into_inner());
+    // Destructuring the cache first proves to Rust that each target's
+    // texture and failure marker are independent, disjoint fields.
+    let Wallpapers {
+        main,
+        progress,
+        main_failed,
+        progress_failed,
+    } = &mut *cache;
     let (slot, failed) = match target {
-        Target::Main => (&mut cache.main, &mut cache.main_failed),
-        Target::Progress => (&mut cache.progress, &mut cache.progress_failed),
+        Target::Main => (main, main_failed),
+        Target::Progress => (progress, progress_failed),
     };
     let unchanged_failure = failed.as_ref()
         .is_some_and(|(previous, previous_blur)| previous == path && *previous_blur == blur);
