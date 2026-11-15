@@ -1117,6 +1117,8 @@ pub struct App {
     /// 90 real aggregate-speed readings, sampled at 0.5-second intervals.
     speed_samples: std::collections::VecDeque<f32>,
     speed_sampled_at: Option<Instant>,
+    /// Per-download measured rates, used for genuine row-level graphs.
+    per_item_speed: std::collections::HashMap<u64, std::collections::VecDeque<f32>>,
     /// The main window's caption matches the mode.
     caption_set: bool,
     /// Windows: whether the main window's title bar is ours (a style theme's, #45), as applied
@@ -1752,6 +1754,7 @@ impl App {
             ticked: None,
             speed_samples: std::collections::VecDeque::with_capacity(90),
             speed_sampled_at: None,
+            per_item_speed: std::collections::HashMap::new(),
             caption_set: false,
             // The system's title bar is the frame's own: nothing to apply for it.
             drawn_frame: Some(false),
@@ -2007,6 +2010,9 @@ impl App {
     /// `queued`: the downloads in a queue (worked out once for all the rows).
     fn row(&self, it: &Item, queued: &std::collections::HashSet<u64>) -> list::Row {
         list::Row {
+            progress_fraction: it.fraction().map(|f| f as f32),
+            rate_history: self.per_item_speed.get(&it.id).map_or_else(Vec::new,
+                |samples| samples.iter().copied().collect()),
             status_group: match it.status {
                 // i18n: a download's status (state it is in, not a command): being downloaded now
                 Status::Downloading => "Downloading",
@@ -11209,6 +11215,21 @@ impl App {
             if self.speed_samples.len() >= 90 { self.speed_samples.pop_front(); }
             let mb_s = (bytes_per_second / 1048576.0) as f32;
             self.speed_samples.push_back(if mb_s.is_finite() { mb_s.max(0.0) } else { 0.0 });
+            let known: std::collections::HashSet<u64> =
+                self.items.iter().map(|it| it.id).collect();
+            self.per_item_speed.retain(|id, _| known.contains(id));
+            for item in &self.items {
+                if item.live.is_none() && !self.per_item_speed.contains_key(&item.id) {
+                    continue;
+                }
+                let history = self.per_item_speed.entry(item.id).or_default();
+                if history.len() >= 48 { history.pop_front(); }
+                let per_second = if item.live.is_some() {
+                    (item.rate() / 1048576.0) as f32
+                } else { 0.0 };
+                history.push_back(if per_second.is_finite() { per_second.max(0.0) }
+                    else { 0.0 });
+            }
         }
         crate::crash::step(crate::crash::Step::RemoteTorrents);
         self.poll_remote_torrents();
