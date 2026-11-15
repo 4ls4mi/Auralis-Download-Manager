@@ -1,8 +1,13 @@
 //! Safe, cached user-selected desktop wallpapers for both Mister viewports.
 //! Images are local files only; decoded once, size-limited and resized before GPU upload.
 
+use std::io::Read;
 use std::path::Path;
-use std::sync::{LazyLock, Mutex};
+use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{Receiver, TryRecvError, sync_channel};
+use std::sync::{Arc, LazyLock, Mutex, OnceLock};
+use std::time::Duration;
 
 use egui::{
     Color32, ColorImage, Painter, Rect, Stroke, TextureHandle, TextureOptions, Ui, pos2, vec2,
@@ -12,6 +17,40 @@ use egui::{
 const MAX_WIDTH: u32 = 2048;
 const MAX_HEIGHT: u32 = 1280;
 const MAX_FILE: u64 = 48 * 1024 * 1024;
+const VIDEO_WIDTH: usize = 960;
+const VIDEO_HEIGHT: usize = 540;
+const VIDEO_FRAME_BYTES: usize = VIDEO_WIDTH * VIDEO_HEIGHT * 4;
+
+/// Playback uses FFmpeg's standalone executable, when available on Windows PATH.
+/// The decoder runs in a worker; only a bounded number of frames enter egui.
+static HAS_FFMPEG: OnceLock<bool> = OnceLock::new();
+
+pub fn is_video(path: &str) -> bool {
+    Path::new(path).extension().is_some_and(|ext| {
+        matches!(ext.to_string_lossy().to_ascii_lowercase().as_str(),
+            "mp4" | "webm" | "mov" | "mkv" | "m4v")
+    })
+}
+
+pub fn video_decoder_available() -> bool {
+    *HAS_FFMPEG.get_or_init(|| {
+        Command::new("ffmpeg").arg("-version")
+            .stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null())
+            .status().is_ok_and(|s| s.success())
+    })
+}
+
+/// A video worker owns its decoder. Removing or changing a wallpaper asks the
+/// worker to stop, and it closes its child process without touching the UI.
+struct VideoStream {
+    frames: Receiver<ColorImage>,
+    stop: Arc<AtomicBool>,
+}
+impl Drop for VideoStream {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Target {
@@ -26,6 +65,7 @@ struct Cached {
     width: f32,
     height: f32,
     brightness: f32,
+    video: Option<VideoStream>,
 }
 
 #[derive(Default)]
@@ -82,7 +122,64 @@ impl Contrast {
     }
 }
 
+fn load_video(ctx: &egui::Context, path: &str, blur: u8, target: Target) -> Option<Cached> {
+    if !Path::new(path).is_file() || !video_decoder_available() {
+        return None;
+    }
+    let texture = ctx.load_texture(
+        format!("hybrid-motion-wallpaper-{target:?}-{path}-{blur}"),
+        ColorImage::from_rgba_unmultiplied([1, 1], &[0, 0, 0, 255]),
+        TextureOptions::LINEAR,
+    );
+    let (tx, frames) = sync_channel::<ColorImage>(2);
+    let stop = Arc::new(AtomicBool::new(false));
+    let worker_stop = stop.clone();
+    let file = path.to_owned();
+    std::thread::Builder::new()
+        .name("mister-wallpaper-video".into())
+        .spawn(move || {
+            let mut filters = format!(
+                "fps=12,scale={VIDEO_WIDTH}:{VIDEO_HEIGHT}:force_original_aspect_ratio=decrease,pad={VIDEO_WIDTH}:{VIDEO_HEIGHT}:(ow-iw)/2:(oh-ih)/2"
+            );
+            if blur > 0 {
+                filters.push_str(&format!(",boxblur={}:1", (blur / 4).max(1)));
+            }
+            let child = Command::new("ffmpeg")
+                .args(["-hide_banner", "-loglevel", "error", "-nostdin",
+                    "-stream_loop", "-1", "-i"])
+                .arg(&file)
+                .args(["-an", "-sn", "-vf", &filters, "-pix_fmt", "rgba",
+                    "-f", "rawvideo", "pipe:1"])
+                .stdin(Stdio::null()).stderr(Stdio::null())
+                .stdout(Stdio::piped()).spawn();
+            let Ok(mut child) = child else { return };
+            let mut bytes = vec![0_u8; VIDEO_FRAME_BYTES];
+            if let Some(mut stdout) = child.stdout.take() {
+                while !worker_stop.load(Ordering::Relaxed) {
+                    if stdout.read_exact(&mut bytes).is_err() { break; }
+                    let frame = ColorImage::from_rgba_unmultiplied(
+                        [VIDEO_WIDTH, VIDEO_HEIGHT], &bytes);
+                    match tx.try_send(frame) {
+                        Ok(()) | Err(std::sync::mpsc::TrySendError::Full(_)) => (),
+                        Err(std::sync::mpsc::TrySendError::Disconnected(_)) => break,
+                    }
+                }
+            }
+            let _ = child.kill();
+            let _ = child.wait();
+        }).ok()?;
+    Some(Cached {
+        path: path.into(), blur, texture,
+        width: VIDEO_WIDTH as f32, height: VIDEO_HEIGHT as f32,
+        brightness: 0.25,
+        video: Some(VideoStream { frames, stop }),
+    })
+}
+
 fn load(ctx: &egui::Context, path: &str, blur: u8, target: Target) -> Option<Cached> {
+    if is_video(path) {
+        return load_video(ctx, path, blur, target);
+    }
     let location = Path::new(path);
     let ext = location.extension()?.to_string_lossy().to_ascii_lowercase();
     if !matches!(ext.as_str(), "png" | "jpeg" | "jpg" | "webp") {
@@ -131,6 +228,7 @@ fn load(ctx: &egui::Context, path: &str, blur: u8, target: Target) -> Option<Cac
         width: width as f32,
         height: height as f32,
         brightness,
+        video: None,
     })
 }
 
@@ -160,7 +258,29 @@ pub fn paint(
     {
         *slot = load(ui.ctx(), path, blur, target);
     }
-    let loaded = slot.as_ref()?;
+    let loaded = slot.as_mut()?;
+    if let Some(stream) = &mut loaded.video {
+        // Never decode video or wait for a frame on the UI thread.
+        // A bounded queue drops excess frames when the window is busy.
+        loop {
+            match stream.frames.try_recv() {
+                Ok(frame) => {
+                    let sample_step = (frame.pixels.len() / 256).max(1);
+                    let (mut sum, mut count) = (0.0_f32, 0_u32);
+                    for px in frame.pixels.iter().step_by(sample_step) {
+                        sum += (0.2126 * px.r() as f32
+                            + 0.7152 * px.g() as f32
+                            + 0.0722 * px.b() as f32) / 255.0;
+                        count += 1;
+                    }
+                    loaded.brightness = sum / count.max(1) as f32;
+                    loaded.texture.set(frame, TextureOptions::LINEAR);
+                }
+                Err(TryRecvError::Empty) | Err(TryRecvError::Disconnected) => break,
+            }
+        }
+        ui.ctx().request_repaint_after(Duration::from_millis(80));
+    }
     let out = Contrast::for_wallpaper(loaded.brightness, dim_percent, glass_percent);
     let painter = ui.painter_at(rect);
     // Fill crops to preserve aspect ratio. Fit letterboxes to preserve
