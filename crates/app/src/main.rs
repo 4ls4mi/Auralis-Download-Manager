@@ -1,6 +1,7 @@
 #![windows_subsystem = "windows"]
 
 mod app;
+mod appearance;
 mod batch;
 mod categories;
 mod checksum;
@@ -65,6 +66,7 @@ mod store;
 mod theme;
 mod themefile;
 mod themeicons;
+mod wallpaper;
 mod torrent_rename;
 mod torrentdlg;
 mod torrentfiles;
