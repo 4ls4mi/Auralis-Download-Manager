@@ -8934,6 +8934,7 @@ impl App {
                 self.list.set_keys(false);
                 match ev {
                     TreeEvent::Close => self.show_categories = false,
+                    TreeEvent::Settings => chosen = Some((Cmd::Options, None)),
                     TreeEvent::Select(k) => match rows[k].1 {
                         Some(v) => self.view = v,
                         None => self.toggle(rows[k].2),
