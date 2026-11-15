@@ -9,7 +9,12 @@ use std::{
     thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
-use tauri::{AppHandle, Manager};
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    AppHandle, Manager, WindowEvent,
+};
+use serde::Deserialize;
 
 type ApiResult<T> = Result<T, String>;
 
@@ -41,43 +46,70 @@ fn possible_legacy_paths(app: &AppHandle) -> Vec<PathBuf> {
     paths
 }
 
-fn boot_existing_engine(app: &AppHandle) -> ApiResult<String> {
-    // An existing instance always wins: don't start duplicate downloads,
-    // overwrite settings, or touch another process's files.
-    let status = send_ipc(&mdm_ipc::Command {
-        api: Some(true),
+#[derive(Deserialize)]
+struct BackendIdentity {
+    headless: bool,
+    glass: bool,
+}
+
+fn current_backend() -> ApiResult<BackendIdentity> {
+    let response = send_ipc(&mdm_ipc::Command {
+        query: Some("glass-backend".into()),
         ..Default::default()
-    });
-    if status.is_err() {
-        let backend = possible_legacy_paths(app).into_iter()
-            .find(|candidate| candidate.is_file())
-            .ok_or_else(|| "MDM backend is not running and its bundled executable is missing. Use the Windows installer for this build.".to_string())?;
-        // /startup is supported by the original app: starts minimized to tray.
-        ProcessCommand::new(backend)
-            .arg("/startup")
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .map_err(|e| format!("Could not launch original MDM backend: {e}"))?;
-        let mut ready = false;
-        for _ in 0..40 {
-            thread::sleep(Duration::from_millis(250));
-            if send_ipc(&mdm_ipc::Command {
-                api: Some(true),
-                ..Default::default()
-            }).is_ok() {
-                ready = true;
-                break;
-            }
+    })?;
+    serde_json::from_str(&response)
+        .map_err(|_| "Another original Mister Download Manager instance is running.             It still owns the old tray icon. Please finish active downloads,             then exit the original MDM from its tray icon before starting             Mister Hybrid Glass. The current downloads and settings will be preserved.".into())
+}
+
+fn boot_existing_engine(app: &AppHandle) -> ApiResult<String> {
+    // NEVER attach the Glass UI to a legacy GUI instance: that previously
+    // resulted in two tray icons and opening the old window by accident.
+    // Nor silently exit an existing user's active downloads.
+    match current_backend() {
+        Ok(identity) if identity.headless && identity.glass => {
+            request_snapshot()?;
+            return Ok("Connected to headless Rust downloader • Glass owns the Windows tray".into())
         }
-        if !ready {
-            return Err("MDM backend did not become available. Check its tray icon or log.".into());
+        Ok(_) => return Err("An incompatible downloader is running. Exit it safely before switching to Glass.".into()),
+        Err(e) if e.contains("Another original Mister") => return Err(e),
+        Err(_) => {}
+    }
+    let backend = possible_legacy_paths(app).into_iter()
+        .find(|candidate| candidate.is_file())
+        .ok_or_else(|| "The bundled headless Rust downloader is missing. Reinstall Mister Hybrid Glass.".to_string())?;
+    // The ORIGINAL project already implements --headless. No egui window
+    // opens, no original tray icon is created, and its download logic and
+    // saved data are preserved. Disable its separate remote HTTP server.
+    ProcessCommand::new(backend)
+        .arg("--headless")
+        .env("MDM_GLASS_HEADLESS", "1")
+        .env("MDM_REMOTE", "off")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| format!("Could not launch headless Rust engine: {e}"))?;
+    for _ in 0..48 {
+        thread::sleep(Duration::from_millis(250));
+        match current_backend() {
+            Ok(identity) if identity.headless && identity.glass => {
+                request_snapshot()?;
+                return Ok("Headless Rust downloader started • One Glass tray icon".into());
+            }
+            Ok(_) => return Err("A different MDM process acquired the download data lock.                 Please close that instance without losing active downloads.".into()),
+            Err(e) if e.contains("Another original Mister") => return Err(e),
+            Err(_) => {}
         }
     }
-    // Confirm that the version of MDM really supports the API before claiming connected.
-    request_snapshot()?;
-    Ok("Connected to original MDM download engine (local authenticated IPC)".into())
+    Err("Headless downloader did not initialize. See its crash logs in the original MDM data directory.".into())
+}
+
+fn show_main(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.unminimize();
+        let _ = w.show();
+        let _ = w.set_focus();
+    }
 }
 
 #[tauri::command]
@@ -135,32 +167,50 @@ fn suffix(path: &Path) -> Option<String> {
     path.extension()?.to_str().map(|s| s.to_ascii_lowercase())
 }
 
-/// Opens the ORIGINAL application's Windows UI, preserving advanced tools
-/// that have not yet been ported into the new React frontend.
-/// The original app brings its main window to the front for any /show command.
+/// Read validated live options from the same headless process that handles
+/// downloads. Never edit downloads.json from the WebView or a second process.
 #[tauri::command]
-async fn open_original_window(page: String) -> ApiResult<String> {
-    const PAGES: &[&str] = &[
-        "main", "options:general", "options:types", "options:saveto",
-        "options:downloads", "options:connection", "options:proxy",
-        "options:logins", "options:sounds", "options:regional",
-        "options:panels", "scheduler", "speedlimit", "helpers",
-        "extension", "torrent-settings", "rss", "find",
-        "batch", "language", "shortcuts", "video-page",
-        "about", "addurl",
+async fn glass_settings() -> ApiResult<serde_json::Value> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let reply = send_ipc(&mdm_ipc::Command {
+            query: Some("glass-settings".into()),
+            ..Default::default()
+        })?;
+        let settings: serde_json::Value = serde_json::from_str(&reply)
+            .map_err(|_| "Failed to decode Rust downloader settings".to_string())?;
+        if !settings.is_object() || settings.get("error").is_some() {
+            return Err(format!("Settings not available: {reply}"));
+        }
+        Ok(settings)
+    }).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn update_glass_setting(key: String, value: String) -> ApiResult<serde_json::Value> {
+    const VALID: &[&str] = &[
+        "max_connections", "speed_limit_on", "speed_limit_kb",
+        "global_limit_on", "global_limit_kb", "start_immediately",
+        "only_add_to_queue", "confirm_delete", "torrent_keep_sharing",
+        "torrent_dht", "torrent_lsd", "proxy_from_browser",
+        "capture_opened", "net_adapter"
     ];
-    if !PAGES.contains(&page.as_str()) {
-        return Err("Unknown original Mister Download Manager window".into());
+    if !VALID.contains(&key.as_str()) || value.len() > 256 {
+        return Err("Unsupported settings change".into());
     }
     tauri::async_runtime::spawn_blocking(move || {
         let reply = send_ipc(&mdm_ipc::Command {
-            show: Some(page),
+            action: Some("glass-setting".into()),
+            category: Some(key),
+            queue: Some(value),
             ..Default::default()
         })?;
-        if reply == "ok" { Ok("Opened original MDM controls".into()) }
-        else { Err(format!("MDM could not open the requested window: {reply}")) }
-    })
-    .await.map_err(|e| e.to_string())?
+        let result: serde_json::Value = serde_json::from_str(&reply)
+            .map_err(|_| "Invalid response from Rust settings service".to_string())?;
+        if result.get("saved").and_then(|v| v.as_bool()) != Some(true) {
+            return Err(format!("Settings change rejected: {reply}"));
+        }
+        Ok(result)
+    }).await.map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -195,9 +245,59 @@ async fn select_wallpaper(app: AppHandle, target: String) -> ApiResult<Option<St
 
 fn main() {
     tauri::Builder::default()
+        // Glass is the one and only UI process: a second launch restores it.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            show_main(app);
+        }))
+        .setup(|app| {
+            let show = MenuItem::with_id(app, "show", "Open Mister Hybrid Glass", true, None::<&str>)?;
+            let exit = MenuItem::with_id(app, "quit", "Exit Glass and stop downloads", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&show, &exit])?;
+            TrayIconBuilder::with_id("glass-tray")
+                .icon(app.default_window_icon().cloned().ok_or("No packaged tray icon")?)
+                .tooltip("Mister Hybrid Glass — Rust download engine")
+                .menu(&menu)
+                .show_menu_on_left_click(false)
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "show" => show_main(app),
+                    "quit" => {
+                        // This is an explicit EXIT, not closing/minimizing.
+                        // The headless service persists its state on exit.
+                        if current_backend().is_ok_and(|b| b.headless && b.glass) {
+                            let _ = mdm_ipc::send(&mdm_ipc::Command {
+                                exit: true,
+                                ..Default::default()
+                            });
+                        }
+                        app.exit(0);
+                    }
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event {
+                        show_main(tray.app_handle());
+                    }
+                })
+                .build(app)?;
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            if window.label() == "main" {
+                if let WindowEvent::CloseRequested { api, .. } = event {
+                    // Closing the X hides the glass window, never exits the
+                    // downloader. Restore it through the single Glass tray.
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             boot_engine, dashboard_snapshot, download_action,
-            add_download, select_wallpaper, open_original_window
+            add_download, select_wallpaper, glass_settings, update_glass_setting
         ])
         .run(tauri::generate_context!())
         .expect("error starting Mister Hybrid glass desktop");
