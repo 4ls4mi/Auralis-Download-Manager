@@ -387,7 +387,9 @@ impl OptionsDialog {
                     "Appearance...",
                     ButtonKind::Normal,
                     false,
-                ).clicked() {
+                )
+                .clicked()
+                {
                     self.appearance_requested = true;
                 }
                 let ok = winui::button_light(
