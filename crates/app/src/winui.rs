@@ -3951,6 +3951,25 @@ fn paint_button(
     use crate::palette::ButtonLook;
     let c = crate::theme::colors();
     let m = crate::theme::metrics();
+    if crate::glass_ui::active() && shape == Shape::Push {
+        let radius = (rc.height() * 0.28).clamp(5.0, 10.0);
+        let (r, g, b, alpha) = if kind == ButtonKind::Accent {
+            (23, 143, 131, 208)
+        } else if state == State::Hot {
+            (57, 91, 100, 190)
+        } else if state == State::Disabled {
+            (22, 32, 39, 92)
+        } else {
+            (28, 48, 56, 166)
+        };
+        p.rect_filled(rc, radius,
+            Color32::from_rgba_unmultiplied(r, g, b, alpha));
+        p.rect_stroke(rc, radius,
+            Stroke::new(1.0, Color32::from_rgba_unmultiplied(
+                132, 183, 189, if state == State::Hot { 158 } else { 68 })),
+            StrokeKind::Inside);
+        return radius;
+    }
     let look = crate::theme::current().controls.button;
     let part = shape != Shape::Push;
     let radius = match look {
@@ -5430,6 +5449,7 @@ pub fn tabs_light(
     selected: usize,
 ) -> Option<usize> {
     let p = ui.painter().clone();
+    let glass = crate::glass_ui::active();
     let border = HEADER_LINE();
     let shadow = TAB_UNSELECTED();
     // Pane: x rc.left ..= right − 3, y top + 20 ..= bottom − 2, then a 2 px / 1 px shadow.
@@ -5439,13 +5459,17 @@ pub fn tabs_light(
         rc.right() - 3.0,
         rc.bottom() - 2.0,
     );
-    fill(&p, l, t, rr, b, LIGHT_PAGE());
-    hline(&p, l, rr, t, border);
-    hline(&p, l, rr, b, border);
-    vline(&p, l, t, b, border);
-    vline(&p, rr, t, b, border);
-    fill(&p, rr + 1.0, t, rr + 2.0, b + 1.0, shadow);
-    hline(&p, l, rr + 2.0, b + 1.0, shadow);
+    if glass {
+        crate::glass_ui::panel(&p, rc.shrink(2.0), 12.0, 174);
+    } else {
+        fill(&p, l, t, rr, b, LIGHT_PAGE());
+        hline(&p, l, rr, t, border);
+        hline(&p, l, rr, b, border);
+        vline(&p, l, t, b, border);
+        vline(&p, rr, t, b, border);
+        fill(&p, rr + 1.0, t, rr + 2.0, b + 1.0, shadow);
+        hline(&p, l, rr + 2.0, b + 1.0, shadow);
+    }
     // (selected range, unselected range, label x, label shown), from the client origin.
     type Placed = ((f32, f32), (f32, f32), f32, String);
     let placed: Vec<Placed> = if tabs.iter().all(|t| crate::i18n::t(t.label) == t.label) {
@@ -5523,15 +5547,32 @@ pub fn tabs_light(
         } else {
             shadow
         };
-        fill(&p, x0, y0, x1, t, face);
-        hline(&p, x0 + 1.0, x1 - 1.0, y0, border);
-        vline(&p, x0, y0 + 1.0, t, border);
-        vline(&p, x1, y0 + 1.0, t, border);
-        if sel {
-            // Open at the bottom: the pane's top line stops at the tab.
-            hline(&p, x0 + 1.0, x1 - 1.0, t, LIGHT_PAGE());
+        if glass {
+            let card = Rect::from_min_max(
+                pos2(x0, rc.top()), pos2(x1 + 1.0, rc.top() + 20.0));
+            p.rect_filled(card, 7.0, if sel {
+                Color32::from_rgba_unmultiplied(11, 140, 129, 151)
+            } else if resp.hovered() {
+                Color32::from_rgba_unmultiplied(67, 100, 105, 145)
+            } else {
+                Color32::from_rgba_unmultiplied(22, 37, 43, 132)
+            });
+            if sel {
+                p.rect_filled(
+                    Rect::from_min_max(pos2(x0 + 5.0, rc.top() + 18.0),
+                        pos2(x1 - 4.0, rc.top() + 20.0)),
+                    1.0, crate::glass_ui::accent());
+            }
         } else {
-            hline(&p, x0, x1, t, border);
+            fill(&p, x0, y0, x1, t, face);
+            hline(&p, x0 + 1.0, x1 - 1.0, y0, border);
+            vline(&p, x0, y0 + 1.0, t, border);
+            vline(&p, x1, y0 + 1.0, t, border);
+            if sel {
+                hline(&p, x0 + 1.0, x1 - 1.0, t, LIGHT_PAGE());
+            } else {
+                hline(&p, x0, x1, t, border);
+            }
         }
         let base = if sel {
             rc.top() + 13.0
@@ -5539,7 +5580,12 @@ pub fn tabs_light(
             rc.top() + 15.0
         };
         let full = crate::i18n::t(tab.label);
-        let drawn = text(&p, o.x + label_x, base, shown, LIGHT_TEXT());
+        let drawn = if glass {
+            text_at(&p, segoe(), o.x + label_x, base, shown,
+                if sel { crate::glass_ui::text() } else { crate::glass_ui::muted() })
+        } else {
+            text(&p, o.x + label_x, base, shown, LIGHT_TEXT())
+        };
         // Over the tab's face (drawn before it, the face hid it).
         show_focus(ui, &resp, hit.shrink(2.0));
         if shown != full {
