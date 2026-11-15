@@ -54,8 +54,10 @@ jobs:
       - name: Headless Rust runtime integration smoke test
         shell: pwsh
         run: |
+          # The script throws on test failure and returns normally on success.
+          # Do not inspect $LASTEXITCODE here: a previous Rust native command
+          # may leave it nonzero after all four smoke assertions have passed.
           ./tools/lab/tauri-headless-smoke.ps1 -Backend target/x86_64-pc-windows-msvc/release/misterdownloadmanager.exe
-          if ($LASTEXITCODE -ne 0) { throw "Headless download backend smoke test failed" }
 
       - name: Install frontend dependencies
         shell: pwsh
