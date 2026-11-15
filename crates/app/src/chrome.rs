@@ -2027,6 +2027,8 @@ pub enum TreeEvent {
     Select(usize),
     Toggle(usize),
     Close,
+    /// Open the existing Options dialog from V3's navigation footer.
+    Settings,
     /// Right-click: the row whose menu opens (the selection does not move) and where.
     Context(usize, Pos2),
 }
@@ -2142,7 +2144,8 @@ fn glass_categories(
         if let Some(n) = row.count {
             let count = count_text(n);
             let cap = Rect::from_center_size(
-                pos2(slot.right() - 21.0, slot.center().y), vec2(34.0, 19.0));
+                pos2(slot.right() - if row.expander.is_some() { 54.0 } else { 21.0 },
+                    slot.center().y), vec2(34.0, 19.0));
             cp.rect_filled(cap, 9.0,
                 Color32::from_rgba_unmultiplied(37, 73, 78, 133));
             cp.text(cap.center(), egui::Align2::CENTER_CENTER, &count,
@@ -2195,9 +2198,24 @@ fn glass_categories(
     {
         event = Some(TreeEvent::Context(k, at));
     }
-    p.text(pos2(side + 16.0, rect.bottom() - 16.0),
-        egui::Align2::LEFT_CENTER, "WINDOWS  •  HYBRID V3",
-        egui::FontId::proportional(9.0), crate::glass_ui::muted());
+    let settings_rect = Rect::from_min_size(
+        pos2(side + 11.0, rect.bottom() - 39.0),
+        vec2((rect.width() - 22.0).max(0.0), 29.0),
+    );
+    let settings = ui.interact(settings_rect,
+        egui::Id::unique("glass-open-settings"), winui::pointer_only())
+        .on_hover_text(crate::i18n::t("Options"));
+    winui::expose(&settings, egui::Role::Button,
+        crate::i18n::t("Options"), true, None);
+    if settings.hovered() {
+        crate::glass_ui::inset(&p, settings_rect, 8.0);
+    }
+    p.text(pos2(settings_rect.left() + 15.0, settings_rect.center().y),
+        egui::Align2::LEFT_CENTER, "⚙  Settings",
+        egui::FontId::proportional(12.0), crate::glass_ui::muted());
+    if settings.clicked() {
+        event = Some(TreeEvent::Settings);
+    }
     event
 }
 
