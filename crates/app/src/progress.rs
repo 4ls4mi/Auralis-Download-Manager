@@ -1,7 +1,7 @@
 //! The per-download progress dialog, painted to IDM 6.42's pixels
 //! (notes/ui-spec/progress-dialog.md). Coordinates are client pixels from the spec.
 
-use egui::{Color32, Pos2, Ui, ViewportId, vec2};
+use egui::{Color32, Pos2, Rect, Ui, ViewportId, pos2, vec2};
 use mdm_engine::Snapshot;
 use mdm_engine::download::ConnStatus;
 
