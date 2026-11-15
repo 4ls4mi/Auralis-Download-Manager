@@ -20,7 +20,10 @@
         "minHeight": 640,
         "center": true,
         "decorations": false,
-        "backgroundColor": "#07121b"
+        "backgroundColor": "#00000000",
+        "transparent": true,
+        "shadow": false,
+        "noRedirectionBitmap": true
       }
     ],
     "security": {
