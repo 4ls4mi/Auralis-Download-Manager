@@ -4,6 +4,19 @@
 //! cached, pre-blurred local wallpaper. This is *in-app* frosted glass: it
 //! does not pretend to blur other Windows desktop applications.
 use egui::{Color32, Painter, Rect, Stroke, StrokeKind, pos2};
+use std::sync::atomic::{AtomicU8, Ordering};
+
+static GLASS_PERCENT: AtomicU8 = AtomicU8::new(73);
+
+/// The Appearance opacity slider changes every main UI glass surface.
+pub fn configure(opacity_percent: u8) {
+    GLASS_PERCENT.store(opacity_percent.clamp(48, 95), Ordering::Relaxed);
+}
+
+fn scaled_alpha(base: u8) -> u8 {
+    ((f32::from(base) * f32::from(GLASS_PERCENT.load(Ordering::Relaxed)) / 73.0)
+        .round() as u16).clamp(30, 239) as u8
+}
 
 pub fn active() -> bool {
     crate::theme::current().id.as_ref() == "plexo"
@@ -44,7 +57,7 @@ pub fn panel(p: &Painter, rect: Rect, radius: f32, opacity: u8) {
     if rect.width() <= 0.0 || rect.height() <= 0.0 {
         return;
     }
-    p.rect_filled(rect, radius, rgba(12, 20, 25, opacity.clamp(24, 245)));
+    p.rect_filled(rect, radius, rgba(12, 20, 25, scaled_alpha(opacity)));
     p.rect_stroke(
         rect,
         radius,
@@ -57,7 +70,7 @@ pub fn inset(p: &Painter, rect: Rect, radius: f32) {
     if rect.width() <= 0.0 || rect.height() <= 0.0 {
         return;
     }
-    p.rect_filled(rect, radius, rgba(14, 26, 32, 125));
+    p.rect_filled(rect, radius, rgba(14, 26, 32, scaled_alpha(125)));
     p.rect_stroke(
         rect,
         radius,
@@ -67,7 +80,7 @@ pub fn inset(p: &Painter, rect: Rect, radius: f32) {
 }
 
 pub fn selected(p: &Painter, rect: Rect, radius: f32) {
-    p.rect_filled(rect, radius, rgba(15, 116, 107, 116));
+    p.rect_filled(rect, radius, rgba(15, 116, 107, scaled_alpha(116)));
     p.rect_stroke(
         rect,
         radius,
@@ -92,7 +105,7 @@ pub fn muted() -> Color32 {
 mod tests {
     #[test]
     fn glass_is_never_opaque() {
-        let alpha = 90_u8.clamp(24, 245);
+        let alpha = super::scaled_alpha(90);
         assert!(alpha < 255);
     }
 }
