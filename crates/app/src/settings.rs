@@ -119,6 +119,20 @@ pub struct Settings {
     /// The look (#45): a built-in theme's id ("classic", the default) or a theme file's name in
     /// the data folder's `themes` folder (crate::themefile).
     pub theme: String,
+    /// Custom wallpaper for the main window (an empty string disables it).
+    pub wallpaper_main: String,
+    /// Optional custom wallpaper for download progress windows.
+    pub wallpaper_download: String,
+    /// Reuse the main wallpaper for progress windows unless overridden.
+    pub wallpaper_download_inherit: bool,
+    /// Wallpaper blur amount in pixels, processed once when an image is selected.
+    pub wallpaper_blur: u8,
+    /// Backdrop dimming percent; adapts to luminance to preserve text contrast.
+    pub wallpaper_dim: u8,
+    /// Opacity (percent) of protective glass panels.
+    pub wallpaper_glass: u8,
+    /// One-time fork visual migration: respect future explicit user theme choices.
+    pub hybrid_theme_seen: bool,
     /// View → Draw with (#89): OpenGL or Direct3D (Windows only), used from the next start.
     /// None: MDM's default (`renderer::DEFAULT`), which may change.
     pub renderer: Option<crate::renderer::Api>,
@@ -428,7 +442,14 @@ impl Default for Settings {
             view: None,
             dark_mode_support: true,
             always_dark: false,
-            theme: "classic".into(),
+            theme: "plexo".into(),
+            wallpaper_main: String::new(),
+            wallpaper_download: String::new(),
+            wallpaper_download_inherit: true,
+            wallpaper_blur: 9,
+            wallpaper_dim: 55,
+            wallpaper_glass: 85,
+            hybrid_theme_seen: false,
             renderer: None,
             window_system: None,
             interface_size: 100,
