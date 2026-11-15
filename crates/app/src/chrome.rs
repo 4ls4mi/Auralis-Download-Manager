@@ -1790,7 +1790,7 @@ fn glass_toolbar(
     }
     if width > 840.0 && x < o.x + width - 115.0 {
         let at = pos2(o.x + width - 127.0, top + 29.0);
-        p.text(at, egui::Align2::LEFT_CENTER, "MISTER HYBRID V3",
+        p.text(at, egui::Align2::LEFT_CENTER, "HYBRID V4.1 • GLASS",
             egui::FontId::proportional(11.0), crate::glass_ui::muted());
     }
     answer
