@@ -1,4 +1,4 @@
-# Mister Hybrid V2: build/test the redesigned Windows fork.
+# Mister Hybrid V3: Windows x64 only, native glass UI build/test/installer.
 # Never tags or publishes this as an official release.
 name: Mister Hybrid V3 Windows
 
@@ -10,17 +10,17 @@ on:
 permissions:
   contents: read
 
-# A newer revision supersedes earlier unverified development builds.
+# Do not abort active Windows builds on later commits.
 concurrency:
   group: mister-hybrid-v3-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: windows-latest
     timeout-minutes: 120
     steps:
-      - name: Checkout V2 source
+      - name: Checkout V3 source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
