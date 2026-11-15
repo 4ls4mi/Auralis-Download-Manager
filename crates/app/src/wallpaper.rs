@@ -144,6 +144,7 @@ pub fn paint(
     dim_percent: u8,
     glass_percent: u8,
     target: Target,
+    mode: u8,
 ) -> Option<Contrast> {
     if path.is_empty() || rect.width() <= 1.0 || rect.height() <= 1.0 {
         return None;
@@ -161,15 +162,30 @@ pub fn paint(
     }
     let loaded = slot.as_ref()?;
     let out = Contrast::for_wallpaper(loaded.brightness, dim_percent, glass_percent);
-    let scale = (rect.width() / loaded.width).max(rect.height() / loaded.height);
-    let visible_w = (rect.width() / (loaded.width * scale)).clamp(0.0, 1.0);
-    let visible_h = (rect.height() / (loaded.height * scale)).clamp(0.0, 1.0);
-    let uv = Rect::from_min_max(
-        pos2((1.0 - visible_w) * 0.5, (1.0 - visible_h) * 0.5),
-        pos2((1.0 + visible_w) * 0.5, (1.0 + visible_h) * 0.5),
-    );
     let painter = ui.painter_at(rect);
-    painter.image(loaded.texture.id(), rect, uv, Color32::WHITE);
+    // Fill crops to preserve aspect ratio. Fit letterboxes to preserve
+    // every pixel; Stretch deliberately fills the area without preserving
+    // aspect ratio, for users who want exact background coverage.
+    let (paint_rect, uv) = match mode {
+        1 => {
+            let scale = (rect.width() / loaded.width)
+                .min(rect.height() / loaded.height);
+            (Rect::from_center_size(rect.center(),
+                vec2(loaded.width * scale, loaded.height * scale)),
+                Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)))
+        }
+        2 => (rect, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0))),
+        _ => {
+            let scale = (rect.width() / loaded.width)
+                .max(rect.height() / loaded.height);
+            let visible_w = (rect.width() / (loaded.width * scale)).clamp(0.0, 1.0);
+            let visible_h = (rect.height() / (loaded.height * scale)).clamp(0.0, 1.0);
+            (rect, Rect::from_min_max(
+                pos2((1.0 - visible_w) * 0.5, (1.0 - visible_h) * 0.5),
+                pos2((1.0 + visible_w) * 0.5, (1.0 + visible_h) * 0.5)))
+        }
+    };
+    painter.image(loaded.texture.id(), paint_rect, uv, Color32::WHITE);
 
     // Darken whites more than blacks, preserving a uniformly legible
     // canvas for the dark UI. Every readable control has its own surface.
