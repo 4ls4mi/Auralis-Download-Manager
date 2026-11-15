@@ -131,6 +131,8 @@ pub struct Settings {
     pub wallpaper_dim: u8,
     /// Opacity (percent) of protective glass panels.
     pub wallpaper_glass: u8,
+    /// A one-time migration to roomier V3 navigation; resizing remains user-controlled.
+    pub glass_layout_seen: bool,
     /// One-time fork visual migration: respect future explicit user theme choices.
     pub hybrid_theme_seen: bool,
     /// View → Draw with (#89): OpenGL or Direct3D (Windows only), used from the next start.
@@ -449,6 +451,7 @@ impl Default for Settings {
             wallpaper_blur: 9,
             wallpaper_dim: 39,
             wallpaper_glass: 73,
+            glass_layout_seen: false,
             hybrid_theme_seen: false,
             renderer: None,
             window_system: None,
