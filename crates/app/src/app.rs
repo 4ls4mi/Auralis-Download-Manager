@@ -8663,7 +8663,7 @@ impl App {
         let full = ui.max_rect();
         crate::glass_ui::configure(self.settings.wallpaper_glass);
         crate::glass_ui::backdrop(&ui.painter_at(full), full);
-        crate::wallpaper::paint(
+        let wallpaper_loaded = crate::wallpaper::paint(
             ui,
             full,
             &self.settings.wallpaper_main,
@@ -8672,7 +8672,13 @@ impl App {
             self.settings.wallpaper_glass,
             crate::wallpaper::Target::Main,
             self.settings.wallpaper_main_mode,
-        );
+        ).is_some();
+        let wallpaper_problem = if !self.settings.wallpaper_main.is_empty() && !wallpaper_loaded {
+            Some(crate::wallpaper::diagnose(&self.settings.wallpaper_main)
+                .unwrap_or_else(|| "The selected image/video could not be decoded.".into()))
+        } else {
+            None
+        };
         // The client area, laid out from the right in a right-to-left interface (winui).
         let _surface = winui::Surface::enter(full.min.x, full.max.x);
         // A style theme's title bar, drawn above the layout (Windows; #45), mirrored right to
@@ -9128,6 +9134,25 @@ impl App {
             } else if del {
                 chosen = Some((Cmd::Remove, None));
             }
+        }
+        if let Some(reason) = wallpaper_problem {
+            // A chosen image must never silently vanish into a black fallback.
+            // Painted after the dashboard so it remains visible over its panels.
+            let alert = egui::Rect::from_min_size(
+                pos2(o.x + 14.0, o.y + h - STRIP_H - 55.0),
+                egui::vec2((w - 28.0).min(630.0).max(280.0), 42.0),
+            );
+            ui.painter().rect_filled(alert, 10.0,
+                egui::Color32::from_rgba_unmultiplied(64, 32, 25, 231));
+            ui.painter().rect_stroke(alert, 10.0,
+                egui::Stroke::new(1.0, egui::Color32::from_rgb(246, 164, 99)),
+                egui::StrokeKind::Inside);
+            let reason = format!("Wallpaper not loaded: {reason}  •  Open Wallpapers & Glass");
+            let label = crate::winui::ellipsize(ui.painter(),
+                &crate::winui::segoe(), &reason, alert.width() - 30.0);
+            ui.painter().text(alert.left_center() + egui::vec2(14.0, 0.0),
+                egui::Align2::LEFT_CENTER, label,
+                egui::FontId::proportional(12.0), egui::Color32::from_rgb(255, 221, 193));
         }
         if let Some((c, target)) = chosen {
             self.run(c, target, &ctx);
