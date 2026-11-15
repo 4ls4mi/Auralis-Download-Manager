@@ -143,20 +143,20 @@ pub fn show(ctx: &egui::Context, open: &mut bool, settings: &mut Settings) -> bo
 
             ui.heading("Glass and readability");
             ui.label("The app dims bright images more strongly, keeps text on protective surfaces, and outlines labels over pictures.");
-            ui.add(egui::Slider::new(&mut settings.wallpaper_dim, 20..=95)
+            ui.add(egui::Slider::new(&mut settings.wallpaper_dim, 0..=90)
                 .text("Wallpaper darkness %"));
             ui.add(egui::Slider::new(&mut settings.wallpaper_blur, 0..=28)
                 .text("Wallpaper blur px"));
-            ui.add(egui::Slider::new(&mut settings.wallpaper_glass, 58..=98)
+            ui.add(egui::Slider::new(&mut settings.wallpaper_glass, 48..=95)
                 .text("Glass-panel opacity %"));
             ui.horizontal(|ui| {
                 if ui.button("Reset wallpaper settings").clicked() {
                     settings.wallpaper_main.clear();
                     settings.wallpaper_download.clear();
                     settings.wallpaper_download_inherit = true;
-                    settings.wallpaper_dim = 55;
+                    settings.wallpaper_dim = 39;
                     settings.wallpaper_blur = 9;
-                    settings.wallpaper_glass = 85;
+                    settings.wallpaper_glass = 73;
                     wallpaper::clear();
                 }
                 ui.small("PNG, JPG or WebP • images are loaded locally");
