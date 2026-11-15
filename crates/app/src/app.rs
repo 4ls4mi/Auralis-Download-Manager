@@ -709,7 +709,7 @@ fn place_to_take(item: &Item, items: &[Item]) -> Option<PathBuf> {
 }
 
 /// The status strip's height, under the list and the Categories pane.
-const STRIP_H: f32 = 40.0;
+const STRIP_H: f32 = 79.0;
 
 impl Cmd {
     /// The key that runs this command anywhere in the main window, as the shortcuts list writes
@@ -1902,63 +1902,67 @@ impl App {
     /// how fast in all (beyond IDM, which has no status bar).
     fn status_strip(&self, ui: &Ui, o: Pos2, w: f32, h: f32, shown: usize) {
         let p = ui.painter();
-        if crate::theme::current().id.as_ref() == "plexo" {
-            let card = egui::Rect::from_min_size(
-                pos2(o.x + 5.0, o.y + h - STRIP_H + 2.0),
-                egui::vec2((w - 10.0).max(0.0), STRIP_H - 4.0),
+        if crate::glass_ui::active() {
+            let rect = egui::Rect::from_min_size(
+                pos2(o.x + 7.0, o.y + h - STRIP_H + 3.0),
+                egui::vec2((w - 14.0).max(0.0), STRIP_H - 7.0),
             );
-            crate::wallpaper::glass_panel(p, card, self.settings.wallpaper_glass, 8.0);
-            let c = crate::theme::colors();
-            let label = crate::i18n::tn(shown as u64, "{n} download", "{n} downloads");
-            p.text(
-                pos2(card.left() + 12.0, card.center().y),
-                egui::Align2::LEFT_CENTER,
-                label,
-                egui::FontId::proportional(12.0),
-                c.text,
+            crate::glass_ui::panel(p, rect, 12.0, 174);
+            let active = self.items.iter().filter(|i| i.status == Status::Downloading).count();
+            let complete = self.items.iter().filter(|i| i.status == Status::Complete).count();
+            let stopped = self.items.iter().filter(|i| i.status == Status::Stopped).count();
+            let total_speed: f64 = self.items.iter()
+                .filter(|i| i.live.is_some()).map(|i| i.rate()).sum();
+            let labels = [
+                ("TOTAL SPEED", model::rate(total_speed)),
+                ("ACTIVE", active.to_string()),
+                ("COMPLETED", complete.to_string()),
+                ("STOPPED", stopped.to_string()),
+            ];
+            let width = ((rect.width() - 42.0) * 0.15).clamp(82.0, 156.0);
+            let mut x = rect.left() + 9.0;
+            for (title, value) in labels {
+                let card = egui::Rect::from_min_size(
+                    pos2(x, rect.top() + 8.0),
+                    egui::vec2(width, rect.height() - 16.0),
+                );
+                crate::glass_ui::inset(p, card, 9.0);
+                p.text(pos2(card.left() + 10.0, card.top() + 16.0),
+                    egui::Align2::LEFT_CENTER, title,
+                    egui::FontId::proportional(9.5),
+                    crate::glass_ui::muted());
+                p.text(pos2(card.left() + 10.0, card.top() + 38.0),
+                    egui::Align2::LEFT_CENTER, &value,
+                    egui::FontId::proportional(15.0),
+                    crate::glass_ui::text());
+                x += width + 7.0;
+            }
+            let plot = egui::Rect::from_min_max(
+                pos2(x + 5.0, rect.top() + 15.0),
+                pos2(rect.right() - 17.0, rect.bottom() - 15.0),
             );
-            // Real measured speed history, not a decorative animation.
-            let graph = egui::Rect::from_min_max(
-                pos2(card.left() + 155.0, card.top() + 7.0),
-                pos2(
-                    (card.right() - 198.0).max(card.left() + 180.0),
-                    card.bottom() - 7.0,
-                ),
-            );
-            let peak = self
-                .speed_samples
-                .iter()
-                .copied()
-                .filter(|s| s.is_finite())
-                .fold(0.01_f32, f32::max);
-            if self.speed_samples.len() >= 2 {
-                let mut before = None;
+            if plot.width() > 55.0 && self.speed_samples.len() >= 2 {
+                let top_speed = self.speed_samples.iter().copied()
+                    .filter(|v| v.is_finite()).fold(0.01_f32, f32::max);
+                let mut previous = None;
                 let last = (self.speed_samples.len() - 1) as f32;
                 for (i, rate) in self.speed_samples.iter().enumerate() {
-                    let x = graph.left() + i as f32 / last * graph.width();
-                    let y =
-                        graph.bottom() - (rate.max(0.0) / peak).clamp(0.0, 1.0) * graph.height();
-                    let point = pos2(x, y);
-                    if let Some(previous) = before {
-                        p.line_segment([previous, point], egui::Stroke::new(1.6, c.accent));
+                    let at = pos2(
+                        plot.left() + i as f32 / last * plot.width(),
+                        plot.bottom() - (rate.max(0.0) / top_speed).clamp(0.0, 1.0)
+                            * plot.height(),
+                    );
+                    if let Some(before) = previous {
+                        p.line_segment([before, at],
+                            egui::Stroke::new(1.7, crate::glass_ui::accent()));
                     }
-                    before = Some(point);
+                    previous = Some(at);
                 }
+            } else if plot.width() > 75.0 {
+                p.text(plot.center(), egui::Align2::CENTER_CENTER,
+                    &format!("{} shown", shown), egui::FontId::proportional(11.0),
+                    crate::glass_ui::muted());
             }
-            let total_speed: f64 = self
-                .items
-                .iter()
-                .filter(|it| it.live.is_some())
-                .map(|it| it.rate())
-                .sum();
-            let text = model::rate(total_speed);
-            p.text(
-                pos2(card.right() - 12.0, card.center().y),
-                egui::Align2::RIGHT_CENTER,
-                text,
-                egui::FontId::proportional(12.0),
-                c.accent,
-            );
             return;
         }
         let top = o.y + h - STRIP_H;
