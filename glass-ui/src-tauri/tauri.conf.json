@@ -1,0 +1,48 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Mister Hybrid Glass",
+  "version": "0.1.0",
+  "identifier": "com.misterhybrid.glass",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Mister Hybrid Glass",
+        "width": 1480,
+        "height": 850,
+        "minWidth": 1024,
+        "minHeight": 640,
+        "center": true,
+        "decorations": false,
+        "backgroundColor": "#07121b"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self' customprotocol: asset: http://asset.localhost; img-src 'self' asset: http://asset.localhost data: blob:; media-src 'self' asset: http://asset.localhost blob:; style-src 'self' 'unsafe-inline'; script-src 'self'",
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "$APPDATA/**"
+        ]
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis"
+    ],
+    "icon": [
+      "icons/icon.ico"
+    ],
+    "resources": {
+      "resources/mdm-legacy.exe": "mdm-legacy.exe"
+    }
+  }
+}
