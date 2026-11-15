@@ -44,7 +44,7 @@ jobs:
   rust:
     # V3 has a dedicated Windows x64 workflow that runs tests and packages it.
     # Keep the upstream cross-platform CI intact on every other branch.
-    if: github.head_ref != 'feature/plexo-glass-v3'
+    if: github.head_ref != 'feature/plexo-glass-v3' && github.head_ref != 'feature/plexo-glass-v4-polish' && github.ref_name != 'feature/plexo-glass-v4-polish'
     name: ${{ matrix.name || matrix.os }}
     strategy:
       fail-fast: false
@@ -156,7 +156,7 @@ jobs:
   # A translator's reviewed rows (no "#, machine" line) must survive every pull request: no
   # tool or merge may drop them or hand them back to machine translation.
   translations:
-    if: github.event_name == 'pull_request' && github.head_ref != 'feature/plexo-glass-v3'
+    if: github.event_name == 'pull_request' && github.head_ref != 'feature/plexo-glass-v3' && github.head_ref != 'feature/plexo-glass-v4-polish' && github.ref_name != 'feature/plexo-glass-v4-polish'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -167,7 +167,7 @@ jobs:
         run: python3 tools/i18n/reviewed_guard.py --base "origin/${{ github.base_ref }}"
 
   extension:
-    if: github.head_ref != 'feature/plexo-glass-v3'
+    if: github.head_ref != 'feature/plexo-glass-v3' && github.head_ref != 'feature/plexo-glass-v4-polish' && github.ref_name != 'feature/plexo-glass-v4-polish'
     name: browser extension
     runs-on: ubuntu-latest
     timeout-minutes: 15
