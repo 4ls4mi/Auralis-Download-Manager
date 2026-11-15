@@ -5981,6 +5981,32 @@ impl App {
         // authenticated local GUI process may invoke these actions. The paired
         // remote-control API never gets these capabilities.
         if !cmd.remote && glass_owned
+            && cmd.action.as_deref() == Some("glass-torrent-file") {
+            let Some(path) = cmd.dir.as_deref().map(std::path::Path::new) else {
+                return line(&ErrorAnswer { error: "no torrent file path".into(), code: None });
+            };
+            if !path.is_absolute() ||
+                !path.extension().is_some_and(|e| e.eq_ignore_ascii_case("torrent")) {
+                return line(&ErrorAnswer {
+                    error: "select an absolute .torrent file".into(), code: None,
+                });
+            }
+            let Some(len) = std::fs::metadata(path).ok().map(|m| m.len()) else {
+                return line(&ErrorAnswer { error: "torrent file not found".into(), code: None });
+            };
+            if len > 16_000_000 {
+                return line(&ErrorAnswer { error: "torrent file is too large".into(), code: None });
+            }
+            let Ok(bytes) = std::fs::read(path) else {
+                return line(&ErrorAnswer {
+                    error: "could not read selected .torrent file".into(), code: None,
+                });
+            };
+            let mut imported = ipc::Command::default();
+            imported.torrent_file = Some(bytes);
+            return self.remote_add(imported);
+        }
+        if !cmd.remote && glass_owned
             && cmd.action.as_deref() == Some("glass-bulk") {
             let action = cmd.category.as_deref().unwrap_or("");
             let ids: Vec<u64> = match action {
