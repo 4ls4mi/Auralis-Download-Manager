@@ -42,7 +42,7 @@ fn wallpaper_file_ok(path: &str) -> bool {
 pub fn show(ctx: &egui::Context, open: &mut bool, settings: &mut Settings) -> bool {
     let before = settings.clone();
     egui::Window::new("Appearance & Wallpapers")
-        .id(egui::Id::new("mister-hybrid-appearance"))
+        .id(egui::Id::unique("mister-hybrid-appearance"))
         .open(open)
         .default_width(540.0)
         .min_width(410.0)
