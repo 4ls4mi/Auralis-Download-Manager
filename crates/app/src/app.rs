@@ -1437,6 +1437,16 @@ impl App {
         start: crate::Start,
     ) -> Self {
         // The look (#45): the chosen theme before anything is drawn.
+        let mut loaded = loaded;
+        // Once for existing installs on this fork: switch their unmodified Classic
+        // preference to the new visual baseline, without locking future choices.
+        if !loaded.settings.hybrid_theme_seen {
+            if loaded.settings.theme == "classic" {
+                loaded.settings.theme = "plexo".into();
+                loaded.settings.always_dark = true;
+            }
+            loaded.settings.hybrid_theme_seen = true;
+        }
         crate::theme::select(&crate::theme::startup_id(&loaded.settings.theme), ctx);
         crate::theme::apply(ctx);
         // The zoom main.rs started at (View → Interface size, #262).
@@ -7680,6 +7690,7 @@ impl App {
         items.push(Radio("Aqua", Cmd::Theme("aqua"), true, on("aqua")));
         // i18n: View → Theme: a style theme's name (a white canvas, emerald fills, 6-point corners), a name: keep "Emerald" as written
         items.push(Radio("Emerald", Cmd::Theme("emerald"), true, on("emerald")));
+        items.push(Radio("Plexo Dark Glass", Cmd::Theme("plexo"), true, on("plexo")));
         let wal = crate::themefile::PYWAL;
         for e in self.theme_list.iter().filter(|e| e.path.is_some()) {
             if !files {
