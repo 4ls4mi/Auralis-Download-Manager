@@ -21,9 +21,9 @@ const VIDEO_WIDTH: usize = 960;
 const VIDEO_HEIGHT: usize = 540;
 const VIDEO_FRAME_BYTES: usize = VIDEO_WIDTH * VIDEO_HEIGHT * 4;
 
-/// Playback uses FFmpeg's standalone executable, when available on Windows PATH.
-/// The decoder runs in a worker; only a bounded number of frames enter egui.
-static HAS_FFMPEG: OnceLock<bool> = OnceLock::new();
+/// Prefer the application's already configured FFmpeg video helper (including
+/// an MDM-managed download), then check the system copy on PATH.
+static FFMPEG_BINARY: OnceLock<Option<std::path::PathBuf>> = OnceLock::new();
 
 pub fn is_video(path: &str) -> bool {
     Path::new(path).extension().is_some_and(|ext| {
@@ -32,12 +32,23 @@ pub fn is_video(path: &str) -> bool {
     })
 }
 
+fn ffmpeg_binary() -> Option<std::path::PathBuf> {
+    FFMPEG_BINARY.get_or_init(|| {
+        mdm_tools::tools_dir()
+            .and_then(|dir| mdm_tools::ffmpeg::installed(&dir))
+            .map(|item| item.exe)
+            .or_else(|| {
+                Command::new("ffmpeg").arg("-version")
+                    .stdin(Stdio::null()).stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status().is_ok_and(|s| s.success())
+                    .then(|| std::path::PathBuf::from("ffmpeg"))
+            })
+    }).clone()
+}
+
 pub fn video_decoder_available() -> bool {
-    *HAS_FFMPEG.get_or_init(|| {
-        Command::new("ffmpeg").arg("-version")
-            .stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null())
-            .status().is_ok_and(|s| s.success())
-    })
+    ffmpeg_binary().is_some()
 }
 
 /// A video worker owns its decoder. Removing or changing a wallpaper asks the
@@ -123,9 +134,10 @@ impl Contrast {
 }
 
 fn load_video(ctx: &egui::Context, path: &str, blur: u8, target: Target) -> Option<Cached> {
-    if !Path::new(path).is_file() || !video_decoder_available() {
+    if !Path::new(path).is_file() {
         return None;
     }
+    let binary = ffmpeg_binary()?;
     let texture = ctx.load_texture(
         format!("hybrid-motion-wallpaper-{target:?}-{path}-{blur}"),
         ColorImage::from_rgba_unmultiplied([1, 1], &[0, 0, 0, 255]),
@@ -144,7 +156,7 @@ fn load_video(ctx: &egui::Context, path: &str, blur: u8, target: Target) -> Opti
             if blur > 0 {
                 filters.push_str(&format!(",boxblur={}:1", (blur / 4).max(1)));
             }
-            let child = Command::new("ffmpeg")
+            let child = Command::new(&binary)
                 .args(["-hide_banner", "-loglevel", "error", "-nostdin",
                     "-stream_loop", "-1", "-i"])
                 .arg(&file)
