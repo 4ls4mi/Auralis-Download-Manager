@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Activity, AlertCircle, CheckCircle2, ChevronRight, Folder, HardDrive, LoaderCircle, Settings2, Shield, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, ChevronRight, Folder, HardDrive, LoaderCircle, Settings2, Shield, X } from "lucide-react";
 import "./native-settings.css";
 
 export type NativeTab = "General" | "Connection" | "Downloads" | "Torrents" | "Integration" | "Scheduler";
