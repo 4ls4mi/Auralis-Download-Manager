@@ -30,6 +30,10 @@ use mdm_ipc as ipc;
 #[derive(Clone, Copy, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) enum View {
     All,
+    /// Active transfers only, not queued or completed items.
+    Downloading,
+    /// User-stopped transfers (the same state used by Pause).
+    Stopped,
     Cat(Category),
     Unfinished(Option<Category>),
     Finished(Option<Category>),
@@ -1590,9 +1594,19 @@ impl App {
         let view = match settings.view {
             Some(View::Queue(q)) if q < queues.len() => View::Queue(q),
             Some(v @ View::Cat(c)) if known(Some(c)) => v,
+            Some(View::Downloading) => View::Downloading,
+            Some(View::Stopped) => View::Stopped,
             Some(v @ (View::Unfinished(c) | View::Finished(c))) if known(c) => v,
             _ => View::All,
         };
+        // V3 migration: the former 143px IDM pane is too narrow for the
+        // approved navigation, and an expanded tree hides all main sections.
+        // Migrate once, then respect explicit resizing and expansion choices.
+        if !settings.glass_layout_seen && settings.theme == "plexo" {
+            settings.categories_width = settings.categories_width.max(236);
+            settings.branches = [false, false, false, false];
+            settings.glass_layout_seen = true;
+        }
         let show_categories = settings.show_categories;
         // Click'n'Load (#37): made here, listening only once `new` starts it (Options →
         // Archives and Link grabber turns it on).
@@ -2122,6 +2136,8 @@ impl App {
         let in_cat = |c: Option<Category>| c.is_none_or(|c| i.category == c);
         match view {
             View::All => true,
+            View::Downloading => i.status == Status::Downloading,
+            View::Stopped => i.status == Status::Stopped,
             View::Cat(c) => i.category == c,
             View::Unfinished(c) => i.status != Status::Complete && in_cat(c),
             View::Finished(c) => i.status == Status::Complete && in_cat(c),
@@ -8436,6 +8452,20 @@ impl App {
             Branch::All,
             View::Cat,
         );
+        if crate::glass_ui::active() {
+            rows.push((
+                row(0, "Downloading", None,
+                    IconKey::Themed("cat-unfinished", "folder_go"),
+                    None, Some(View::Downloading)),
+                Some(View::Downloading), Branch::Leaf,
+            ));
+            rows.push((
+                row(0, "Stopped", None,
+                    IconKey::Themed("cat-unfinished", "folder"),
+                    None, Some(View::Stopped)),
+                Some(View::Stopped), Branch::Leaf,
+            ));
+        }
         branch(
             // i18n: adjective: the downloads that are not complete yet
             "Unfinished",
