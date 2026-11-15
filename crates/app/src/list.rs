@@ -1066,35 +1066,36 @@ pub fn show(
                         pos2(x0 + 2.0, top),
                     );
                 }
-                // Plexo-style progress tiles: a genuine completed byte fraction,
-                // with no invented Ethernet ownership.
-                let plexo = crate::theme::current().id.as_ref() == "plexo";
-                if *c == STATUS
-                    && plexo
-                    && x1 - x0 >= 165.0
-                    && let Some(fraction) = row.progress_fraction
-                {
-                    let filled = (fraction.clamp(0.0, 1.0) * 14.0).round() as usize;
-                    let color = match row.status_group {
-                        "Complete" => crate::theme::colors().success,
-                        "Stopped" => crate::theme::colors().warning,
-                        "Error" => crate::theme::colors().error,
-                        _ => crate::theme::colors().accent,
-                    };
-                    for segment in 0..14usize {
-                        let rx = *x0 + 5.0 + segment as f32 * 6.4;
-                        let rect = Rect::from_min_size(
-                            pos2(rx, top + (row_h() - 9.0) * 0.5),
-                            egui::vec2(5.3, 9.0),
-                        );
-                        let fill_color = if segment < filled {
-                            color
+                // Real byte-completion segments under each file name.
+                // Segment colours are not attributed to network adapters.
+                if *c == 0 && glass && let Some(fraction) = row.progress_fraction {
+                    let track = Rect::from_min_size(
+                        pos2(*x0 + 34.0, top + 36.0),
+                        egui::vec2((x1 - x0 - 50.0).max(0.0), 5.0),
+                    );
+                    if track.width() > 24.0 {
+                        bp.rect_filled(screen(track), 3.0,
+                            Color32::from_rgba_unmultiplied(115, 149, 156, 62));
+                        let segments = 24_usize;
+                        let gap = 1.5_f32;
+                        let w = (track.width() - (segments - 1) as f32 * gap)
+                            / segments as f32;
+                        let filled = (fraction.clamp(0.0, 1.0) * segments as f32)
+                            .round() as usize;
+                        let accent = if row.status_group == "Complete" {
+                            crate::theme::colors().success
+                        } else if row.status_group == "Stopped" {
+                            crate::theme::colors().warning
                         } else {
-                            crate::theme::colors().piece_missing
+                            crate::glass_ui::accent()
                         };
-                        bp.rect_filled(winui::rect(rect), 1.5, fill_color);
+                        for i in 0..filled.min(segments) {
+                            let left = track.left() + i as f32 * (w + gap);
+                            bp.rect_filled(screen(Rect::from_min_size(
+                                pos2(left, track.top()), egui::vec2(w, 5.0))),
+                                1.5, accent);
+                        }
                     }
-                    tx = *x0 + 104.0;
                 }
                 let cell = Rect::from_min_max(pos2(*x0, top), pos2(*x1 - 1.0, top + row_h()));
                 if *c == SOURCE {
@@ -1171,17 +1172,17 @@ pub fn show(
                     let width = (winui::text_width_font(&clip, font.clone(), &s) + 18.0).min(max_w);
                     if width > 19.0 {
                         let capsule = Rect::from_min_size(
-                            pos2(tx - 5.0, top + 2.0),
-                            egui::vec2(width, row_h() - 4.0),
+                            pos2(tx - 5.0, top + (row_h() - 25.0) * 0.5),
+                            egui::vec2(width, 25.0),
                         );
                         clip.rect_filled(
                             winui::rect(capsule),
-                            (row_h() - 4.0) * 0.5,
+                            12.5,
                             Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 33),
                         );
                         clip.rect_stroke(
                             winui::rect(capsule),
-                            (row_h() - 4.0) * 0.5,
+                            12.5,
                             egui::Stroke::new(
                                 0.7,
                                 Color32::from_rgba_unmultiplied(
@@ -1193,11 +1194,16 @@ pub fn show(
                             ),
                             egui::StrokeKind::Inside,
                         );
-                        text_font(&clip, font.clone(), tx, top + 12.0, &s, accent);
+                        text_font(&clip, font.clone(), tx,
+                            top + if glass { row_h() * 0.5 + 5.0 } else { 12.0 },
+                            &s, accent);
                         continue;
                     }
                 }
-                text_font(&clip, font.clone(), tx, top + 12.0, &s, ink);
+                text_font(&clip, font.clone(), tx,
+                    top + if glass && *c == 0 { 23.0 }
+                    else if glass { row_h() * 0.5 + 5.0 } else { 12.0 },
+                    &s, ink);
                 if speed_graph {
                     let maximum = row
                         .rate_history
@@ -1229,7 +1235,7 @@ pub fn show(
         // both modes (dark changes only colours).
         let gy = top + row_h() - 1.0;
         // An empty list has no grid (the empty state stands alone).
-        if !rows.is_empty() {
+        if !rows.is_empty() && !glass {
             fill(&bp, cl, gy, rr, gy, GRID_H());
         }
     }
