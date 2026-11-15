@@ -1117,7 +1117,7 @@ pub fn show(
                 }
                 let value = cell_text(*c, &row.cells[*c]);
                 let speed_graph =
-                    plexo && *c == 5 && row.rate_history.len() >= 2 && x1 - tx >= 145.0;
+                    glass && *c == 5 && row.rate_history.len() >= 2 && x1 - tx >= 145.0;
                 let available = x1 - tx - 3.0 - if speed_graph { 56.0 } else { 0.0 };
                 let s = winui::ellipsize(&bp, &font, &value, available);
                 // A cut cell shows its whole text on hover (Windows' list label tip); the

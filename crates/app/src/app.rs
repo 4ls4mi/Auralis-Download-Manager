@@ -8471,20 +8471,7 @@ impl App {
             Branch::All,
             View::Cat,
         );
-        if crate::glass_ui::active() {
-            rows.push((
-                row(0, "Downloading", None,
-                    IconKey::Themed("cat-unfinished", "folder_go"),
-                    None, Some(View::Downloading)),
-                Some(View::Downloading), Branch::Leaf,
-            ));
-            rows.push((
-                row(0, "Stopped", None,
-                    IconKey::Themed("cat-unfinished", "folder"),
-                    None, Some(View::Stopped)),
-                Some(View::Stopped), Branch::Leaf,
-            ));
-        }
+
         branch(
             // i18n: adjective: the downloads that are not complete yet
             "Unfinished",
@@ -8505,6 +8492,35 @@ impl App {
             Branch::Finished,
             |c| View::Finished(Some(c)),
         );
+        if crate::glass_ui::active() {
+            // Insert after the All Downloads section. Do this after the
+            // branch-building closure's last call to avoid a second mutable
+            // borrow of rows while the closure is still alive.
+            let at = rows
+                .iter()
+                .position(|(_, view, _)| *view == Some(View::Unfinished(None)))
+                .unwrap_or(rows.len());
+            rows.insert(
+                at,
+                (
+                    row(0, "Downloading", None,
+                        IconKey::Themed("cat-unfinished", "folder_go"),
+                        None, Some(View::Downloading)),
+                    Some(View::Downloading),
+                    Branch::Leaf,
+                ),
+            );
+            rows.insert(
+                at + 1,
+                (
+                    row(0, "Stopped", None,
+                        IconKey::Themed("cat-unfinished", "folder"),
+                        None, Some(View::Stopped)),
+                    Some(View::Stopped),
+                    Branch::Leaf,
+                ),
+            );
+        }
         let stack = IconKey::Silk("page_white_stack");
         rows.push((
             row(
