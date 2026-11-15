@@ -1744,7 +1744,32 @@ fn glass_toolbar(
         } else {
             button.center()
         };
-        icon.image(*enabled).paint_at(ui,
+        // V4: a deliberate color-coded outline icon system, not the old
+        // monochrome IDM toolbar. The hue follows the action, with a small
+        // motion cue on hover (and never changes what the action does).
+        let icon_tint = if !*enabled {
+            Color32::from_rgb(103, 125, 132)
+        } else {
+            match *icon {
+                Icon::AddUrl | Icon::Resume | Icon::StartQueue => Color32::from_rgb(40, 226, 203),
+                Icon::AddTorrent => Color32::from_rgb(63, 185, 234),
+                Icon::Stop | Icon::StopAll | Icon::StopQueue => Color32::from_rgb(250, 184, 75),
+                Icon::Delete | Icon::DeleteCompleted => Color32::from_rgb(240, 113, 125),
+                Icon::Scheduler => Color32::from_rgb(180, 153, 244),
+                Icon::Options => Color32::from_rgb(134, 185, 242),
+                _ => Color32::from_rgb(187, 220, 231),
+            }
+        };
+        if r.hovered() && *enabled {
+            let wave = (ui.input(|input| input.time) as f32 * 5.0).sin() * 0.5 + 0.5;
+            p.circle_stroke(center, 16.0 + wave * 2.0,
+                Stroke::new(1.0,
+                    Color32::from_rgba_unmultiplied(
+                        icon_tint.r(), icon_tint.g(), icon_tint.b(),
+                        (42.0 + 65.0 * wave) as u8)));
+            ui.ctx().request_repaint_after(std::time::Duration::from_millis(40));
+        }
+        icon.image(*enabled).tint(icon_tint).paint_at(ui,
             Rect::from_center_size(center, vec2(icon_w, icon_w)));
         if is_primary && w > 83.0 {
             p.text(pos2(button.left() + 34.0, button.center().y),
@@ -2029,6 +2054,8 @@ pub enum TreeEvent {
     Close,
     /// Open the existing Options dialog from V3's navigation footer.
     Settings,
+    /// The dedicated appearance editor (different from importing a .toml theme file).
+    Appearance,
     /// Right-click: the row whose menu opens (the selection does not move) and where.
     Context(usize, Pos2),
 }
@@ -2075,7 +2102,7 @@ fn glass_categories(
         Stroke::new(1.0, Color32::from_rgba_unmultiplied(141, 181, 185, 48)));
     let area = Rect::from_min_max(
         pos2(side + 9.0, top + 69.0),
-        pos2(rect.right() - 9.0, rect.bottom() - 33.0),
+        pos2(rect.right() - 9.0, rect.bottom() - 74.0),
     );
     let mut event = None;
     let tree = ui.interact(winui::rect(area), egui::Id::unique("glass-tree"),
@@ -2197,6 +2224,24 @@ fn glass_categories(
         && let Some(at) = tree.interact_pointer_pos()
     {
         event = Some(TreeEvent::Context(k, at));
+    }
+    let wallpaper_rect = Rect::from_min_size(
+        pos2(side + 11.0, rect.bottom() - 74.0),
+        vec2((rect.width() - 22.0).max(0.0), 31.0),
+    );
+    let wallpaper_button = ui.interact(wallpaper_rect,
+        egui::Id::unique("glass-open-wallpaper"), winui::pointer_only())
+        .on_hover_text("Choose image or video backgrounds for both windows");
+    winui::expose(&wallpaper_button, egui::Role::Button,
+        "Appearance & Wallpapers", true, None);
+    if wallpaper_button.hovered() {
+        crate::glass_ui::inset(&p, wallpaper_rect, 8.0);
+    }
+    p.text(pos2(wallpaper_rect.left() + 15.0, wallpaper_rect.center().y),
+        egui::Align2::LEFT_CENTER, "◈  Wallpapers & Glass",
+        egui::FontId::proportional(12.0), crate::glass_ui::accent());
+    if wallpaper_button.clicked() {
+        event = Some(TreeEvent::Appearance);
     }
     let settings_rect = Rect::from_min_size(
         pos2(side + 11.0, rect.bottom() - 39.0),
