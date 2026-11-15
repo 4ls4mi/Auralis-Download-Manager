@@ -21,11 +21,11 @@ try {
         $f = $y / 540.0
         $color = [System.Drawing.Color]::FromArgb(255,
             [int](38 + 182 * $f), [int](185 - 60 * $f), [int](215 - 130 * $f))
-        $brush = New-Object System.Drawing.SolidBrush($color)
+        $brush = [System.Drawing.SolidBrush]::new($color)
         try { $g.FillRectangle($brush, 0, $y, 960, 3) }
         finally { $brush.Dispose() }
     }
-    $amber = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255, 250, 194, 85))
+    $amber = [System.Drawing.SolidBrush]::new([System.Drawing.Color]::FromArgb(255, 250, 194, 85))
     try { $g.FillEllipse($amber, 570, 75, 260, 260) }
     finally { $amber.Dispose() }
     $bmp.Save($photo, [System.Drawing.Imaging.ImageFormat]::Png)
