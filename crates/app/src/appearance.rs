@@ -28,6 +28,10 @@ fn preview(ui: &mut Ui, path: &str, s: &Settings, target: wallpaper::Target) {
         s.wallpaper_dim,
         s.wallpaper_glass,
         target,
+        match target {
+            wallpaper::Target::Main => s.wallpaper_main_mode,
+            wallpaper::Target::Progress => s.wallpaper_download_mode,
+        },
     );
     let center = rect.shrink(11.0);
     if let Some(contrast) = contrast {
@@ -115,6 +119,19 @@ pub fn show(ctx: &egui::Context, open: &mut bool, settings: &mut Settings) -> bo
                     ui.colored_label(Color32::from_rgb(255, 176, 134), "Image could not be found. Choose another.");
                 }
             }
+            ui.horizontal(|ui| {
+                ui.label("Image fit:");
+                egui::ComboBox::from_id_salt("main-wallpaper-fit")
+                    .selected_text(["Fill (crop)", "Fit (whole image)", "Stretch"]
+                        [settings.wallpaper_main_mode.min(2) as usize])
+                    .show_ui(ui, |ui| {
+                        for (i, text) in ["Fill (crop)", "Fit (whole image)", "Stretch"]
+                            .iter().enumerate()
+                        {
+                            ui.selectable_value(&mut settings.wallpaper_main_mode, i as u8, *text);
+                        }
+                    });
+            });
             preview(ui, &settings.wallpaper_main, settings, wallpaper::Target::Main);
             ui.add_space(8.0);
 
@@ -138,6 +155,23 @@ pub fn show(ctx: &egui::Context, open: &mut bool, settings: &mut Settings) -> bo
                 &settings.wallpaper_download,
                 settings.wallpaper_download_inherit,
             );
+            if !settings.wallpaper_download_inherit {
+                ui.horizontal(|ui| {
+                    ui.label("Image fit:");
+                    egui::ComboBox::from_id_salt("download-wallpaper-fit")
+                        .selected_text(["Fill (crop)", "Fit (whole image)", "Stretch"]
+                            [settings.wallpaper_download_mode.min(2) as usize])
+                        .show_ui(ui, |ui| {
+                            for (i, text) in ["Fill (crop)", "Fit (whole image)", "Stretch"]
+                                .iter().enumerate()
+                            {
+                                ui.selectable_value(
+                                    &mut settings.wallpaper_download_mode, i as u8, *text
+                                );
+                            }
+                        });
+                });
+            }
             preview(ui, download_path, settings, wallpaper::Target::Progress);
             ui.separator();
 
@@ -154,6 +188,8 @@ pub fn show(ctx: &egui::Context, open: &mut bool, settings: &mut Settings) -> bo
                     settings.wallpaper_main.clear();
                     settings.wallpaper_download.clear();
                     settings.wallpaper_download_inherit = true;
+                    settings.wallpaper_main_mode = 0;
+                    settings.wallpaper_download_mode = 0;
                     settings.wallpaper_dim = 39;
                     settings.wallpaper_blur = 9;
                     settings.wallpaper_glass = 73;
