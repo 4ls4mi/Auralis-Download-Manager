@@ -116,7 +116,7 @@ try{
  await capture('fixture-eight.zip');let info=await pageFor('request=');await info.waitForSelector('.cg-file-info');await wait(350);
  assert.equal((await ipc({query:'list'})).downloads.length,0,'Capture must wait for user confirmation');assert.equal((await ipc({query:'list'})).downloads.some(f=>f.status==='Downloading'),false,'Metadata probing must not create a running download before confirmation');
  await bothThemes(info,'file-info',settings);
- const destination=path.join(folder,'downloads','fixture-eight.zip');
+ let destination=path.join(folder,'downloads','fixture-eight.zip');
  await info.getByLabel('Save As',{exact:true}).fill(destination);await info.getByLabel('Chunks / connections').selectOption('8');await info.getByRole('button',{name:'Start Download',exact:true}).click();
  const first=await until(async()=>{const d=await ipc({query:'list'});return d.downloads.find(f=>f.file==='fixture-eight.zip');},'Original engine did not add the chosen file');
  let progress=await pageFor('detail='+first.id);await progress.waitForSelector('.cg-mdm-details');
@@ -158,6 +158,14 @@ try{
  passed('Actual transfer completes while main is hidden; progress closes and completion dialog opens');
  await invoke(main,'file_operation',{id:first.id,operation:'checksum',value:expected});
  const check=await until(async()=>{const r=await invoke(main,'file_operation',{id:first.id,operation:'checksum-result',value:null});return r.complete?r:null},'Original engine checksum verifier did not finish');assert.equal(check.matches,true);passed('Original engine verifies the completed file checksum');
+ if(process.env.GLASS_TEST_HELPERS==='1'){
+  const oldPath=destination;const movedFolder=path.join(folder,'moved');await mkdir(movedFolder,{recursive:true});const movedPath=path.join(movedFolder,'fixture-eight.zip');
+  const requested=await ipc({action:'glass-item',category:'move',ids:[first.id],queue:movedPath});assert(!requested.error,'Original engine rejected file move');
+  await until(async()=>{const state=await ipc({query:'glass-move-status',ids:[first.id]});return !state.moving&&state.path===movedPath},'Original engine did not record the moved file');
+  await access(movedPath);await assert.rejects(access(oldPath));destination=movedPath;
+  passed('Completed-file move finishes on disk and updates the original engine path');
+ }
+
  await complete.locator('.cg-complete-page').getByRole('button',{name:'Close',exact:true}).click();
  await capture('fixture-thirty-two.zip');info=await pageFor('request=');await info.waitForSelector('.cg-file-info');await info.getByLabel('Save As',{exact:true}).fill(path.join(folder,'downloads','fixture-thirty-two.zip'));await info.getByLabel('Chunks / connections').selectOption('32');await info.getByRole('button',{name:'Start Download',exact:true}).click();
  const second=await until(async()=>(await ipc({query:'list'})).downloads.find(f=>f.file==='fixture-thirty-two.zip'),'Second file missing');const progress32=await pageFor('detail='+second.id);await progress32.waitForSelector('.cg-chunk-map');await until(async()=>await progress32.locator('.cg-chunk-map>span').count()===32,'Progress did not show 32 selected chunks');await screenshot(progress32,'progress-32-chunks');

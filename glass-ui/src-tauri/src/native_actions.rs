@@ -41,7 +41,21 @@ pub async fn choose_move(id:u64) -> ApiResult<Option<serde_json::Value>> {
         let s=send_ipc(&mdm_ipc::Command{action:Some("glass-item".into()),category:Some("move".into()),ids:vec![id],queue:Some(target.to_string_lossy().into_owned()),..Default::default()})?;
         let v:serde_json::Value=serde_json::from_str(&s).map_err(|e|e.to_string())?;
         if v.get("error").is_some() {return Err(v.to_string());}
-        Ok(Some(v))
+        // Moving is asynchronous in MDM. Do not report success until the backend
+        // has finished and updated its stored destination; a failed move leaves
+        // the old path in place and must remain visible to the user.
+        for _ in 0..14400 {
+            let reply=send_ipc(&mdm_ipc::Command{query:Some("glass-move-status".into()),ids:vec![id],..Default::default()})?;
+            let status:serde_json::Value=serde_json::from_str(&reply).map_err(|e|e.to_string())?;
+            if let Some(error)=status.get("error"){return Err(error.to_string());}
+            if status["moving"]==false {
+                let actual=status["path"].as_str().ok_or("Could not read the moved file location")?;
+                if PathBuf::from(actual)==target {return Ok(Some(serde_json::json!({"ok":true,"path":actual})));}
+                return Err("The file could not be moved. Check the destination and Windows permissions.".into());
+            }
+            std::thread::sleep(std::time::Duration::from_millis(250));
+        }
+        Err("The move is still running; check the download list for its eventual location.".into())
     }).await.map_err(|e|e.to_string())?
 }
 

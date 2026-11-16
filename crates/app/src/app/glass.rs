@@ -38,6 +38,12 @@ impl App {
             return Some(json!({"id": serial, "info": self.file_info.as_mut().map(FileInfo::glass_view),
                 "categories":Category::all().into_iter().map(|c|json!({"key":c.key(),"name":c.label()})).collect::<Vec<_>>(), "waiting": self.file_info_waiting.len()}).to_string());
         }
+        if cmd.query.as_deref()==Some("glass-move-status") {
+            let Some(id)=cmd.ids.first().copied() else {return Some(json!({"error":"Choose a download"}).to_string());};
+            let Some(item)=self.items.iter().find(|item|item.id==id) else {return Some(json!({"error":"Download not found"}).to_string());};
+            let moving=self.moving.iter().any(|(item_id,_,_)|*item_id==id);
+            return Some(json!({"moving":moving,"path":item.dest.to_string_lossy()}).to_string());
+        }
         if cmd.query.as_deref()==Some("glass-power") {
             return Some(json!({"id":self.glass_power_serial,"pending":self.turn_off.as_ref().map(dialogs::TurnOffCountdown::glass_view),"exit":self.glass_exit_requested}).to_string());
         }
