@@ -33,11 +33,11 @@ export function CrystalFileInfo({id}:{id:number}){
   <main className="cg-page cg-file-info">
    <label className="cg-field">URL<input value={info?.url??''} readOnly title={info?.url}/></label>
    <div className="cg-info-layout"><div>
-    <label className="cg-field">Category<div className="cg-input-row"><select value={info?.category??''} disabled={busy||!info} onChange={async e=>{setError('');pathEdited.current=false;try{await perform('category',{category:e.target.value})}catch(x){setError(String(x))}}>
+    <label className="cg-field">Category<div className="cg-input-row"><select value={info?.category??''} disabled={busy||!info} onChange={async e=>{setError('');pathEdited.current=false;try{await perform('category',{category:e.target.value})}catch(x){setError(String(x))}}}>
      {categories.map(c=><option value={c.key} key={c.key}>{c.name}</option>)}</select>
      <button className="cg-btn cg-neon-violet" title="Add category" onClick={()=>openWindow('tool-category','/?tool=category',640,480)}><Plus size={16}/></button></div></label>
     <label className="cg-field">Save As<div className="cg-input-row"><input value={form.save_as} onChange={e=>{pathEdited.current=true;setForm(old=>({...old,save_as:e.target.value}))}}/>
-     <button className="cg-btn" title="Choose save location" onClick={async()=>{try{const path=await invoke<string|null>('choose_download_path',{current:form.save_as});if(path){pathEdited.current=true;setForm(old=>({...old,save_as:path}))}}catch(e){setError(String(e))}}><FolderOpen size={16}/></button></div></label>
+     <button className="cg-btn" title="Choose save location" onClick={async()=>{try{const path=await invoke<string|null>('choose_download_path',{current:form.save_as});if(path){pathEdited.current=true;setForm(old=>({...old,save_as:path}))}}catch(e){setError(String(e))}}}><FolderOpen size={16}/></button></div></label>
     <div className="cg-remember-path"><label><input type="checkbox" checked={form.remember} onChange={e=>setForm(old=>({...old,remember:e.target.checked}))}/> Remember this path for “{categories.find(c=>c.key===info?.category)?.name??info?.category}” category</label>
      <input readOnly disabled={!form.remember} aria-label="Remembered folder" value={form.save_as.replace(/[\\/][^\\/]*$/,'')}/></div>
    </div><div className="cg-info-file"><FileArchive size={36}/><strong>{units(info?.size)}</strong><small>{info?.probing?'Checking file…':'Archive / file'}</small><button className="cg-btn" disabled title="Preview is available after a transfer has created a previewable file">Preview</button></div></div>
