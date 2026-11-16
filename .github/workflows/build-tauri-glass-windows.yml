@@ -1,4 +1,4 @@
-# Separate Windows x64 Tauri/React frontend. Original egui app is a bundled hidden backend.
+# Windows x64 only: Tauri/React frontend plus bundled original headless Rust engine.
 name: Mister Hybrid Glass Windows x64
 
 on:
@@ -9,10 +9,9 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: mister-hybrid-glass-${{ github.ref }}
-  cancel-in-progress: true
-
+# Do not use a workflow concurrency group here. Rust release compilation is
+# slow on Windows. A push to the Glass branch must never cancel an already
+# running Windows build, and queued reruns must not block a newer build.
 jobs:
   windows:
     runs-on: windows-latest
