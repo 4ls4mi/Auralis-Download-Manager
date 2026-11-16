@@ -2787,21 +2787,47 @@ pub fn drag_file_out(
     file: &std::path::Path,
     followed: impl FnOnce(crate::dialogs::DraggedOut) + Send + 'static,
 ) -> Result<(), String> {
-    use std::sync::atomic::Ordering;
     let hwnd = own_capture()
         .or_else(|| find_own_window(title))
         .ok_or("window not found")? as isize;
+    drag_file_out_with_window(hwnd, None, file, false, followed)
+}
+
+/// Glass owns its window in another process. Verify its PID and attach the drag
+/// thread to that window's input before using MDM's original shell tracker.
+pub fn drag_file_out_from_glass(
+    hwnd: isize,
+    expected_pid: u32,
+    file: &std::path::Path,
+    followed: impl FnOnce(crate::dialogs::DraggedOut) + Send + 'static,
+) -> Result<(), String> {
+    use windows_sys::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId;
+    let mut pid=0u32;
+    // SAFETY: Windows validates the handle and writes to the local PID slot.
+    let thread=unsafe { GetWindowThreadProcessId(hwnd as HWND, &mut pid) };
+    if thread==0 || pid!=expected_pid || expected_pid==0 {return Err("Glass window is no longer available".into());}
+    drag_file_out_with_window(hwnd, Some(thread), file, true, followed)
+}
+
+fn drag_file_out_with_window(
+    hwnd: isize,
+    source_thread: Option<u32>,
+    file: &std::path::Path,
+    move_only: bool,
+    followed: impl FnOnce(crate::dialogs::DraggedOut) + Send + 'static,
+) -> Result<(), String> {
+    use std::sync::atomic::Ordering;
     if DRAGGING.swap(true, Ordering::AcqRel) {
         return Ok(());
     }
     let file = file.to_path_buf();
-    let started = with_shared_input("drag out", move |shared| {
+    let started = with_shared_input("drag out", source_thread, move |shared| {
         if !shared {
             tracing::warn!("drag out: the window's input isn't shared");
         }
         // Looked for here, beside the window (#743): a drive slow to answer doesn't hold it.
         let result = if file.exists() {
-            dragout::drag(hwnd as HWND, &file)
+            dragout::drag(hwnd as HWND, &file, move_only)
         } else {
             Ok(None)
         };
@@ -2863,6 +2889,7 @@ fn release_button(hwnd: HWND) {
 /// follow-up), and OLE is closed. The caller has a message queue (a window thread).
 fn with_shared_input<A: FnOnce()>(
     name: &str,
+    source_thread: Option<u32>,
     work: impl FnOnce(bool) -> A + Send + 'static,
 ) -> Result<(), String> {
     use windows_sys::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
@@ -2873,7 +2900,7 @@ fn with_shared_input<A: FnOnce()>(
         fn OleUninitialize();
     }
     // SAFETY: a plain query.
-    let caller = unsafe { GetCurrentThreadId() };
+    let caller = source_thread.unwrap_or_else(|| unsafe { GetCurrentThreadId() });
     std::thread::Builder::new()
         .name(name.to_owned())
         .spawn(move || {
@@ -2921,7 +2948,7 @@ mod drag_thread_tests {
         let window_thread = unsafe { GetCurrentThreadId() };
         let (tx, rx) = std::sync::mpsc::channel();
         let (go_tx, go_rx) = std::sync::mpsc::channel::<()>();
-        with_shared_input("drag test", move |shared| {
+        with_shared_input("drag test", None, move |shared| {
             // Held until the caller has gone on: the work doesn't hold the caller up.
             go_rx.recv().unwrap();
             let mut kind: APTTYPE = 0;
@@ -3445,7 +3472,7 @@ mod dragout {
 
     /// Drag `file` out of `hwnd` (on the drag's thread, OLE set up), offering a move, a copy and
     /// a link. Some when it was dropped.
-    pub(super) fn drag(hwnd: HWND, file: &Path) -> Result<Option<Dropped>, String> {
+    pub(super) fn drag(hwnd: HWND, file: &Path, move_only: bool) -> Result<Option<Dropped>, String> {
         let file = plain(std::fs::canonicalize(file).map_err(|e| e.to_string())?);
         // Watched from before the drop: a move on the same drive is done before the drag ends.
         // MDM_TEST_NO_SHELL_WATCH=1 (debug builds, for checks): not watched, as when the shell
@@ -3465,7 +3492,7 @@ mod dragout {
                 hwnd,
                 data.0,
                 std::ptr::null_mut(),
-                DROPEFFECT_COPY | DROPEFFECT_MOVE | DROPEFFECT_LINK,
+                if move_only { DROPEFFECT_MOVE } else { DROPEFFECT_COPY | DROPEFFECT_MOVE | DROPEFFECT_LINK },
                 &mut effect,
             )
         };

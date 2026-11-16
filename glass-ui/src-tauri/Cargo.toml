@@ -20,5 +20,4 @@ open = "5"
 [workspace]
 
 [target.'cfg(windows)'.dependencies]
-drag = "2.1.1"
 arboard = { version = "3.7.0", default-features = false }

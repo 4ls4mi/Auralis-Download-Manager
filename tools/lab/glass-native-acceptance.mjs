@@ -158,10 +158,11 @@ try{
  await invoke(main,'file_operation',{id:first.id,operation:'checksum',value:expected});
  const check=await until(async()=>{const r=await invoke(main,'file_operation',{id:first.id,operation:'checksum-result',value:null});return r.complete?r:null},'Original engine checksum verifier did not finish');assert.equal(check.matches,true);passed('Original engine verifies the completed file checksum');
  if(process.env.GLASS_TEST_HELPERS==='1'){
+  const before=await invoke(complete,'drag_state',{id:first.id});assert.equal(before.path,destination);const rejected=await ipc({action:'glass-drag-file',ids:[first.id],queue:JSON.stringify({hwnd:0,pid:process.pid})});assert(rejected.error,'Invalid native drag window must be rejected');
   const oldPath=destination;const movedFolder=path.join(folder,'moved');await mkdir(movedFolder,{recursive:true});const movedPath=path.join(movedFolder,'fixture-eight.zip');
   const requested=await ipc({action:'glass-item',category:'move',ids:[first.id],queue:movedPath});assert(!requested.error,'Original engine rejected file move');
   await until(async()=>{const state=await ipc({query:'glass-move-status',ids:[first.id]});return !state.moving&&state.path===movedPath},'Original engine did not record the moved file');
-  await access(movedPath);await assert.rejects(access(oldPath));destination=movedPath;
+  await access(movedPath);await assert.rejects(access(oldPath));destination=movedPath;await until(async()=>(await complete.locator('input[readonly]').last().inputValue())===movedPath,'Completion window did not follow the moved file');
   passed('Completed-file move finishes on disk and updates the original engine path');
  }
 

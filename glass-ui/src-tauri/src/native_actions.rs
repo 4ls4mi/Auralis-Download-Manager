@@ -10,21 +10,33 @@ fn completed_path(id:u64) -> ApiResult<PathBuf> {
 }
 
 #[tauri::command]
-pub async fn drag_download(app:AppHandle, window:tauri::Window, id:u64) -> ApiResult<()> {
-    let path=tauri::async_runtime::spawn_blocking(move || completed_path(id)).await.map_err(|e|e.to_string())??;
+pub async fn drag_download(window:tauri::Window, id:u64) -> ApiResult<()> {
     #[cfg(windows)]
     {
-        let (tx,rx)=std::sync::mpsc::channel();
-        app.run_on_main_thread(move || {
-            let result=drag::start_drag(&window,drag::DragItem::Files(vec![path]),
-                drag::Image::Raw(include_bytes!("../icons/drag.png").to_vec()),
-                |_,_|{},drag::Options::default()).map_err(|e|e.to_string());
-            let _=tx.send(result);
-        }).map_err(|e|e.to_string())?;
-        tauri::async_runtime::spawn_blocking(move || rx.recv().map_err(|e|e.to_string())?).await.map_err(|e|e.to_string())?
+        let hwnd=window.hwnd().map_err(|e|e.to_string())?.0 as isize;
+        let pid=std::process::id();
+        tauri::async_runtime::spawn_blocking(move||{
+            completed_path(id)?;
+            let request=mdm_ipc::Command{action:Some("glass-drag-file".into()),ids:vec![id],queue:Some(serde_json::json!({"hwnd":hwnd,"pid":pid}).to_string()),..Default::default()};
+            let reply=send_ipc(&request)?;
+            let result:serde_json::Value=serde_json::from_str(&reply).map_err(|e|e.to_string())?;
+            if let Some(error)=result.get("error"){return Err(error.to_string());}
+            Ok(())
+        }).await.map_err(|e|e.to_string())?
     }
     #[cfg(not(windows))]
-    { let _=(app,window,path); Err("Native file dragging is Windows-only".into()) }
+    { let _=(window,id); Err("Native file dragging is Windows-only".into()) }
+}
+
+/// The original engine owns the current path and whether an unknown target took it.
+#[tauri::command]
+pub async fn drag_state(id:u64) -> ApiResult<serde_json::Value> {
+    tauri::async_runtime::spawn_blocking(move||{
+        let reply=send_ipc(&mdm_ipc::Command{query:Some("glass-move-status".into()),ids:vec![id],..Default::default()})?;
+        let result:serde_json::Value=serde_json::from_str(&reply).map_err(|e|e.to_string())?;
+        if let Some(error)=result.get("error"){return Err(error.to_string());}
+        Ok(result)
+    }).await.map_err(|e|e.to_string())?
 }
 
 #[tauri::command]

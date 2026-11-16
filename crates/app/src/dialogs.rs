@@ -3113,6 +3113,11 @@ pub enum DraggedOut {
 /// Files dragged out and moved: (download, the path it was dragged from, what became of it).
 static DRAGGED_OUT: Mutex<Vec<(u64, PathBuf, DraggedOut)>> = Mutex::new(Vec::new());
 
+/// Queue a tracked Glass drag for the original app's move-following logic.
+pub fn record_dragged_out(id:u64, from:PathBuf, out:DraggedOut) {
+    DRAGGED_OUT.lock().unwrap_or_else(|e|e.into_inner()).push((id,from,out));
+}
+
 /// What [`DRAGGED_OUT`] was given since the last call (the app updates its downloads).
 pub fn dragged_out() -> Vec<(u64, PathBuf, DraggedOut)> {
     std::mem::take(&mut *DRAGGED_OUT.lock().unwrap_or_else(|e| e.into_inner()))

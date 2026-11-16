@@ -42,7 +42,22 @@ impl App {
             let Some(id)=cmd.ids.first().copied() else {return Some(json!({"error":"Choose a download"}).to_string());};
             let Some(item)=self.items.iter().find(|item|item.id==id) else {return Some(json!({"error":"Download not found"}).to_string());};
             let moving=self.moving.iter().any(|(item_id,_,_)|*item_id==id);
-            return Some(json!({"moving":moving,"path":item.dest.to_string_lossy()}).to_string());
+            return Some(json!({"moving":moving,"path":item.dest.to_string_lossy(),"moved_away":item.moved_away}).to_string());
+        }
+        if cmd.action.as_deref()==Some("glass-drag-file") {
+            #[cfg(windows)]
+            {
+                let Some(id)=cmd.ids.first().copied() else{return Some(json!({"error":"Choose a download"}).to_string());};
+                let Some(item)=self.items.iter().find(|item|item.id==id && item.status==Status::Complete) else{return Some(json!({"error":"Select a completed download"}).to_string());};
+                let payload:Value=serde_json::from_str(cmd.queue.as_deref().unwrap_or("")).unwrap_or(Value::Null);
+                let Some(hwnd)=payload["hwnd"].as_i64().and_then(|n|isize::try_from(n).ok()) else{return Some(json!({"error":"Invalid window"}).to_string());};
+                let Some(pid)=payload["pid"].as_u64().and_then(|n|u32::try_from(n).ok()) else{return Some(json!({"error":"Invalid window"}).to_string());};
+                let from=item.dest.clone();let tracked=from.clone();let wake=self.ui_ctx.clone();
+                let result=crate::win32::drag_file_out_from_glass(hwnd,pid,&from,move |out|{crate::dialogs::record_dragged_out(id,tracked,out);wake.request_repaint();});
+                return Some(match result{Ok(())=>json!({"ok":true}),Err(error)=>json!({"error":error})}.to_string());
+            }
+            #[cfg(not(windows))]
+            return Some(json!({"error":"File dragging is available on Windows"}).to_string());
         }
         if cmd.query.as_deref()==Some("glass-power") {
             return Some(json!({"id":self.glass_power_serial,"pending":self.turn_off.as_ref().map(dialogs::TurnOffCountdown::glass_view),"exit":self.glass_exit_requested}).to_string());

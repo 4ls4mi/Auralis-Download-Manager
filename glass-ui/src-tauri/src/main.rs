@@ -5,7 +5,7 @@
 mod lifecycle;
 mod native_actions;
 use lifecycle::{pending_file_info, file_info_action, choose_download_path, window_preferences, glass_tool, choose_folder, open_glass_window, close_progress_windows};
-use native_actions::{drag_download, choose_move, clipboard_text, video_tool};
+use native_actions::{drag_download, drag_state, choose_move, clipboard_text, video_tool};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -308,6 +308,9 @@ async fn file_operation(id: u64, operation: String, value: Option<String>) -> Ap
         // Read the current path and URL from backend by ID, never trust file
         // paths supplied by web content or browser/clipboard input.
         if operation == "open" || operation == "folder" {
+            let state=send_ipc(&mdm_ipc::Command{query:Some("glass-move-status".into()),ids:vec![id],..Default::default()})?;
+            let state:serde_json::Value=serde_json::from_str(&state).map_err(|e|e.to_string())?;
+            if state["moved_away"]==true {return Err("The file was moved, but Windows could not report its new location".into());}
             let downloads = request_snapshot()?;
             let file = downloads.downloads.iter().find(|d| d.id == id)
                 .ok_or_else(|| "Download no longer exists".to_string())?;
@@ -519,7 +522,7 @@ fn main() {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            pending_file_info, file_info_action, choose_download_path, window_preferences, glass_tool, choose_folder, open_glass_window, close_progress_windows, drag_download, choose_move, clipboard_text, video_tool,
+            pending_file_info, file_info_action, choose_download_path, window_preferences, glass_tool, choose_folder, open_glass_window, close_progress_windows, drag_download, drag_state, choose_move, clipboard_text, video_tool,
             boot_engine, dashboard_snapshot, dashboard_visuals, download_action,
             add_download, select_wallpaper, queue_action, glass_settings, update_glass_setting,
             browser_integration, bulk_action, file_operation, add_torrent_file, quit_glass, open_upstream_releases
