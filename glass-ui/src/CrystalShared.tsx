@@ -262,7 +262,7 @@ export function CrystalWindow({ children, target = "main" }: {
     };
     const reset=()=>{setFit(baseScale());measure()};
     const observer=new ResizeObserver(measure);observer.observe(el);
-    const content=el.firstElementChild;if(content)observer.observe(content);
+    const content=el.querySelector('.cg-fit-content');if(content)observer.observe(content);
     const mutations=new MutationObserver(measure);mutations.observe(el,{childList:true,subtree:true});
     const sectionClick=(event:Event)=>{if((event.target as Element).closest('nav button,.cg-appearance-tabs button,details summary'))reset()};
     el.addEventListener('click',sectionClick);el.addEventListener('change',reset);el.addEventListener('toggle',reset,true);
