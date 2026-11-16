@@ -229,7 +229,8 @@ export function CrystalWindow({ children, target = "main" }: {
 }) {
   const { appearance, theme } = useCrystal();
   const frame=useRef<HTMLDivElement>(null);
-  const [fit,setFit]=useState(1);
+  const [fit,setFit]=useState(1),[windowError,setWindowError]=useState("");
+  useEffect(()=>{const report=(event:Event)=>setWindowError(String((event as CustomEvent).detail));window.addEventListener("glass-window-error",report);return()=>window.removeEventListener("glass-window-error",report)},[]);
   useLayoutEffect(()=>{
     const el=frame.current;if(!el)return;
     let disposed=false,raf=0;
@@ -239,7 +240,7 @@ export function CrystalWindow({ children, target = "main" }: {
         if(disposed)return;
         const fit=el.querySelector<HTMLElement>('.cg-fit-content');if(!fit)return;
         let ratio=1;
-        for(const box of [fit,...el.querySelectorAll<HTMLElement>('.cg-page,.cg-settings-body,.cg-settings-nav,.cg-sidebar,.cg-main-body,.cg-workspace,.cg-table,.cg-original-editor')]){
+        for(const box of [fit,...el.querySelectorAll<HTMLElement>('.cg-page,.cg-window-add,.cg-settings-body,.cg-settings-nav,.cg-sidebar,.cg-main-body,.cg-workspace,.cg-table,.cg-original-editor')]){
           if(box.clientHeight>0&&box.scrollHeight>box.clientHeight+2)ratio=Math.min(ratio,box.clientHeight/box.scrollHeight);
           if(box.clientWidth>0&&box.scrollWidth>box.clientWidth+2)ratio=Math.min(ratio,box.clientWidth/box.scrollWidth);
         }
@@ -250,9 +251,10 @@ export function CrystalWindow({ children, target = "main" }: {
     const observer=new ResizeObserver(measure);observer.observe(el);
     const content=el.firstElementChild;if(content)observer.observe(content);
     const mutations=new MutationObserver(measure);mutations.observe(el,{childList:true,subtree:true});
-    el.addEventListener('click',reset);el.addEventListener('change',reset);el.addEventListener('toggle',reset,true);
+    const sectionClick=(event:Event)=>{if((event.target as Element).closest('nav button,.cg-appearance-tabs button,details summary'))reset()};
+    el.addEventListener('click',sectionClick);el.addEventListener('change',reset);el.addEventListener('toggle',reset,true);
     window.addEventListener('resize',reset);reset();
-    return()=>{disposed=true;cancelAnimationFrame(raf);observer.disconnect();mutations.disconnect();el.removeEventListener('click',reset);el.removeEventListener('change',reset);el.removeEventListener('toggle',reset,true);window.removeEventListener('resize',reset)};
+    return()=>{disposed=true;cancelAnimationFrame(raf);observer.disconnect();mutations.disconnect();el.removeEventListener('click',sectionClick);el.removeEventListener('change',reset);el.removeEventListener('toggle',reset,true);window.removeEventListener('resize',reset)};
   },[appearance.uiScale,appearance.fontSize,appearance.fontFamily,target]);
   const main = target === "main", mode = main ? appearance.mainMode : appearance.detailMode;
   const path = main ? appearance.wallMain : (appearance.wallDetail || appearance.wallMain);
@@ -283,6 +285,7 @@ export function CrystalWindow({ children, target = "main" }: {
     </div>}
     {mode === "solid" && <div className="cg-solid" />}
     <div className="cg-content" ref={frame}><div className="cg-fit-content">{children}</div></div>
+    {windowError&&<aside className="cg-window-notice cg-error" role="alert"><span>{windowError}</span><button title="Dismiss" onClick={()=>setWindowError("")}><X size={15}/></button></aside>}
     <ResizeGrips />
   </div>;
 }

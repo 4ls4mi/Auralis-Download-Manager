@@ -1,6 +1,8 @@
 # Rerun native acceptance on an already-built installer candidate, Windows x64 only.
 name: Glass native Windows review
 on:
+  push:
+    branches: ["feature/ice-crystal-parity-windows"]
   workflow_dispatch:
     inputs:
       source_run:
@@ -12,6 +14,7 @@ permissions:
   actions: read
 jobs:
   native:
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[native review]') }}
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
@@ -21,12 +24,22 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Select the installer candidate
+        shell: pwsh
+        env:
+          GLASS_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          GLASS_REQUESTED_RUN: ${{ inputs.source_run }}
+        run: |
+          $run = $env:GLASS_REQUESTED_RUN
+          if (-not $run) { $run = [regex]::Match($env:GLASS_COMMIT_MESSAGE, 'source-run:(\d+)').Groups[1].Value }
+          if ($run -notmatch '^\d+$') { throw 'Specify a valid installer source run' }
+          "GLASS_REVIEW_RUN=$run" >> $env:GITHUB_ENV
       - uses: actions/download-artifact@v4
         with:
           name: mister-hybrid-glass-windows-x64-candidate
           path: ${{ runner.temp }}/glass-installer
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ inputs.source_run }}
+          run-id: ${{ env.GLASS_REVIEW_RUN }}
       - name: Install WebView2 and the candidate in an isolated directory
         shell: pwsh
         run: |
@@ -38,7 +51,7 @@ jobs:
           Start-Process $installer -ArgumentList "/S /D=$root" -Wait
           "GLASS_E2E_DIR=$root" >> $env:GITHUB_ENV
           "GLASS_E2E_EXE=$root\mister-hybrid-glass.exe" >> $env:GITHUB_ENV
-          "GLASS_E2E_SOURCE_RUN=${{ inputs.source_run }}" >> $env:GITHUB_ENV
+          "GLASS_E2E_SOURCE_RUN=$env:GLASS_REVIEW_RUN" >> $env:GITHUB_ENV
       - name: Install test client
         working-directory: glass-ui
         shell: pwsh

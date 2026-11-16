@@ -39,7 +39,7 @@ export default function CrystalSettings(){
         invoke<{queues:Queue[]}>("dashboard_snapshot")
       ]);
       setCfg(settings);setQueues(data.queues??[]);
-    }catch(e){setError("The headless download engine isn't available: "+String(e))}
+    }catch(e){setError("The download service is unavailable: "+String(e))}
   },[]);
   useEffect(()=>{void load();void invoke<string>("browser_integration",{repair:false}).then(setBrowser).catch(e=>setBrowser(String(e)))},[load]);
   const change=async(key:EngineKey,value:boolean|number|string)=>{
@@ -93,12 +93,12 @@ export default function CrystalSettings(){
         {check("only_add_to_queue","Queue silent download requests","Applies when an address is added without a confirmation dialog")}
         {check("confirm_delete","Ask before deleting","Protect items and downloaded files")}
         {check("double_click_open","Double-click opens a finished file","When off, double-click displays download details")}
-        {check("show_complete","Show download complete dialog","Restore original completion notifications")}
+        {check("show_complete","Show download complete dialog","Show a separate window when a download finishes")}
         {check("show_progress","Open a download progress window","A separate movable status window")}
       </>;
       case "Downloads":return <>
         <button className="cg-btn" onClick={()=>openWindow("tool-category","/?tool=category",680,520)}>Edit categories</button>
-        <p>MDM's original directories are preserved and the Rust backend continues saving downloads there.</p>
+        <p>Choose folders and categories for downloaded files.</p>
         {(cfg?.category_dirs??[]).map(([category,path])=>
           <div className="cg-queue-row" key={category}><span><Folder size={14} style={{marginRight:9}}/>{category}</span><span className="cg-muted" title={path}>{path}</span></div>)}
         {check("only_add_to_queue","Queue download requests","Keep downloads in the main queue until started")}
@@ -106,36 +106,36 @@ export default function CrystalSettings(){
         <div className="cg-settings-fallback">More options includes category folders, duplicate-download handling, and archive extraction preferences.</div>
       </>;
       case "Connection":return <>
-        {number("max_connections","Maximum connections per download","Rust MDM's real multi-segment connection count",1,128)}
+        {number("max_connections","Maximum connections per download","The selected connection count for new downloads",1,128)}
         {check("speed_limit_on","Enable global per-file speed limiter","Apply configured speed threshold")}
-        {number("speed_limit_kb","Maximum speed per file (KB/s)","Original MDM's default speed limiter",0,10000000)}
+        {number("speed_limit_kb","Maximum speed per file (KB/s)","The default limit for each download",0,10000000)}
         {check("global_limit_on","Enable total bandwidth cap","Limit combined download traffic")}
         {number("global_limit_kb","Global cap (KB/s)","Applies across all active downloads",0,10000000)}
         <div className="cg-settings-fallback">Per-file limits are available directly in each download window's Speed Limiter tab.</div>
       </>;
       case "Browser Integration":return <>
         <h3>Original MDM browser extension</h3>
-        <p>The original Chrome / Edge / Firefox native messaging protocol is used—no new browser extension is required.</p>
+        <p>Use your existing MDM extension for Chrome, Edge or Firefox.</p>
         <div className="cg-settings-fallback">{browser||"Checking for bundled native-messaging helper…"}</div>
         <button className="cg-btn cg-btn-primary" style={{marginTop:12}} disabled={busy}
           onClick={async()=>{setBusy(true);setError("");try{const result=await invoke<string>("browser_integration",{repair:true});setBrowser(result);setNotice("Registered with Windows. Restart your browser to reconnect the extension.")}catch(e){setError(String(e))}finally{setBusy(false)}}}>
           <RotateCcw size={17}/> Reconnect / Repair browser extension
         </button>
         <div style={{height:14}}/>
-        {check("advanced_integration","Enable advanced browser integration","Use the original native-messaging download capture rules")}
+        {check("advanced_integration","Enable advanced browser integration","Apply your browser capture rules")}
         {check("capture_opened","Capture opened URLs","Capture eligible downloads and opened links")}
         {check("proxy_from_browser","Use browser proxy","Preserve the browser's proxy, cookies and referrer context")}
         <div className="cg-settings-fallback">Restart the browser after registration. Browser extension capture must be tested with a real download link; registration alone does not prove interception works.</div>
       </>;
       case "Torrents":return <>
-        {check("torrent_keep_sharing","Continue sharing after download","Original torrent seeding behavior")}
+        {check("torrent_keep_sharing","Continue sharing after download","Keep uploading to other peers after the file finishes")}
         {check("torrent_dht","Use distributed hash table (DHT)","Discover BitTorrent peers")}
         {check("torrent_lsd","Discover local peers (LSD)","Use local peer discovery")}
-        <div className="cg-settings-fallback">Add Torrent in the main toolbar accepts .torrent files and magnet links via the Rust torrent engine.</div>
+        <div className="cg-settings-fallback">Add Torrent accepts .torrent files and magnet links.</div>
       </>;
       case "Scheduler":return <>
         <button className="cg-btn cg-btn-primary" onClick={()=>openWindow("scheduler","/?schedule=1",860,660)}>Edit schedules and completion actions</button>
-        <p>Queues below are the real queues supplied by the Rust download scheduler.</p>
+        <p>Start and stop your download queues here.</p>
         {(queues??[]).map(q=><div key={q.name} className="cg-queue-row">
           <div><strong>{q.name}</strong><small>{q.ids.length} items • {q.running?"Running":"Stopped"}</small></div>
           <button className="cg-btn" disabled={busy} onClick={async()=>{
@@ -201,7 +201,7 @@ export default function CrystalSettings(){
         <p>Proxy, DNS and site authentication are in Connection → More options. Browser capture rules are in Browser Integration → More options.</p>
 
         <h3>Updates from the original MDM developer</h3>
-        <p>Check upstream releases without silently replacing the Glass interface. Installing the original developer's app directly can replace the custom UI and may require a rollback. Integrating a new upstream release safely requires rebuilding this Windows fork against those changes.</p>
+        <p>Opens MDM release notes. Glass updates are packaged separately.</p>
         <button className="cg-btn" onClick={()=>void invoke("open_upstream_releases").catch(e=>setError(String(e)))}>
           Check original developer's releases
         </button>
@@ -223,7 +223,7 @@ export default function CrystalSettings(){
       {tab!=="Appearance"&&tab!=="Accounts"&&<nav className="cg-appearance-tabs"><button className={settingsPanel==="Main options"?"selected":""} onClick={()=>setSettingsPanel("Main options")}>Main options</button><button className={settingsPanel==="More options"?"selected":""} onClick={()=>setSettingsPanel("More options")}>More options</button></nav>}
       <div>{tab==="Appearance"||tab==="Accounts"||settingsPanel==="Main options"?body():<CrystalOriginalSettings section={tab}/>}</div>
     </div></div>
-    <footer className="cg-bottom-actions" style={{padding:"9px 18px"}}><span className="cg-muted" style={{marginRight:"auto",fontSize:10}}>Windows x64 • Changes to engine settings are saved by MDM</span>
+    <footer className="cg-bottom-actions" style={{padding:"9px 18px"}}><span className="cg-muted" style={{marginRight:"auto",fontSize:10}}>Windows x64 • Changes are saved automatically</span>
       <button className="cg-btn cg-btn-primary" onClick={()=>void import("@tauri-apps/api/window").then(m=>m.getCurrentWindow().close())}>Done</button>
     </footer>
   </CrystalWindow>;

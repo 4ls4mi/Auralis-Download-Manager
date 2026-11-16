@@ -2896,6 +2896,12 @@ impl App {
             self.run(Cmd::Exit, None, ctx);
             return;
         }
+        if self.glass_owned()&&!cmd.remote {
+            if let Some(host)=cmd.exclude_site.as_deref(){self.settings.excluded_sites=mdm_ipc::capture::add_site(&self.settings.excluded_sites,host);self.dirty=true;return;}
+            if let Some(host)=cmd.include_site.as_deref(){self.settings.excluded_sites=mdm_ipc::capture::unlist_site(&self.settings.excluded_sites,host);self.dirty=true;return;}
+            if let Some(host)=cmd.panel_hide_site.as_deref(){self.settings.video_panel_sites=mdm_ipc::capture::add_site(&self.settings.video_panel_sites,host);self.dirty=true;return;}
+            if let Some(host)=cmd.panel_show_site.as_deref(){self.settings.video_panel_sites=mdm_ipc::capture::remove_site(&self.settings.video_panel_sites,host);self.dirty=true;return;}
+        }
         // Without a window (#157): an address, magnet or .torrent is added as a paired device's
         // is (no Download File Info, no Add torrent); nothing else opens anything.
         if self.headless {

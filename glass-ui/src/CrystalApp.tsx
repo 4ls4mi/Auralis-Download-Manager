@@ -36,7 +36,7 @@ function StatusBadge({item}:{item:MdmFile}){
   return <span className={"cg-status "+item.status.toLowerCase()}><span className="dot"/>{label}</span>;
 }
 export default function CrystalApp(){
-  const [data,setData]=useState<Dashboard>(blank),[online,setOnline]=useState(false),[message,setMessage]=useState("Connecting to Rust download engine…");
+  const [data,setData]=useState<Dashboard>(blank),[online,setOnline]=useState(false),[message,setMessage]=useState("Connecting to downloads…");
   const [chosen,setChosen]=useState<number|null>(null),[filter,setFilter]=useState("All Downloads"),[term,setTerm]=useState("");
   const [openMenu,setOpenMenu]=useState<Menu|null>(null),[context,setContext]=useState<{id:number;x:number;y:number}|null>(null);
   const [busy,setBusy]=useState(false),[error,setError]=useState(""),[history,setHistory]=useState<number[]>([]);
@@ -69,7 +69,7 @@ export default function CrystalApp(){
     pending.current=true;
     try{
       const next=await invoke<Dashboard>("dashboard_snapshot");
-      setData(next);setOnline(true);setMessage("Rust engine connected • Browser integration uses original MDM native host");
+      setData(next);setOnline(true);setMessage("Ready");
       setHistory(h=>[...h.slice(-52),Math.max(0,next.speed)]);
       setFileRates(old=>{
         const updated={...old};
@@ -161,12 +161,12 @@ export default function CrystalApp(){
     if(action==="properties"){if(item)props(item.id);return}
     if(action==="hide"){void import("@tauri-apps/api/window").then(m=>m.getCurrentWindow().close());return}
     if(action==="exit"){
-      if(window.confirm("Exit Mister Hybrid Glass and stop the headless downloader? Active transfers will be saved and interrupted.")){
+      if(window.confirm("Exit Mister Hybrid Glass and stop active downloads? Download progress will be saved.")){
         setBusy(true);try{await invoke("quit_glass")}catch(e){setError(String(e))}finally{setBusy(false)}
       }
       return;
     }
-    if(!online){setError("Rust download engine is offline.");return}
+    if(!online){setError("The download service is unavailable.");return}
     setBusy(true);
     try{
       if(action==="stop-all"||action==="delete-completed"){
@@ -339,7 +339,7 @@ export default function CrystalApp(){
             <span>{timeLeft(d)}</span>
           </button>)}
           {!shown.length&&<div className="cg-empty"><FolderOpen size={35}/><strong>{online?"No downloads in this view":"Connecting to MDM"}</strong>
-            <p>{online?"Add a URL or torrent to begin. All progress and transfer speeds come from the real Rust engine.":message}</p>
+            <p>{online?"Add a URL or torrent to begin.":message}</p>
             {online&&<button className="cg-btn cg-btn-primary" onClick={()=>add()}><Plus size={15}/> Add URL</button>}
           </div>}
         </div></div>

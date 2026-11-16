@@ -25,7 +25,7 @@ impl App {
         fields.push(json!({"key":"many_connections","label":"Allow more than 32 connections","section":"Connection","kind":"boolean","value":self.settings.many_connections}));
         fields.push(json!({"key":"user_agent","label":"Default User-Agent","section":"Connection","kind":"text","value":self.settings.user_agent}));
         fields.push(json!({"key":"conn_exceptions","label":"Per-server connection limits","section":"Connection","kind":"table","columns":[{"label":"Server pattern","kind":"text"},{"label":"Connections","kind":"number"}],"value":self.settings.conn_exceptions}));
-        fields.push(json!({"key":"proxy_mode","label":"Proxy mode","section":"Connection","kind":"select","options":["No proxy","Manual proxy","Automatic configuration (PAC)"],"value":self.settings.proxy_mode}));
+        fields.push(json!({"key":"proxy_mode","label":"Proxy mode","section":"Connection","kind":"select","options":["No proxy","System proxy settings","Automatic configuration (PAC)","Manual proxy"],"value":self.settings.proxy_mode}));
         fields.push(json!({"key":"proxy_script","label":"Proxy auto-configuration script URL","section":"Connection","kind":"text","value":self.settings.proxy_script}));
         fields.push(json!({"key":"proxy_host","label":"Proxy server","section":"Connection","kind":"text","value":self.settings.proxy_host}));
         fields.push(json!({"key":"proxy_port","label":"Proxy port","section":"Connection","kind":"text","value":self.settings.proxy_port}));
@@ -174,11 +174,11 @@ impl App {
                 },
                 _=>return Err("Unsupported setting".into()),
             }
-            if next.proxy_mode>2||next.dns_mode>3||next.duplicate_action>3||next.extract_subfolder>2 {return Err("Choose a valid option".into());}
-            if !next.proxy_port.is_empty()&&next.proxy_port.trim().parse::<u16>().ok().filter(|p|*p>0).is_none(){return Err("Proxy port must be 1–65535".into());}
-            if next.conn_exceptions.iter().any(|(_,n)|!(1..=128).contains(n)){return Err("Connection counts must be 1–128".into());}
-            if next.regional.week_start>6 {return Err("Choose a valid first day of the week".into());}
-            if next.category_dirs.iter().any(|(key,_)|!Category::all().iter().any(|c|c.key()==key.as_str())) {return Err("Choose a known category".into());}
+            if key=="proxy_mode"&&next.proxy_mode>3||key=="dns_mode"&&next.dns_mode>3||key=="duplicate_action"&&next.duplicate_action>3||key=="extract_subfolder"&&next.extract_subfolder>2 {return Err("Choose a valid option".into());}
+            if key=="proxy_port"&&!next.proxy_port.is_empty()&&next.proxy_port.trim().parse::<u16>().ok().filter(|p|*p>0).is_none(){return Err("Proxy port must be 1–65535".into());}
+            if key=="conn_exceptions"&&next.conn_exceptions.iter().any(|(_,n)|!(1..=128).contains(n)){return Err("Connection counts must be 1–128".into());}
+            if key=="regional"&&next.regional.week_start>6 {return Err("Choose a valid first day of the week".into());}
+            if key=="category_dirs"&&next.category_dirs.iter().any(|(key,_)|!Category::all().iter().any(|c|c.key()==key.as_str())) {return Err("Choose a known category".into());}
             Ok(())
         })();
         if let Err(error)=apply {return json!({"error":error});}

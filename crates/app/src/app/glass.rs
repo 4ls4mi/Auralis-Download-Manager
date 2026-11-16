@@ -58,8 +58,8 @@ impl App {
                 return Some(json!({"error":"Choose valid dates and times"}).to_string());
             }
             let Some(q)=self.queues.iter_mut().find(|q|q.name==name) else {return Some(json!({"error":"Queue not found"}).to_string());};
-            q.schedule=schedule;
-            if let Some(count)=payload["files_at_once"].as_u64().filter(|c|(1..=128).contains(c)){q.files_at_once=count as u32;}
+            let Some(count)=payload["files_at_once"].as_u64().filter(|c|(1..=128).contains(c))else{return Some(json!({"error":"Choose 1–128 simultaneous downloads"}).to_string());};
+            q.schedule=schedule;q.files_at_once=count as u32;
             self.dirty=true;
             return Some(json!({"ok":true}).to_string());
         }

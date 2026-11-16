@@ -53,6 +53,13 @@ async function capture(name){
 async function pageFor(key){return until(()=>browser.contexts().flatMap(c=>c.pages()).find(p=>!p.isClosed()&&p.url().includes(key)),'Native window did not open: '+key);}
 const invoke=(page,command,args={})=>page.evaluate(([command,args])=>window.__TAURI_INTERNALS__.invoke(command,args),[command,args]);
 async function screenshot(page,name){await page.screenshot({path:path.join(output,name+'.png')});}
+async function assertFits(page,name){
+ await until(async()=>{
+  const overflow=await page.evaluate(()=>Array.from(document.querySelectorAll('.cg-fit-content,.cg-page,.cg-settings-body,.cg-settings-nav,.cg-sidebar')).filter(el=>el.clientWidth&&el.clientHeight&&(el.scrollHeight>el.clientHeight+3||el.scrollWidth>el.clientWidth+3)).map(el=>el.className));
+  return overflow.length===0;
+ },name+' has clipped content or would require page scrolling');
+}
+async function resizeWindow(page,label,width,height){await invoke(page,'plugin:window|set_size',{label,size:{type:'Logical',data:{width,height}}});await wait(450);}
 async function setTheme(settings,light){await settings.getByRole('button',{name:'Appearance',exact:true}).click();await settings.getByRole('button',{name:light?'Light crystal':'Dark crystal',exact:true}).click();await wait(350);}
 async function bothThemes(page,name,settings){for(const light of [false,true]){await setTheme(settings,light);await until(()=>page.locator(light?'.cg-light':'.cg-dark').count(),'Appearance did not reach '+name);await screenshot(page,name+(light?'-light':'-dark'));}}
 try{
@@ -83,6 +90,11 @@ try{
  passed('Original native host capture opens FileInfo before transfer and preserves browser context');
  passed('Chosen destination and eight independently measured chunks reach both windows');
  await bothThemes(progress,'progress',settings);await bothThemes(main,'main',settings);
+ await progress.locator('.cg-connection-details>summary').click();await assertFits(progress,'Expanded connection details');await screenshot(progress,'progress-expanded-connections');
+ await resizeWindow(progress,'download-'+first.id,620,500);await assertFits(progress,'Small progress window with expanded connections');await screenshot(progress,'progress-small-expanded');
+ await progress.locator('.cg-connection-details>summary').click();await resizeWindow(progress,'download-'+first.id,880,680);
+ await resizeWindow(main,'main',800,540);await assertFits(main,'Small main window');await screenshot(main,'main-small');await resizeWindow(main,'main',1480,850);
+ passed('Main and expanded progress content fit resized native windows without page scrolling');
  await invoke(main,'update_glass_setting',{key:'max_connections',value:'32'});
  assert.equal((await invoke(main,'dashboard_visuals')).downloads.find(f=>f.id===first.id).chunk_count,8);
  passed('Changing the global connection setting preserves an existing file’s selected chunk count');
@@ -106,17 +118,25 @@ try{
  await rows.first().click();await main.locator('.cg-toolbar').getByRole('button',{name:'Delete',exact:true}).click();await main.waitForSelector('.cg-dialog');assert.equal(await main.getByLabel('Also delete the file from disk').isChecked(),false);await bothThemes(main,'delete-dialog',settings);await main.getByRole('dialog').getByRole('button',{name:'Yes',exact:true}).click();await until(async()=>(await ipc({query:'list'})).downloads.length===1,'List entry was not removed');await access(destination);passed('Delete confirmation removes the entry and keeps the downloaded file by default');
  await main.locator('.cg-row').first().click();await main.locator('.cg-toolbar').getByRole('button',{name:'Delete',exact:true}).click();await main.getByLabel('Also delete the file from disk').check();await main.getByRole('dialog').getByRole('button',{name:'Yes',exact:true}).click();await until(async()=>(await ipc({query:'list'})).downloads.length===0,'Disk-delete entry was not removed');await until(async()=>{try{await access(path.join(folder,'downloads','fixture-thirty-two.zip'));return false}catch{return true}},'Downloaded file was not removed');passed('Optional disk deletion removes the actual test file');
  await bothThemes(settings,'settings',settings);
+ await settings.getByRole('button',{name:'Glass & scaling',exact:true}).click();await settings.getByLabel(/Interface size/).focus();await settings.getByLabel(/Interface size/).press('End');
+ await settings.getByRole('button',{name:'Typography',exact:true}).click();await settings.getByLabel(/Text size/).focus();await settings.getByLabel(/Text size/).press('End');
+ await assertFits(settings,'Largest typography and scaling in Settings');await assertFits(main,'Largest typography and scaling in main');await screenshot(settings,'settings-large-typography');await screenshot(main,'main-large-typography');
+ await settings.getByRole('button',{name:'Restore default Glass appearance',exact:true}).click();
+ passed('Large typography and interface scaling adapt across native windows');
  passed('Dark/light appearance propagates across native windows; screenshots captured');
  results.push({name:'Explorer/application native drag and physical DPI/transparency review',status:'manual Windows review still required'});
- await writeFile(path.join(output,'results.json'),JSON.stringify({platform:process.platform,arch:process.arch,results},null,2));
+ await writeFile(path.join(output,'results.json'),JSON.stringify({platform:process.platform,arch:process.arch,source_run:process.env.GLASS_E2E_SOURCE_RUN??process.env.GITHUB_RUN_ID,results},null,2));
  console.log('Windows native acceptance passed. Screenshots and result evidence are in the proof artifact.');
 }catch(error){
  await writeFile(path.join(output,'shell-startup.txt'),JSON.stringify({exit:shellExit,output:shellError},null,2));
  const diagnostic=spawnSync('powershell.exe',['-NoProfile','-Command',"Get-Process | Where-Object {$_.ProcessName -match 'mister|msedge|WebView'} | Select-Object ProcessName,Id,SessionId,MainWindowTitle | Format-Table -AutoSize"],{encoding:'utf8'});
  await writeFile(path.join(output,'processes.txt'),diagnostic.stdout||diagnostic.stderr||'No process diagnostics');
+ const desktop=spawnSync('powershell.exe',['-NoProfile','-Command',"Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $bounds=[System.Windows.Forms.SystemInformation]::VirtualScreen; $bitmap=New-Object System.Drawing.Bitmap $bounds.Width,$bounds.Height; $graphics=[System.Drawing.Graphics]::FromImage($bitmap); $graphics.CopyFromScreen($bounds.Left,$bounds.Top,0,0,$bitmap.Size); $bitmap.Save('"+path.join(output,'windows-desktop.png').replaceAll("'","''")+"'); $graphics.Dispose(); $bitmap.Dispose()"],{encoding:'utf8'});
+ if(desktop.status!==0)await writeFile(path.join(output,'desktop-capture.txt'),desktop.stderr||desktop.stdout||'No interactive desktop');
+
  console.error(error.stack||error.message);results.push({name:error.message,status:'failed'});
  if(browser)for(const [i,page] of browser.contexts().flatMap(c=>c.pages()).entries())if(!page.isClosed())await screenshot(page,'failure-'+i).catch(()=>{});
- await writeFile(path.join(output,'results.json'),JSON.stringify({platform:process.platform,arch:process.arch,results},null,2));process.exitCode=1;
+ await writeFile(path.join(output,'results.json'),JSON.stringify({platform:process.platform,arch:process.arch,source_run:process.env.GLASS_E2E_SOURCE_RUN??process.env.GITHUB_RUN_ID,results},null,2));process.exitCode=1;
 }finally{
  if(browser){for(const page of browser.contexts().flatMap(c=>c.pages())){if(!page.isClosed()){await invoke(page,'quit_glass').catch(()=>{});break}}await browser.close().catch(()=>{});}
  if(shell&&!shell.killed)spawnSync('taskkill',['/PID',String(shell.pid),'/T','/F'],{stdio:'ignore'});

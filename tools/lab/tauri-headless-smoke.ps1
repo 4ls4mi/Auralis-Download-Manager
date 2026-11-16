@@ -32,6 +32,7 @@ function Invoke-GlassIpc([hashtable] $command) {
         $writer.WriteLine($json)
         $line = $reader.ReadLine()
         if ([string]::IsNullOrWhiteSpace($line)) { throw "Empty IPC reply" }
+        if ($line -eq "ok") { return @{ accepted = $true } }
         return ($line | ConvertFrom-Json)
     }
     finally { $client.Dispose() }
@@ -116,6 +117,35 @@ try {
     $queues = Invoke-GlassIpc @{ query = 'glass-queues' }
     if ($queues.queues[0].files_at_once -ne 3) { throw 'Original queue parallelism did not update' }
     Write-Host 'PASS: original batch pattern parser and queue schedule roundtrip'
+    $batch = Invoke-GlassIpc @{ action = 'glass-batch'; queue = (@{ address = 'http://127.0.0.1:1/glass-smoke-*.zip'; from = '1'; to = '2'; width = '1'; commit = $true } | ConvertTo-Json -Compress) }
+    if ($batch.ok -ne $true) { throw 'Batch queue commit failed' }
+    $prompts = Invoke-GlassIpc @{ query = 'glass-prompts' }
+    if (-not $prompts.queue -or $prompts.queue.count -ne 2) { throw 'Original Download Later queue panel was not exposed' }
+    $stale = Invoke-GlassIpc @{ action = 'glass-prompt'; queue = (@{ kind = 'queue'; lease = $prompts.queue.lease + 99; cancel = $true } | ConvertTo-Json -Compress) }
+    if (-not $stale.error) { throw 'A stale queue window answered a newer request' }
+    $chosen = Invoke-GlassIpc @{ action = 'glass-prompt'; queue = (@{ kind = 'queue'; lease = $prompts.queue.lease; name = $queue.name; start = $false } | ConvertTo-Json -Compress) }
+    if ($chosen.ok -ne $true) { throw 'Original queue choice was not applied' }
+    $visuals = Invoke-GlassIpc @{ query = 'glass-visuals' }
+    if ($visuals.downloads.Count -ne 2 -or $visuals.downloads[0].chunk_count -ne 7) { throw 'Per-download connection choice was not captured' }
+    $set = Invoke-GlassIpc @{ action = 'glass-setting'; category = 'max_connections'; queue = '32' }
+    $visuals = Invoke-GlassIpc @{ query = 'glass-visuals' }
+    if ($visuals.downloads[0].chunk_count -ne 7) { throw 'Global limit overwrote an existing download choice' }
+    $capture = Invoke-GlassIpc @{ url = 'http://127.0.0.1:1/glass-smoke-1.zip' }
+    $prompts = Invoke-GlassIpc @{ query = 'glass-prompts' }
+    if (-not $prompts.duplicate) { throw 'Original duplicate decision was not exposed' }
+    $cancel = Invoke-GlassIpc @{ action = 'glass-prompt'; queue = (@{ kind = 'duplicate'; lease = $prompts.duplicate.lease; cancel = $true } | ConvertTo-Json -Compress) }
+    if ($cancel.ok -ne $true) { throw 'Duplicate cancellation failed' }
+    Write-Host 'PASS: original queue/duplicate prompts use request leases; selected chunk counts survive global changes'
+    $exit = Invoke-GlassIpc @{ exit = $true }
+    if (-not $proc.WaitForExit(15000)) { throw 'Backend did not save and exit' }
+    $proc = Start-Process -FilePath $Backend -ArgumentList '--headless' -PassThru
+    $persisted = $null
+    for ($i = 0; $i -lt 60; $i++) {
+        Start-Sleep -Milliseconds 300
+        try { $persisted = Invoke-GlassIpc @{ query = 'glass-visuals' }; if ($persisted.downloads.Count -eq 2) { break } } catch {}
+    }
+    if (-not $persisted -or $persisted.downloads[0].chunk_count -ne 7) { throw 'Selected chunks were not restored from MDM storage' }
+    Write-Host 'PASS: selected per-download chunk counts persist across an original backend restart'
     Write-Host "Runtime smoke test PASSED"
 }
 finally {
