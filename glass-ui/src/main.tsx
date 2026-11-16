@@ -6,6 +6,7 @@ import CrystalProgress from "./CrystalProgress";
 import CrystalAdd from "./CrystalAdd";
 import { CrystalProvider } from "./CrystalShared";
 import "./crystal.css";
+import "./crystal-overrides.css";
 
 function Main() {
   const query = new URLSearchParams(window.location.search);
