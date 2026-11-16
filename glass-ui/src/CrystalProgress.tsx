@@ -38,7 +38,7 @@ export default function CrystalProgress({id}:{id:number}){
   <nav className="cg-page-tabs">{(['Download status','Speed Limiter','Options on completion'] as Tab[]).map(t=><button className={tab===t?'active':''} key={t} onClick={()=>setTab(t)}>{t}</button>)}</nav>
   <main className="cg-page cg-minimal-progress">
    {!item?<div className="cg-empty">Waiting for download information…</div>:tab==='Download status'?<>
-    <section className="cg-glass cg-mdm-details"><div className="cg-download-url" title={item.url}>{item.url}</div><dl>{metadata.map(([label,value])=><div key={label}><dt>{label}</dt><dd>{label==='Server'&&<CountryFlag place={server?.place}/>} {value}</dd></div>)}</dl></section>
+    <section className="cg-glass cg-mdm-details"><div className="cg-download-url" title={item.url}>{item.url}</div><dl>{metadata.map(([label,value])=><div key={label}><dt>{label}</dt><dd title={value}>{label==='Server'&&<CountryFlag place={server?.place}/>} {value}</dd></div>)}</dl></section>
     <div className="cg-overall"><GradientBar percent={pct(item)} showLabel/></div>
     <section className="cg-glass cg-progress-section cg-selected-chunks"><div className="cg-section-title"><h3>Download chunks</h3></div><ChunkMap segments={visual?.segments} size={item.size} count={visual?.chunk_count} active={visual?.active_connections}/>
      <details className="cg-connection-details"><summary>Connection details ({connectionCount})</summary>

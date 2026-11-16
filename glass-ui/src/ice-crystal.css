@@ -53,3 +53,5 @@
 .cg-percent-track{filter:drop-shadow(0 0 5px rgba(92,99,255,.55))}
 
 .cg-window input,.cg-window select,.cg-window textarea,.cg-window .cg-search input{font-size:max(var(--min-text-size),1em)}
+
+.cg-window .cg-toolbar>button>span{display:block;white-space:normal;line-height:1.1;text-align:center;overflow-wrap:anywhere}.cg-window .cg-toolbar>button svg{width:max(19px,var(--min-icon-size));height:max(19px,var(--min-icon-size));flex:none}.cg-window .cg-winbuttons button{min-width:var(--min-window-button);flex:none}.cg-window .cg-winbuttons button svg{width:max(16px,var(--min-icon-size));height:max(16px,var(--min-icon-size))}.cg-mdm-details dl>div{grid-template-columns:max-content minmax(0,1fr)}

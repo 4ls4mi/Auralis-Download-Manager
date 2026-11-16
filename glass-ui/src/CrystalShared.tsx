@@ -276,6 +276,8 @@ export function CrystalWindow({ children, target = "main" }: {
     "--fit-scale": Math.max(.4,fit),
     "--font-family": appearance.fontFamily === "Inter" ? "Inter, Segoe UI, sans-serif" : appearance.fontFamily === "Arial" ? "Arial, sans-serif" : appearance.fontFamily === "Consolas" ? "Consolas, monospace" : "Segoe UI Variable, Segoe UI, sans-serif",
     "--min-text-size": (12/Math.max(.4,fit))+"px",
+    "--min-icon-size": (16/Math.min(1,Math.max(.4,fit)))+"px",
+    "--min-window-button": (30/Math.min(1,Math.max(.4,fit)))+"px",
     "--font-size": Math.max(Math.min(20,Math.max(12,appearance.fontSize)),12/Math.max(.4,fit))+"px"
   } as CSSProperties;
   return <div className={`cg-window cg-mode-${mode} ${appearance.lightMode?"cg-light":"cg-dark"}`} style={style}>
