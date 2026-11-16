@@ -51,8 +51,8 @@ async function capture(name){
  return message;
 }
 async function pageFor(key){return until(()=>browser.contexts().flatMap(c=>c.pages()).find(p=>!p.isClosed()&&p.url().includes(key)),'Native window did not open: '+key);}
-const invoke=(page,command,args={})=>page.evaluate(([command,args])=>window.__TAURI_INTERNALS__.invoke(command,args),[command,args]);
-async function screenshot(page,name){await page.screenshot({path:path.join(output,name+'.png')});}
+const invoke=(page,command,args={})=>Promise.race([page.evaluate(([command,args])=>window.__TAURI_INTERNALS__.invoke(command,args),[command,args]),wait(12000).then(()=>{throw new Error('Native command timed out: '+command)})]);
+async function screenshot(page,name){await page.screenshot({path:path.join(output,name+'.png'),timeout:7000});}
 async function assertFits(page,name){
  await until(async()=>{
   const overflow=await page.evaluate(()=>{const frame=document.querySelector('.cg-content')?.getBoundingClientRect(),fit=document.querySelector('.cg-fit-content')?.getBoundingClientRect();const out=Array.from(document.querySelectorAll('.cg-fit-content,.cg-page,.cg-settings-body,.cg-settings-nav,.cg-sidebar,.cg-toolbar,.cg-window-top')).filter(el=>el.clientWidth&&el.clientHeight&&(el.scrollHeight>el.clientHeight+3||el.scrollWidth>el.clientWidth+3)).map(el=>el.className);if(frame&&fit&&(fit.right>frame.right+3||fit.bottom>frame.bottom+3))out.push('window bounds');const root=document.querySelector('.cg-fit-content');const zoom=root?Number.parseFloat(getComputedStyle(root).zoom)||1:1;for(const el of document.querySelectorAll('.cg-toolbar button span,.cg-sidebar button span,.cg-mdm-details dt,.cg-mdm-details dd')){if(el.getBoundingClientRect().width>0&&Number.parseFloat(getComputedStyle(el).fontSize)*zoom<11.5)out.push('unreadable text');}return out});
