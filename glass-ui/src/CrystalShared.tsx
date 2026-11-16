@@ -2,7 +2,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { getCurrentWindow, Effect, EffectState } from "@tauri-apps/api/window";
 type ResizeDirection = Parameters<ReturnType<typeof getCurrentWindow>["startResizeDragging"]>[0];
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { useEffect, useState, createContext, useContext } from "react";
+import { useEffect, useState, useId, createContext, useContext } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { AppWindow, Maximize2, Minus, X } from "lucide-react";
 
@@ -13,6 +13,16 @@ export type Download = {
   category: string; error?: string | null
 };
 export type Queue = { name: string; running: boolean; ids: number[] };
+export type Segment = { start: number; cursor: number; end: number };
+export type Connection = { id: number; downloaded: number; speed: number; state: string };
+export type DownloadVisual = {
+  id: number; segments: Segment[]; connections: Connection[]; resumable: boolean | null;
+  server: {hostname:string|null;ip:string|null;country_code:string|null;rtt_ms:number|null;cdn:string|null;proxied:boolean};
+  last_try:string|null;added:string|null;referer:string|null;page:string|null;
+  description:string;category:string;is_torrent:boolean
+};
+export type VisualDashboard = {downloads:DownloadVisual[]};
+
 export type Dashboard = {
   downloads: Download[]; speed: number; queues: Queue[];
   categories: { name: string; key: string }[]; free?: number | null
@@ -32,7 +42,8 @@ export type BackgroundMode = "desktop" | "wallpaper" | "solid";
 export type Appearance = {
   theme: string; wallMain: string; wallDetail: string; mainMode: BackgroundMode;
   detailMode: BackgroundMode; dim: number; opacity: number; blur: number;
-  acrylic: boolean; autoPopups: boolean; uiScale: number
+  acrylic: boolean; autoPopups: boolean; uiScale: number;
+  lightMode: boolean; fontFamily: string; fontSize: number
 };
 const key = "mh-glass-";
 const stored = (name: string, fallback: string) => {
@@ -43,19 +54,22 @@ export function loadAppearance(): Appearance {
   return {
     theme: stored("theme", "plexo"),
     wallMain: stored("wall-main", ""), wallDetail: stored("wall-detail", ""),
-    mainMode: stored("back-main", "wallpaper") as BackgroundMode,
-    detailMode: stored("back-details", "wallpaper") as BackgroundMode,
-    dim: Number(stored("dim", "26")), opacity: Number(stored("opacity", "66")),
-    blur: Number(stored("blur", "3")), acrylic: stored("acrylic", "true") === "true",
+    mainMode: stored("back-main", "desktop") as BackgroundMode,
+    detailMode: stored("back-details", "desktop") as BackgroundMode,
+    dim: Number(stored("dim", "26")), opacity: Number(stored("opacity", "77")),
+    blur: Number(stored("blur", "3")), acrylic: stored("acrylic", "false") === "true",
     autoPopups: stored("auto-popups", "true") === "true",
-    uiScale: Number(stored("ui-scale", "100"))
+    uiScale: Number(stored("ui-scale", "100")),
+    lightMode: stored("light-mode", "false") === "true",
+    fontFamily: stored("font-family","Segoe UI"),fontSize:Number(stored("font-size","12"))
   };
 }
 const keys: Record<keyof Appearance, string> = {
   theme: "theme", wallMain: "wall-main", wallDetail: "wall-detail",
   mainMode: "back-main", detailMode: "back-details", dim: "dim",
   opacity: "opacity", blur: "blur", acrylic: "acrylic",
-  autoPopups: "auto-popups", uiScale: "ui-scale"
+  autoPopups: "auto-popups", uiScale: "ui-scale",
+  lightMode: "light-mode", fontFamily: "font-family", fontSize: "font-size"
 };
 type AppearanceValue = {
   appearance: Appearance; theme: Theme;
@@ -83,21 +97,18 @@ export function CrystalProvider({ children }: { children: ReactNode }) {
   const theme = themes.find(t => t.id === appearance.theme) ?? themes[0];
   return <Context.Provider value={{ appearance, set, theme }}>{children}</Context.Provider>;
 }
-export function hue(hex: string) {
-  const c = hex.match(/[0-9a-f]{2}/gi)?.map(x => parseInt(x, 16) / 255) ?? [0, .8, .75];
-  const max = Math.max(...c), min = Math.min(...c), d = max - min;
-  if (!d) return 180;
-  const idx = c.indexOf(max);
-  const h = idx === 0 ? (c[1] - c[2]) / d + (c[1] < c[2] ? 6 : 0)
-    : idx === 1 ? (c[2] - c[0]) / d + 2 : (c[0] - c[1]) / d + 4;
-  return h * 60;
-}
-export function progressGradient(percent: number, accent: string) {
-  const base = hue(accent), spread = 14 + Math.min(100, Math.max(0, percent)) * 2.05;
-  const a = `hsl(${base.toFixed(1)} 92% 54%)`;
-  const b = `hsl(${((base + spread * .57) % 360).toFixed(1)} 90% 57%)`;
-  const c = `hsl(${((base + spread) % 360).toFixed(1)} 91% 61%)`;
-  return `linear-gradient(90deg, ${a}, ${b} 53%, ${c})`;
+// Progress colors deliberately do NOT follow the selected theme.
+// The filled length reveals the fixed spectrum at its real position in 0–100%.
+export const PROGRESS_PALETTE = ["#243985","#3664ce","#477af4","#8155df","#b461ef"] as const;
+export const PROGRESS_GRADIENT =
+  "linear-gradient(90deg,#243985 0%,#3664ce 27%,#477af4 52%,#8155df 77%,#b461ef 100%)";
+export function progressGradient(){return PROGRESS_GRADIENT}
+export function progressColor(fraction: number) {
+  const f=Math.max(0,Math.min(1,fraction))*4;
+  const a=Math.min(3,Math.floor(f)),b=Math.min(4,a+1),w=f-a;
+  const parse=(hex:string)=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16));
+  const aa=parse(PROGRESS_PALETTE[a]),bb=parse(PROGRESS_PALETTE[b]);
+  return "rgb("+aa.map((v,i)=>Math.round(v+(bb[i]-v)*w)).join(",")+")";
 }
 export function pct(d: Download) {
   return d.size && d.size > 0 ? Math.max(0, Math.min(100, 100 * d.downloaded / d.size))
@@ -115,47 +126,80 @@ export function timeLeft(d: Download) {
   return s < 60 ? s + "s" : s < 3600 ? Math.floor(s / 60) + "m " + s % 60 + "s"
     : Math.floor(s / 3600) + "h " + Math.floor(s % 3600 / 60) + "m";
 }
-export function GradientBar({ percent, blocks = 17, showLabel = false }: {
-  percent: number; blocks?: number; showLabel?: boolean
-}) {
-  const { theme } = useCrystal();
-  const fill = Math.max(0, Math.min(100, percent));
-  return <div className="cg-progress">
-    <div className="cg-blocks" aria-label={`${Math.round(fill)} percent completed`}>
-      {Array.from({ length: blocks }, (_, i) => {
-        const on = i / blocks * 100 < fill;
-        const color = `hsl(${(hue(theme.accent) + (i + 1) / blocks * (15 + fill * 2.05)) % 360} 87% 57%)`;
-        return <i key={i} className={on ? "lit" : ""} style={{ background: on ? color : undefined }} />;
-      })}
-    </div>
-    {showLabel && <strong>{fill.toFixed(0)}%</strong>}
+// One continuous, factual total-file percentage. Its gradient stays in the
+// same absolute position as the file fills—purple is only reached near 100%.
+export function GradientBar({percent,showLabel=false}:{percent:number;showLabel?:boolean}){
+  const fill=Math.max(0,Math.min(100,percent));
+  return <div className="cg-percent-wrap" aria-label={`Download ${fill.toFixed(1)} percent completed`}>
+    <div className="cg-percent-track">
+      {fill>0&&<span className="cg-percent-fill" style={{
+        width:`${fill}%`,
+        backgroundImage:PROGRESS_GRADIENT,
+        backgroundSize:`${10000/fill}% 100%`
+      }}/>}
+    </div>{showLabel&&<strong>{fill.toFixed(0)}%</strong>}
   </div>;
 }
-export function FlowMatrix({ percent, count = 168 }: { percent: number; count?: number }) {
-  const { theme } = useCrystal();
-  return <div className="cg-matrix" role="img"
-    aria-label={`${Math.round(percent)}% complete. Decorative color-flow blocks, not actual connections.`}>
-    {Array.from({ length: count }, (_, i) => {
-      const on = i / count * 100 < percent;
-      const h = (hue(theme.accent) + i / count * (15 + percent * 2.05)) % 360;
-      return <i key={i} className={on ? "lit" : ""}
-        style={on ? { background: `hsl(${h.toFixed(1)} 90% 57%)`, boxShadow: `0 0 9px hsla(${h.toFixed(1)},100%,60%,.24)` } : {}} />;
+
+// Engine segment ranges, NOT an animation of the overall percent.
+// Each small block covers a real byte interval; its fill is the overlap
+// with the engine's actual [segment.start, segment.cursor] downloaded ranges.
+export function ChunkMap({segments,size,compact=false}:{
+  segments:Segment[]|undefined;size:number|null;compact?:boolean
+}){
+  const range= Math.max(0,size??0,...(segments??[]).map(s=>s.end));
+  const valid=(segments??[]).filter(s=>s.end>s.start&&s.cursor>=s.start);
+  if(!valid.length||!Number.isFinite(range)||range<=0)
+    return <div className={`cg-chunk-unavailable ${compact?"compact":""}`} title="MDM engine reports no segment ranges for this download">
+      Segment data unavailable
+    </div>;
+  const blocks=compact?20:144, columns=compact?20:24;
+  return <div className={`cg-chunk-map ${compact?"compact":""}`}
+    style={{gridTemplateColumns:`repeat(${columns},minmax(0,1fr))`}}
+    aria-label={`Actual segment byte map, ${valid.length} engine segments`}>
+    {Array.from({length:blocks},(_,i)=>{
+      const lo=range*i/blocks,hi=range*(i+1)/blocks;
+      let received=0,active=false;
+      for(const seg of valid){
+        if(seg.end>lo&&seg.start<hi){
+          active=true;
+          received+=Math.max(0,Math.min(hi,seg.cursor)-Math.max(lo,seg.start));
+        }
+      }
+      const filled=Math.max(0,Math.min(100,100*received/(hi-lo)));
+      return <span key={i} title={`Byte range ${Math.floor(lo).toLocaleString()}–${Math.floor(hi).toLocaleString()}: ${filled.toFixed(0)}% received`}
+        className={active?"active":""}>
+        {filled>0&&<i style={{width:`${filled}%`,background:progressColor(i/Math.max(1,blocks-1))}}/>}
+      </span>;
     })}
   </div>;
 }
-export function SpeedGraph({ values }: { values: number[] }) {
-  const seq = values.length > 1 ? values : [0, 0], peak = Math.max(1, ...seq) * 1.12;
-  const line = seq.map((v, i) => (i / (seq.length - 1) * 100).toFixed(2) + "," + (58 - v / peak * 48).toFixed(2)).join(" ");
-  return <svg className="cg-graph" viewBox="0 0 100 65" preserveAspectRatio="none"
-    role="img" aria-label="Actual recent transfer speed">
-    <defs><linearGradient id="cg-fill" x1="0" x2="0" y1="0" y2="1">
-      <stop stopColor="var(--accent)" stopOpacity=".22" /><stop offset="1" stopColor="var(--accent)" stopOpacity="0" />
-    </linearGradient></defs>
-    {[15, 37, 57].map(y => <line key={y} x1="0" x2="100" y1={y} y2={y}
-      stroke="rgba(180,227,242,.13)" strokeWidth=".35" />)}
-    <polygon points={`0,65 ${line} 100,65`} fill="url(#cg-fill)" />
-    <polyline points={line} stroke="var(--accent)" strokeWidth="1.65" fill="none"
-      strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+
+// Live connection/speed data only—one unique SVG gradient ID per graph, so
+// many small row graphs never collide with each other or the footer graph.
+export function SpeedGraph({values,small=false}:{values:number[];small?:boolean}){
+  const id=useId().replace(/:/g,"-");
+  const seq=values.length>1?values:[0,0],peak=Math.max(1,...seq)*1.12;
+  const points=seq.map((v,i)=>(i/(seq.length-1)*100).toFixed(2)+","+(58-v/peak*48).toFixed(2)).join(" ");
+  const trail=`0,65 ${points} 100,65`;
+  return <svg className={`cg-graph ${small?"cg-graph-small":""}`} viewBox="0 0 100 65"
+    preserveAspectRatio="none" role="img" aria-label="Real measured transfer-speed history">
+    <defs>
+      <linearGradient id={`${id}-line`} x1="0%" x2="100%" y1="0%" y2="0%">
+        <stop offset="0%" stopColor="#315dbd"/><stop offset="45%" stopColor="#477af4"/>
+        <stop offset="77%" stopColor="#8155df"/><stop offset="100%" stopColor="#b461ef"/>
+      </linearGradient>
+      <linearGradient id={`${id}-fill`} x1="0%" x2="100%" y1="0%" y2="0%">
+        <stop offset="0%" stopColor="#315dbd" stopOpacity=".16"/>
+        <stop offset="50%" stopColor="#477af4" stopOpacity=".23"/>
+        <stop offset="100%" stopColor="#b461ef" stopOpacity=".25"/>
+      </linearGradient>
+    </defs>
+    {[15,37,57].map(y=><line key={y} x1="0" x2="100" y1={y} y2={y}
+      stroke="rgba(180,227,242,.11)" strokeWidth=".4"/>)}
+    <polygon points={trail} fill={`url(#${id}-fill)`}/>
+    <polyline points={points} fill="none" stroke={`url(#${id}-line)`} strokeWidth={small?"1.9":"1.7"}
+      strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke"/>
   </svg>;
 }
 const directions = ["North", "South", "East", "West", "NorthEast", "NorthWest", "SouthEast", "SouthWest"] as const;
@@ -203,9 +247,11 @@ export function CrystalWindow({ children, target = "main" }: {
     "--accent-rgb": theme.rgb,
     "--panel-opacity": Math.min(.94, Math.max(.45, appearance.opacity / 100)),
     "--crystal-blur": appearance.blur + "px",
-    "--ui-scale": appearance.uiScale / 100
+    "--ui-scale": appearance.uiScale / 100,
+    "--font-family": appearance.fontFamily === "Inter" ? "Inter, Segoe UI, sans-serif" : appearance.fontFamily === "Arial" ? "Arial, sans-serif" : appearance.fontFamily === "Consolas" ? "Consolas, monospace" : "Segoe UI Variable, Segoe UI, sans-serif",
+    "--font-size": Math.min(20,Math.max(10,appearance.fontSize))+"px"
   } as CSSProperties;
-  return <div className={`cg-window cg-mode-${mode}`} style={style}>
+  return <div className={`cg-window cg-mode-${mode} ${appearance.lightMode?"cg-light":"cg-dark"}`} style={style}>
     {mode === "wallpaper" && <div className="cg-wallpaper">
       {video ? <video key={src} autoPlay loop muted playsInline src={src} /> :
         <div style={{ backgroundImage: `url("${src}")` }} />}
