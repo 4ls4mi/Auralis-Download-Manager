@@ -1417,6 +1417,12 @@ impl App {
         }
         // Nobody to answer Click'n'Load's question or tick Link grabber's packages.
         let _ = self.cnl.listen(false);
+        // Glass is the desktop shell: keep an existing MDM-managed yt-dlp current
+        // with the original signed, atomic once-per-session update check. Ordinary
+        // headless servers do not perform a desktop helper update here.
+        if self.glass_owned() {
+            crate::videodlg::refresh_ytdlp(&self.rt);
+        }
         self
     }
 
