@@ -72,8 +72,10 @@ try{
  passed('One Glass shell connects to the original headless MDM backend');
  await main.locator('.cg-toolbar').getByRole('button',{name:'Settings',exact:true}).click();const settings=await pageFor('settings=');
  await settings.getByRole('button',{name:'General',exact:true}).click();
+ await settings.getByLabel('Show download complete dialog').uncheck();
+ await until(async()=>!(await invoke(main,'glass_settings')).show_complete,'Turning completion off failed through the actual Tauri bridge');
  await settings.getByLabel('Show download complete dialog').check();
- await until(async()=>(await invoke(main,'glass_settings')).show_complete,'Completion setting failed through the actual Tauri bridge');
+ await until(async()=>(await invoke(main,'glass_settings')).show_complete,'Turning completion on failed through the actual Tauri bridge');
  passed('Completion-dialog checkbox saves through the real native bridge');
  await capture('fixture-eight.zip');let info=await pageFor('request=');await info.waitForSelector('.cg-file-info');await wait(350);
  assert.equal((await ipc({query:'list'})).downloads.length,0,'Capture must wait for user confirmation');assert.equal((await ipc({query:'list'})).downloads.some(f=>f.status==='Downloading'),false,'Metadata probing must not create a running download before confirmation');
@@ -111,6 +113,7 @@ try{
  // Main-window timers must not own completion lifecycle.
  await invoke(main,'plugin:window|hide',{label:'main'});
  const complete=await pageFor('complete='+first.id);await complete.waitForSelector('.cg-complete-page');
+ assert.equal(await complete.getByTitle('Drag the file into a folder or an app').isEnabled(),true,'Completed file drag control should be available');assert.equal(await complete.getByTitle('Hide to tray').isVisible(),true,'Completed window must offer a tray control');
  await until(()=>progress.isClosed(),'Progress window did not close on completion');
  await invoke(main,'plugin:window|show',{label:'main'});
  await bothThemes(complete,'complete',settings);
