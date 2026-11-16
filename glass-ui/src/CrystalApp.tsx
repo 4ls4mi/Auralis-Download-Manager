@@ -7,10 +7,10 @@ import {
   ListFilter
 } from "lucide-react";
 import {
-  CrystalWindow, WindowTop, GradientBar, SpeedGraph, pct, rate, units,
+  CrystalWindow, WindowTop, GradientBar, ChunkMap, SpeedGraph, pct, rate, units,
   timeLeft, openWindow, useCrystal
 } from "./CrystalShared";
-import type { Dashboard, Download as MdmFile } from "./CrystalShared";
+import type { Dashboard, Download as MdmFile, DownloadVisual, VisualDashboard } from "./CrystalShared";
 
 type Menu = "Tasks" | "File" | "Downloads" | "View" | "Help";
 type MenuEntry = { label: string; action: string; disabled?: boolean; shortcut?: string };
@@ -36,6 +36,8 @@ export default function CrystalApp(){
   const [chosen,setChosen]=useState<number|null>(null),[filter,setFilter]=useState("All Downloads"),[term,setTerm]=useState("");
   const [openMenu,setOpenMenu]=useState<Menu|null>(null),[context,setContext]=useState<{id:number;x:number;y:number}|null>(null);
   const [busy,setBusy]=useState(false),[error,setError]=useState(""),[history,setHistory]=useState<number[]>([]);
+  const [visuals,setVisuals]=useState<Record<number,DownloadVisual>>({});
+  const [fileRates,setFileRates]=useState<Record<number,number[]>>({});
   const [doubleClickOpen,setDoubleClickOpen]=useState(false);
   const [showCategories,setShowCategories]=useState(true);
   const {appearance}=useCrystal();
@@ -49,6 +51,19 @@ export default function CrystalApp(){
       const next=await invoke<Dashboard>("dashboard_snapshot");
       setData(next);setOnline(true);setMessage("Rust engine connected • Browser integration uses original MDM native host");
       setHistory(h=>[...h.slice(-52),Math.max(0,next.speed)]);
+      setFileRates(old=>{
+        const updated={...old};
+        for(const item of next.downloads)
+          updated[item.id]=[...(old[item.id]??[]).slice(-45),Math.max(0,item.speed)];
+        for(const key of Object.keys(updated))
+          if(!next.downloads.some(item=>item.id===Number(key)))delete updated[Number(key)];
+        return updated;
+      });
+      // The backend returns REAL byte-range segment cursors. The completion
+      // percentage is independently calculated from downloaded/total bytes.
+      const telemetry=await invoke<VisualDashboard>("dashboard_visuals").catch(()=>null);
+      if(telemetry?.downloads)
+        setVisuals(Object.fromEntries(telemetry.downloads.map(x=>[x.id,x])));
       if(previous.current&&autoRef.current){
         for(const item of next.downloads){
           if(item.status==="Downloading"&&previous.current.get(item.id)!=="Downloading")pop(item.id);
@@ -272,7 +287,11 @@ export default function CrystalApp(){
             <span className="cg-file"><FileSymbol name={d.file}/><span className="cg-file-info">
               <strong title={d.file}>{d.file}</strong><small>{units(d.downloaded)} / {units(d.size)}</small></span></span>
             <span>{units(d.size)}</span><StatusBadge item={d}/>
-            <GradientBar percent={pct(d)} showLabel/>
+            <span className="cg-row-progress">
+              <GradientBar percent={pct(d)} showLabel/>
+              <ChunkMap segments={visuals[d.id]?.segments} size={d.size} compact/>
+              <SpeedGraph values={fileRates[d.id]??[d.speed,d.speed]} small/>
+            </span>
             <span>{d.status==="Downloading"?rate(d.speed):"—"}</span>
             <span>{timeLeft(d)}</span>
           </button>)}
