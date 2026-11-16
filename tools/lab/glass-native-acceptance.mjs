@@ -95,6 +95,11 @@ try{
   for(const name of ['yt-dlp','ffmpeg','gallery-dl'])await settings.getByText(name,{exact:true}).waitFor();
   await settings.getByRole('button',{name:'General',exact:true}).click();
   passed('Original verified helper manager reports all three tools through Glass');
+  const video=await invoke(main,'video_tool',{action:'lookup',value:'https://example.invalid/fixture-video',choice:null});
+  assert.notEqual(video.state,'use-window','Glass video lookup must reach the original engine');
+  await main.getByRole('button',{name:'Tasks',exact:true}).click();await main.getByRole('button',{name:'Download video from a page…',exact:true}).click();
+  const videoWindow=await pageFor('tool=video');await videoWindow.getByLabel('Video page URL').waitFor();await videoWindow.locator('.cg-tool-body').getByRole('button',{name:'Close',exact:true}).click();
+  passed('Video page quality lookup reaches the original engine from a Glass window');
  }
 
  await capture('fixture-eight.zip');let info=await pageFor('request=');await info.waitForSelector('.cg-file-info');await wait(350);

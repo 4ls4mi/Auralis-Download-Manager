@@ -55,3 +55,20 @@ pub async fn clipboard_text() -> ApiResult<String> {
         { Err("Clipboard prefill is available on Windows".into()) }
     }).await.map_err(|e|e.to_string())?
 }
+
+/// Original MDM video quality lookup; the engine owns the token and choices.
+#[tauri::command]
+pub async fn video_tool(action:String,value:String,choice:Option<usize>) -> ApiResult<serde_json::Value> {
+    if value.len()>8192 {return Err("Video request is too long".into());}
+    let mut command=mdm_ipc::Command::default();
+    match action.as_str() {
+        "lookup" if value.starts_with("https://")||value.starts_with("http://") => command.video_lookup=Some(mdm_ipc::VideoLookup{address:value,..Default::default()}),
+        "poll" if !value.is_empty()&&value.len()<=256 => command.video_poll=Some(value),
+        "pick" if !value.is_empty()&&value.len()<=256&&choice.is_some_and(|n|n<1000) => command.video_pick=Some(mdm_ipc::VideoPick{token:value,choice:choice.unwrap_or_default(),..Default::default()}),
+        _=>return Err("Enter a valid video page address".into()),
+    }
+    tauri::async_runtime::spawn_blocking(move||{
+        let response=send_ipc(&command)?;
+        serde_json::from_str(&response).map_err(|_|"Could not read the video lookup result".into())
+    }).await.map_err(|e|e.to_string())?
+}

@@ -4736,7 +4736,9 @@ impl App {
     /// into the main queue instead, with no queue panel either).
     fn quality_menu(&mut self, cmd: &ipc::Command) -> ipc::api::VideoLookupAnswer {
         use ipc::api::{VideoLookupAnswer, lookup};
-        if menu_needs_window(cmd, self.headless) {
+        // Glass supplies its own desktop quality picker while the original MDM
+        // engine runs headlessly; server-only mode still requires a window.
+        if menu_needs_window(cmd, self.headless && !self.glass_owned()) {
             return VideoLookupAnswer::of(lookup::USE_WINDOW);
         }
         let now = Instant::now();

@@ -154,6 +154,7 @@ export default function CrystalApp(){
     if(action.startsWith("queue-add:")&&item){try{await invoke("file_operation",{id:item.id,operation:"queue-add",value:action.slice(10)});await refresh()}catch(e){setError(String(e))}return}
     if(action==="queue-remove"&&item){try{await invoke("file_operation",{id:item.id,operation:"queue-remove",value:null});await refresh()}catch(e){setError(String(e))}return}
     if(action==="double-open"||action==="double-properties"){try{const on=action==="double-open";await invoke("update_glass_setting",{key:"double_click_open",value:String(on)});setDoubleClickOpen(on)}catch(e){setError(String(e))}return}
+    if(action==="video")return openWindow("tool-video","/?tool=video",720,560);
     if(action==="batch"||action==="grabber")return openWindow("tool-"+action,"/?tool="+action,action==="batch"?760:900,680);
     if(action==="add")return add();
     if(action==="torrent")return add(true);
@@ -203,6 +204,7 @@ export default function CrystalApp(){
       case "Tasks":return [
         {label:"Add new download…",action:"add",shortcut:"Ctrl+N"},
         {label:"Open torrent file / magnet…",action:"torrent",shortcut:"Ctrl+O"},
+        {label:"Download video from a page…",action:"video"},
         {label:"Batch download…",action:"batch"},
         {label:"Link grabber…",action:"grabber"},
         {label:"Browser integration",action:"browser"},

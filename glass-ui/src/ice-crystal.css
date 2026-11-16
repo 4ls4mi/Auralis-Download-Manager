@@ -95,3 +95,4 @@
 .cg-window:is(.cg-dark,.cg-light) .cg-toolbar>button[data-action="remove"]{--tone:#ff6d62;--tone-rgb:255,109,98}
 .cg-light .cg-toolbar>button[data-action="remove"]{--tone:#bc3028!important}
 .cg-row-progress .cg-chunk-map.compact>span{height:8px;border-radius:2px}.cg-row-progress .cg-graph-small{height:18px}
+.cg-video-choice{display:flex;align-items:center;gap:10px;padding:8px;border-bottom:1px solid var(--edge)}.cg-video-choice span{flex:1}.cg-video-choice small{color:var(--muted)}
