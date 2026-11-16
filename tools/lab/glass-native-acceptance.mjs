@@ -162,7 +162,7 @@ try{
   const oldPath=destination;const movedFolder=path.join(folder,'moved');await mkdir(movedFolder,{recursive:true});const movedPath=path.join(movedFolder,'fixture-eight.zip');
   const requested=await ipc({action:'glass-item',category:'move',ids:[first.id],queue:movedPath});assert(!requested.error,'Original engine rejected file move');
   await until(async()=>{const state=await ipc({query:'glass-move-status',ids:[first.id]});return !state.moving&&state.path===movedPath},'Original engine did not record the moved file');
-  await access(movedPath);await assert.rejects(access(oldPath));destination=movedPath;await until(async()=>(await complete.locator('input[readonly]').last().inputValue())===movedPath,'Completion window did not follow the moved file');
+  await access(movedPath);await assert.rejects(access(oldPath));destination=movedPath;await until(async()=>(await complete.locator('input[readonly]').last().inputValue())===movedPath,'Completion window did not follow the moved file');await complete.getByRole('status').filter({hasText:'File moved to'}).waitFor();
   passed('Completed-file move finishes on disk and updates the original engine path');
  }
 
