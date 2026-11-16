@@ -79,6 +79,15 @@ try{
  await until(async()=>(await invoke(main,'glass_settings')).show_complete,'Turning completion on failed through the actual Tauri bridge');
  passed('Completion-dialog checkbox saves through the real native bridge');
  if(process.env.GLASS_TEST_HELPERS==='1'){
+  const mode=settings.getByLabel('Copied download links');
+  const original=async()=>{const d=await invoke(main,'glass_tool',{action:'original-settings',payload:null});return Object.fromEntries(d.fields.map(f=>[f.key,f.value]));};
+  await mode.selectOption('auto');await until(async()=>{const s=await original();return s.clipboard_autostart&&s.glass_clipboard_auto_download},'Automatic clipboard mode did not save');
+  await until(()=>mode.isEnabled(),'Clipboard selector stayed busy');await mode.selectOption('paste');await until(async()=>!(await original()).clipboard_autostart,'Paste-only mode did not stop automatic capture');
+  await until(()=>mode.isEnabled(),'Clipboard selector stayed busy');await mode.selectOption('offer');await until(async()=>{const s=await original();return s.clipboard_autostart&&!s.glass_clipboard_auto_download},'Clipboard offer mode did not save');
+  passed('Clipboard modes save through the original backend');
+ }
+
+ if(process.env.GLASS_TEST_HELPERS==='1'){
   const helpers=await invoke(main,'glass_tool',{action:'helpers',payload:null});
   assert.deepEqual(helpers.tools.map(t=>t.name),['yt-dlp','ffmpeg','gallery-dl']);
   await settings.getByRole('button',{name:'Advanced',exact:true}).click();
