@@ -55,7 +55,7 @@ const invoke=(page,command,args={})=>page.evaluate(([command,args])=>window.__TA
 async function screenshot(page,name){await page.screenshot({path:path.join(output,name+'.png')});}
 async function assertFits(page,name){
  await until(async()=>{
-  const overflow=await page.evaluate(()=>Array.from(document.querySelectorAll('.cg-fit-content,.cg-page,.cg-settings-body,.cg-settings-nav,.cg-sidebar')).filter(el=>el.clientWidth&&el.clientHeight&&(el.scrollHeight>el.clientHeight+3||el.scrollWidth>el.clientWidth+3)).map(el=>el.className));
+  const overflow=await page.evaluate(()=>{const frame=document.querySelector('.cg-content')?.getBoundingClientRect(),fit=document.querySelector('.cg-fit-content')?.getBoundingClientRect();const out=Array.from(document.querySelectorAll('.cg-fit-content,.cg-page,.cg-settings-body,.cg-settings-nav,.cg-sidebar,.cg-toolbar,.cg-window-top')).filter(el=>el.clientWidth&&el.clientHeight&&(el.scrollHeight>el.clientHeight+3||el.scrollWidth>el.clientWidth+3)).map(el=>el.className);if(frame&&fit&&(fit.right>frame.right+3||fit.bottom>frame.bottom+3))out.push('window bounds');return out});
   return overflow.length===0;
  },name+' has clipped content or would require page scrolling');
 }
@@ -81,9 +81,17 @@ try{
  const destination=path.join(folder,'downloads','fixture-eight.zip');
  await info.getByLabel('Save As',{exact:true}).fill(destination);await info.getByLabel('Chunks / connections').selectOption('8');await info.getByRole('button',{name:'Start Download',exact:true}).click();
  const first=await until(async()=>{const d=await ipc({query:'list'});return d.downloads.find(f=>f.file==='fixture-eight.zip');},'Original engine did not add the chosen file');
- const progress=await pageFor('detail='+first.id);await progress.waitForSelector('.cg-mdm-details');
+ let progress=await pageFor('detail='+first.id);await progress.waitForSelector('.cg-mdm-details');
  await until(async()=>(await ipc({query:'list'})).downloads.find(f=>f.id===first.id)?.downloaded>0,'Original HTTP engine received no bytes');
  await progress.getByRole('button',{name:'Pause',exact:true}).click();await until(async()=>(await ipc({query:'list'})).downloads.find(f=>f.id===first.id)?.status==='Stopped','Transfer did not pause');
+ assert.equal(progress.isClosed(),false,'Pausing in the progress window keeps it open');
+ await progress.getByRole('button',{name:'Resume',exact:true}).click();
+ await until(async()=>(await ipc({query:'list'})).downloads.find(f=>f.id===first.id)?.status==='Downloading','Transfer did not resume');
+ await main.locator('.cg-row').first().click();await main.locator('.cg-toolbar').getByRole('button',{name:'Stop',exact:true}).click();
+ await until(()=>progress.isClosed(),'Stopping from the main window did not close progress');await wait(1000);
+ await main.locator('.cg-toolbar').getByRole('button',{name:'Resume',exact:true}).click();progress=await pageFor('detail='+first.id);
+ await progress.getByRole('button',{name:'Pause',exact:true}).click();await until(async()=>(await ipc({query:'list'})).downloads.find(f=>f.id===first.id)?.status==='Stopped','Transfer did not pause again');
+ passed('Pause keeps progress open; Stop from the main window closes it');
  assert.equal(await progress.locator('.cg-chunk-map>span').count(),8);await main.waitForSelector('.cg-row');assert.equal(await main.locator('.cg-row').first().locator('.cg-chunk-map>span').count(),8);
  assert.equal(await progress.locator('.cg-mdm-details dt').allTextContents().then(a=>a.join('|')),'Status|File size|Downloaded|Transfer rate|Time left|Resume capability|Server');
  assert(headersPreserved>0,'Captured cookie/referrer/User-Agent reached the original HTTP engine');

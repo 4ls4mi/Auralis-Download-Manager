@@ -240,7 +240,7 @@ export function CrystalWindow({ children, target = "main" }: {
         if(disposed)return;
         const fit=el.querySelector<HTMLElement>('.cg-fit-content');if(!fit)return;
         let ratio=1;
-        for(const box of [fit,...el.querySelectorAll<HTMLElement>('.cg-page,.cg-window-add,.cg-settings-body,.cg-settings-nav,.cg-sidebar,.cg-main-body,.cg-workspace,.cg-table,.cg-original-editor')]){
+        for(const box of [fit,...el.querySelectorAll<HTMLElement>('.cg-page,.cg-window-add,.cg-settings-body,.cg-settings-nav,.cg-sidebar,.cg-main-body,.cg-workspace,.cg-table,.cg-toolbar,.cg-window-top,.cg-original-editor')]){
           if(box.clientHeight>0&&box.scrollHeight>box.clientHeight+2)ratio=Math.min(ratio,box.clientHeight/box.scrollHeight);
           if(box.clientWidth>0&&box.scrollWidth>box.clientWidth+2)ratio=Math.min(ratio,box.clientWidth/box.scrollWidth);
         }
