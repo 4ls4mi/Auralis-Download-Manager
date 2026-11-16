@@ -144,21 +144,51 @@ export default function CrystalSettings(){
         <div className="cg-color-choices">{themes.map(t=><button key={t.id} className={appearance.theme===t.id?"selected":""}
           onClick={()=>set("theme",t.id)}><i style={{background:`linear-gradient(140deg,${t.accent},${t.secondary})`}}/>{t.name}
         </button>)}</div>
+        <h3>Light or dark crystal material</h3>
+        <div className="cg-wall-choice">
+          <button className={`cg-btn ${!appearance.lightMode?"cg-btn-primary":""}`}
+            onClick={()=>set("lightMode",false)}>Dark crystal</button>
+          <button className={`cg-btn ${appearance.lightMode?"cg-btn-primary":""}`}
+            onClick={()=>set("lightMode",true)}>Light crystal</button>
+        </div>
+        <div className="cg-settings-fallback">The interface theme affects glass reflections and controls. Download progress, actual chunks and transfer-speed graphs always use navy blue to purple regardless of theme.</div>
         <h3>Independent translucent backgrounds</h3>
         {mode("main")}{mode("details")}
         {slider("opacity","Crystal glass opacity",45,94,"%")}
         {slider("blur","Wallpaper blur",0,20," px")}
         {slider("dim","Wallpaper darkness",0,80,"%")}
         {slider("uiScale","Interface size",80,150,"%")}
+        <h3>Typography and contrast</h3>
+        <label className="cg-field">Font family
+          <select value={appearance.fontFamily} onChange={e=>set("fontFamily",e.target.value)}>
+            <option value="Segoe UI">Segoe UI / Windows</option>
+            <option value="Inter">Inter</option>
+            <option value="Arial">Arial</option>
+            <option value="Consolas">Consolas</option>
+          </select>
+        </label>
+        {slider("fontSize","Text size",10,20," px")}
+        <p>Text contrast automatically adjusts for light/dark material. Glass panels keep a readable text backing even over bright wallpapers.</p>
         <label className="cg-toggle"><span><strong>Native Windows Acrylic</strong><small>Blur the desktop behind see-through windows when supported</small></span>
           <input type="checkbox" checked={appearance.acrylic} onChange={e=>set("acrylic",e.target.checked)}/></label>
         <label className="cg-toggle"><span><strong>Show actual download popup automatically</strong><small>Open the separate floating progress window when a download starts</small></span>
           <input type="checkbox" checked={appearance.autoPopups} onChange={e=>set("autoPopups",e.target.checked)}/></label>
+        <button className="cg-btn" style={{marginTop:15}} onClick={()=>{
+          set("mainMode","desktop");set("detailMode","desktop");
+          set("acrylic",false);set("dim",26);set("opacity",77);set("blur",3);
+          set("uiScale",100);set("lightMode",false);set("fontFamily","Segoe UI");
+          set("fontSize",12);set("theme","plexo");
+        }}><RotateCcw size={15}/> Restore default Glass appearance</button>
       </>;
       case "Advanced":return <>
         <h3>Original MDM configuration</h3>
         <p>Original proxy settings, site credentials, file-type capture rules and accounts are preserved in the MDM data store. Full editing support for these sections still requires backend APIs.</p>
         <div className="cg-settings-fallback"><Shield size={18}/> Native Glass uses authenticated loopback IPC; the backend does not expose its local token to React. The original MDM download engine and settings database remain intact.</div>
+        <h3>Updates from the original MDM developer</h3>
+        <p>Check upstream releases without silently replacing the Glass interface. Installing the original developer's app directly can replace the custom UI and may require a rollback. Integrating a new upstream release safely requires rebuilding this Windows fork against those changes.</p>
+        <button className="cg-btn" onClick={()=>void invoke("open_upstream_releases").catch(e=>setError(String(e)))}>
+          Check original developer's releases
+        </button>
         {cfg&&<label className="cg-field" style={{marginTop:18}}>Preferred network adapter<input defaultValue={cfg.net_adapter} key={cfg.net_adapter}
           onBlur={e=>{if(e.target.value!==cfg.net_adapter)void change("net_adapter",e.target.value)}}/></label>}
       </>;
