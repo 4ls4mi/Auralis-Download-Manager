@@ -5,6 +5,7 @@ use super::*;
 impl App {
     pub(super) fn glass_original_settings(&self)->Value {
         let mut fields:Vec<Value>=Vec::new();
+        fields.push(json!({"key":"update_check","label":"Check original MDM releases on startup","section":"General","kind":"boolean","value":self.settings.update_check}));
         fields.push(json!({"key":"clipboard_autostart","label":"Offer copied download links","section":"General","kind":"boolean","value":self.settings.clipboard_autostart}));
         fields.push(json!({"key":"glass_clipboard_auto_download","label":"Download copied links automatically","section":"General","kind":"boolean","value":self.settings.glass_clipboard_auto_download}));
         fields.push(json!({"key":"limiter_on_startup","label":"Enable the speed limiter on startup","section":"General","kind":"boolean","value":self.settings.limiter_on_startup}));
@@ -91,6 +92,7 @@ impl App {
         let mut next=self.settings.clone();
         let apply=(||->Result<(),String>{
             match key {
+                "update_check" => next.update_check=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?,
                 "clipboard_autostart" => next.clipboard_autostart=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?,
                 "glass_clipboard_auto_download" => next.glass_clipboard_auto_download=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?,
                 "limiter_on_startup" => next.limiter_on_startup=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?,

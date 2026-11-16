@@ -1,5 +1,6 @@
 import CrystalAccounts from "./CrystalAccounts";
 import CrystalHelpers from "./CrystalHelpers";
+import CrystalUpstream from "./CrystalUpstream";
 import CrystalOriginalSettings from "./CrystalOriginalSettings";
 import { useEffect, useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
@@ -204,16 +205,6 @@ export default function CrystalSettings(){
       </>;
       case "Advanced":return <>
         <CrystalHelpers/>
-        <h3>Original MDM configuration</h3>
-        <p>Proxy, DNS and site authentication are in Connection → More options. Browser capture rules are in Browser Integration → More options.</p>
-
-        <h3>Updates from the original MDM developer</h3>
-        <p>Opens MDM release notes. Glass updates are packaged separately.</p>
-        <button className="cg-btn" onClick={()=>void invoke("open_upstream_releases").catch(e=>setError(String(e)))}>
-          Check original developer's releases
-        </button>
-        {cfg&&<label className="cg-field" style={{marginTop:18}}>Preferred network adapter<input defaultValue={cfg.net_adapter} key={cfg.net_adapter}
-          onBlur={e=>{if(e.target.value!==cfg.net_adapter)void change("net_adapter",e.target.value)}}/></label>}
       </>;
     }
   };
@@ -227,8 +218,8 @@ export default function CrystalSettings(){
       </div>
       {error&&<p className="cg-error">{error}</p>}
       {notice&&<p className="cg-success"><CheckCircle2 size={14}/> {notice}</p>}
-      {tab!=="Appearance"&&tab!=="Accounts"&&<nav className="cg-appearance-tabs"><button className={settingsPanel==="Main options"?"selected":""} onClick={()=>setSettingsPanel("Main options")}>Main options</button><button className={settingsPanel==="More options"?"selected":""} onClick={()=>setSettingsPanel("More options")}>More options</button></nav>}
-      <div>{tab==="Appearance"||tab==="Accounts"||settingsPanel==="Main options"?body():<CrystalOriginalSettings section={tab}/>}</div>
+      {tab!=="Appearance"&&tab!=="Accounts"&&<nav className="cg-appearance-tabs"><button className={settingsPanel==="Main options"?"selected":""} onClick={()=>setSettingsPanel("Main options")}>Main options</button><button className={settingsPanel==="More options"?"selected":""} onClick={()=>setSettingsPanel("More options")}>More options</button>{tab==="Advanced"&&<button className={settingsPanel==="Updates"?"selected":""} onClick={()=>setSettingsPanel("Updates")}>Updates</button>}</nav>}
+      <div>{tab==="Advanced"&&settingsPanel==="Updates"?<><CrystalUpstream/>{cfg&&<label className="cg-field">Preferred network adapter<input defaultValue={cfg.net_adapter} key={cfg.net_adapter} onBlur={e=>{if(e.target.value!==cfg.net_adapter)void change("net_adapter",e.target.value)}}/></label>}</>:tab==="Appearance"||tab==="Accounts"||settingsPanel==="Main options"?body():<CrystalOriginalSettings section={tab}/>}</div>
     </div></div>
     <footer className="cg-bottom-actions" style={{padding:"9px 18px"}}><span className="cg-muted" style={{marginRight:"auto",fontSize:"var(--min-text-size)"}}>Windows x64 • Changes are saved automatically</span>
       <button className="cg-btn cg-btn-primary" onClick={()=>void import("@tauri-apps/api/window").then(m=>m.getCurrentWindow().close())}>Done</button>

@@ -11,6 +11,7 @@
 - **In validation:** Glass deletion confirmation and original file/queue tools, with an isolated Windows WebView2 + original-engine acceptance run and screenshot artifacts.
 - **In validation:** original scheduler, completion plans, queue/duplicate prompts, batch and Link Grabber, categories, proxy/site settings and service-account adapters.
 - Windows evidence and remaining manual checks: [validation notes](docs/GLASS-WINDOWS-VALIDATION.md).
+- **In development:** read-only original MDM release checks report available versions without replacing Glass; integration of upstream application changes remains manual.
 - Installer compilation and runtime/visual evidence are reported separately. Original `main` remains unchanged; no merge is authorized.
 
 What's done for version 0.5.2, what's being built, and what's planned. Each item links to its

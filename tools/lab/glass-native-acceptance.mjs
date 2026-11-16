@@ -95,6 +95,7 @@ try{
   for(const name of ['yt-dlp','ffmpeg','gallery-dl'])await settings.getByText(name,{exact:true}).waitFor();
   await settings.getByRole('button',{name:'General',exact:true}).click();
   passed('Original verified helper manager reports all three tools through Glass');
+  const upstream=await invoke(main,'glass_tool',{action:'upstream-status',payload:null});assert(['not-checked','checking','latest','newer','error'].includes(upstream.state),'Original release status unavailable');await settings.getByRole('button',{name:'Updates',exact:true}).click();await settings.getByText('Original MDM releases',{exact:true}).waitFor();passed('Original MDM release check is available without replacing Glass');
   if(process.env.GLASS_TEST_INSTALL_HELPERS==='1'){
    for(const name of ['yt-dlp','ffmpeg','gallery-dl']){
     await invoke(main,'glass_tool',{action:'helpers-install',payload:{name}});
