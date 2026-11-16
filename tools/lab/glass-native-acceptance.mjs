@@ -81,9 +81,30 @@ try{
  if(process.env.GLASS_TEST_HELPERS==='1'){
   const mode=settings.getByLabel('Copied download links');
   const original=async()=>{const d=await invoke(main,'glass_tool',{action:'original-settings',payload:null});return Object.fromEntries(d.fields.map(f=>[f.key,f.value]));};
+  const setClipboard=text=>spawnSync('powershell.exe',['-NoProfile','-STA','-Command',"Set-Clipboard -Value '"+text.replaceAll("'","''")+"'"],{encoding:'utf8',timeout:12000});
   await mode.selectOption('auto');await until(async()=>{const s=await original();return s.clipboard_autostart&&s.glass_clipboard_auto_download},'Automatic clipboard mode did not save');
+  await wait(2300);const automaticUrl=address+'/clipboard-automatic.custom';const clipboard=setClipboard(automaticUrl);
+  if(clipboard.status===0){
+   const auto=await until(async()=>(await ipc({query:'list'})).downloads.find(f=>f.url===automaticUrl),'Automatically copied URL was not added');
+   await until(async()=>{const f=(await ipc({query:'list'})).downloads.find(x=>x.id===auto.id);return f&&f.status!=='Downloading'},'Automatic fixture did not stop after the expected server refusal');
+   await invoke(main,'download_action',{action:'remove',ids:[auto.id]});await invoke(main,'close_progress_windows',{ids:[auto.id]});await until(async()=>(await ipc({query:'list'})).downloads.every(f=>f.id!==auto.id),'Automatic clipboard fixture was not removed');
+   passed('Automatic mode adds a supported copied URL without relying on its extension');
+  }
   await until(()=>mode.isEnabled(),'Clipboard selector stayed busy');await mode.selectOption('paste');await until(async()=>!(await original()).clipboard_autostart,'Paste-only mode did not stop automatic capture');
+  const pasteUrl=address+'/clipboard-prefill.zip';if(clipboard.status===0)assert.equal(setClipboard(pasteUrl).status,0,'Could not set the Windows clipboard');
+  if(clipboard.status===0){
+   await main.locator('.cg-toolbar').getByRole('button',{name:'Add URL',exact:true}).click();const add=await pageFor('add=url');
+   await until(async()=>(await add.getByLabel('Download address').inputValue())===pasteUrl,'Add URL did not prefill the copied link');
+   await add.locator('.cg-window-add').getByRole('button',{name:'Close',exact:true}).click();await until(()=>add.isClosed(),'Add URL did not close');
+   passed('Paste-on-Add URL reads the actual Windows clipboard');
+  }else results.push({name:'Windows clipboard unavailable on the runner: '+(clipboard.stderr||clipboard.error?.message||'unknown error'),status:'manual Windows review still required'});
   await until(()=>mode.isEnabled(),'Clipboard selector stayed busy');await mode.selectOption('offer');await until(async()=>{const s=await original();return s.clipboard_autostart&&!s.glass_clipboard_auto_download},'Clipboard offer mode did not save');
+  if(clipboard.status===0){
+   await wait(2300);const offerUrl=address+'/clipboard-offer.zip';const copied=setClipboard(offerUrl);assert.equal(copied.status,0,'Could not set the Windows clipboard');
+   const offer=await pageFor('request=');await offer.waitForSelector('.cg-file-info');assert.equal(await offer.getByLabel('URL',{exact:true}).inputValue(),offerUrl);
+   await offer.locator('main.cg-file-info').getByRole('button',{name:'Cancel',exact:true}).click();await until(()=>offer.isClosed(),'Clipboard File Info did not close');
+   passed('Original clipboard watcher offers a copied link in File Info');
+  }
   passed('Clipboard modes save through the original backend');
  }
 
