@@ -16,7 +16,7 @@ jobs:
   native:
     if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[native review]') }}
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
         with:
@@ -56,6 +56,23 @@ jobs:
         working-directory: glass-ui
         shell: pwsh
         run: npm install --no-audit --no-fund
+      - name: Rebuild the current Glass interface against the candidate backend
+        if: ${{ contains(github.event.head_commit.message, '[rebuild ui]') }}
+        shell: pwsh
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add x86_64-pc-windows-msvc
+          New-Item -ItemType Directory -Force glass-ui/src-tauri/resources,glass-ui/src-tauri/icons | Out-Null
+          Copy-Item (Join-Path $env:GLASS_E2E_DIR 'mdm-legacy.exe') glass-ui/src-tauri/resources/mdm-legacy.exe
+          Copy-Item (Join-Path $env:GLASS_E2E_DIR 'misterdownloadmanager-nmhost.exe') glass-ui/src-tauri/resources/misterdownloadmanager-nmhost.exe
+          Copy-Item crates/app/assets/icons/app/mdm.ico glass-ui/src-tauri/icons/icon.ico
+          Push-Location glass-ui
+          try { npm run tauri -- build --no-bundle; if ($LASTEXITCODE -ne 0) { throw 'Glass UI build failed' } }
+          finally { Pop-Location }
+          Get-Process 'mister-hybrid-glass','mdm-legacy' -ErrorAction SilentlyContinue | Stop-Process -Force
+          Copy-Item glass-ui/src-tauri/target/release/mister-hybrid-glass.exe $env:GLASS_E2E_EXE -Force
+
       - name: Real native acceptance
         timeout-minutes: 7
         shell: pwsh
