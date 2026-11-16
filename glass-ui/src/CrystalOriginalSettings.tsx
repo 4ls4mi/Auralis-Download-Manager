@@ -14,7 +14,7 @@ export default function CrystalOriginalSettings({section}:{section:string}){
 function Editor({field,onSaved}:{field:Field;onSaved:()=>Promise<void>}){
  const [value,setValue]=useState<unknown>(structuredClone(field.value)),[clear,setClear]=useState(false),[clearPasswords,setClearPasswords]=useState<number[]>([]);
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[page,setPage]=useState(0);
- const columns=field.kind==='lines'?[{label:'Address',kind:'text'}]:field.columns??[];
+ const columns:Column[]=field.kind==='lines'?[{label:'Address',kind:'text'}]:field.columns??[];
  const rows:Cell[][]=field.kind==='lines'?(value as string[]).map(v=>[v]):field.kind==='table'?(value as Cell[][]):[];
  const count=Math.max(1,Math.ceil(rows.length/4)),safePage=Math.min(page,count-1);
  const setRows=(rows:Cell[][])=>setValue(field.kind==='lines'?rows.map(r=>String(r[0])):rows);

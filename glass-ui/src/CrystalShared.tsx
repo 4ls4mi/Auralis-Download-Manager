@@ -1,7 +1,6 @@
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { getCurrentWindow, Effect, EffectState } from "@tauri-apps/api/window";
 type ResizeDirection = Parameters<ReturnType<typeof getCurrentWindow>["startResizeDragging"]>[0];
-import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { useEffect, useState, useLayoutEffect, useRef, useId, createContext, useContext } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { AppWindow, Maximize2, Minus, X, PanelBottomClose } from "lucide-react";
@@ -233,9 +232,28 @@ export function CrystalWindow({ children, target = "main" }: {
     const el=frame.current;if(!el)return;
     const query=new URLSearchParams(location.search);
     const base=query.has("settings")?[880,700]:query.has("detail")?[720,640]:query.has("request")?[720,500]:query.has("complete")?[660,390]:query.has("properties")?[680,580]:target==="main"?[1040,620]:[600,420];
-    const resize=()=>setFit(Math.min(appearance.uiScale/100,el.clientWidth/base[0],el.clientHeight/base[1]));
-    const observer=new ResizeObserver(resize);observer.observe(el);resize();return()=>observer.disconnect();
-  },[appearance.uiScale,target]);
+    let disposed=false,raf=0;
+    const baseScale=()=>Math.min(appearance.uiScale/100,el.clientWidth/base[0],el.clientHeight/base[1]);
+    const measure=()=>{
+      cancelAnimationFrame(raf);raf=requestAnimationFrame(()=>{
+        if(disposed)return;
+        const fit=el.querySelector<HTMLElement>('.cg-fit-content');if(!fit)return;
+        let ratio=1;
+        for(const box of [fit,...el.querySelectorAll<HTMLElement>('.cg-page,.cg-settings-body,.cg-sidebar,.cg-original-editor')]){
+          if(box.clientHeight>0&&box.scrollHeight>box.clientHeight+2)ratio=Math.min(ratio,box.clientHeight/box.scrollHeight);
+          if(box.clientWidth>0&&box.scrollWidth>box.clientWidth+2)ratio=Math.min(ratio,box.clientWidth/box.scrollWidth);
+        }
+        if(ratio<.998)setFit(old=>Math.max(.2,old*ratio*.99));
+      });
+    };
+    const reset=()=>{setFit(baseScale());measure()};
+    const observer=new ResizeObserver(measure);observer.observe(el);
+    const content=el.firstElementChild;if(content)observer.observe(content);
+    const mutations=new MutationObserver(measure);mutations.observe(el,{childList:true,subtree:true});
+    el.addEventListener('click',reset);el.addEventListener('change',reset);el.addEventListener('toggle',reset,true);
+    window.addEventListener('resize',reset);reset();
+    return()=>{disposed=true;cancelAnimationFrame(raf);observer.disconnect();mutations.disconnect();el.removeEventListener('click',reset);el.removeEventListener('change',reset);el.removeEventListener('toggle',reset,true);window.removeEventListener('resize',reset)};
+  },[appearance.uiScale,appearance.fontSize,appearance.fontFamily,target]);
   const main = target === "main", mode = main ? appearance.mainMode : appearance.detailMode;
   const path = main ? appearance.wallMain : (appearance.wallDetail || appearance.wallMain);
   const src = path ? convertFileSrc(path) : "/alpine.svg";
@@ -253,7 +271,7 @@ export function CrystalWindow({ children, target = "main" }: {
     "--panel-opacity": Math.min(.94, Math.max(.45, appearance.opacity / 100)),
     "--crystal-blur": appearance.blur + "px",
     "--ui-scale": 1,
-    "--fit-scale": Math.max(.35,fit),
+    "--fit-scale": Math.max(.2,fit),
     "--font-family": appearance.fontFamily === "Inter" ? "Inter, Segoe UI, sans-serif" : appearance.fontFamily === "Arial" ? "Arial, sans-serif" : appearance.fontFamily === "Consolas" ? "Consolas, monospace" : "Segoe UI Variable, Segoe UI, sans-serif",
     "--font-size": Math.min(20,Math.max(10,appearance.fontSize))+"px"
   } as CSSProperties;
@@ -269,12 +287,7 @@ export function CrystalWindow({ children, target = "main" }: {
   </div>;
 }
 export function openWindow(label: string, url: string, width: number, height: number) {
-  void WebviewWindow.getByLabel(label).then(w => {
-    if (w) { void w.unminimize(); void w.show(); void w.setFocus(); return; }
-    new WebviewWindow(label, {
-      url, title: "Mister Hybrid Glass", width, height, minWidth: Math.min(540, width),
-      minHeight: Math.min(500, height), center: true, decorations: false, resizable: true,
-      transparent: true, shadow: false, backgroundColor: "#00000000"
-    });
-  }).catch(e => { window.alert("Couldn't open window: " + String(e)); });
+  void invoke("open_glass_window",{label,url,width,height}).catch(e=>{
+    window.dispatchEvent(new CustomEvent("glass-window-error",{detail:String(e)}));
+  });
 }

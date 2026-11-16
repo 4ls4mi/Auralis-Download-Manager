@@ -4,7 +4,7 @@
 // Frontend never accesses MDM's token or loopback socket directly.
 mod lifecycle;
 mod native_actions;
-use lifecycle::{pending_file_info, file_info_action, choose_download_path, window_preferences, glass_tool, choose_folder};
+use lifecycle::{pending_file_info, file_info_action, choose_download_path, window_preferences, glass_tool, choose_folder, open_glass_window};
 use native_actions::{drag_download, choose_move};
 use std::{
     fs,
@@ -507,7 +507,7 @@ fn main() {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            pending_file_info, file_info_action, choose_download_path, window_preferences, glass_tool, choose_folder, drag_download, choose_move,
+            pending_file_info, file_info_action, choose_download_path, window_preferences, glass_tool, choose_folder, open_glass_window, drag_download, choose_move,
             boot_engine, dashboard_snapshot, dashboard_visuals, download_action,
             add_download, select_wallpaper, queue_action, glass_settings, update_glass_setting,
             browser_integration, bulk_action, file_operation, add_torrent_file, quit_glass, open_upstream_releases

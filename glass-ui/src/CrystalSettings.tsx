@@ -1,3 +1,4 @@
+import CrystalAccounts from "./CrystalAccounts";
 import CrystalOriginalSettings from "./CrystalOriginalSettings";
 import { useEffect, useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
@@ -14,12 +15,12 @@ type EngineSettings = {
   category_dirs:[string,string][];net_adapter:string
 };
 type EngineKey=keyof EngineSettings;
-type Tab="General"|"Downloads"|"Connection"|"Browser Integration"|"Torrents"|"Scheduler"|"Appearance"|"Advanced";
+type Tab="General"|"Downloads"|"Connection"|"Browser Integration"|"Torrents"|"Scheduler"|"Accounts"|"Appearance"|"Advanced";
 const tabs:{name:Tab;icon:typeof Settings}[]=[
   {name:"General",icon:Settings},{name:"Downloads",icon:Download},
   {name:"Connection",icon:Network},{name:"Browser Integration",icon:Globe2},
   {name:"Torrents",icon:Activity},{name:"Scheduler",icon:Gauge},
-  {name:"Appearance",icon:Palette},{name:"Advanced",icon:SlidersHorizontal}
+  {name:"Accounts",icon:Globe2},{name:"Appearance",icon:Palette},{name:"Advanced",icon:SlidersHorizontal}
 ];
 export default function CrystalSettings(){
   const initial=new URLSearchParams(location.search).get("tab") as Tab|null;
@@ -65,7 +66,7 @@ export default function CrystalSettings(){
       <strong>{target==="main"?"Main MDM window background":"Download and other popup backgrounds"}</strong>
       <div className="cg-wall-choice">{(["desktop","wallpaper","solid"] as BackgroundMode[]).map(m=>
         <button key={m} className={`cg-btn ${current===m?"cg-btn-primary":""}`} onClick={()=>set(key,m)}>
-          {m==="desktop"?"See-through desktop":m==="wallpaper"?"Custom wallpaper":"Dark solid"}
+          {m==="desktop"?"See-through desktop":m==="wallpaper"?"Custom wallpaper":"Solid color"}
         </button>)}
       </div>
       <button className="cg-btn" onClick={async()=>{
@@ -96,6 +97,7 @@ export default function CrystalSettings(){
         {check("show_progress","Open a download progress window","A separate movable status window")}
       </>;
       case "Downloads":return <>
+        <button className="cg-btn" onClick={()=>openWindow("tool-category","/?tool=category",680,520)}>Edit categories</button>
         <p>MDM's original directories are preserved and the Rust backend continues saving downloads there.</p>
         {(cfg?.category_dirs??[]).map(([category,path])=>
           <div className="cg-queue-row" key={category}><span><Folder size={14} style={{marginRight:9}}/>{category}</span><span className="cg-muted" title={path}>{path}</span></div>)}
@@ -143,6 +145,7 @@ export default function CrystalSettings(){
         </div>)}
         {!queues.length&&<p>No queues reported by the engine.</p>}
       </>;
+      case "Accounts":return <CrystalAccounts/>;
       case "Appearance":return <>
         <nav className="cg-appearance-tabs" aria-label="Appearance sections">{["Theme","Backgrounds","Glass & scaling","Typography"].map(name=><button key={name} className={appearanceTab===name?"selected":""} onClick={()=>setAppearanceTab(name)}>{name}</button>)}</nav>
         {appearanceTab==="Theme"&&<>
@@ -217,8 +220,8 @@ export default function CrystalSettings(){
       </div>
       {error&&<p className="cg-error">{error}</p>}
       {notice&&<p className="cg-success"><CheckCircle2 size={14}/> {notice}</p>}
-      {tab!=="Appearance"&&<nav className="cg-appearance-tabs"><button className={settingsPanel==="Main options"?"selected":""} onClick={()=>setSettingsPanel("Main options")}>Main options</button><button className={settingsPanel==="More options"?"selected":""} onClick={()=>setSettingsPanel("More options")}>More options</button></nav>}
-      <div>{tab==="Appearance"||settingsPanel==="Main options"?body():<CrystalOriginalSettings section={tab}/>}</div>
+      {tab!=="Appearance"&&tab!=="Accounts"&&<nav className="cg-appearance-tabs"><button className={settingsPanel==="Main options"?"selected":""} onClick={()=>setSettingsPanel("Main options")}>Main options</button><button className={settingsPanel==="More options"?"selected":""} onClick={()=>setSettingsPanel("More options")}>More options</button></nav>}
+      <div>{tab==="Appearance"||tab==="Accounts"||settingsPanel==="Main options"?body():<CrystalOriginalSettings section={tab}/>}</div>
     </div></div>
     <footer className="cg-bottom-actions" style={{padding:"9px 18px"}}><span className="cg-muted" style={{marginRight:"auto",fontSize:10}}>Windows x64 • Changes to engine settings are saved by MDM</span>
       <button className="cg-btn cg-btn-primary" onClick={()=>void import("@tauri-apps/api/window").then(m=>m.getCurrentWindow().close())}>Done</button>

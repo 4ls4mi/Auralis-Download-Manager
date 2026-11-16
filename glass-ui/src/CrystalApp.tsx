@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Activity, Archive, CheckCircle2, Clock3, Download as DownloadIcon, File,
   FileArchive, Film, Folder, FolderOpen,
@@ -47,8 +47,22 @@ export default function CrystalApp(){
   const [deletion,setDeletion]=useState<DeleteRequest|null>(null);
   const [confirmDelete,setConfirmDelete]=useState(true);
   const [page,setPage]=useState(0),[capacity,setCapacity]=useState(8);
+  const contextRef=useRef<HTMLDivElement>(null);
   const viewport=useRef<HTMLDivElement|null>(null);
   useEffect(()=>{const el=viewport.current;if(!el)return;const observer=new ResizeObserver(()=>setCapacity(Math.max(1,Math.floor((el.clientHeight-38)/82))));observer.observe(el);return()=>observer.disconnect()},[]);
+  useLayoutEffect(()=>{
+    const menu=contextRef.current;if(!menu)return;
+    const fit=menu.closest<HTMLElement>('.cg-fit-content');if(!fit)return;
+    const place=()=>{
+      const box=menu.getBoundingClientRect(),host=fit.getBoundingClientRect(),scale=host.width/fit.offsetWidth;
+      const maxHeight=(host.height-16)/scale;
+      menu.style.zoom=String(Math.min(1,maxHeight/menu.scrollHeight));
+      const resized=menu.getBoundingClientRect();
+      menu.style.left=Math.max(8,Math.min(context?.x??8,(host.width-resized.width-8)/scale))+'px';
+      menu.style.top=Math.max(8,Math.min(context?.y??8,(host.height-resized.height-8)/scale))+'px';
+    };
+    place();menu.addEventListener('toggle',place,true);return()=>menu.removeEventListener('toggle',place,true);
+  },[context]);
   const pending=useRef(false),searchRef=useRef<HTMLInputElement|null>(null);
   const refresh=useCallback(async()=>{
     if(pending.current)return;
@@ -130,6 +144,7 @@ export default function CrystalApp(){
     if(action.startsWith("queue-add:")&&item){try{await invoke("file_operation",{id:item.id,operation:"queue-add",value:action.slice(10)});await refresh()}catch(e){setError(String(e))}return}
     if(action==="queue-remove"&&item){try{await invoke("file_operation",{id:item.id,operation:"queue-remove",value:null});await refresh()}catch(e){setError(String(e))}return}
     if(action==="double-open"||action==="double-properties"){try{const on=action==="double-open";await invoke("update_glass_setting",{key:"double_click_open",value:String(on)});setDoubleClickOpen(on)}catch(e){setError(String(e))}return}
+    if(action==="batch"||action==="grabber")return openWindow("tool-"+action,"/?tool="+action,action==="batch"?760:900,680);
     if(action==="add")return add();
     if(action==="torrent")return add(true);
     if(action==="settings")return settings();
@@ -178,8 +193,8 @@ export default function CrystalApp(){
       case "Tasks":return [
         {label:"Add new download…",action:"add",shortcut:"Ctrl+N"},
         {label:"Open torrent file / magnet…",action:"torrent",shortcut:"Ctrl+O"},
-        {label:"Batch download…",action:"batch",disabled:true},
-        {label:"Link grabber…",action:"grabber",disabled:true},
+        {label:"Batch download…",action:"batch"},
+        {label:"Link grabber…",action:"grabber"},
         {label:"Browser integration",action:"browser"},
         {label:"Hide in system tray",action:"hide"},
         {label:"Exit",action:"exit"}];
@@ -308,7 +323,7 @@ export default function CrystalApp(){
             onClick={()=>{setChosen(d.id);setContext(null)}} onDoubleClick={()=>rowDouble(d)}
             onContextMenu={e=>{
               e.preventDefault();setChosen(d.id);setOpenMenu(null);
-              setContext({id:d.id,x:Math.min(e.clientX,window.innerWidth-247),y:Math.min(e.clientY,window.innerHeight-430)});
+              const fit=e.currentTarget.closest<HTMLElement>(".cg-fit-content");if(fit){const box=fit.getBoundingClientRect(),scale=box.width/fit.offsetWidth;setContext({id:d.id,x:(e.clientX-box.left)/scale,y:(e.clientY-box.top)/scale});}
             }}>
             <span className="cg-file"><FileSymbol name={d.file}/><span className="cg-file-info">
               <strong title={d.file}>{d.file}</strong><small>{units(d.downloaded)} / {units(d.size)}</small></span></span>
@@ -336,7 +351,7 @@ export default function CrystalApp(){
       <SpeedGraph values={history}/>
       <span className="cg-footer-message" title={error||message}>{error||message}</span>
     </footer>
-    {context&&picked&&picked.id===context.id&&<div className="cg-context" style={{left:Math.max(10,context.x),top:Math.max(10,context.y)}}
+    {context&&picked&&picked.id===context.id&&<div ref={contextRef} className="cg-context" style={{left:Math.max(10,context.x),top:Math.max(10,context.y)}}
       onContextMenu={e=>e.preventDefault()}>{contextItems.map(x=>x.children?<details key={x.label}><summary>{x.label}<ChevronDown size={13}/></summary><div className="cg-context-submenu">{x.children.map(c=><button key={c.label} onClick={()=>void execute(c.action,picked)}>{c.label}</button>)}</div></details>:<button key={x.label} disabled={x.disabled} onClick={()=>void execute(x.action,picked)}><span>{x.label}</span>{x.shortcut&&<kbd>{x.shortcut}</kbd>}</button>)}</div>}
     {deletion&&<DeleteDialog request={deletion} busy={busy} onChange={setDeletion} onCancel={()=>setDeletion(null)} onConfirm={()=>void remove(deletion)}/>}
   </div></CrystalWindow>;

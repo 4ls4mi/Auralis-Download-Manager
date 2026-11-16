@@ -95,6 +95,27 @@ try {
     $pending = Invoke-GlassIpc @{ query = "glass-file-info" }
     if ($pending.info) { throw "Fresh isolated backend unexpectedly has a pending capture" }
     Write-Host "PASS: completion setting and authenticated original FileInfo queue"
+    $catalog = Invoke-GlassIpc @{ query = 'glass-original-settings' }
+    if ($catalog.fields.Count -lt 50) { throw 'Original preference catalog is incomplete' }
+    $proxySecret = 'local-fixture-proxy-secret'
+    $set = Invoke-GlassIpc @{ action = 'glass-original-setting'; queue = (@{ key = 'proxy_pass'; value = $proxySecret } | ConvertTo-Json -Compress) }
+    if ($set.ok -ne $true) { throw 'Proxy secret update failed' }
+    $safe = Invoke-GlassIpc @{ query = 'glass-original-settings' }
+    if (($safe | ConvertTo-Json -Depth 15).Contains($proxySecret)) { throw 'Preference query exposed a stored password' }
+    $set = Invoke-GlassIpc @{ action = 'glass-original-setting'; queue = (@{ key = 'proxy_pass'; value = ''; clear = $true } | ConvertTo-Json -Compress) }
+    if ($set.ok -ne $true) { throw 'Proxy secret clear failed' }
+    $bad = Invoke-GlassIpc @{ action = 'glass-original-setting'; queue = (@{ key = 'proxy_mode'; value = 99 } | ConvertTo-Json -Compress) }
+    if (-not $bad.error) { throw 'Invalid original proxy mode accepted' }
+    Write-Host 'PASS: typed original preferences validate changes and never return stored passwords'
+    $batch = Invoke-GlassIpc @{ action = 'glass-batch'; queue = (@{ address = 'https://example.com/file*.zip'; from = '1'; to = '8'; width = '2'; commit = $false } | ConvertTo-Json -Compress) }
+    if ($batch.count -ne 8 -or $batch.preview[0] -ne 'https://example.com/file01.zip') { throw 'Original batch parser did not expand a numbered pattern' }
+    $queues = Invoke-GlassIpc @{ query = 'glass-queues' }
+    $queue = $queues.queues[0]
+    $schedule = Invoke-GlassIpc @{ action = 'glass-schedule'; queue = (@{ name = $queue.name; schedule = $queue.schedule; files_at_once = 3 } | ConvertTo-Json -Depth 15 -Compress) }
+    if ($schedule.ok -ne $true) { throw 'Original schedule update failed' }
+    $queues = Invoke-GlassIpc @{ query = 'glass-queues' }
+    if ($queues.queues[0].files_at_once -ne 3) { throw 'Original queue parallelism did not update' }
+    Write-Host 'PASS: original batch pattern parser and queue schedule roundtrip'
     Write-Host "Runtime smoke test PASSED"
 }
 finally {

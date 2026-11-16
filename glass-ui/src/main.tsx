@@ -1,5 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
+import { CrystalBatch, CrystalGrabber } from "./CrystalImports";
 import CrystalApp from "./CrystalApp";
 import CrystalSettings from "./CrystalSettings";
 import CrystalProgress from "./CrystalProgress";
@@ -22,6 +23,8 @@ function Main() {
   const url = query.get("add") === "url";
   if(query.has("schedule")) return <CrystalScheduler/>;
   if(query.has("power")) return <CrystalPower id={Number(query.get("power"))}/>;
+  if(query.get("tool")==="batch") return <CrystalBatch/>;
+  if(query.get("tool")==="grabber") return <CrystalGrabber/>;
   if(query.has("tool")) return <CrystalTool kind={query.get("tool")??""} id={Number(query.get("id"))||0}/>;
   if(query.has("request")) return <CrystalFileInfo id={Number(query.get("request"))}/>;
   if(query.has("complete")) return <CrystalComplete id={Number(query.get("complete"))}/>;

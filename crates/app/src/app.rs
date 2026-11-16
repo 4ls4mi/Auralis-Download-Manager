@@ -861,6 +861,8 @@ pub struct App {
     add_url: Option<AddUrl>,
     file_info: Option<FileInfo>,
     glass_info_serial: u64,
+    glass_import_serial: u64,
+    glass_account: Option<(mdm_debrid::ServiceKind,crate::debrid::SignIn)>,
     glass_checks: glass::CheckSlots,
     glass_exit_requested: bool,
     glass_power_serial: u64,
@@ -1625,6 +1627,8 @@ impl App {
             update_checked_this_run: None,
             file_info: None,
             glass_info_serial: 0,
+            glass_import_serial: 0,
+            glass_account: None,
             glass_checks: Default::default(),
             glass_exit_requested: false,
             glass_power_serial: 0,
@@ -2893,6 +2897,11 @@ impl App {
         // Without a window (#157): an address, magnet or .torrent is added as a paired device's
         // is (no Download File Info, no Add torrent); nothing else opens anything.
         if self.headless {
+            if self.glass_owned() && !cmd.remote && (!cmd.links.is_empty()||cmd.links_part.is_some()) {
+                let cmd=if cmd.links_part.is_some(){match self.link_parts.add(cmd,Instant::now()){crate::linkparts::Placed::Whole(c)=>*c,_=>return}}else{cmd};
+                let found=cmd.links.iter().map(|url|crate::transfer::Imported{url:url.clone(),referer:cmd.referer.clone(),cookies:page_data_for(url,cmd.referer.as_deref(),cmd.cookies.as_deref()),user_agent:cmd.user_agent.clone(),private:cmd.private,..Default::default()}).collect();
+                self.show_import(found,crate::i18n::t("Links from the browser").to_owned());return;
+            }
             if self.glass_owned() && !cmd.remote && !cmd.silent
                 && let Some(url) = cmd.url.as_deref().and_then(|u| url::Url::parse(u).ok()).filter(mdm_engine::supported)
             {
@@ -9879,6 +9888,7 @@ impl App {
     /// the list already go unticked under "Already in the list" (imported twice, they were
     /// doubled).
     fn show_import(&mut self, found: Vec<crate::transfer::Imported>, source: String) {
+        self.glass_import_serial=self.glass_import_serial.wrapping_add(1);
         let known: std::collections::HashSet<String> =
             self.items.iter().map(|i| i.url.to_string()).collect();
         let (downloads, s) = (&self.downloads, &self.settings);
@@ -11402,6 +11412,7 @@ impl App {
         self.poll(ctx);
         crate::crash::step(crate::crash::Step::RemoteTorrents);
         self.poll_remote_torrents();
+        if self.glass_owned(){self.grabber_checks(ctx);}
         // What failed in any window, told here (dialogs::tell).
         if let Some((title, text)) = dialogs::told().pop() {
             self.notice = Some((title, text));

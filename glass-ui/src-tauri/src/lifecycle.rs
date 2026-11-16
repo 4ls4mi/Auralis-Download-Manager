@@ -33,6 +33,7 @@ pub fn start(app: AppHandle) {
         let mut previous: Option<HashMap<u64, String>> = None;
         let mut last_info = 0;
         let mut last_power = 0;
+        let mut last_import = 0;
         loop {
             thread::sleep(Duration::from_millis(650));
             if !current_backend().is_ok_and(|b|b.headless&&b.glass) {continue;}
@@ -62,6 +63,9 @@ pub fn start(app: AppHandle) {
             let exit=power.as_ref().is_some_and(|p|p["exit"]==true);
             let power_id=power.as_ref().filter(|p|p["pending"].is_object()).and_then(|p|p["id"].as_u64()).filter(|id|*id!=last_power);
             if let Some(id)=power_id {last_power=id;}
+            let imported=send_ipc(&mdm_ipc::Command{query:Some("glass-grabber-status".into()),..Default::default()}).ok().and_then(|s|serde_json::from_str::<serde_json::Value>(&s).ok());
+            let import=imported.as_ref().filter(|g|g["pending"]==true).and_then(|g|g["version"].as_u64()).filter(|v|*v!=last_import);
+            if let Some(v)=import{last_import=v;}
             let owner = app.clone();
             let _ = app.run_on_main_thread(move || {
                 for (id, status) in transitions {
@@ -73,6 +77,7 @@ pub fn start(app: AppHandle) {
                     }
                 }
                 if exit {let _=mdm_ipc::send(&mdm_ipc::Command{exit:true,..Default::default()});owner.exit(0);return;}
+                if import.is_some(){let _=open(&owner,"tool-grabber","tool=grabber",900.0,680.0);}
                 if let Some(id)=power_id {let _=open(&owner,&format!("power-{id}"),&format!("power={id}"),590.0,330.0);}
                 if let Some(id) = request { let _ = open(&owner,&format!("info-{id}"),&format!("request={id}"),780.0,560.0); }
             });
@@ -115,10 +120,11 @@ pub async fn choose_download_path(current:String) -> ApiResult<Option<String>> {
 
 #[tauri::command]
 pub async fn glass_tool(action:String,payload:Option<serde_json::Value>) -> ApiResult<serde_json::Value> {
-    if !matches!(action.as_str(),"category"|"queues"|"schedule"|"power"|"power-state"|"original-settings"|"original-setting") {return Err("Unsupported tool".into());}
+    if !matches!(action.as_str(),"category"|"queues"|"schedule"|"power"|"power-state"|"original-settings"|"original-setting"|"batch"|"grabber"|"grabber-state"|"categories"|"accounts"|"account") {return Err("Unsupported tool".into());}
     tauri::async_runtime::spawn_blocking(move||{
         let mut cmd=mdm_ipc::Command::default();
         if action=="queues" {cmd.query=Some("glass-queues".into());}
+        else if action=="grabber-state"||action=="categories"||action=="accounts"{cmd.query=Some(format!("glass-{action}"));}
         else if action=="power-state" {cmd.query=Some("glass-power".into());}
         else if action=="original-settings" {cmd.query=Some("glass-original-settings".into());}
         else {cmd.action=Some(format!("glass-{action}"));cmd.queue=payload.map(|p|p.to_string());}
@@ -132,4 +138,10 @@ pub async fn glass_tool(action:String,payload:Option<serde_json::Value>) -> ApiR
 #[tauri::command]
 pub async fn choose_folder()->ApiResult<Option<String>> {
     tauri::async_runtime::spawn_blocking(||Ok(rfd::FileDialog::new().set_title("Choose folder").pick_folder().map(|p|p.to_string_lossy().into_owned()))).await.map_err(|e|e.to_string())?
+}
+
+#[tauri::command]
+pub fn open_glass_window(app:AppHandle,label:String,url:String,width:f64,height:f64)->ApiResult<()> {
+    if label.is_empty()||label.len()>100||!label.chars().all(|c|c.is_ascii_alphanumeric()||c=='-'||c=='_')||!url.starts_with("/?")||url.len()>1024||url.contains(['\\',':'])||!width.is_finite()||!height.is_finite(){return Err("Invalid download window".into());}
+    open(&app,&label,&url[2..],width.clamp(360.0,1800.0),height.clamp(280.0,1200.0))
 }

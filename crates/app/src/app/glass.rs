@@ -1,6 +1,8 @@
 //! Authenticated, local-only adapter to the original MDM actions and file-info queue.
 //! Browser cookies/credentials remain in FileInfo.context and are never sent to a WebView.
 mod settings;
+mod tools;
+mod accounts;
 use super::*;
 use serde_json::{Value, json};
 
@@ -21,6 +23,8 @@ impl App {
     }
 
     pub(super) fn glass_answer(&mut self, cmd: &ipc::Command) -> Option<String> {
+        if let Some(answer)=self.glass_accounts(cmd){return Some(answer);}
+        if let Some(answer)=self.glass_tools(cmd){return Some(answer);}
         if cmd.query.as_deref()==Some("glass-original-settings"){return Some(self.glass_original_settings().to_string());}
         if cmd.action.as_deref()==Some("glass-original-setting"){
             let payload=serde_json::from_str(cmd.queue.as_deref().unwrap_or("")).unwrap_or(Value::Null);
@@ -59,20 +63,6 @@ impl App {
         }
         if cmd.query.as_deref() == Some("glass-queues") {
             return Some(json!({"queues":self.queues}).to_string());
-        }
-        if cmd.action.as_deref() == Some("glass-category") {
-            let Ok(data)=serde_json::from_str::<Value>(cmd.queue.as_deref().unwrap_or("")) else {return Some(json!({"error":"Invalid category"}).to_string());};
-            let name=data["name"].as_str().unwrap_or("").trim();
-            if name.is_empty()||name.len()>120||self.settings.custom_categories.iter().any(|c|c.name.eq_ignore_ascii_case(name)) {
-                return Some(json!({"error":"Choose a unique category name"}).to_string());
-            }
-            let id=self.settings.custom_categories.iter().map(|c|c.id).max().unwrap_or(0)+1;
-            let category=crate::model::CustomCategory {id,name:name.into(),types:data["types"].as_str().unwrap_or("").chars().take(2048).collect(),folder:data["folder"].as_str().filter(|s|!s.is_empty()).map(str::to_owned)};
-            self.settings.custom_categories.push(category);
-            crate::model::set_custom(&self.settings.custom_categories);
-            if let Some(fi)=self.file_info.as_mut(){fi.set_category(Category::Custom(id));}
-            self.dirty=true;
-            return Some(json!({"ok":true}).to_string());
         }
         let action = cmd.action.as_deref()?;
         if action == "glass-file-info" {
