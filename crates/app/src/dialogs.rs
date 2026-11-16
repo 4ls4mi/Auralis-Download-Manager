@@ -2772,6 +2772,11 @@ impl TurnOffCountdown {
         }
     }
 
+    pub(crate) fn glass_view(&self)->serde_json::Value {
+        let left=self.deadline.saturating_duration_since(std::time::Instant::now());
+        serde_json::json!({"mode":self.mode,"force":self.force,"seconds":left.as_secs()+u64::from(left.subsec_millis()>0)})
+    }
+
     /// `Done` when the time is up or "Turn off now" was pressed; `Closed` on Cancel.
     pub fn show(&mut self, ctx: &egui::Context) -> Outcome<()> {
         use crate::queue::TurnOff;

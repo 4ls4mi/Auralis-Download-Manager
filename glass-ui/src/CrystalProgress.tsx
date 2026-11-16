@@ -1,3 +1,4 @@
+import CrystalCompletionOptions from './CrystalCompletionOptions';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useEffect, useState } from 'react';
@@ -11,14 +12,14 @@ const flag=(code:string|null|undefined)=>code&&/^[A-Z]{2}$/.test(code)?String.fr
 export default function CrystalProgress({id}:{id:number}){
  const [item,setItem]=useState<Download|null>(null),[visual,setVisual]=useState<DownloadVisual|null>(null),[tab,setTab]=useState<Tab>('Download status');
  const [values,setValues]=useState<number[]>([]),[error,setError]=useState(''),[busy,setBusy]=useState(false);
- const [limit,setLimit]=useState<Limit|null>(null),[limited,setLimited]=useState(false),[kb,setKb]=useState('512'),[showComplete,setShowComplete]=useState(false),[loaded,setLoaded]=useState(false);
+ const [limit,setLimit]=useState<Limit|null>(null),[limited,setLimited]=useState(false),[kb,setKb]=useState('512');
  const [connectionPage,setConnectionPage]=useState(0);
  useEffect(()=>{
   let active=true,running=false;
   const load=async()=>{if(running)return;running=true;try{const [data,telemetry]=await Promise.all([invoke<Dashboard>('dashboard_snapshot'),invoke<VisualDashboard>('dashboard_visuals')]);if(!active)return;const file=data.downloads.find(d=>d.id===id)??null;setItem(file);setVisual(telemetry.downloads.find(d=>d.id===id)??null);if(file)setValues(v=>[...v.slice(-55),file.speed]);}catch(e){if(active)setError(String(e))}finally{running=false}};
   void load();const timer=setInterval(()=>void load(),1200);
   void invoke<Limit>('file_operation',{id,operation:'details',value:null}).then(l=>{if(active){setLimit(l);setLimited(l.own_limit_kb!=null);if(l.own_limit_kb!=null)setKb(String(l.own_limit_kb))}}).catch(e=>{if(active)setError(String(e))});
-  void invoke<{show_complete:boolean}>('glass_settings').then(c=>{if(active){setShowComplete(c.show_complete);setLoaded(true)}}).catch(e=>{if(active)setError(String(e))});
+
   return()=>{active=false;clearInterval(timer)};
  },[id]);
  const run=async(action:string)=>{setBusy(true);setError('');try{await invoke('download_action',{action,ids:[id]});if(action==='pause'&&item?.status==='Downloading')setItem({...item,status:'Stopped',speed:0});}catch(e){setError(String(e))}finally{setBusy(false)}};
@@ -47,9 +48,7 @@ export default function CrystalProgress({id}:{id:number}){
     </section>
     <section className="cg-glass cg-progress-section cg-progress-speed"><div className="cg-section-title"><h3>Transfer speed</h3><small>{rate(item.speed)} · last {Math.round(values.length*1.2)} sec</small></div><div className="cg-speed-axis"><span>{rate(Math.max(0,...values))}</span><span>0 B/s</span></div><SpeedGraph values={values}/></section>
     {item.error&&<p className="cg-error">{item.error}</p>}
-   </>:tab==='Speed Limiter'?<section className="cg-glass cg-progress-section"><h3>Speed Limiter</h3><label className="cg-toggle"><span><strong>Use Speed Limiter</strong><small>Remember the limit after pause and resume</small></span><input type="checkbox" checked={limited} disabled={!limit||busy} onChange={e=>setLimited(e.target.checked)}/></label><label className="cg-field">Maximum speed (KB/sec)<input type="number" min="1" value={kb} disabled={!limited||busy} onChange={e=>setKb(e.target.value)}/></label><button className="cg-btn cg-btn-primary" disabled={!limit||busy} onClick={()=>void save()}><Save size={16}/>Apply limit</button></section>:<section className="cg-glass cg-progress-section"><h3>Options on completion</h3><label className="cg-toggle"><span><strong>Show download complete dialog</strong><small>Applies to all downloads</small></span><input type="checkbox" checked={showComplete} disabled={!loaded||busy} onChange={async e=>{const value=e.target.checked;setBusy(true);setError('');try{await invoke('update_glass_setting',{key:'show_complete',value:String(value)});setShowComplete(value)}catch(e){setError(String(e))}finally{setBusy(false)}}}/></label>
-    <p className="cg-muted">Advanced completion actions are configured in the Scheduler.</p>
-   </section>}
+   </>:tab==='Speed Limiter'?<section className="cg-glass cg-progress-section"><h3>Speed Limiter</h3><label className="cg-toggle"><span><strong>Use Speed Limiter</strong><small>Remember the limit after pause and resume</small></span><input type="checkbox" checked={limited} disabled={!limit||busy} onChange={e=>setLimited(e.target.checked)}/></label><label className="cg-field">Maximum speed (KB/sec)<input type="number" min="1" value={kb} disabled={!limited||busy} onChange={e=>setKb(e.target.value)}/></label><button className="cg-btn cg-btn-primary" disabled={!limit||busy} onClick={()=>void save()}><Save size={16}/>Apply limit</button></section>:<CrystalCompletionOptions id={id}/>}
    {error&&<p className="cg-error" role="alert">{error}</p>}
    <div className="cg-bottom-actions"><button className="cg-btn cg-neon-violet" onClick={()=>openWindow(`properties-${id}`,`/?properties=${id}`,760,600)}><FileText size={15}/>Properties</button><span className="cg-action-space"/>{item?.status==='Downloading'?<button className="cg-btn cg-neon-amber" disabled={busy} onClick={()=>void run('pause')}><Pause size={16}/>Pause</button>:item&&item.status!=='Complete'?<button className="cg-btn cg-neon-mint" disabled={busy} onClick={()=>void run('start')}><Play size={16}/>Resume</button>:null}<button className="cg-btn cg-btn-danger" disabled={busy} onClick={async()=>{if(item?.status==='Downloading')await run('pause');await getCurrentWindow().close()}}>Cancel</button></div>
   </main></CrystalWindow>;

@@ -11,7 +11,8 @@
     "info-*",
     "complete-*",
     "properties-*",
-    "tool-*"
+    "tool-*",
+    "power-*"
   ],
   "permissions": [
     "core:default",

@@ -1,0 +1,37 @@
+import { invoke } from '@tauri-apps/api/core';
+import { useEffect, useState } from 'react';
+import { Plus, Save, Trash2 } from 'lucide-react';
+type Cell=string|number|boolean;
+type Column={label:string;kind:string;options?:{label:string;value:string}[]};
+type Field={key:string;label:string;section:string;kind:string;value:unknown;options?:string[];columns?:Column[];saved?:boolean;fixed?:boolean};
+export default function CrystalOriginalSettings({section}:{section:string}){
+ const [fields,setFields]=useState<Field[]>([]),[key,setKey]=useState(''),[error,setError]=useState(''),[revision,setRevision]=useState(0);
+ const load=async()=>{const data=await invoke<{fields:Field[]}>('glass_tool',{action:'original-settings',payload:null});setFields(data.fields.filter(f=>f.section===section));setRevision(n=>n+1)};
+ useEffect(()=>{setKey('');void load().catch(e=>setError(String(e)))},[section]);
+ const field=fields.find(f=>f.key===key)??fields[0];
+ return <div className="cg-original-settings"><label className="cg-field">Preference<select value={field?.key??''} onChange={e=>setKey(e.target.value)}>{fields.map(f=><option key={f.key} value={f.key}>{f.label}</option>)}</select></label>{field&&<Editor key={field.key+'-'+revision} field={field} onSaved={load}/>} {error&&<p className="cg-error">{error}</p>}</div>;
+}
+function Editor({field,onSaved}:{field:Field;onSaved:()=>Promise<void>}){
+ const [value,setValue]=useState<unknown>(structuredClone(field.value)),[clear,setClear]=useState(false),[clearPasswords,setClearPasswords]=useState<number[]>([]);
+ const [busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[page,setPage]=useState(0);
+ const columns=field.kind==='lines'?[{label:'Address',kind:'text'}]:field.columns??[];
+ const rows:Cell[][]=field.kind==='lines'?(value as string[]).map(v=>[v]):field.kind==='table'?(value as Cell[][]):[];
+ const count=Math.max(1,Math.ceil(rows.length/4)),safePage=Math.min(page,count-1);
+ const setRows=(rows:Cell[][])=>setValue(field.kind==='lines'?rows.map(r=>String(r[0])):rows);
+ const save=async()=>{setBusy(true);setError('');try{await invoke('glass_tool',{action:'original-setting',payload:{key:field.key,value,clear,clear_passwords:clearPasswords}});setNotice('Saved.');await onSaved()}catch(e){setError(String(e))}finally{setBusy(false)}};
+ return <section className="cg-glass cg-progress-section cg-original-editor"><h3>{field.label}</h3>
+  {field.kind==='boolean'?<label className="cg-toggle"><span>Enabled</span><input type="checkbox" checked={Boolean(value)} onChange={e=>setValue(e.target.checked)}/></label>:field.kind==='select'?<label className="cg-field">Choose an option<select value={Number(value)} onChange={e=>setValue(Number(e.target.value))}>{field.options?.map((name,i)=><option key={i} value={i}>{name}</option>)}</select></label>:field.kind==='regional'?<Regional value={value as Region} onChange={setValue}/>:field.kind==='table'||field.kind==='lines'?<>
+   <div className="cg-original-table">{rows.slice(safePage*4,safePage*4+4).map((row,i)=>{const index=safePage*4+i;return <div className="cg-original-row" key={index}>{columns.map((column,c)=>
+    <label className="cg-field" key={c}>{column.label}{column.kind==='boolean'?<input type="checkbox" checked={Boolean(row[c])} onChange={e=>{const next=structuredClone(rows);next[index][c]=e.target.checked;setRows(next)}}/>:column.options?<select value={String(row[c])} onChange={e=>{const next=structuredClone(rows);next[index][c]=e.target.value;setRows(next)}}><option value="">Choose…</option>{column.options.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select>:<input type={column.kind==='password'?'password':column.kind==='number'?'number':'text'} autoComplete={column.kind==='password'?'new-password':'off'} value={String(row[c]??'')} placeholder={column.kind==='password'?'Leave blank to keep saved password':undefined} onChange={e=>{const next=structuredClone(rows);next[index][c]=column.kind==='number'?Number(e.target.value):e.target.value;setRows(next)}}/>}
+     {column.kind==='password'&&<span className="cg-clear-secret"><input type="checkbox" checked={clearPasswords.includes(index)} onChange={e=>setClearPasswords(old=>e.target.checked?[...old,index]:old.filter(n=>n!==index))}/>Clear saved password</span>}
+    </label>)}{!field.fixed&&<button className="cg-btn cg-btn-danger" title="Remove entry" onClick={()=>{setRows(rows.filter((_,n)=>n!==index));setClearPasswords([])}}><Trash2 size={14}/></button>}</div>})}</div>
+   <div className="cg-pagination">{!field.fixed&&<button onClick={()=>{setRows([...rows,columns.map(c=>c.kind==='boolean'?false:c.kind==='number'?1:'')]);setPage(Math.floor(rows.length/4))}}><Plus size={13}/>Add entry</button>}<span className="cg-action-space"/><button disabled={!safePage} onClick={()=>setPage(n=>n-1)}>Previous</button><span>{safePage+1} / {count}</span><button disabled={safePage>=count-1} onClick={()=>setPage(n=>n+1)}>Next</button></div>
+  </>:<label className="cg-field">{field.kind==='password'?(field.saved?'A password is saved. Leave blank to keep it.':'Password'):'Value'}<input type={field.kind==='password'?'password':field.kind==='number'?'number':'text'} autoComplete={field.kind==='password'?'new-password':'off'} min={field.kind==='number'?0:undefined} value={String(value??'')} onChange={e=>setValue(field.kind==='number'?Number(e.target.value):e.target.value)}/></label>}
+  {field.kind==='password'&&<label className="cg-clear-secret"><input type="checkbox" checked={clear} onChange={e=>setClear(e.target.checked)}/>Clear saved password</label>}
+  {error&&<p className="cg-error">{error}</p>}{notice&&<p className="cg-success">{notice}</p>}<div className="cg-bottom-actions"><span className="cg-action-space"/><button className="cg-btn cg-btn-primary" disabled={busy} onClick={()=>void save()}><Save size={15}/>Save preference</button></div>
+ </section>;
+}
+type Region={custom:boolean;order:string;clock24:boolean;week_start:number};
+function Regional({value,onChange}:{value:Region;onChange:(v:Region)=>void}){
+ return <div className="cg-form-grid"><label className="cg-toggle"><span>Use custom date and time format</span><input type="checkbox" checked={value.custom} onChange={e=>onChange({...value,custom:e.target.checked})}/></label><label className="cg-field">Date order<select value={value.order} onChange={e=>onChange({...value,order:e.target.value})}><option value="dmy">Day / Month / Year</option><option value="mdy">Month / Day / Year</option><option value="ymd">Year / Month / Day</option></select></label><label className="cg-toggle"><span>24-hour clock</span><input type="checkbox" checked={value.clock24} onChange={e=>onChange({...value,clock24:e.target.checked})}/></label><label className="cg-field">First day of week<select value={value.week_start} onChange={e=>onChange({...value,week_start:Number(e.target.value)})}>{['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map((day,i)=><option key={day} value={i}>{day}</option>)}</select></label></div>;
+}

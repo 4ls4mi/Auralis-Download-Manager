@@ -1,5 +1,6 @@
 //! Authenticated, local-only adapter to the original MDM actions and file-info queue.
 //! Browser cookies/credentials remain in FileInfo.context and are never sent to a WebView.
+mod settings;
 use super::*;
 use serde_json::{Value, json};
 
@@ -20,11 +21,41 @@ impl App {
     }
 
     pub(super) fn glass_answer(&mut self, cmd: &ipc::Command) -> Option<String> {
+        if cmd.query.as_deref()==Some("glass-original-settings"){return Some(self.glass_original_settings().to_string());}
+        if cmd.action.as_deref()==Some("glass-original-setting"){
+            let payload=serde_json::from_str(cmd.queue.as_deref().unwrap_or("")).unwrap_or(Value::Null);
+            return Some(self.glass_update_original(payload).to_string());
+        }
         if cmd.query.as_deref() == Some("glass-file-info") {
             self.glass_next_info();
             let serial = self.glass_info_serial;
             return Some(json!({"id": serial, "info": self.file_info.as_mut().map(FileInfo::glass_view),
                 "categories":Category::all().into_iter().map(|c|json!({"key":c.key(),"name":c.label()})).collect::<Vec<_>>(), "waiting": self.file_info_waiting.len()}).to_string());
+        }
+        if cmd.query.as_deref()==Some("glass-power") {
+            return Some(json!({"id":self.glass_power_serial,"pending":self.turn_off.as_ref().map(dialogs::TurnOffCountdown::glass_view),"exit":self.glass_exit_requested}).to_string());
+        }
+        if cmd.action.as_deref()==Some("glass-power") {
+            let payload:Value=serde_json::from_str(cmd.queue.as_deref().unwrap_or("")).unwrap_or(Value::Null);
+            if payload["id"].as_u64()!=Some(self.glass_power_serial) {return Some(json!({"error":"This completion action is no longer pending"}).to_string());}
+            let Some(countdown)=self.turn_off.take() else {return Some(json!({"ok":true}).to_string());};
+            if payload["action"].as_str()==Some("execute"){countdown.execute();}
+            return Some(json!({"ok":true}).to_string());
+        }
+        if cmd.action.as_deref()==Some("glass-schedule") {
+            let payload:Value=serde_json::from_str(cmd.queue.as_deref().unwrap_or("")).unwrap_or(Value::Null);
+            let name=payload["name"].as_str().unwrap_or("");
+            let schedule=serde_json::from_value::<crate::queue::Schedule>(payload["schedule"].clone());
+            let valid_time=|t:Option<(u8,u8,u8)>|t.is_none_or(|(h,m,s)|h<24&&m<60&&s<60);
+            let Ok(schedule)=schedule else {return Some(json!({"error":"Invalid schedule"}).to_string());};
+            if !valid_time(schedule.start_at)||!valid_time(schedule.stop_at)||schedule.once.is_some_and(|(y,m,d)|chrono::NaiveDate::from_ymd_opt(y,m,d).is_none()){
+                return Some(json!({"error":"Choose valid dates and times"}).to_string());
+            }
+            let Some(q)=self.queues.iter_mut().find(|q|q.name==name) else {return Some(json!({"error":"Queue not found"}).to_string());};
+            q.schedule=schedule;
+            if let Some(count)=payload["files_at_once"].as_u64().filter(|c|(1..=128).contains(c)){q.files_at_once=count as u32;}
+            self.dirty=true;
+            return Some(json!({"ok":true}).to_string());
         }
         if cmd.query.as_deref() == Some("glass-queues") {
             return Some(json!({"queues":self.queues}).to_string());
@@ -97,6 +128,12 @@ impl App {
         let fail = |s: &str| Some(json!({"error":s}).to_string());
         if !self.items.iter().any(|i| i.id == id) { return fail("Download not found"); }
         match operation {
+            "completion-options" => {
+                let payload:Value=match serde_json::from_str(value){Ok(v)=>v,Err(_)=>return fail("Invalid completion options")};
+                if !payload["turn_off"].is_null() && !matches!(payload["turn_off"].as_str(),Some("ShutDown"|"Sleep"|"Hibernate")){return fail("Invalid power action");}
+                if !self.progress.iter().any(|p|p.id==id){self.progress.push(Progress::new(id,self.settings.show_complete));}
+                if let Some(progress)=self.progress.iter_mut().find(|p|p.id==id){progress.glass_set_completion(&payload,self.settings.show_complete);}
+            }
             "move" => {
                 let target = dialogs::resolve_path(value);
                 if !target.is_absolute() || target.file_name().is_none() || target.exists() {

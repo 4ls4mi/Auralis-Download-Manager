@@ -862,6 +862,8 @@ pub struct App {
     file_info: Option<FileInfo>,
     glass_info_serial: u64,
     glass_checks: glass::CheckSlots,
+    glass_exit_requested: bool,
+    glass_power_serial: u64,
     /// Addresses (and their browser context) waiting for Download File Info to close.
     file_info_waiting: std::collections::VecDeque<(dialogs::NewUrl, ipc::Command)>,
     /// Download File Info's open answers, for the download each was given to (by id) to start
@@ -1624,6 +1626,8 @@ impl App {
             file_info: None,
             glass_info_serial: 0,
             glass_checks: Default::default(),
+            glass_exit_requested: false,
+            glass_power_serial: 0,
             file_info_waiting: Default::default(),
             kept_answers: Default::default(),
             progress: Vec::new(),
@@ -6046,7 +6050,7 @@ impl App {
                 "torrent_lsd" => bool_value.map(|n| { self.settings.torrent_lsd = n; }),
                 "proxy_from_browser" => bool_value.map(|n| { self.settings.proxy_from_browser = n; }),
                 "capture_opened" => bool_value.map(|n| { self.settings.capture_opened = n; }),
-                "show_complete" => bool_value.map(|n| { self.settings.show_complete = n; }),
+                "show_complete" => bool_value.map(|n| { self.settings.show_complete = n; for p in &mut self.progress {p.glass_set_show_complete(n);} }),
                 "show_progress" => bool_value.map(|n| { self.settings.show_progress = n; }),
                 "advanced_integration" => bool_value.map(|n| { self.settings.advanced_integration = n; }),
                 "double_click_open" => bool_value.map(|n| { self.settings.double_click_open = n; }),
@@ -6164,6 +6168,7 @@ impl App {
                         "id": id,
                         "own_limit_kb": it.own_limit.map(|n| n / 1024),
                         "checksum": it.checksum.as_ref().map(mdm_engine::verify::Hash::display),
+                        "completion":self.progress.iter().find(|p|p.id==id).map(Progress::glass_completion).unwrap_or(serde_json::json!({"hang_up":false,"exit":false,"turn_off":null,"force":false})),
                         "file": it.file_name,
                         "status": format!("{:?}", it.status),
                         "is_torrent": it.torrent.is_some(),
@@ -6846,8 +6851,10 @@ impl App {
             });
         }
         if let Some(mode) = w.turn_off {
+            self.glass_power_serial=self.glass_power_serial.wrapping_add(1);
             self.turn_off = Some(dialogs::TurnOffCountdown::new(mode, w.force));
         } else if w.exit {
+            if self.glass_owned() {self.glass_exit_requested=true;return;}
             tracing::info!("when done: exit");
             let ctx = self.ui_ctx.clone();
             self.quit(&ctx);

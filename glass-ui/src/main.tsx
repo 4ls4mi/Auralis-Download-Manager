@@ -4,6 +4,8 @@ import CrystalApp from "./CrystalApp";
 import CrystalSettings from "./CrystalSettings";
 import CrystalProgress from "./CrystalProgress";
 import CrystalAdd from "./CrystalAdd";
+import CrystalScheduler from "./CrystalScheduler";
+import CrystalPower from "./CrystalPower";
 import CrystalTool from "./CrystalTool";
 import CrystalProperties from "./CrystalProperties";
 import { CrystalFileInfo, CrystalComplete } from "./CrystalLifecycle";
@@ -18,6 +20,8 @@ function Main() {
   const properties = Number(query.get("properties")) || 0;
   const torrent = query.get("add") === "torrent";
   const url = query.get("add") === "url";
+  if(query.has("schedule")) return <CrystalScheduler/>;
+  if(query.has("power")) return <CrystalPower id={Number(query.get("power"))}/>;
   if(query.has("tool")) return <CrystalTool kind={query.get("tool")??""} id={Number(query.get("id"))||0}/>;
   if(query.has("request")) return <CrystalFileInfo id={Number(query.get("request"))}/>;
   if(query.has("complete")) return <CrystalComplete id={Number(query.get("complete"))}/>;

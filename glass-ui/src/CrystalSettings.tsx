@@ -1,7 +1,8 @@
+import CrystalOriginalSettings from "./CrystalOriginalSettings";
 import { useEffect, useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Activity, Check, CheckCircle2, Download, Folder, Gauge, Globe2, Image, Network, Palette, RotateCcw, Settings, Shield, SlidersHorizontal } from "lucide-react";
-import { CrystalWindow, WindowTop, themes, useCrystal } from "./CrystalShared";
+import { Activity, Check, CheckCircle2, Download, Folder, Gauge, Globe2, Image, Network, Palette, RotateCcw, Settings, SlidersHorizontal } from "lucide-react";
+import { CrystalWindow, WindowTop, themes, useCrystal, openWindow } from "./CrystalShared";
 import type { Appearance, BackgroundMode, Queue } from "./CrystalShared";
 
 type EngineSettings = {
@@ -23,6 +24,7 @@ const tabs:{name:Tab;icon:typeof Settings}[]=[
 export default function CrystalSettings(){
   const initial=new URLSearchParams(location.search).get("tab") as Tab|null;
   const [tab,setTab]=useState<Tab>(tabs.some(t=>t.name===initial)?initial!:"General");
+  const [settingsPanel,setSettingsPanel]=useState("Main options");
   const [appearanceTab,setAppearanceTab]=useState("Theme");
   const [cfg,setCfg]=useState<EngineSettings|null>(null);
   const [queues,setQueues]=useState<Queue[]>([]);
@@ -99,7 +101,7 @@ export default function CrystalSettings(){
           <div className="cg-queue-row" key={category}><span><Folder size={14} style={{marginRight:9}}/>{category}</span><span className="cg-muted" title={path}>{path}</span></div>)}
         {check("only_add_to_queue","Queue download requests","Keep downloads in the main queue until started")}
         {check("confirm_delete","Confirm remove or delete","Ask before files are removed")}
-        <div className="cg-settings-fallback">Advanced original options such as category folder editing, file-type rules and duplicate-download rules remain stored in the original data. Their Glass editing controls are not migrated yet.</div>
+        <div className="cg-settings-fallback">More options includes category folders, duplicate-download handling, and archive extraction preferences.</div>
       </>;
       case "Connection":return <>
         {number("max_connections","Maximum connections per download","Rust MDM's real multi-segment connection count",1,128)}
@@ -130,6 +132,7 @@ export default function CrystalSettings(){
         <div className="cg-settings-fallback">Add Torrent in the main toolbar accepts .torrent files and magnet links via the Rust torrent engine.</div>
       </>;
       case "Scheduler":return <>
+        <button className="cg-btn cg-btn-primary" onClick={()=>openWindow("scheduler","/?schedule=1",860,660)}>Edit schedules and completion actions</button>
         <p>Queues below are the real queues supplied by the Rust download scheduler.</p>
         {(queues??[]).map(q=><div key={q.name} className="cg-queue-row">
           <div><strong>{q.name}</strong><small>{q.ids.length} items • {q.running?"Running":"Stopped"}</small></div>
@@ -192,8 +195,8 @@ export default function CrystalSettings(){
       </>;
       case "Advanced":return <>
         <h3>Original MDM configuration</h3>
-        <p>Original proxy settings, site credentials, file-type capture rules and accounts are preserved in the MDM data store. Full editing support for these sections still requires backend APIs.</p>
-        <div className="cg-settings-fallback"><Shield size={18}/> Native Glass uses authenticated loopback IPC; the backend does not expose its local token to React. The original MDM download engine and settings database remain intact.</div>
+        <p>Proxy, DNS and site authentication are in Connection → More options. Browser capture rules are in Browser Integration → More options.</p>
+
         <h3>Updates from the original MDM developer</h3>
         <p>Check upstream releases without silently replacing the Glass interface. Installing the original developer's app directly can replace the custom UI and may require a rollback. Integrating a new upstream release safely requires rebuilding this Windows fork against those changes.</p>
         <button className="cg-btn" onClick={()=>void invoke("open_upstream_releases").catch(e=>setError(String(e)))}>
@@ -206,7 +209,7 @@ export default function CrystalSettings(){
   };
   return <CrystalWindow target="details"><WindowTop title="Settings — Mister Hybrid Glass"/>
     <div className="cg-settings"><aside className="cg-settings-nav cg-glass">
-      {tabs.map(t=>{const Icon=t.icon;return <button key={t.name} className={tab===t.name?"selected":""} onClick={()=>setTab(t.name)}><Icon size={17}/><span>{t.name}</span></button>})}
+      {tabs.map(t=>{const Icon=t.icon;return <button key={t.name} className={tab===t.name?"selected":""} onClick={()=>{setTab(t.name);setSettingsPanel("Main options")}}><Icon size={17}/><span>{t.name}</span></button>})}
     </aside><div className="cg-settings-body cg-glass">
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <div><h2>{tab}</h2><p>Download and appearance preferences</p></div>
@@ -214,7 +217,8 @@ export default function CrystalSettings(){
       </div>
       {error&&<p className="cg-error">{error}</p>}
       {notice&&<p className="cg-success"><CheckCircle2 size={14}/> {notice}</p>}
-      <div>{body()}</div>
+      {tab!=="Appearance"&&<nav className="cg-appearance-tabs"><button className={settingsPanel==="Main options"?"selected":""} onClick={()=>setSettingsPanel("Main options")}>Main options</button><button className={settingsPanel==="More options"?"selected":""} onClick={()=>setSettingsPanel("More options")}>More options</button></nav>}
+      <div>{tab==="Appearance"||settingsPanel==="Main options"?body():<CrystalOriginalSettings section={tab}/>}</div>
     </div></div>
     <footer className="cg-bottom-actions" style={{padding:"9px 18px"}}><span className="cg-muted" style={{marginRight:"auto",fontSize:10}}>Windows x64 • Changes to engine settings are saved by MDM</span>
       <button className="cg-btn cg-btn-primary" onClick={()=>void import("@tauri-apps/api/window").then(m=>m.getCurrentWindow().close())}>Done</button>

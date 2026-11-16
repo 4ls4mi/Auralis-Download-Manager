@@ -134,7 +134,7 @@ async fn open_upstream_releases() -> ApiResult<()> {
     // A user-requested read-only check. Never launch an updater that could
     // overwrite the separate Glass Windows installation.
     tauri::async_runtime::spawn_blocking(|| {
-        open::that("https://github.com/4ls4mi/misterdownloadmanager/releases")
+        open::that("https://github.com/anefzaoui/misterdownloadmanager/releases")
             .map_err(|e| format!("Could not open upstream release history: {e}"))
     }).await.map_err(|e| e.to_string())?
 }
@@ -301,7 +301,7 @@ async fn bulk_action(action: String) -> ApiResult<mdm_ipc::api::ActAnswer> {
 #[tauri::command]
 async fn file_operation(id: u64, operation: String, value: Option<String>) -> ApiResult<serde_json::Value> {
     if !matches!(operation.as_str(), "details" | "redownload" | "speed-limit" |
-        "open" | "folder" | "open-with" | "queue-add" | "queue-remove" | "refresh-address" | "checksum" | "checksum-result" | "extract" | "extract-status" | "extract-password" | "extract-cancel") {
+        "open" | "folder" | "open-with" | "queue-add" | "queue-remove" | "refresh-address" | "checksum" | "checksum-result" | "completion-options" | "extract" | "extract-status" | "extract-password" | "extract-cancel") {
         return Err("Unsupported file operation".into());
     }
     tauri::async_runtime::spawn_blocking(move || {
@@ -490,6 +490,9 @@ fn main() {
         })
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { .. } = event {
+                if let Some(id)=window.label().strip_prefix("power-").and_then(|s|s.parse::<u64>().ok()) {
+                    thread::spawn(move || {let _=send_ipc(&mdm_ipc::Command {action:Some("glass-power".into()),queue:Some(serde_json::json!({"id":id,"action":"cancel"}).to_string()),..Default::default()});});
+                }
                 if let Some(id)=window.label().strip_prefix("info-").and_then(|s|s.parse::<u64>().ok()) {
                     thread::spawn(move || {let _=send_ipc(&mdm_ipc::Command {action:Some("glass-file-info".into()),category:Some("cancel".into()),ids:vec![id],..Default::default()});});
                 }

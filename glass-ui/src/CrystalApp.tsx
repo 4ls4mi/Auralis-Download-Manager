@@ -133,7 +133,7 @@ export default function CrystalApp(){
     if(action==="add")return add();
     if(action==="torrent")return add(true);
     if(action==="settings")return settings();
-    if(action==="scheduler")return settings("Scheduler");
+    if(action==="scheduler")return openWindow("scheduler","/?schedule=1",860,660);
     if(action==="browser")return settings("Browser Integration");
     if(action==="appearance")return settings("Appearance");
     if(action==="limit")return settings("Connection");
