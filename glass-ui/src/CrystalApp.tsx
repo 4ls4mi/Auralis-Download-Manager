@@ -98,6 +98,11 @@ export default function CrystalApp(){
     const timer=window.setInterval(()=>{if(mounted)void refresh()},1200);
     return()=>{mounted=false;window.clearInterval(timer)}
   },[refresh]);
+  useEffect(()=>{
+    const changed=(event:StorageEvent)=>{if(event.key==="glass-downloads-changed")void refresh()};
+    window.addEventListener("storage",changed);
+    return()=>window.removeEventListener("storage",changed);
+  },[refresh]);
   const counts=useMemo(()=>({
     all:data.downloads.length,downloading:data.downloads.filter(x=>x.status==="Downloading").length,
     stopped:data.downloads.filter(x=>x.status==="Stopped").length,
