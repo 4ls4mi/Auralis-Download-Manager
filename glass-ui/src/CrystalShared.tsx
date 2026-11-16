@@ -1,6 +1,6 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { getCurrentWindow, Effect, EffectState } from "@tauri-apps/api/window";
-import type { ResizeDirection } from "@tauri-apps/api/window";
+type ResizeDirection = Parameters<ReturnType<typeof getCurrentWindow>["startResizeDragging"]>[0];
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { useEffect, useState, createContext, useContext } from "react";
 import type { CSSProperties, ReactNode } from "react";
