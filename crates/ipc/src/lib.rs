@@ -30,6 +30,7 @@ pub struct Command {
     pub later: bool,
     /// Optional per-download connection/chunk limit. The app validates 1..=128.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(skip)]
     pub connections: Option<u32>,
     /// `/n`: silent — no Download File Info dialog.
     pub silent: bool,
