@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
-import { Activity, CheckCircle2, Clock3, Download, Folder, Gauge, HardDrive, Pause, Play, Save, Shield, X } from "lucide-react";
+import type { CSSProperties } from "react";
+import { Activity, CheckCircle2, Clock3, Gauge, HardDrive, Pause, Play, Save, Shield, X } from "lucide-react";
 import {
   CrystalWindow, WindowTop, FlowMatrix, GradientBar, SpeedGraph, pct, units, rate, timeLeft,
   progressGradient, useCrystal
@@ -74,7 +75,7 @@ export default function CrystalProgress({ id }: { id: number }) {
         <p>This window will update when the Rust download engine reports the file.</p></div>:<>
         {tab==="Download status"&&<div className="cg-progress-page">
           <section className="cg-glass cg-progress-summary">
-            <div className="cg-donut" style={{"--percent":`${percent}%`,background:`conic-gradient(${theme.accent} ${percent}%,rgba(97,152,171,.21) 0)`} as React.CSSProperties}>
+            <div className="cg-donut" style={{"--percent":`${percent}%`,background:`conic-gradient(${theme.accent} ${percent}%,rgba(97,152,171,.21) 0)`} as CSSProperties}>
               <strong>{percent.toFixed(0)}%</strong>
             </div>
             <div><h2>{item.file}</h2><p>
