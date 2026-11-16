@@ -84,13 +84,14 @@ pub async fn clipboard_text() -> ApiResult<String> {
 
 /// Original MDM video quality lookup; the engine owns the token and choices.
 #[tauri::command]
-pub async fn video_tool(action:String,value:String,choice:Option<usize>) -> ApiResult<serde_json::Value> {
+pub async fn video_tool(action:String,value:String,choice:Option<usize>,subs:Option<serde_json::Value>) -> ApiResult<serde_json::Value> {
     if value.len()>8192 {return Err("Video request is too long".into());}
     let mut command=mdm_ipc::Command::default();
     match action.as_str() {
         "lookup" if value.starts_with("https://")||value.starts_with("http://") => command.video_lookup=Some(mdm_ipc::VideoLookup{address:value,..Default::default()}),
+        "tracks" if !value.is_empty()&&value.len()<=256 => {command.query=Some("glass-video-tracks".into());command.queue=Some(value)},
         "poll" if !value.is_empty()&&value.len()<=256 => command.video_poll=Some(value),
-        "pick" if !value.is_empty()&&value.len()<=256&&choice.is_some_and(|n|n<1000) => command.video_pick=Some(mdm_ipc::VideoPick{token:value,choice:choice.unwrap_or_default(),..Default::default()}),
+        "pick" if !value.is_empty()&&value.len()<=256&&choice.is_some_and(|n|n<1000) => {command.video_pick=Some(mdm_ipc::VideoPick{token:value,choice:choice.unwrap_or_default(),..Default::default()});if let Some(subs)=subs {command.category=Some("glass-subtitles".into());command.queue=Some(subs.to_string());}},
         _=>return Err("Enter a valid video page address".into()),
     }
     tauri::async_runtime::spawn_blocking(move||{
@@ -100,9 +101,9 @@ pub async fn video_tool(action:String,value:String,choice:Option<usize>) -> ApiR
 }
 
 #[tauri::command]
-pub async fn browser_video(id:u64, choice:Option<usize>) -> ApiResult<serde_json::Value> {
+pub async fn browser_video(id:u64, choice:Option<usize>,subs:Option<serde_json::Value>) -> ApiResult<serde_json::Value> {
     tauri::async_runtime::spawn_blocking(move||{
-        let command=if let Some(choice)=choice {mdm_ipc::Command{action:Some("glass-video".into()),ids:vec![id],queue:Some(choice.to_string()),..Default::default()}} else {mdm_ipc::Command{query:Some("glass-video".into()),ids:vec![id],..Default::default()}};
+        let command=if let Some(choice)=choice {mdm_ipc::Command{action:Some("glass-video".into()),ids:vec![id],queue:Some(serde_json::json!({"choice":choice,"subs":subs}).to_string()),..Default::default()}} else {mdm_ipc::Command{query:Some("glass-video".into()),ids:vec![id],..Default::default()}};
         let response=send_ipc(&command)?;
         serde_json::from_str(&response).map_err(|_|"Could not read the video request".into())
     }).await.map_err(|e|e.to_string())?

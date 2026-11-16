@@ -4794,14 +4794,18 @@ impl App {
         let music = (!Category::Music.deleted())
             .then(|| self.settings.category_dir(Category::Music, &self.downloads));
         let start_now = !self.settings.only_add_to_queue;
+        let requested_subs = (self.glass_owned() && cmd.category.as_deref()==Some("glass-subtitles"))
+            .then(||cmd.queue.as_deref().and_then(|s|serde_json::from_str::<mdm_tools::video::Subs>(s).ok())).flatten();
         let add = self.lookups.pick(pick, cmd.private, now).and_then(|p| {
-            crate::videolookup::video_add(
-                p,
-                &folder,
-                music.as_deref(),
-                start_now,
-                &self.settings.video_subs,
-            )
+            let selected = requested_subs.as_ref().map(|requested| {
+                let available = if requested.automatic { &p.video.automatic } else { &p.video.subtitles };
+                let langs = if requested.langs.iter().any(|s|s=="all") { available.iter().map(|t|t.code.clone()).collect() }
+                    else { requested.langs.iter().filter(|code|available.iter().any(|t|t.code.as_str()==code.as_str())).cloned().collect() };
+                mdm_tools::video::Subs { langs, automatic: requested.automatic, embed: requested.embed }
+            });
+            let mut add = crate::videolookup::video_add(p, &folder, music.as_deref(), start_now, &self.settings.video_subs)?;
+            if let Some(subs)=selected { add.subs=subs; }
+            Some(add)
         });
         let Some(add) = add else {
             return VideoLookupAnswer::of(lookup::USE_WINDOW);

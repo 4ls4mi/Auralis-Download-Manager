@@ -32,6 +32,10 @@ impl App {
             let payload=serde_json::from_str(cmd.queue.as_deref().unwrap_or("")).unwrap_or(Value::Null);
             return Some(self.glass_update_original(payload).to_string());
         }
+        if cmd.query.as_deref() == Some("glass-video-tracks") {
+            let tracks=cmd.queue.as_deref().and_then(|token|self.lookups.glass_tracks(token,Instant::now()));
+            return Some(tracks.unwrap_or_else(||json!({"error":"Video lookup is not ready"})).to_string());
+        }
         if cmd.query.as_deref() == Some("glass-videos") {
             return Some(json!({"ids":self.glass_videos.keys().copied().collect::<Vec<_>>()}).to_string());
         }
@@ -47,8 +51,9 @@ impl App {
             let Some((_,answer,private))=self.glass_videos.get(&id) else{return Some(json!({"error":"Video request expired"}).to_string());};
             let Some(token)=answer.token.clone() else{return Some(json!({"error":"Video lookup has no token"}).to_string());};
             let private=*private;
-            let Some(choice)=cmd.queue.as_deref().and_then(|s|s.parse::<usize>().ok()).filter(|n|*n<1000) else{return Some(json!({"error":"Invalid quality"}).to_string());};
-            return Some(ipc::api::line(&self.quality_menu(&ipc::Command{private,video_pick:Some(ipc::VideoPick{token,choice,store_id:None}),..Default::default()})));
+            let payload:Value=cmd.queue.as_deref().and_then(|s|serde_json::from_str(s).ok()).unwrap_or(Value::Null);
+            let Some(choice)=payload["choice"].as_u64().and_then(|n|usize::try_from(n).ok()).or_else(||cmd.queue.as_deref().and_then(|s|s.parse().ok())).filter(|n|*n<1000) else{return Some(json!({"error":"Invalid quality"}).to_string());};
+            return Some(ipc::api::line(&self.quality_menu(&ipc::Command{private,category:payload.get("subs").map(|_|"glass-subtitles".into()),queue:payload.get("subs").map(Value::to_string),video_pick:Some(ipc::VideoPick{token,choice,store_id:None}),..Default::default()})));
         }
         if cmd.query.as_deref() == Some("glass-file-info") {
             self.glass_next_info();

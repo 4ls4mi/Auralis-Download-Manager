@@ -342,6 +342,16 @@ impl Lookups {
         }
     }
 
+    /// Subtitle languages from the original lookup, without browser credentials.
+    pub fn glass_tracks(&mut self, token: &str, now: Instant) -> Option<serde_json::Value> {
+        self.prune(now);
+        let search = self.searches.get(token)?;
+        let found = lock(&search.found);
+        let Found::Video(video, _) = &*found else { return None; };
+        let tracks = |list: &[mdm_tools::resolve::Track]| list.iter().map(|t| serde_json::json!({"code": t.code, "name": t.name})).collect::<Vec<_>>();
+        Some(serde_json::json!({"subtitles": tracks(&video.subtitles), "automatic": tracks(&video.automatic)}))
+    }
+
     /// The choice `pick` made in the browser (from a private window: `private`), if it fits
     /// its look-up: found, one of the choices offered, from the same kind of window and the
     /// same cookie store. Taken once: the look-up is forgotten then.
