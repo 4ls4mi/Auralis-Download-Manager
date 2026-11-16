@@ -274,11 +274,12 @@ export function CrystalWindow({ children, target = "main" }: {
   const src = path ? convertFileSrc(path) : "/alpine.svg";
   const video = /\.(mp4|webm|mov|m4v)$/i.test(path);
   useEffect(() => {
-    const w = getCurrentWindow();
+    const w = getCurrentWindow();let active=true;
     if (mode === "desktop" && appearance.acrylic)
-      void w.setEffects({ effects: [Effect.Acrylic], state: EffectState.Active }).catch(() => w.clearEffects().catch(() => undefined));
+      void w.setEffects({ effects: [Effect.Acrylic], state: EffectState.Active }).catch(()=>{if(active)setWindowError("Windows backdrop blur is unavailable; transparent glass is being used.");return w.clearEffects().catch(()=>undefined)});
     else void w.clearEffects().catch(() => undefined);
-  }, [mode, appearance.acrylic, appearance.material]);
+    return()=>{active=false};
+  }, [mode, appearance.acrylic]);
   const style = {
     "--accent": appearance.lightMode ? (({plexo:"#086e84",ocean:"#146c9b",purple:"#7050b5",pink:"#b73962",gold:"#8a5b05",green:"#19765b",silver:"#4c6680",navy:"#394ea2",orange:"#ad4700",rose:"#a42b70"} as Record<string,string>)[theme.id]??"#086e84") : theme.accent,
     "--accent-secondary": theme.secondary,

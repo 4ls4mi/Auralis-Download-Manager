@@ -202,3 +202,14 @@
 .cg-list-panel .cg-table{min-width:0}
 @media(max-width:750px){.cg-cols{display:none!important}.cg-row{height:auto;min-height:98px;grid-template-columns:minmax(0,1fr) auto auto;gap:5px 8px}.cg-row .cg-file{grid-column:1/-1}.cg-row .cg-row-progress{grid-column:1/-1}.cg-row>span{min-width:0}.cg-row .cg-file-info strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
 @media(max-width:750px){.cg-row>span:nth-child(5)::before{content:'Speed ';color:var(--muted)}.cg-row>span:nth-child(6)::before{content:'Left ';color:var(--muted)}}
+/* Remaining action buttons use vivid, distinguishable colors too; download rows and
+   native title-bar controls retain their own dedicated semantics. */
+.cg-window button:not(:disabled,.cg-row,.cg-resize,.cg-toolbar>button,.cg-winbuttons button){--button-hue:195;transition:transform .16s ease,background .18s ease,box-shadow .18s ease,color .18s ease}
+.cg-window button:not(:disabled,.cg-row,.cg-resize,.cg-toolbar>button,.cg-winbuttons button):nth-of-type(5n+1){--button-hue:155}
+.cg-window button:not(:disabled,.cg-row,.cg-resize,.cg-toolbar>button,.cg-winbuttons button):nth-of-type(5n+2){--button-hue:280}
+.cg-window button:not(:disabled,.cg-row,.cg-resize,.cg-toolbar>button,.cg-winbuttons button):nth-of-type(5n+3){--button-hue:36}
+.cg-window button:not(:disabled,.cg-row,.cg-resize,.cg-toolbar>button,.cg-winbuttons button):nth-of-type(5n+4){--button-hue:342}
+.cg-dark button:not(:disabled,.cg-row,.cg-resize,.cg-toolbar>button,.cg-winbuttons button){color:hsl(var(--button-hue) 95% 78%)!important}
+.cg-light button:not(:disabled,.cg-row,.cg-resize,.cg-toolbar>button,.cg-winbuttons button){color:hsl(var(--button-hue) 92% 25%)!important}
+.cg-window button:not(:disabled,.cg-row,.cg-resize,.cg-toolbar>button,.cg-winbuttons button):hover{background:hsl(var(--button-hue) 88% 52% / .38)!important;box-shadow:inset 0 1px #ffffff70,0 0 14px hsl(var(--button-hue) 90% 60% / .30)}
+@media(prefers-reduced-motion:reduce){.cg-window button:not(:disabled){transition:none!important;animation:none!important;transform:none!important}}
