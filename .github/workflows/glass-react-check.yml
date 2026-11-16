@@ -3,7 +3,7 @@
 name: Mister Hybrid Glass React Check
 on:
   push:
-    branches: ["feature/crystal-parity-windows"]
+    branches: ["feature/progress-chunks-windows"]
   workflow_dispatch:
 permissions:
   contents: read
