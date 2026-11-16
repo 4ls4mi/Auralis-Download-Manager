@@ -3,6 +3,8 @@
 
 ## Mister Hybrid Glass — Windows x64 integration
 
+- **In validation:** twelve tinted glass materials, expanded fonts, compact icon controls, startup helper prompts and foreground download windows. Video subtitle language selection uses MDM lookup results; real-site subtitle downloads, YouTube account access, scaling across physical displays and visual resemblance to the material concepts need Windows review.
+
 - **In development:** expanded glass materials and independent indicator gradients; colorful action highlights, compact progress presentation, clipboard modes and movable confirmations. Windows x64 validation is required.
 - **In development:** completed-file Move/Rename and live list refresh; Glass reuses MDM's Windows shell tracking for moved files; physical desktop drag/drop verification is still required. A Glass helper manager delegates yt-dlp, FFmpeg and gallery-dl installs to the original verified installers; existing managed helpers are checked once per Glass session using MDM’s verified update routines. Basic Glass video quality and gallery download windows delegate to MDM; playlist and full original dialog parity remain open. Windows testing remains pending.
 
