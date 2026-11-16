@@ -1041,11 +1041,20 @@ fn deliver(cmd: &mdm_ipc::Command) -> Result<(), Undelivered> {
     // written next to this copy.
     let app = match std::fs::read_to_string(dir.join("app-path")) {
         Ok(path) if !path.trim().is_empty() => PathBuf::from(path.trim()),
-        _ => dir.join(if cfg!(windows) {
-            "misterdownloadmanager.exe"
-        } else {
-            "misterdownloadmanager"
-        }),
+        _ => {
+            // The Glass package keeps the ORIGINAL native host protocol, but its
+            // visible application has a different name. Prefer that shell when
+            // it is installed beside this host (or above a resources folder).
+            // A stock MDM installation still follows its original path.
+            let glass = [Some(dir.join("mister-hybrid-glass.exe")),
+                dir.parent().map(|p|p.join("mister-hybrid-glass.exe"))]
+                .into_iter().flatten().find(|p|cfg!(windows)&&p.is_file());
+            glass.unwrap_or_else(|| dir.join(if cfg!(windows) {
+                "misterdownloadmanager.exe"
+            } else {
+                "misterdownloadmanager"
+            }))
+        },
     };
     let safari = SAFARI.load(std::sync::atomic::Ordering::Relaxed);
     let mut child = if safari {

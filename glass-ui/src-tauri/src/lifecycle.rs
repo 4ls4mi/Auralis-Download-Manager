@@ -6,6 +6,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{WebviewUrl, WebviewWindowBuilder};
 static AUTO_PROGRESS: AtomicBool = AtomicBool::new(true);
 
+pub fn fit_size(app:&AppHandle,width:f64,height:f64)->(f64,f64) {
+    app.get_webview_window("main").and_then(|w|w.current_monitor().ok().flatten())
+        .map(|m|(width.min((m.size().width as f64/m.scale_factor()-32.0).max(360.0)),
+            height.min((m.size().height as f64/m.scale_factor()-76.0).max(300.0))))
+        .unwrap_or((width,height))
+}
+
 pub fn open(app: &AppHandle, label: &str, route: &str, width: f64, height: f64) -> ApiResult<()> {
     if let Some(w) = app.get_webview_window(label) {
         w.show().map_err(|e| e.to_string())?;
@@ -13,9 +20,10 @@ pub fn open(app: &AppHandle, label: &str, route: &str, width: f64, height: f64) 
         let _ = w.set_focus();
         return Ok(());
     }
+    let (width,height)=fit_size(app,width,height);
     WebviewWindowBuilder::new(app, label, WebviewUrl::App(format!("index.html?{route}").into()))
         .title("Mister Hybrid Glass").inner_size(width, height)
-        .min_inner_size(520.0, 360.0).center().decorations(false)
+        .min_inner_size(width.min(520.0), height.min(360.0)).center().decorations(false)
         .transparent(true).shadow(false).resizable(true).build()
         .map(|_| ()).map_err(|e| e.to_string())
 }

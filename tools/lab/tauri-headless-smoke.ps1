@@ -88,6 +88,13 @@ try {
     $invalid = Invoke-GlassIpc @{ action = "glass-setting"; category = "max_connections"; queue = "99999" }
     if ($invalid.code -ne "invalid-setting") { throw "Invalid connection limit was not rejected" }
     Write-Host "PASS: invalid settings rejected"
+    $complete = Invoke-GlassIpc @{ action = "glass-setting"; category = "show_complete"; queue = "true" }
+    if ($complete.saved -ne $true) { throw "Completion dialog preference rejected" }
+    $readback = Invoke-GlassIpc @{ query = "glass-settings" }
+    if ($readback.show_complete -ne $true) { throw "Completion preference did not persist to live backend" }
+    $pending = Invoke-GlassIpc @{ query = "glass-file-info" }
+    if ($pending.info) { throw "Fresh isolated backend unexpectedly has a pending capture" }
+    Write-Host "PASS: completion setting and authenticated original FileInfo queue"
     Write-Host "Runtime smoke test PASSED"
 }
 finally {

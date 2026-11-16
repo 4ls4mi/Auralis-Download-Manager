@@ -440,6 +440,12 @@ fn main() {
             show_main(app);
         }))
         .setup(|app| {
+            if let Some(main)=app.get_webview_window("main") {
+                let (width,height)=lifecycle::fit_size(app.handle(),1480.0,850.0);
+                let _=main.set_min_size(Some(tauri::LogicalSize::new(width.min(720.0),height.min(520.0))));
+                let _=main.set_size(tauri::LogicalSize::new(width,height));
+                let _=main.center();
+            }
             let show = MenuItem::with_id(app, "show", "Open Mister Hybrid Glass", true, None::<&str>)?;
             let exit = MenuItem::with_id(app, "quit", "Exit Glass and stop downloads", true, None::<&str>)?;
             let downloads = MenuItem::with_id(app, "downloads", "Restore download windows", true, None::<&str>)?;

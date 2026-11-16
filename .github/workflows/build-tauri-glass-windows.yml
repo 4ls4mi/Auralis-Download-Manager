@@ -86,6 +86,28 @@ jobs:
           npm run tauri -- build --bundles nsis
           if ($LASTEXITCODE -ne 0) { throw "Tauri Windows packaging failed" }
 
+      - name: Exercise real Windows native dialogs and original transfers
+        shell: pwsh
+        run: |
+          $testRoot = Join-Path $env:RUNNER_TEMP 'glass-native-acceptance'
+          New-Item -ItemType Directory -Force $testRoot | Out-Null
+          Copy-Item glass-ui/src-tauri/target/release/mister-hybrid-glass.exe $testRoot
+          Copy-Item glass-ui/src-tauri/resources/mdm-legacy.exe $testRoot
+          Copy-Item glass-ui/src-tauri/resources/misterdownloadmanager-nmhost.exe $testRoot
+          $env:GLASS_E2E_EXE = Join-Path $testRoot 'mister-hybrid-glass.exe'
+          $env:GLASS_E2E_DIR = $testRoot
+          node tools/lab/glass-native-acceptance.mjs
+          if ($LASTEXITCODE -ne 0) { throw "Native Windows acceptance failed; inspect the proof artifact" }
+
+      - name: Upload Windows behavior and visual evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mister-hybrid-glass-windows-proof
+          path: ${{ runner.temp }}/glass-native-acceptance/proof/
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
