@@ -18,7 +18,7 @@ A successful installer build is **compilation/packaging evidence only**. The nat
 
 The acceptance script uses an isolated data directory, original native-messaging host, actual Tauri commands and original HTTP engine. A local range server checks browser cookie, referrer and User-Agent handoff. It exercises chosen paths, 8/32 chunk counts, pause/resume, output bytes, checksum verification, completion while main is hidden, safe list removal, optional disk deletion and both color modes. Headless smoke checks include typed settings, write-only secrets, batch parsing and schedule roundtrips.
 
-The latest known frontend compile and chunk-accounting tests passed on Windows x64. An earlier implementation packaged an installer and passed its headless smoke checks, but its UI acceptance could not connect to WebView2. Runtime setup and startup diagnostics have been added; native behavior must not be marked verified until a subsequent run passes.
+Windows x64 frontend compilation, chunk-accounting tests, original IPC and native-host tests, installer packaging and headless smoke checks have passed. Native WebView acceptance also confirmed that the completion setting saves, Pause keeps the progress window open, Stop from the main list closes it, browser-host capture opens File Info with its request context, and eight measured chunks appear in both windows. The acceptance run stopped at a resize-test harness error; later scenarios require a passing rerun before they can be considered verified. The native review rebuild uses the current Glass interface with the backend from the specified installer candidate; the final installer workflow tests its own bundled backend.
 
 Manual Windows review still covers:
 

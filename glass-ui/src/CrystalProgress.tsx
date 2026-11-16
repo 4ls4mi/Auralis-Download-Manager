@@ -14,6 +14,8 @@ export default function CrystalProgress({id}:{id:number}){
  const [values,setValues]=useState<number[]>([]),[error,setError]=useState(''),[busy,setBusy]=useState(false);
  const [limit,setLimit]=useState<Limit|null>(null),[limited,setLimited]=useState(false),[kb,setKb]=useState('512');
  const [connectionPage,setConnectionPage]=useState(0);
+ const [compactConnections,setCompactConnections]=useState(()=>window.innerHeight<=600);
+ useEffect(()=>{const resize=()=>setCompactConnections(window.innerHeight<=600);window.addEventListener('resize',resize);return()=>window.removeEventListener('resize',resize)},[]);
  useEffect(()=>{
   let active=true,running=false;
   const load=async()=>{if(running)return;running=true;try{const [data,telemetry]=await Promise.all([invoke<Dashboard>('dashboard_snapshot'),invoke<VisualDashboard>('dashboard_visuals')]);if(!active)return;const file=data.downloads.find(d=>d.id===id)??null;setItem(file);setVisual(telemetry.downloads.find(d=>d.id===id)??null);if(file)setValues(v=>[...v.slice(-55),file.speed]);}catch(e){if(active)setError(String(e))}finally{running=false}};
@@ -26,7 +28,8 @@ export default function CrystalProgress({id}:{id:number}){
  const save=async()=>{setBusy(true);setError('');try{const n=Number(kb);if(limited&&(!Number.isInteger(n)||n<1||n>10_000_000))throw Error('Enter 1–10,000,000 KB/sec.');await invoke('file_operation',{id,operation:'speed-limit',value:limited?String(n):'off'});}catch(e){setError(String(e))}finally{setBusy(false)}};
  const server=visual?.server;
  const connectionCount=visual?.connections.length??0;
- const pages=Math.max(1,Math.ceil(connectionCount/8)),page=Math.min(connectionPage,pages-1);
+ const pageSize=compactConnections?2:8;
+ const pages=Math.max(1,Math.ceil(connectionCount/pageSize)),page=Math.min(connectionPage,pages-1);
  const statusText=item?.status==='Downloading'?(visual?.connections.some(c=>c.state==='Receiving')?'Receiving data…':'Connecting…'):item?.status==='Stopped'?'Paused':item?.status??'Waiting…';
  const metadata=item?[
   ['Status',statusText],['File size',units(item.size)],['Downloaded',`${units(item.downloaded)} (${pct(item).toFixed(2)}%)`],
@@ -42,7 +45,7 @@ export default function CrystalProgress({id}:{id:number}){
     <div className="cg-overall"><GradientBar percent={pct(item)} showLabel/></div>
     <section className="cg-glass cg-progress-section cg-selected-chunks"><div className="cg-section-title"><h3>Download chunks</h3></div><ChunkMap segments={visual?.segments} size={item.size} count={visual?.chunk_count} active={visual?.active_connections}/>
      <details className="cg-connection-details"><summary>Connection details ({connectionCount})</summary>
-      <table className="cg-connections"><thead><tr><th>N.</th><th>Downloaded</th><th>Speed</th><th>Info</th></tr></thead><tbody>{visual?.connections.slice(page*8,page*8+8).map(c=><tr key={c.id}><td>{c.id+1}</td><td>{units(c.downloaded)}</td><td>{rate(c.speed)}</td><td>{c.state}</td></tr>)}</tbody></table>
+      <table className="cg-connections"><thead><tr><th>N.</th><th>Downloaded</th><th>Speed</th><th>Info</th></tr></thead><tbody>{visual?.connections.slice(page*pageSize,page*pageSize+pageSize).map(c=><tr key={c.id}><td>{c.id+1}</td><td>{units(c.downloaded)}</td><td>{rate(c.speed)}</td><td>{c.state}</td></tr>)}</tbody></table>
       {pages>1&&<div className="cg-pagination"><button disabled={!page} onClick={()=>setConnectionPage(p=>p-1)}>Previous</button><span>{page+1} / {pages}</span><button disabled={page>=pages-1} onClick={()=>setConnectionPage(p=>p+1)}>Next</button></div>}
      </details>
     </section>
