@@ -244,7 +244,7 @@ export function CrystalWindow({ children, target = "main" }: {
           if(box.clientHeight>0&&box.scrollHeight>box.clientHeight+2)ratio=Math.min(ratio,box.clientHeight/box.scrollHeight);
           if(box.clientWidth>0&&box.scrollWidth>box.clientWidth+2)ratio=Math.min(ratio,box.clientWidth/box.scrollWidth);
         }
-        if(ratio<.998)setFit(old=>Math.max(.2,old*ratio*.99));
+        if(ratio<.998)setFit(old=>Math.max(.4,old*ratio*.99));
       });
     };
     const reset=()=>{setFit(baseScale());measure()};
@@ -273,9 +273,9 @@ export function CrystalWindow({ children, target = "main" }: {
     "--panel-opacity": Math.min(.94, Math.max(.45, appearance.opacity / 100)),
     "--crystal-blur": appearance.blur + "px",
     "--ui-scale": 1,
-    "--fit-scale": Math.max(.2,fit),
+    "--fit-scale": Math.max(.4,fit),
     "--font-family": appearance.fontFamily === "Inter" ? "Inter, Segoe UI, sans-serif" : appearance.fontFamily === "Arial" ? "Arial, sans-serif" : appearance.fontFamily === "Consolas" ? "Consolas, monospace" : "Segoe UI Variable, Segoe UI, sans-serif",
-    "--font-size": Math.min(20,Math.max(10,appearance.fontSize))+"px"
+    "--font-size": Math.max(Math.min(20,Math.max(12,appearance.fontSize)),12/Math.max(.4,fit))+"px"
   } as CSSProperties;
   return <div className={`cg-window cg-mode-${mode} ${appearance.lightMode?"cg-light":"cg-dark"}`} style={style}>
     {mode === "wallpaper" && <div className="cg-wallpaper">

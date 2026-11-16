@@ -184,7 +184,7 @@ export default function CrystalSettings(){
             <option value="Consolas">Consolas</option>
           </select>
         </label>
-        {slider("fontSize","Text size",10,20," px")}
+        {slider("fontSize","Text size",12,20," px")}
         <p>Text contrast automatically adjusts for light/dark material. Glass panels keep a readable text backing even over bright wallpapers.</p>
         </>}
         <label className="cg-toggle"><span><strong>Show actual download popup automatically</strong><small>Open the separate floating progress window when a download starts</small></span>
