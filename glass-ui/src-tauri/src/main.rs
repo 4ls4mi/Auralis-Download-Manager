@@ -126,6 +126,16 @@ async fn boot_engine(app: AppHandle) -> ApiResult<String> {
 
 /// Private, authenticated engine telemetry for the native download views.
 #[tauri::command]
+async fn open_upstream_releases() -> ApiResult<()> {
+    // A user-requested read-only check. Never launch an updater that could
+    // overwrite the separate Glass Windows installation.
+    tauri::async_runtime::spawn_blocking(|| {
+        open::that("https://github.com/4ls4mi/misterdownloadmanager/releases")
+            .map_err(|e| format!("Could not open upstream release history: {e}"))
+    }).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
 async fn dashboard_visuals() -> ApiResult<serde_json::Value> {
     tauri::async_runtime::spawn_blocking(|| {
         let reply = send_ipc(&mdm_ipc::Command {
@@ -476,7 +486,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             boot_engine, dashboard_snapshot, dashboard_visuals, download_action,
             add_download, select_wallpaper, queue_action, glass_settings, update_glass_setting,
-            browser_integration, bulk_action, file_operation, add_torrent_file, quit_glass
+            browser_integration, bulk_action, file_operation, add_torrent_file, quit_glass, open_upstream_releases
         ])
         .run(tauri::generate_context!())
         .expect("error starting Mister Hybrid glass desktop");
