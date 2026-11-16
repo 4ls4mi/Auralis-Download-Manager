@@ -59,7 +59,7 @@ async function assertFits(page,name){
   return overflow.length===0;
  },name+' has clipped content or would require page scrolling');
 }
-async function resizeWindow(page,label,width,height){await invoke(page,'plugin:window|set_size',{label,size:{type:'Logical',data:{width,height}}});await wait(450);}
+async function resizeWindow(page,label,width,height){await invoke(page,'plugin:window|set_size',{label,value:{Logical:{width,height}}});await wait(450);}
 async function setTheme(settings,light){await settings.getByRole('button',{name:'Appearance',exact:true}).click();await settings.getByRole('button',{name:light?'Light crystal':'Dark crystal',exact:true}).click();await wait(350);}
 async function bothThemes(page,name,settings){for(const light of [false,true]){await setTheme(settings,light);await until(()=>page.locator(light?'.cg-light':'.cg-dark').count(),'Appearance did not reach '+name);await screenshot(page,name+(light?'-light':'-dark'));}}
 try{
