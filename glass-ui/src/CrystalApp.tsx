@@ -19,7 +19,7 @@ type Menu = "Tasks" | "File" | "Downloads" | "View" | "Help";
 type MenuEntry = { label: string; action: string; disabled?: boolean; shortcut?: string; children?:MenuEntry[] };
 const menus: Menu[]=["Tasks","File","Downloads","View","Help"];
 const blank:Dashboard={downloads:[],speed:0,queues:[],categories:[]};
-const pop = (id:number)=>openWindow("download-"+id,"/?detail="+id,880,680);
+const pop = (id:number)=>openWindow("download-"+id,"/?detail="+id,880,500);
 const settings = (tab="General")=>openWindow("settings","/?settings=1&tab="+encodeURIComponent(tab),880,695);
 const add=(torrent=false)=>openWindow(torrent?"add-torrent":"add-url",`/?add=${torrent?"torrent":"url"}`,590,390);
 const props=(id:number)=>openWindow("properties-"+id,"/?properties="+id,760,600);

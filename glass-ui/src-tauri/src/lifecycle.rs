@@ -94,7 +94,7 @@ pub fn start(app: AppHandle) {
                         if let Some(w) = owner.get_webview_window(&format!("download-{id}")) { let _ = w.close(); }
                         if complete { let _ = open(&owner,&format!("complete-{id}"),&format!("complete={id}"),720.0,420.0); }
                     } else {
-                        let _ = open(&owner,&format!("download-{id}"),&format!("detail={id}"),880.0,680.0);
+                        let _ = open(&owner,&format!("download-{id}"),&format!("detail={id}"),880.0,500.0);
                     }
                 }
                 for id in new_videos {let _=open(&owner,&format!("tool-video-{id}"),&format!("tool=video&browser={id}"),720.0,560.0);}
