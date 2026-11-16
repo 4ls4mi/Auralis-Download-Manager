@@ -67,7 +67,7 @@ export function loadAppearance(): Appearance {
     autoPopups: stored("auto-popups", "true") === "true", highContrast: stored("high-contrast", "true") === "true",
     uiScale: Number(stored("ui-scale", "100")),
     lightMode: stored("light-mode", "false") === "true",
-    fontFamily: stored("font-family","Segoe UI"),fontSize:Number(stored("font-size","12"))
+    fontFamily: stored("font-family","Segoe UI"),fontSize:Number(stored("font-size","14"))
   };
 }
 const keys: Record<keyof Appearance, string> = {
