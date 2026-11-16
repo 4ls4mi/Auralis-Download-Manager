@@ -95,6 +95,16 @@ try{
   for(const name of ['yt-dlp','ffmpeg','gallery-dl'])await settings.getByText(name,{exact:true}).waitFor();
   await settings.getByRole('button',{name:'General',exact:true}).click();
   passed('Original verified helper manager reports all three tools through Glass');
+  if(process.env.GLASS_TEST_INSTALL_HELPERS==='1'){
+   for(const name of ['yt-dlp','ffmpeg','gallery-dl']){
+    await invoke(main,'glass_tool',{action:'helpers-install',payload:{name}});
+    const finished=await until(async()=>{const data=await invoke(main,'glass_tool',{action:'helpers',payload:null});return data.job?.name===name&&data.job.state!=='installing'?data:null},name+' installation did not finish',360000);
+    assert.equal(finished.job.state,'ready',name+' installation failed: '+finished.job.state);
+    const tool=finished.tools.find(t=>t.name===name);assert(tool?.version&&tool.path,name+' not reported after installation');await access(tool.path);
+    passed('Original MDM verified installer makes '+name+' available');
+   }
+  }
+
   const video=await invoke(main,'video_tool',{action:'lookup',value:'https://example.invalid/fixture-video',choice:null});
   assert.notEqual(video.state,'use-window','Glass video lookup must reach the original engine');
   await main.getByRole('button',{name:'Tasks',exact:true}).click();await main.getByRole('button',{name:'Download video from a page…',exact:true}).click();

@@ -98,7 +98,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Tauri Windows packaging failed" }
 
       - name: Exercise real Windows native dialogs and original transfers
-        timeout-minutes: 7
+        timeout-minutes: 25
         shell: pwsh
         run: |
           $testRoot = Join-Path $env:RUNNER_TEMP 'glass-native-acceptance'
@@ -109,6 +109,7 @@ jobs:
           $env:GLASS_E2E_EXE = Join-Path $testRoot 'mister-hybrid-glass.exe'
           $env:GLASS_E2E_DIR = $testRoot
           $env:GLASS_TEST_HELPERS = '1'
+          $env:GLASS_TEST_INSTALL_HELPERS = '1'
           node tools/lab/glass-native-acceptance.mjs
           if ($LASTEXITCODE -ne 0) { throw "Native Windows acceptance failed; inspect the proof artifact" }
 
