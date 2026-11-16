@@ -14,7 +14,7 @@ pub fn fit_size(app:&AppHandle,width:f64,height:f64)->(f64,f64) {
 }
 
 pub fn open(app: &AppHandle, label: &str, route: &str, width: f64, height: f64) -> ApiResult<()> {
-    let priority = label.starts_with("info-") || label.starts_with("tool-video-");
+    let priority = label.starts_with("info-") || label.starts_with("tool-video-") || label.starts_with("download-");
     if let Some(w) = app.get_webview_window(label) {
         if priority { let _ = w.set_always_on_top(true); }
         w.show().map_err(|e| e.to_string())?;

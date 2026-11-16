@@ -115,3 +115,5 @@
 .cg-material-aurora-veil .cg-content{background:linear-gradient(140deg,transparent 25%,#63ffd329 42%,transparent 56%,#bc71ff2b 72%,transparent),linear-gradient(130deg,var(--glass-tint),transparent 60%),rgba(var(--glass),var(--panel-opacity))!important}
 .cg-material-brushed-glass .cg-content{background:repeating-linear-gradient(115deg,#ffffff09 0 1px,transparent 1px 4px),linear-gradient(130deg,var(--glass-tint),transparent 60%),rgba(var(--glass),var(--panel-opacity))!important}
 .cg-window .cg-toolbar>button>span{display:none}.cg-window .cg-toolbar{min-height:44px}.cg-window .cg-toolbar>button{min-height:36px}.cg-window .cg-toolbar>button svg{width:20px;height:20px}
+
+.cg-window input[type=range][data-setting="tintHue"]{background:linear-gradient(90deg,red,#ff0,#0f0,#0ff,#00f,#f0f,red);border-radius:8px}

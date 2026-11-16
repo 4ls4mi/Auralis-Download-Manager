@@ -88,7 +88,7 @@ export default function CrystalSettings(){
   };
   const slider=(name:keyof Appearance,title:string,min:number,max:number,suffix:string)=>
     <label className="cg-slider"><span>{title}<b>{appearance[name] as number}{suffix}</b></span>
-      <input type="range" min={min} max={max} value={appearance[name] as number}
+      <input type="range" data-setting={name} min={min} max={max} value={appearance[name] as number}
         onChange={e=>set(name,Number(e.target.value))}/></label>;
   const body=()=>{
     switch(tab){
