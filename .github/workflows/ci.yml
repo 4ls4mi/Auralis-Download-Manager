@@ -45,7 +45,7 @@ env:
 
 jobs:
   rust:
-    if: ${{ !(github.event_name == 'pull_request' && (github.head_ref == 'feature/tauri-unified-windows' || github.head_ref == 'feature/crystal-parity-windows')) }}
+    if: ${{ !(github.event_name == 'pull_request' && (github.head_ref == 'feature/tauri-unified-windows' || (github.head_ref == 'feature/crystal-parity-windows' || github.head_ref == 'feature/progress-chunks-windows'))) }}
     name: ${{ matrix.name || matrix.os }}
     strategy:
       fail-fast: false
@@ -157,7 +157,7 @@ jobs:
   # A translator's reviewed rows (no "#, machine" line) must survive every pull request: no
   # tool or merge may drop them or hand them back to machine translation.
   translations:
-    if: ${{ github.event_name == 'pull_request' && github.head_ref != 'feature/tauri-unified-windows' && github.head_ref != 'feature/crystal-parity-windows' }}
+    if: ${{ github.event_name == 'pull_request' && github.head_ref != 'feature/tauri-unified-windows' && (github.head_ref != 'feature/crystal-parity-windows' && github.head_ref != 'feature/progress-chunks-windows') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -168,7 +168,7 @@ jobs:
         run: python3 tools/i18n/reviewed_guard.py --base "origin/${{ github.base_ref }}"
 
   extension:
-    if: ${{ !(github.event_name == 'pull_request' && (github.head_ref == 'feature/tauri-unified-windows' || github.head_ref == 'feature/crystal-parity-windows')) }}
+    if: ${{ !(github.event_name == 'pull_request' && (github.head_ref == 'feature/tauri-unified-windows' || (github.head_ref == 'feature/crystal-parity-windows' || github.head_ref == 'feature/progress-chunks-windows'))) }}
     name: browser extension
     runs-on: ubuntu-latest
     timeout-minutes: 15
