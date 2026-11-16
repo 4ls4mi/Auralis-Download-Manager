@@ -78,6 +78,16 @@ try{
  await settings.getByLabel('Show download complete dialog').check();
  await until(async()=>(await invoke(main,'glass_settings')).show_complete,'Turning completion on failed through the actual Tauri bridge');
  passed('Completion-dialog checkbox saves through the real native bridge');
+ if(process.env.GLASS_TEST_HELPERS==='1'){
+  const helpers=await invoke(main,'glass_tool',{action:'helpers',payload:null});
+  assert.deepEqual(helpers.tools.map(t=>t.name),['yt-dlp','ffmpeg','gallery-dl']);
+  await settings.getByRole('button',{name:'Advanced',exact:true}).click();
+  await settings.getByText('Video and gallery helpers',{exact:true}).waitFor();
+  for(const name of ['yt-dlp','ffmpeg','gallery-dl'])await settings.getByText(name,{exact:true}).waitFor();
+  await settings.getByRole('button',{name:'General',exact:true}).click();
+  passed('Original verified helper manager reports all three tools through Glass');
+ }
+
  await capture('fixture-eight.zip');let info=await pageFor('request=');await info.waitForSelector('.cg-file-info');await wait(350);
  assert.equal((await ipc({query:'list'})).downloads.length,0,'Capture must wait for user confirmation');assert.equal((await ipc({query:'list'})).downloads.some(f=>f.status==='Downloading'),false,'Metadata probing must not create a running download before confirmation');
  await bothThemes(info,'file-info',settings);

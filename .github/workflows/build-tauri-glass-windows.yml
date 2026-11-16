@@ -108,6 +108,7 @@ jobs:
           Copy-Item glass-ui/src-tauri/resources/misterdownloadmanager-nmhost.exe $testRoot
           $env:GLASS_E2E_EXE = Join-Path $testRoot 'mister-hybrid-glass.exe'
           $env:GLASS_E2E_DIR = $testRoot
+          $env:GLASS_TEST_HELPERS = '1'
           node tools/lab/glass-native-acceptance.mjs
           if ($LASTEXITCODE -ne 0) { throw "Native Windows acceptance failed; inspect the proof artifact" }
 
