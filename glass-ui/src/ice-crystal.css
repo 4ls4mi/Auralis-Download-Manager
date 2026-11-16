@@ -213,3 +213,4 @@
 .cg-light button:not(:disabled,.cg-row,.cg-resize,.cg-toolbar>button,.cg-winbuttons button){color:hsl(var(--button-hue) 92% 25%)!important}
 .cg-window button:not(:disabled,.cg-row,.cg-resize,.cg-toolbar>button,.cg-winbuttons button):hover{background:hsl(var(--button-hue) 88% 52% / .38)!important;box-shadow:inset 0 1px #ffffff70,0 0 14px hsl(var(--button-hue) 90% 60% / .30)}
 @media(prefers-reduced-motion:reduce){.cg-window button:not(:disabled){transition:none!important;animation:none!important;transform:none!important}}
+@media(max-width:690px){.cg-window .cg-sidebar{overflow-x:auto;overflow-y:hidden}}
