@@ -244,7 +244,7 @@ export function CrystalWindow({ children, target = "main" }: {
           if(box.clientHeight>0&&box.scrollHeight>box.clientHeight+2)ratio=Math.min(ratio,box.clientHeight/box.scrollHeight);
           if(box.clientWidth>0&&box.scrollWidth>box.clientWidth+2)ratio=Math.min(ratio,box.clientWidth/box.scrollWidth);
         }
-        if(ratio<.998)setFit(old=>Math.max(.4,old*ratio*.99));
+        if(ratio<.998)setFit(old=>Math.max(target === "main" ? .85 : .4,old*ratio*.99));
       });
     };
     const reset=()=>{setFit(baseScale());measure()};

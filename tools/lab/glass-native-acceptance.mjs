@@ -54,10 +54,11 @@ async function pageFor(key){return until(()=>browser.contexts().flatMap(c=>c.pag
 const invoke=(page,command,args={})=>Promise.race([page.evaluate(([command,args])=>window.__TAURI_INTERNALS__.invoke(command,args),[command,args]),wait(12000).then(()=>{throw new Error('Native command timed out: '+command)})]);
 async function screenshot(page,name){await page.screenshot({path:path.join(output,name+'.png'),timeout:7000});}
 async function assertFits(page,name){
- await until(async()=>{
+ let lastOverflow=[];
+ try { await until(async()=>{
   const overflow=await page.evaluate(()=>{const frame=document.querySelector('.cg-content')?.getBoundingClientRect(),fit=document.querySelector('.cg-fit-content')?.getBoundingClientRect();const out=Array.from(document.querySelectorAll('.cg-fit-content,.cg-page,.cg-settings-body,.cg-settings-nav,.cg-sidebar,.cg-toolbar,.cg-window-top')).filter(el=>el.clientWidth&&el.clientHeight&&(el.scrollHeight>el.clientHeight+3||el.scrollWidth>el.clientWidth+3)).map(el=>el.className);if(frame&&fit&&(fit.right>frame.right+3||fit.bottom>frame.bottom+3))out.push('window bounds');const root=document.querySelector('.cg-fit-content');const zoom=root?Number.parseFloat(getComputedStyle(root).zoom)||1:1;for(const el of document.querySelectorAll('.cg-toolbar button span,.cg-sidebar button span,.cg-mdm-details dt,.cg-mdm-details dd')){if(el.getBoundingClientRect().width>0&&Number.parseFloat(getComputedStyle(el).fontSize)*zoom<11.5)out.push('unreadable text');}return out});
-  return overflow.length===0;
- },name+' has clipped content or would require page scrolling');
+  lastOverflow=overflow;return overflow.length===0;
+ },name+' has clipped content or would require page scrolling'); } catch(error) { throw new Error(error.message+': '+JSON.stringify(lastOverflow)); }
 }
 async function resizeWindow(page,label,width,height){await invoke(page,'plugin:window|set_size',{label,value:{Logical:{width,height}}});await wait(450);}
 async function setTheme(settings,light){await settings.getByRole('button',{name:'Appearance',exact:true}).click();await settings.getByRole('button',{name:light?'Light crystal':'Dark crystal',exact:true}).click();await wait(350);}
@@ -103,8 +104,8 @@ try{
  await progress.locator('.cg-connection-details>summary').click();await assertFits(progress,'Expanded connection details');await screenshot(progress,'progress-expanded-connections');
  await resizeWindow(progress,'download-'+first.id,620,500);await assertFits(progress,'Small progress window with expanded connections');await screenshot(progress,'progress-small-expanded');
  await progress.locator('.cg-connection-details>summary').click();await resizeWindow(progress,'download-'+first.id,880,680);
- await resizeWindow(main,'main',800,540);await assertFits(main,'Small main window');await screenshot(main,'main-small');await resizeWindow(main,'main',1480,850);
- passed('Main and expanded progress content fit resized native windows without page scrolling');
+ let smallMainFailure=null;await resizeWindow(main,'main',800,540);try{await assertFits(main,'Small main window')}catch(e){smallMainFailure=e;results.push({name:e.message,status:'failed'});console.error(e.message)}await screenshot(main,'main-small');await resizeWindow(main,'main',1480,850);
+ if(!smallMainFailure)passed('Main and expanded progress content fit resized native windows without page scrolling');
  await invoke(main,'update_glass_setting',{key:'max_connections',value:'32'});
  assert.equal((await invoke(main,'dashboard_visuals')).downloads.find(f=>f.id===first.id).chunk_count,8);
  passed('Changing the global connection setting preserves an existing file’s selected chunk count');
@@ -137,6 +138,7 @@ try{
  passed('Dark/light appearance propagates across native windows; screenshots captured');
  results.push({name:'Explorer/application native drag and physical DPI/transparency review',status:'manual Windows review still required'});
  await writeFile(path.join(output,'results.json'),JSON.stringify({platform:process.platform,arch:process.arch,source_run:process.env.GLASS_E2E_SOURCE_RUN??process.env.GITHUB_RUN_ID,results},null,2));
+ if(smallMainFailure)throw smallMainFailure;
  console.log('Windows native acceptance passed. Screenshots and result evidence are in the proof artifact.');
 }catch(error){
  await writeFile(path.join(output,'shell-startup.txt'),JSON.stringify({exit:shellExit,output:shellError},null,2));
