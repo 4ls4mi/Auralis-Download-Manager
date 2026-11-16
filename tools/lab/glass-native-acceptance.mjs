@@ -135,6 +135,11 @@ try{
   await assert.rejects(invoke(main,'glass_tool',{action:'gallery',payload:{url:'not-a-url',folder:'',limit:null,start:false}}));
   await main.getByRole('button',{name:'Tasks',exact:true}).click();await main.getByRole('button',{name:'Download gallery…',exact:true}).click();const gallery=await pageFor('tool=gallery');await gallery.getByLabel('Gallery page URL').waitFor();await gallery.locator('.cg-tool-body').getByRole('button',{name:'Close',exact:true}).click();
   passed('Gallery window opens and invalid addresses are rejected by MDM');
+  await invoke(main,'glass_tool',{action:'original-setting',payload:{key:'queue_panel_later',value:false}});
+  const galleryUrl='https://example.invalid/gallery';await invoke(main,'glass_tool',{action:'gallery',payload:{url:galleryUrl,folder:path.join(folder,'gallery-fixture'),limit:1,start:false}});
+  const galleryItem=await until(async()=>(await ipc({query:'list'})).downloads.find(x=>x.url===galleryUrl),'Gallery was not added to the original engine');
+  await invoke(main,'download_action',{action:'remove',ids:[galleryItem.id]});await until(async()=>(await ipc({query:'list'})).downloads.every(x=>x.id!==galleryItem.id),'Gallery fixture was not removed');
+  await invoke(main,'glass_tool',{action:'original-setting',payload:{key:'queue_panel_later',value:true}});passed('Gallery Later adds to the original MDM queue');
  }
 
  await capture('fixture-eight.zip');let info=await pageFor('request=');await info.waitForSelector('.cg-file-info');await wait(350);
