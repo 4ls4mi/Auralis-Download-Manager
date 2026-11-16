@@ -138,6 +138,7 @@ try{
   await invoke(main,'glass_tool',{action:'original-setting',payload:{key:'queue_panel_later',value:false}});
   const galleryUrl='https://example.invalid/gallery';await invoke(main,'glass_tool',{action:'gallery',payload:{url:galleryUrl,folder:path.join(folder,'gallery-fixture'),limit:1,start:false}});
   const galleryItem=await until(async()=>(await ipc({query:'list'})).downloads.find(x=>x.url===galleryUrl),'Gallery was not added to the original engine');
+  await until(async()=>(await invoke(main,'dashboard_snapshot')).queues.some(q=>q.ids.includes(galleryItem.id)),'Gallery was not placed in an MDM queue');
   await invoke(main,'download_action',{action:'remove',ids:[galleryItem.id]});await until(async()=>(await ipc({query:'list'})).downloads.every(x=>x.id!==galleryItem.id),'Gallery fixture was not removed');
   await invoke(main,'glass_tool',{action:'original-setting',payload:{key:'queue_panel_later',value:true}});passed('Gallery Later adds to the original MDM queue');
  }
