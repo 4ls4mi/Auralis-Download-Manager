@@ -35,7 +35,7 @@ const server=createServer((req,res)=>{
  res.writeHead(range?206:200,{'Content-Type':'application/zip','Content-Length':end-start+1,'Accept-Ranges':'bytes','ETag':'"glass-native-fixture-v1"','Content-Disposition':'attachment; filename="fixture.zip"',...(range?{'Content-Range':`bytes ${start}-${end}/${total}`}:{})});
  if(req.method==='HEAD'){res.end();return;}
  let at=start;
- const tick=setInterval(()=>{if(at>end){clearInterval(tick);res.end();return;}const bytes=Math.min(block.length,end-at+1);res.write(block.subarray(0,bytes));at+=bytes;},90);
+ const tick=setInterval(()=>{if(at>end){clearInterval(tick);res.end();return;}const bytes=Math.min(block.length,end-at+1);res.write(block.subarray(0,bytes));at+=bytes;},180);
  res.on('close',()=>clearInterval(tick));
 });
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
@@ -46,7 +46,7 @@ async function capture(name){
  const host=path.join(path.dirname(process.env.GLASS_E2E_EXE),'misterdownloadmanager-nmhost.exe');
  const message={url:address+'/'+name,filename:name,size:name.includes('thirty-two')?64*1024*1024:size,mime:'application/zip',referrer:address+'/source',pageUrl:address+'/source',cookies:'glass_acceptance=1',userAgent:'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0',explicit:true,v:'0.2.4'};
  const bytes=Buffer.from(JSON.stringify(message));const header=Buffer.alloc(4);header.writeUInt32LE(bytes.length);
- const hostReply=await new Promise((resolve,reject)=>{const child=spawn(host,[],{env:{...process.env,MDM_DATA_DIR:data},stdio:['pipe','pipe','pipe']});let raw=Buffer.alloc(0);const timer=setTimeout(()=>{child.kill();reject(new Error('Native browser host did not reply'));},30000);child.on('error',reject);child.stdout.on('data',b=>{raw=Buffer.concat([raw,b]);if(raw.length>=4&&raw.length>=4+raw.readUInt32LE(0)){clearTimeout(timer);child.stdin.end();resolve(JSON.parse(raw.subarray(4,4+raw.readUInt32LE(0)).toString()));}});child.stdin.write(Buffer.concat([header,bytes]));});
+ const hostReply=await new Promise((resolve,reject)=>{const child=spawn(host,['glass-test.firefox.json','integration@misterdownloadmanager.com'],{env:{...process.env,MDM_DATA_DIR:data},stdio:['pipe','pipe','pipe']});let raw=Buffer.alloc(0),hostError='';child.stderr.on('data',b=>{hostError+=b.toString()});child.on('exit',code=>{if(raw.length<4){clearTimeout(timer);reject(new Error('Native browser host exited ('+code+'): '+hostError))}});const timer=setTimeout(()=>{child.kill();reject(new Error('Native browser host did not reply'));},30000);child.on('error',reject);child.stdout.on('data',b=>{raw=Buffer.concat([raw,b]);if(raw.length>=4&&raw.length>=4+raw.readUInt32LE(0)){clearTimeout(timer);child.stdin.end();resolve(JSON.parse(raw.subarray(4,4+raw.readUInt32LE(0)).toString()));}});child.stdin.write(Buffer.concat([header,bytes]));});
  assert.equal(hostReply.ok,true,'Original native messaging host accepted capture');
  return message;
 }

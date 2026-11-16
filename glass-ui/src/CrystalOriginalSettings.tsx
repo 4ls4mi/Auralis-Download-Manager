@@ -13,12 +13,14 @@ export default function CrystalOriginalSettings({section}:{section:string}){
 }
 function Editor({field,onSaved}:{field:Field;onSaved:()=>Promise<void>}){
  const [value,setValue]=useState<unknown>(structuredClone(field.value)),[clear,setClear]=useState(false),[clearPasswords,setClearPasswords]=useState<number[]>([]);
+ const unavailable=field.key==="cnl_on"||field.key==="cnl_sites";
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[page,setPage]=useState(0);
  const columns:Column[]=field.kind==='lines'?[{label:'Address',kind:'text'}]:field.columns??[];
  const rows:Cell[][]=field.kind==='lines'?(value as string[]).map(v=>[v]):field.kind==='table'?(value as Cell[][]):[];
  const count=Math.max(1,Math.ceil(rows.length/4)),safePage=Math.min(page,count-1);
  const setRows=(rows:Cell[][])=>setValue(field.kind==='lines'?rows.map(r=>String(r[0])):rows);
  const save=async()=>{setBusy(true);setError('');try{await invoke('glass_tool',{action:'original-setting',payload:{key:field.key,value,clear,clear_passwords:clearPasswords}});setNotice('Saved.');await onSaved()}catch(e){setError(String(e))}finally{setBusy(false)}};
+ if(unavailable)return <section className="cg-glass cg-progress-section cg-original-editor"><h3>{field.label}</h3><p>Click’n’Load is not yet available in the Glass interface. Your existing settings are preserved.</p></section>;
  return <section className="cg-glass cg-progress-section cg-original-editor"><h3>{field.label}</h3>
   {field.kind==='boolean'?<label className="cg-toggle"><span>Enabled</span><input type="checkbox" checked={Boolean(value)} onChange={e=>setValue(e.target.checked)}/></label>:field.kind==='select'?<label className="cg-field">Choose an option<select value={Number(value)} onChange={e=>setValue(Number(e.target.value))}>{field.options?.map((name,i)=><option key={i} value={i}>{name}</option>)}</select></label>:field.kind==='regional'?<Regional value={value as Region} onChange={setValue}/>:field.kind==='table'||field.kind==='lines'?<>
    <div className="cg-original-table">{rows.slice(safePage*4,safePage*4+4).map((row,i)=>{const index=safePage*4+i;return <div className="cg-original-row" key={index}>{columns.map((column,c)=>

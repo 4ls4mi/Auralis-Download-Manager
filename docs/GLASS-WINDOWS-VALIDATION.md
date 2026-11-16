@@ -30,3 +30,7 @@ Manual Windows review still covers:
 - Queue wake, dial-up disconnect, exit and computer power actions. CI does not execute shutdown/sleep/hibernate; these retain MDM's original cancellable countdown.
 
 These are verification limits, not claims of proven parity across every original MDM feature. Any remaining migration gaps must be recorded with the actual behavior found during review.
+
+## Known migration gaps
+
+The original application source and downloader are retained, but full UI parity is still being completed. The Glass headless path does not yet expose the original video/playlist selection dialog or automatic clipboard monitoring, and the Click'n'Load listener is disabled in headless mode even though its original preference is present. Remote-control and other advanced original dialogs also need a complete parity review. These are open implementation items, not behaviors proven by an installer build.
