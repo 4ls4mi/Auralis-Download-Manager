@@ -44,11 +44,12 @@ export default function CrystalSettings(){
   useEffect(()=>{void load();void invoke<string>("browser_integration",{repair:false}).then(setBrowser).catch(e=>setBrowser(String(e)))},[load]);
   const change=async(key:EngineKey,value:boolean|number|string)=>{
     setBusy(true);setError("");setNotice("");
+    const previous=cfg;setCfg(old=>old?{...old,[key]:value}:old);
     try{
       await invoke("update_glass_setting",{key,value:String(value)});
       const result=await invoke<EngineSettings>("glass_settings");
       setCfg(result);setNotice("Saved.");
-    }catch(e){setError(String(e))}finally{setBusy(false)}
+    }catch(e){setCfg(previous);setError(String(e))}finally{setBusy(false)}
   };
   const check=(key:EngineKey,title:string,detail:string)=>
     <label className="cg-toggle" key={key}><span><strong>{title}</strong><small>{detail}</small></span>
