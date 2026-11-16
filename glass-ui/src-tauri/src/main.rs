@@ -124,6 +124,23 @@ async fn boot_engine(app: AppHandle) -> ApiResult<String> {
     }).await.map_err(|e| e.to_string())?
 }
 
+/// Private, authenticated engine telemetry for the native download views.
+#[tauri::command]
+async fn dashboard_visuals() -> ApiResult<serde_json::Value> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let reply = send_ipc(&mdm_ipc::Command {
+            query: Some("glass-visuals".into()),
+            ..Default::default()
+        })?;
+        let result: serde_json::Value = serde_json::from_str(&reply)
+            .map_err(|_| format!("Invalid engine telemetry: {reply}"))?;
+        if !result.get("downloads").is_some_and(serde_json::Value::is_array) {
+            return Err(format!("Visual telemetry unavailable: {result}"));
+        }
+        Ok(result)
+    }).await.map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 async fn dashboard_snapshot() -> ApiResult<mdm_ipc::api::ListAnswer> {
     tauri::async_runtime::spawn_blocking(request_snapshot)
@@ -457,7 +474,7 @@ fn main() {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            boot_engine, dashboard_snapshot, download_action,
+            boot_engine, dashboard_snapshot, dashboard_visuals, download_action,
             add_download, select_wallpaper, queue_action, glass_settings, update_glass_setting,
             browser_integration, bulk_action, file_operation, add_torrent_file, quit_glass
         ])
