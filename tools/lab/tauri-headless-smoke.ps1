@@ -62,6 +62,17 @@ try {
     }
     Write-Host "PASS: no original MDM main window"
 
+    # The Glass progress and list windows must receive the genuine engine
+    # telemetry (segment cursors / connections / server), not fake percentages.
+    $visuals = Invoke-GlassIpc @{ query = "glass-visuals" }
+    if (-not $visuals.PSObject.Properties.Name.Contains("downloads")) {
+        throw "Glass engine visuals endpoint does not expose downloads array"
+    }
+    if ($null -eq $visuals.downloads) {
+        throw "Visuals endpoint must return an array, even when no downloads exist"
+    }
+    Write-Host "PASS: authenticated original engine segment telemetry endpoint"
+
     $settings = Invoke-GlassIpc @{ query = "glass-settings" }
     if (-not $settings.PSObject.Properties.Name.Contains('max_connections')) {
         throw "The native Glass settings endpoint is missing connection limits"
