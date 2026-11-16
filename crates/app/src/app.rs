@@ -4210,10 +4210,11 @@ impl App {
             return;
         };
         let name = mdm_engine::naming::file_name(None, &url);
-        if mdm_engine::supported(&url) && self.settings.clipboard_type(&name) {
+        let automatic = self.glass_owned() && self.settings.glass_clipboard_auto_download;
+        if mdm_engine::supported(&url) && (automatic || self.settings.clipboard_type(&name)) {
             let cmd = ipc::Command {
                 url: Some(text),
-                silent: self.glass_owned() && self.settings.glass_clipboard_auto_download,
+                silent: automatic,
                 ..Default::default()
             };
             self.handle_command(cmd, ctx);
