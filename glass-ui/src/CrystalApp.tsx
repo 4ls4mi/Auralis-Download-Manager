@@ -1,0 +1,298 @@
+import { invoke } from "@tauri-apps/api/core";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Activity, Archive, CheckCircle2, Clock3, Download as DownloadIcon, File,
+  FileArchive, Film, Folder, FolderOpen, Gauge, Globe2, HardDrive, HelpCircle,
+  Pause, Play, Plus, Search, Settings, Square, Trash2, X, ChevronDown,
+  ListFilter, RefreshCw
+} from "lucide-react";
+import {
+  CrystalWindow, WindowTop, GradientBar, SpeedGraph, pct, rate, units,
+  timeLeft, openWindow, useCrystal
+} from "./CrystalShared";
+import type { Dashboard, Download as MdmFile } from "./CrystalShared";
+
+type Menu = "Tasks" | "File" | "Downloads" | "View" | "Help";
+type MenuEntry = { label: string; action: string; disabled?: boolean; shortcut?: string };
+const menus: Menu[]=["Tasks","File","Downloads","View","Help"];
+const blank:Dashboard={downloads:[],speed:0,queues:[],categories:[]};
+const pop = (id:number)=>openWindow("download-"+id,"/?detail="+id,750,810);
+const settings = (tab="General")=>openWindow("settings","/?settings="+encodeURIComponent(tab),880,695);
+const add=(torrent=false)=>openWindow(torrent?"add-torrent":"add-url",`/?add=${torrent?"torrent":"url"}`,590,390);
+const props=(id:number)=>openWindow("properties-"+id,"/?properties="+id,610,490);
+function FileSymbol({name}:{name:string}){
+  const ext=name.split(".").pop()?.toLowerCase();
+  const Icon=["mp4","mkv","mov","avi","webm"].includes(ext??"")?Film:
+    ["zip","rar","7z","iso","nsp","torrent"].includes(ext??"")?Archive:
+      ["exe","msi"].includes(ext??"")?FileArchive:File;
+  return <div className="cg-file-icon"><Icon size={21}/></div>;
+}
+function StatusBadge({item}:{item:MdmFile}){
+  const label=item.status==="Complete"?"Completed":item.status==="Stopped"?"Paused":item.status;
+  return <span className={"cg-status "+item.status.toLowerCase()}><span className="dot"/>{label}</span>;
+}
+export default function CrystalApp(){
+  const [data,setData]=useState<Dashboard>(blank),[online,setOnline]=useState(false),[message,setMessage]=useState("Connecting to Rust download engine…");
+  const [chosen,setChosen]=useState<number|null>(null),[filter,setFilter]=useState("All Downloads"),[term,setTerm]=useState("");
+  const [openMenu,setOpenMenu]=useState<Menu|null>(null),[context,setContext]=useState<{id:number;x:number;y:number}|null>(null);
+  const [busy,setBusy]=useState(false),[error,setError]=useState(""),[history,setHistory]=useState<number[]>([]);
+  const [doubleClickOpen,setDoubleClickOpen]=useState(false);
+  const [showCategories,setShowCategories]=useState(true);
+  const {appearance}=useCrystal();
+  const autoRef=useRef(appearance.autoPopups),previous=useRef<Map<number,string>|null>(null);
+  const pending=useRef(false),searchRef=useRef<HTMLInputElement|null>(null);
+  useEffect(()=>{autoRef.current=appearance.autoPopups},[appearance.autoPopups]);
+  const refresh=useCallback(async()=>{
+    if(pending.current)return;
+    pending.current=true;
+    try{
+      const next=await invoke<Dashboard>("dashboard_snapshot");
+      setData(next);setOnline(true);setMessage("Rust engine connected • Browser integration uses original MDM native host");
+      setHistory(h=>[...h.slice(-52),Math.max(0,next.speed)]);
+      if(previous.current&&autoRef.current){
+        for(const item of next.downloads){
+          if(item.status==="Downloading"&&previous.current.get(item.id)!=="Downloading")pop(item.id);
+        }
+      }
+      previous.current=new Map(next.downloads.map(x=>[x.id,x.status]));
+    }catch(e){setOnline(false);setMessage(String(e))}
+    finally{pending.current=false}
+  },[]);
+  useEffect(()=>{
+    let mounted=true;
+    void invoke<string>("boot_engine").then(text=>{
+      if(!mounted)return;
+      setMessage(text);void refresh();
+      void invoke<{double_click_open:boolean}>("glass_settings").then(s=>{
+        if(mounted)setDoubleClickOpen(Boolean(s.double_click_open));
+      }).catch(()=>undefined);
+    }).catch(e=>{if(mounted){setOnline(false);setMessage(String(e))}});
+    const timer=window.setInterval(()=>{if(mounted)void refresh()},1200);
+    return()=>{mounted=false;window.clearInterval(timer)}
+  },[refresh]);
+  const counts=useMemo(()=>({
+    all:data.downloads.length,downloading:data.downloads.filter(x=>x.status==="Downloading").length,
+    stopped:data.downloads.filter(x=>x.status==="Stopped").length,
+    unfinished:data.downloads.filter(x=>x.status!=="Complete").length,
+    finished:data.downloads.filter(x=>x.status==="Complete").length
+  }),[data.downloads]);
+  const shown=useMemo(()=>data.downloads.filter(d=>{
+    const match=filter==="All Downloads"||
+      (filter==="Downloading"&&d.status==="Downloading")||
+      (filter==="Stopped"&&d.status==="Stopped")||
+      (filter==="Unfinished"&&d.status!=="Complete")||
+      (filter==="Finished"&&d.status==="Complete")||
+      (filter.startsWith("cat:")&&d.category===filter.slice(4))||
+      (filter.startsWith("queue:")&&data.queues.find(q=>q.name===filter.slice(6))?.ids.includes(d.id));
+    return match&&(d.file+" "+d.url+" "+d.path).toLowerCase().includes(term.toLowerCase())
+  }),[data.downloads,data.queues,filter,term]);
+  const picked=data.downloads.find(i=>i.id===chosen)??null;
+  const anyRunning=counts.downloading>0,anyComplete=counts.finished>0;
+  const mainQueue=data.queues[0];
+  const execute=async(action:string,item:MdmFile|null=picked)=>{
+    setOpenMenu(null);setContext(null);setError("");
+    if(action==="add")return add();
+    if(action==="torrent")return add(true);
+    if(action==="settings")return settings();
+    if(action==="scheduler")return settings("Scheduler");
+    if(action==="browser")return settings("Browser Integration");
+    if(action==="appearance")return settings("Appearance");
+    if(action==="limit")return settings("Connection");
+    if(action==="about")return settings("Advanced");
+    if(action==="refresh")return void refresh();
+    if(action==="search"){searchRef.current?.focus();return}
+    if(action==="toggle-categories"){setShowCategories(v=>!v);return}
+    if(action==="details"){if(item)pop(item.id);return}
+    if(action==="properties"){if(item)props(item.id);return}
+    if(action==="hide"){void import("@tauri-apps/api/window").then(m=>m.getCurrentWindow().close());return}
+    if(action==="exit"){
+      if(window.confirm("Exit Mister Hybrid Glass and stop the headless downloader? Active transfers will be saved and interrupted.")){
+        setBusy(true);try{await invoke("quit_glass")}catch(e){setError(String(e))}finally{setBusy(false)}
+      }
+      return;
+    }
+    if(!online){setError("Rust download engine is offline.");return}
+    setBusy(true);
+    try{
+      if(action==="stop-all"||action==="delete-completed"){
+        if(action==="delete-completed"&&!window.confirm("Remove all completed downloads from the list? Downloaded files are kept."))return;
+        const result=await invoke<{done:number[];skipped:{why:string}[]}>("bulk_action",{action});
+        if(result.skipped.length)setError(result.skipped.map(x=>x.why).join("; "));
+      }else if(action==="queue-start"||action==="queue-stop"){
+        if(!mainQueue)throw Error("No main queue exists");
+        await invoke("queue_action",{name:mainQueue.name,action:action==="queue-start"?"start_queue":"stop_queue"});
+      }else if(item&&(action==="start"||action==="stop"||action==="remove"||action==="delete")){
+        if((action==="delete"||action==="remove")&&!window.confirm(
+          action==="delete"?`Delete "${item.file}" and its downloaded files?`:`Remove "${item.file}" from the list and keep its files?`))return;
+        const result=await invoke<{done:number[];skipped:{why:string}[]}>("download_action",{
+          action:action==="stop"?"pause":action,ids:[item.id]
+        });
+        if(result.skipped.length)setError(result.skipped.map(x=>x.why).join("; "));
+      }else if(item&&(action==="open"||action==="folder"||action==="redownload")){
+        if(action==="redownload"&&!window.confirm(`Redownload "${item.file}" from the beginning?`))return;
+        await invoke("file_operation",{id:item.id,operation:action,value:null});
+      }
+      await refresh();
+    }catch(e){setError(String(e))}
+    finally{setBusy(false)}
+  };
+  function menuEntries(name:Menu):MenuEntry[]{
+    switch(name){
+      case "Tasks":return [
+        {label:"Add new download…",action:"add",shortcut:"Ctrl+N"},
+        {label:"Open torrent file / magnet…",action:"torrent",shortcut:"Ctrl+O"},
+        {label:"Batch download…",action:"batch",disabled:true},
+        {label:"Link grabber…",action:"grabber",disabled:true},
+        {label:"Browser integration",action:"browser"},
+        {label:"Hide in system tray",action:"hide"},
+        {label:"Exit",action:"exit"}];
+      case "File":return [
+        {label:"Open",action:"open",disabled:!picked||picked.status!=="Complete"},
+        {label:"Open folder",action:"folder",disabled:!picked},
+        {label:"Move/Rename…",action:"move",disabled:true},
+        {label:"Redownload",action:"redownload",disabled:!picked||picked.status==="Downloading"},
+        {label:"Remove",action:"remove",disabled:!picked||picked.status==="Downloading",shortcut:"Delete"},
+        {label:"Remove with files",action:"delete",disabled:!picked||picked.status==="Downloading"},
+        {label:"Properties",action:"properties",disabled:!picked}];
+      case "Downloads":return [
+        {label:"Pause All / Stop All",action:"stop-all",disabled:!anyRunning},
+        {label:"Delete All Completed",action:"delete-completed",disabled:!anyComplete},
+        {label:"Scheduler…",action:"scheduler"},
+        {label:"Start queue",action:"queue-start",disabled:!mainQueue||mainQueue.running},
+        {label:"Stop queue",action:"queue-stop",disabled:!mainQueue||!mainQueue.running},
+        {label:"Speed Limiter…",action:"limit"},
+        {label:"Options",action:"settings"}];
+      case "View":return [
+        {label:showCategories?"Hide categories":"Show categories",action:"toggle-categories"},
+        {label:"Refresh",action:"refresh",shortcut:"F5"},
+        {label:"Search downloads…",action:"search",shortcut:"Ctrl+F"},
+        {label:"Crystal Appearance…",action:"appearance"},
+        {label:"Unified Settings…",action:"settings"}];
+      case "Help":return [
+        {label:"Browser integration and repair",action:"browser"},
+        {label:"About Mister Hybrid Glass",action:"about"},
+        {label:"Keyboard shortcuts",action:"about"}];
+    }
+  }
+  useEffect(()=>{
+    const keyboard=(e:KeyboardEvent)=>{
+      if(e.key==="Escape"){setOpenMenu(null);setContext(null);return}
+      if(e.ctrlKey&&e.key.toLowerCase()==="n"){e.preventDefault();void execute("add")}
+      else if(e.ctrlKey&&e.key.toLowerCase()==="o"){e.preventDefault();void execute("torrent")}
+      else if(e.ctrlKey&&e.key.toLowerCase()==="f"){e.preventDefault();searchRef.current?.focus()}
+      else if(e.ctrlKey&&e.key===","){e.preventDefault();void execute("settings")}
+      else if(e.key==="F5"){e.preventDefault();void refresh()}
+      else if(e.key==="Delete"&&picked&&document.activeElement?.tagName!=="INPUT"){e.preventDefault();void execute("remove")}
+      else if(e.key==="Enter"&&picked&&document.activeElement?.tagName!=="INPUT"){e.preventDefault();pop(picked.id)}
+    };
+    const click=(e:MouseEvent)=>{
+      if(!(e.target as HTMLElement).closest(".cg-menu-parent"))setOpenMenu(null);
+      if(!(e.target as HTMLElement).closest(".cg-context"))setContext(null);
+    };
+    window.addEventListener("keydown",keyboard);document.addEventListener("mousedown",click);
+    return()=>{window.removeEventListener("keydown",keyboard);document.removeEventListener("mousedown",click)}
+  });
+  const nav=[["All Downloads",DownloadIcon,counts.all],["Downloading",Activity,counts.downloading],
+    ["Stopped",Pause,counts.stopped],["Unfinished",Clock3,counts.unfinished],["Finished",CheckCircle2,counts.finished]] as const;
+  const toolbar=[
+    {name:"Add URL",key:"add",icon:Plus,primary:true},
+    {name:"Add Torrent",key:"torrent",icon:FileArchive},
+    {name:"Resume",key:"start",icon:Play,disabled:!picked||picked.status==="Downloading"||picked.status==="Complete"},
+    {name:"Stop",key:"stop",icon:Square,disabled:!picked||picked.status!=="Downloading",danger:true},
+    {name:"Stop All",key:"stop-all",icon:Pause,disabled:!anyRunning,danger:true},
+    {name:"Delete",key:"remove",icon:Trash2,disabled:!picked||picked.status==="Downloading",danger:true},
+    {name:"Delete Completed",key:"delete-completed",icon:Trash2,disabled:!anyComplete,danger:true},
+    {name:"Settings",key:"settings",icon:Settings},
+    {name:"Scheduler",key:"scheduler",icon:Clock3},
+    {name:"Start Queue",key:"queue-start",icon:Play,disabled:!mainQueue||mainQueue.running},
+    {name:"Stop Queue",key:"queue-stop",icon:Pause,disabled:!mainQueue||!mainQueue.running,danger:true},
+  ];
+  const contextItems:MenuEntry[]=[
+    {label:"Open",action:"open",disabled:!picked||picked.status!=="Complete"},
+    {label:"Open with…",action:"open-with",disabled:true},
+    {label:"Open folder",action:"folder",disabled:!picked},
+    {label:"Move/Rename…",action:"move",disabled:true},
+    {label:"Redownload",action:"redownload",disabled:!picked||picked.status==="Downloading"},
+    {label:"Resume Download",action:"start",disabled:!picked||picked.status==="Downloading"||picked.status==="Complete"},
+    {label:"Stop Download",action:"stop",disabled:!picked||picked.status!=="Downloading"},
+    {label:"Refresh download address",action:"refresh-address",disabled:true},
+    {label:"Verify checksum…",action:"checksum",disabled:true},
+    {label:"Extract archive",action:"extract",disabled:true},
+    {label:"Remove from list",action:"remove",disabled:!picked||picked.status==="Downloading"},
+    {label:"Remove with files",action:"delete",disabled:!picked||picked.status==="Downloading"},
+    {label:"Add / Move to queue",action:"move-queue",disabled:true},
+    {label:"Properties",action:"properties",disabled:!picked}
+  ];
+  const rowDouble=(d:MdmFile)=>{
+    if(d.status==="Complete"&&doubleClickOpen)void execute("open",d);
+    else pop(d.id);
+  };
+  return <CrystalWindow><WindowTop title="Mister Hybrid Glass — Download Manager">
+    <span className="cg-muted" style={{fontSize:10,whiteSpace:"nowrap",marginRight:9}}>{online?"● RUST ENGINE CONNECTED":"○ ENGINE OFFLINE"}</span>
+  </WindowTop>
+  <div className="cg-main-body" onContextMenu={e=>e.preventDefault()}>
+    <div className="cg-menubar">
+      {menus.map(menu=><div className="cg-menu-parent" key={menu}>
+        <button className={"cg-menu-trigger "+(openMenu===menu?"active":"")} onClick={()=>{setContext(null);setOpenMenu(openMenu===menu?null:menu)}}>{menu}</button>
+        {openMenu===menu&&<div className="cg-dropdown">
+          {menuEntries(menu).map(x=><button key={x.label} disabled={x.disabled} onClick={()=>void execute(x.action)}>
+            <span>{x.label}</span>{x.shortcut&&<kbd>{x.shortcut}</kbd>}</button>)}
+        </div>}
+      </div>)}
+    </div>
+    <div className="cg-toolbar cg-glass">
+      {toolbar.map((b,i)=><button key={i} className={`${b.primary?"primary":""} ${b.danger?"danger":""}`}
+        disabled={busy||b.disabled} title={b.name} onClick={()=>void execute(b.key)}><b.icon size={19}/><span>{b.name}</span></button>)}
+    </div>
+    <div className="cg-workspace">
+      {showCategories&&<aside className="cg-sidebar cg-glass">
+        <div className="cg-side-heading">MISTER HYBRID • LIBRARY</div>
+        {nav.map(([label,Icon,count])=><button key={label} className={filter===label?"selected":""} onClick={()=>setFilter(label)}>
+          <Icon size={17}/><span>{label}</span><b>{count}</b></button>)}
+        <div className="cg-side-separator">CATEGORIES</div>
+        {data.categories.filter(c=>c.key!=="General").slice(0,10).map(c=><button className={filter==="cat:"+c.key?"selected":""}
+          key={c.key} onClick={()=>setFilter("cat:"+c.key)}><Folder size={15}/><span>{c.name}</span></button>)}
+        <div className="cg-side-separator">QUEUES</div>
+        {data.queues.map(q=><button className={"cg-side-queue "+(filter==="queue:"+q.name?"selected":"")} key={q.name}
+          onClick={()=>setFilter("queue:"+q.name)}><ListFilter size={15}/><span>{q.name}</span><b>{q.ids.length}</b></button>)}
+      </aside>}
+      <section className="cg-list-panel cg-glass">
+        <header className="cg-list-title"><div><h2>{filter.startsWith("cat:")?filter.slice(4):filter.startsWith("queue:")?filter.slice(6):filter}</h2>
+          <small>{shown.length} of {data.downloads.length} downloads • Double-click for the floating progress window</small></div>
+          <label className="cg-search"><Search size={17}/><input ref={searchRef} placeholder="Search downloads..." value={term} onChange={e=>setTerm(e.target.value)}/></label>
+        </header>
+        <div className="cg-table-viewport"><div className="cg-table">
+          <header className="cg-cols"><span>FILE NAME</span><span>SIZE</span><span>STATUS</span><span>PROGRESS</span><span>SPEED</span><span>TIME LEFT</span></header>
+          {shown.map(d=><button className={"cg-row "+(chosen===d.id?"selected":"")} key={d.id}
+            onClick={()=>{setChosen(d.id);setContext(null)}} onDoubleClick={()=>rowDouble(d)}
+            onContextMenu={e=>{
+              e.preventDefault();setChosen(d.id);setOpenMenu(null);
+              setContext({id:d.id,x:Math.min(e.clientX,window.innerWidth-247),y:Math.min(e.clientY,window.innerHeight-430)});
+            }}>
+            <span className="cg-file"><FileSymbol name={d.file}/><span className="cg-file-info">
+              <strong title={d.file}>{d.file}</strong><small>{units(d.downloaded)} / {units(d.size)}</small></span></span>
+            <span>{units(d.size)}</span><StatusBadge item={d}/>
+            <GradientBar percent={pct(d)} showLabel/>
+            <span>{d.status==="Downloading"?rate(d.speed):"—"}</span>
+            <span>{timeLeft(d)}</span>
+          </button>)}
+          {!shown.length&&<div className="cg-empty"><FolderOpen size={35}/><strong>{online?"No downloads in this view":"Connecting to MDM"}</strong>
+            <p>{online?"Add a URL or torrent to begin. All progress and transfer speeds come from the real Rust engine.":message}</p>
+            {online&&<button className="cg-btn cg-btn-primary" onClick={()=>add()}><Plus size={15}/> Add URL</button>}
+          </div>}
+        </div></div>
+      </section>
+    </div>
+    <footer className="cg-footer cg-glass">
+      <div className="cg-footer-stats"><span><small>TOTAL SPEED</small><strong>{rate(data.speed)}</strong></span>
+        <span><small>ACTIVE</small><strong>{counts.downloading}</strong></span>
+        <span><small>COMPLETED</small><strong>{counts.finished}</strong></span></div>
+      <SpeedGraph values={history}/>
+      <span className="cg-footer-message" title={error||message}>{error||message}</span>
+    </footer>
+    {context&&picked&&picked.id===context.id&&<div className="cg-context" style={{left:Math.max(10,context.x),top:Math.max(10,context.y)}}
+      onContextMenu={e=>e.preventDefault()}>{contextItems.map((x,i)=>
+        <button key={x.label} disabled={x.disabled} onClick={()=>void execute(x.action,picked)}>{x.label}
+          {i===contextItems.length-1&&<ChevronDown size={13}/>}</button>)}</div>}
+  </div></CrystalWindow>;
+}
