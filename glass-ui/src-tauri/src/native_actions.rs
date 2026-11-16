@@ -98,3 +98,12 @@ pub async fn video_tool(action:String,value:String,choice:Option<usize>) -> ApiR
         serde_json::from_str(&response).map_err(|_|"Could not read the video lookup result".into())
     }).await.map_err(|e|e.to_string())?
 }
+
+#[tauri::command]
+pub async fn browser_video(id:u64, choice:Option<usize>) -> ApiResult<serde_json::Value> {
+    tauri::async_runtime::spawn_blocking(move||{
+        let command=if let Some(choice)=choice {mdm_ipc::Command{action:Some("glass-video".into()),ids:vec![id],queue:Some(choice.to_string()),..Default::default()}} else {mdm_ipc::Command{query:Some("glass-video".into()),ids:vec![id],..Default::default()}};
+        let response=send_ipc(&command)?;
+        serde_json::from_str(&response).map_err(|_|"Could not read the video request".into())
+    }).await.map_err(|e|e.to_string())?
+}

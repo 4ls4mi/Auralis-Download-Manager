@@ -861,6 +861,8 @@ pub struct App {
     add_url: Option<AddUrl>,
     file_info: Option<FileInfo>,
     glass_info_serial: u64,
+    glass_video_serial: u64,
+    glass_videos: std::collections::HashMap<u64, (String, ipc::api::VideoLookupAnswer, bool)>,
     glass_import_serial: u64,
     glass_duplicate_serial:u64,
     glass_account: Option<(mdm_debrid::ServiceKind,crate::debrid::SignIn)>,
@@ -1639,6 +1641,8 @@ impl App {
             update_checked_this_run: None,
             file_info: None,
             glass_info_serial: 0,
+            glass_video_serial: 0,
+            glass_videos: Default::default(),
             glass_import_serial: 0,
             glass_duplicate_serial:0,
             glass_account: None,
@@ -2916,6 +2920,23 @@ impl App {
         // Without a window (#157): an address, magnet or .torrent is added as a paired device's
         // is (no Download File Info, no Add torrent); nothing else opens anything.
         if self.headless {
+            if self.glass_owned() && !cmd.remote && let Some(page) = cmd.video_page.as_deref() {
+                if let Some(file) = drive_file_behind_player(&cmd).or_else(|| cmd.video_direct.then(|| page.to_owned())) {
+                    let mut direct = cmd.clone();
+                    direct.video_page = None;
+                    direct.url = Some(file);
+                    direct.silent = true;
+                    let _ = self.remote_add(direct);
+                    return;
+                }
+                let mut lookup = cmd.clone();
+                lookup.video_lookup = Some(ipc::VideoLookup { address: page.to_owned(), title: cmd.video_title.clone(), store_id: None });
+                let answer = self.quality_menu(&lookup);
+                self.glass_video_serial = self.glass_video_serial.wrapping_add(1);
+                if self.glass_videos.len() >= 20 { if let Some(old) = self.glass_videos.keys().min().copied() { self.glass_videos.remove(&old); } }
+                self.glass_videos.insert(self.glass_video_serial, (page.to_owned(), answer, cmd.private));
+                return;
+            }
             if self.glass_owned() && !cmd.remote && (!cmd.links.is_empty()||cmd.links_part.is_some()) {
                 let cmd=if cmd.links_part.is_some(){match self.link_parts.add(cmd,Instant::now()){crate::linkparts::Placed::Whole(c)=>*c,_=>return}}else{cmd};
                 let found=cmd.links.iter().map(|url|crate::transfer::Imported{url:url.clone(),referer:cmd.referer.clone(),cookies:page_data_for(url,cmd.referer.as_deref(),cmd.cookies.as_deref()),user_agent:cmd.user_agent.clone(),private:cmd.private,..Default::default()}).collect();

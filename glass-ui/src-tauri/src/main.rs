@@ -5,7 +5,7 @@
 mod lifecycle;
 mod native_actions;
 use lifecycle::{pending_file_info, file_info_action, choose_download_path, window_preferences, glass_tool, choose_folder, open_glass_window, close_progress_windows};
-use native_actions::{drag_download, drag_state, choose_move, clipboard_text, video_tool};
+use native_actions::{drag_download, drag_state, choose_move, clipboard_text, video_tool, browser_video};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -500,6 +500,9 @@ fn main() {
         })
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { .. } = event {
+                if let Some(id)=window.label().strip_prefix("tool-video-").and_then(|s|s.parse::<u64>().ok()) {
+                    thread::spawn(move||{let _=send_ipc(&mdm_ipc::Command{action:Some("glass-video".into()),category:Some("close".into()),ids:vec![id],..Default::default()});});
+                }
                 for kind in ["queue","duplicate"]{
                     if let Some(lease)=window.label().strip_prefix(&format!("tool-{kind}-")).and_then(|s|s.parse::<u64>().ok()){
                         thread::spawn(move||{let _=send_ipc(&mdm_ipc::Command{action:Some("glass-prompt".into()),queue:Some(serde_json::json!({"kind":kind,"lease":lease,"cancel":true}).to_string()),..Default::default()});});
@@ -522,7 +525,7 @@ fn main() {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            pending_file_info, file_info_action, choose_download_path, window_preferences, glass_tool, choose_folder, open_glass_window, close_progress_windows, drag_download, drag_state, choose_move, clipboard_text, video_tool,
+            pending_file_info, file_info_action, choose_download_path, window_preferences, glass_tool, choose_folder, open_glass_window, close_progress_windows, drag_download, drag_state, choose_move, clipboard_text, video_tool, browser_video,
             boot_engine, dashboard_snapshot, dashboard_visuals, download_action,
             add_download, select_wallpaper, queue_action, glass_settings, update_glass_setting,
             browser_integration, bulk_action, file_operation, add_torrent_file, quit_glass, open_upstream_releases

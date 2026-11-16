@@ -42,9 +42,9 @@ await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const address=`http://127.0.0.1:${server.address().port}`;
 const portServer=net.createServer();await new Promise(r=>portServer.listen(0,'127.0.0.1',r));const port=portServer.address().port;await new Promise(r=>portServer.close(r));
 async function ipc(command){const endpoint=JSON.parse(await readFile(path.join(data,'ipc.json'),'utf8'));return new Promise((resolve,reject)=>{let text='';const socket=net.connect({host:'127.0.0.1',port:endpoint.port},()=>socket.write(JSON.stringify({token:endpoint.token,...command})+'\n'));socket.setTimeout(10000,()=>socket.destroy(new Error('IPC timeout')));socket.on('data',b=>{text+=b.toString();if(text.includes('\n')){socket.end();try{resolve(JSON.parse(text.split('\n')[0]));}catch(e){reject(e)}}});socket.on('error',reject);});}
-async function capture(name){
+async function capture(name,extra={}){
  const host=path.join(path.dirname(process.env.GLASS_E2E_EXE),'misterdownloadmanager-nmhost.exe');
- const message={url:address+'/'+name,filename:name,size:name.includes('thirty-two')?64*1024*1024:size,mime:'application/zip',referrer:address+'/source',pageUrl:address+'/source',cookies:'glass_acceptance=1',userAgent:'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0',explicit:true,v:'0.2.4'};
+ const message={url:address+'/'+name,filename:name,size:name.includes('thirty-two')?64*1024*1024:size,mime:'application/zip',referrer:address+'/source',pageUrl:address+'/source',cookies:'glass_acceptance=1',userAgent:'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0',explicit:true,v:'0.2.4',...extra};
  const bytes=Buffer.from(JSON.stringify(message));const header=Buffer.alloc(4);header.writeUInt32LE(bytes.length);
  const hostReply=await new Promise((resolve,reject)=>{const child=spawn(host,['glass-test.firefox.json','integration@misterdownloadmanager.com'],{env:{...process.env,MDM_DATA_DIR:data},stdio:['pipe','pipe','pipe']});let raw=Buffer.alloc(0),hostError='';child.stderr.on('data',b=>{hostError+=b.toString()});child.on('exit',code=>{if(raw.length<4){clearTimeout(timer);reject(new Error('Native browser host exited ('+code+'): '+hostError))}});const timer=setTimeout(()=>{child.kill();reject(new Error('Native browser host did not reply'));},30000);child.on('error',reject);child.stdout.on('data',b=>{raw=Buffer.concat([raw,b]);if(raw.length>=4&&raw.length>=4+raw.readUInt32LE(0)){clearTimeout(timer);child.stdin.end();resolve(JSON.parse(raw.subarray(4,4+raw.readUInt32LE(0)).toString()));}});child.stdin.write(Buffer.concat([header,bytes]));});
  assert.equal(hostReply.ok,true,'Original native messaging host accepted capture');
@@ -132,6 +132,17 @@ try{
   await main.getByRole('button',{name:'Tasks',exact:true}).click();await main.getByRole('button',{name:'Download video from a page…',exact:true}).click();
   const videoWindow=await pageFor('tool=video');await videoWindow.getByLabel('Video page URL').waitFor();await videoWindow.locator('.cg-tool-body').getByRole('button',{name:'Close',exact:true}).click();
   passed('Video page quality lookup reaches the original engine from a Glass window');
+  const videoAddress='https://example.invalid/browser-video';
+  await capture('browser-video',{url:videoAddress,video:true,title:'Browser video fixture',private:true});
+  const fromBrowser=await pageFor('tool=video&browser=');
+  await until(async()=>(await fromBrowser.getByLabel('Video page URL').inputValue())===videoAddress,'Browser video command did not reach the Glass video window');
+  const browserId=Number(new URL(fromBrowser.url()).searchParams.get('browser'));
+  const request=await invoke(main,'browser_video',{id:browserId,choice:null});
+  assert.notEqual(request.result.state,'use-window','Browser video must start the original quality lookup');
+  assert(!JSON.stringify(request).includes('glass_acceptance=1'),'Browser cookies must not reach the WebView');
+  await fromBrowser.locator('.cg-tool-body').getByRole('button',{name:'Close',exact:true}).click();
+  passed('Native browser video command opens Glass and starts the original lookup without exposing cookies');
+
   await assert.rejects(invoke(main,'glass_tool',{action:'gallery',payload:{url:'not-a-url',folder:'',limit:null,start:false}}));
   await main.getByRole('button',{name:'Tasks',exact:true}).click();await main.getByRole('button',{name:'Download gallery…',exact:true}).click();const gallery=await pageFor('tool=gallery');await gallery.getByLabel('Gallery page URL').waitFor();await gallery.locator('.cg-tool-body').getByRole('button',{name:'Close',exact:true}).click();
   passed('Gallery window opens and invalid addresses are rejected by MDM');

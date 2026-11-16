@@ -32,6 +32,24 @@ impl App {
             let payload=serde_json::from_str(cmd.queue.as_deref().unwrap_or("")).unwrap_or(Value::Null);
             return Some(self.glass_update_original(payload).to_string());
         }
+        if cmd.query.as_deref() == Some("glass-videos") {
+            return Some(json!({"ids":self.glass_videos.keys().copied().collect::<Vec<_>>()}).to_string());
+        }
+        if cmd.query.as_deref() == Some("glass-video") {
+            return Some(match cmd.ids.first().and_then(|id|self.glass_videos.get(id)) {
+                Some((url,answer,_)) => json!({"url":url,"result":answer}),
+                None => json!({"error":"Video request expired"})
+            }.to_string());
+        }
+        if cmd.action.as_deref() == Some("glass-video") {
+            let Some(id)=cmd.ids.first().copied() else {return Some(json!({"error":"Missing video request"}).to_string());};
+            if cmd.category.as_deref()==Some("close") {self.glass_videos.remove(&id);return Some(json!({"ok":true}).to_string());}
+            let Some((_,answer,private))=self.glass_videos.get(&id) else{return Some(json!({"error":"Video request expired"}).to_string());};
+            let Some(token)=answer.token.clone() else{return Some(json!({"error":"Video lookup has no token"}).to_string());};
+            let private=*private;
+            let Some(choice)=cmd.queue.as_deref().and_then(|s|s.parse::<usize>().ok()).filter(|n|*n<1000) else{return Some(json!({"error":"Invalid quality"}).to_string());};
+            return Some(ipc::api::line(&self.quality_menu(&ipc::Command{private,video_pick:Some(ipc::VideoPick{token,choice,store_id:None}),..Default::default()})));
+        }
         if cmd.query.as_deref() == Some("glass-file-info") {
             self.glass_next_info();
             let serial = self.glass_info_serial;

@@ -38,6 +38,7 @@ pub fn start(app: AppHandle) {
         let mut last_import = 0;
         let mut last_duplicate = 0;
         let mut last_queue = 0;
+        let mut seen_videos = std::collections::HashSet::new();
         loop {
             thread::sleep(Duration::from_millis(650));
             if !current_backend().is_ok_and(|b|b.headless&&b.glass) {continue;}
@@ -73,6 +74,8 @@ pub fn start(app: AppHandle) {
             let prompts=send_ipc(&mdm_ipc::Command{query:Some("glass-prompts".into()),..Default::default()}).ok().and_then(|s|serde_json::from_str::<serde_json::Value>(&s).ok());
             let duplicate=prompts.as_ref().and_then(|p|p["duplicate"]["lease"].as_u64()).filter(|id|*id!=last_duplicate);if let Some(id)=duplicate{last_duplicate=id;}
             let queue=prompts.as_ref().and_then(|p|p["queue"]["lease"].as_u64()).filter(|id|*id!=last_queue);if let Some(id)=queue{last_queue=id;}
+            let videos=send_ipc(&mdm_ipc::Command{query:Some("glass-videos".into()),..Default::default()}).ok().and_then(|s|serde_json::from_str::<serde_json::Value>(&s).ok());
+            let new_videos:Vec<u64>=videos.as_ref().and_then(|v|v["ids"].as_array()).into_iter().flatten().filter_map(|id|id.as_u64()).filter(|id|seen_videos.insert(*id)).collect();
             let owner = app.clone();
             {
                 for (id, status) in transitions {
@@ -83,6 +86,7 @@ pub fn start(app: AppHandle) {
                         let _ = open(&owner,&format!("download-{id}"),&format!("detail={id}"),880.0,680.0);
                     }
                 }
+                for id in new_videos {let _=open(&owner,&format!("tool-video-{id}"),&format!("tool=video&browser={id}"),720.0,560.0);}
                 if exit {let _=mdm_ipc::send(&mdm_ipc::Command{exit:true,..Default::default()});owner.exit(0);return;}
                 if let Some(id)=duplicate{let _=open(&owner,&format!("tool-duplicate-{id}"),&format!("tool=duplicate&lease={id}"),620.0,400.0);}
                 if let Some(id)=queue{let _=open(&owner,&format!("tool-queue-{id}"),&format!("tool=queue&lease={id}"),600.0,340.0);}
