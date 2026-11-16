@@ -57,7 +57,7 @@ const stored = (name: string, fallback: string) => {
 };
 export function loadAppearance(): Appearance {
   return {
-    theme: stored("theme", "plexo"), material: ["ice-edge","smoked-crystal","frosted-layers","aero-gloss","prismatic-glass","liquid-glass","obsidian-glass","diamond-facet","holographic-film","pearl-mist","aurora-veil","brushed-glass"].includes(stored("material", "ice-edge")) ? stored("material", "ice-edge") : "ice-edge", tintHue: Number(stored("tint-hue", "265")), tintStrength: Number(stored("tint-strength", "22")), indicator: stored("indicator", "blue-purple"), clipboardMode: stored("clipboard-mode", "offer"),
+    theme: stored("theme", "plexo"), material: ["ice-edge","smoked-crystal","frosted-layers","aero-gloss","prismatic-glass","liquid-glass","obsidian-glass","diamond-facet","holographic-film","pearl-mist","aurora-veil","brushed-glass","water-bubble"].includes(stored("material", "ice-edge")) ? stored("material", "ice-edge") : "ice-edge", tintHue: Number(stored("tint-hue", "265")), tintStrength: Number(stored("tint-strength", "22")), indicator: stored("indicator", "blue-purple"), clipboardMode: stored("clipboard-mode", "offer"),
     wallMain: stored("wall-main", ""), wallDetail: stored("wall-detail", ""),
     mainMode: stored("back-main", "desktop") as BackgroundMode,
     detailMode: stored("back-details", "desktop") as BackgroundMode,
@@ -274,8 +274,8 @@ export function CrystalWindow({ children, target = "main" }: {
   const video = /\.(mp4|webm|mov|m4v)$/i.test(path);
   useEffect(() => {
     const w = getCurrentWindow();
-    if (mode === "desktop" && appearance.acrylic)
-      void w.setEffects({ effects: [Effect.Acrylic], state: EffectState.Active }).catch(() => undefined);
+    if (mode === "desktop")
+      void w.setEffects({ effects: [Effect.Acrylic], state: EffectState.Active }).catch(() => w.clearEffects().catch(() => undefined));
     else void w.clearEffects().catch(() => undefined);
   }, [mode, appearance.acrylic, appearance.material]);
   const style = {
