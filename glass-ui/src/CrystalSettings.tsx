@@ -29,6 +29,7 @@ export default function CrystalSettings(){
   const [tab,setTab]=useState<Tab>(tabs.some(t=>t.name===initial)?initial!:"General");
   const [settingsPanel,setSettingsPanel]=useState("Main options");
   const [appearanceTab,setAppearanceTab]=useState("Theme");
+  const [materialPage,setMaterialPage]=useState(0);
   const [cfg,setCfg]=useState<EngineSettings|null>(null);
   const [queues,setQueues]=useState<Queue[]>([]);
   const [busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
@@ -167,7 +168,7 @@ export default function CrystalSettings(){
         <div className="cg-settings-fallback">The interface theme affects glass reflections and controls. Download progress, actual chunks and transfer-speed graphs use your chosen indicator gradient independently of the interface theme.</div>
         </>}
         {appearanceTab==="Materials"&&<><h3>Glass material</h3>
-        <div className="cg-wall-choice">{[["ice","Ice glass"],["aero","Aero"],["acrylic","Acrylic"],["frost","Frost"],["mica","Mica"],["plexo","Plexo"],["black","Pure black"]].map(([id,label])=><button key={id} className={`cg-btn ${appearance.material===id?"cg-btn-primary":""}`} onClick={()=>set("material",id)}>{label}</button>)}</div><p>Choose a surface style for light and dark windows.</p></>}
+        <div className="cg-wall-choice">{[["ice-edge","Ice Edge"],["smoked-crystal","Smoked Crystal"],["frosted-layers","Frosted Layers"],["aero-gloss","Aero Gloss"],["prismatic-glass","Prismatic Glass"],["liquid-glass","Liquid Glass"],["obsidian-glass","Obsidian Glass"],["diamond-facet","Diamond Facet"],["holographic-film","Holographic Film"],["pearl-mist","Pearl Mist"],["aurora-veil","Aurora Veil"],["brushed-glass","Brushed Glass"]].slice(materialPage*6,materialPage*6+6).map(([id,label])=><button key={id} className={`cg-btn ${appearance.material===id?"cg-btn-primary":""}`} onClick={()=>set("material",id)}>{label}</button>)}</div><div className="cg-pagination"><button disabled={materialPage===0} onClick={()=>setMaterialPage(0)}>Previous</button><span>{materialPage+1} / 2</span><button disabled={materialPage===1} onClick={()=>setMaterialPage(1)}>Next</button></div><p>Choose a surface style for light and dark windows.</p>{slider("tintHue","Glass tint color",0,360,"°")}{slider("tintStrength","Glass tint strength",0,65,"%")}</>}
         {appearanceTab==="Indicators"&&<><h3>Indicator gradients</h3><div className="cg-color-choices">{Object.entries(indicatorPalettes).map(([id,p])=><button key={id} className={appearance.indicator===id?"selected":""} onClick={()=>set("indicator",id)}><i style={{background:`linear-gradient(90deg,${p.colors.join(",")})`}}/>{p.label}</button>)}</div><p>The progress bar, actual chunks and measured speed graph use this palette independently of your interface theme.</p></>}
         {appearanceTab==="Backgrounds"&&<>
         <h3>Independent translucent backgrounds</h3>
@@ -178,8 +179,6 @@ export default function CrystalSettings(){
         {slider("blur","Wallpaper blur",0,20," px")}
         {slider("dim","Wallpaper darkness",0,80,"%")}
         {slider("uiScale","Interface size",80,150,"%")}
-        <label className="cg-toggle"><span><strong>Native Windows Acrylic</strong><small>Blur the desktop behind see-through windows when supported</small></span>
-          <input type="checkbox" checked={appearance.acrylic} onChange={e=>set("acrylic",e.target.checked)}/></label>
         </>}
         {appearanceTab==="Typography"&&<>
         <h3>Typography and contrast</h3>
@@ -189,6 +188,7 @@ export default function CrystalSettings(){
             <option value="Inter">Inter</option>
             <option value="Arial">Arial</option>
             <option value="Consolas">Consolas</option>
+            <option value="Trebuchet MS">Trebuchet</option><option value="Verdana">Verdana</option><option value="Georgia">Georgia</option><option value="Candara">Candara</option><option value="Century Gothic">Century Gothic</option><option value="Palatino Linotype">Palatino</option><option value="Tahoma">Tahoma</option>
           </select>
         </label>
         {slider("fontSize","Text size",12,20," px")}
@@ -200,7 +200,7 @@ export default function CrystalSettings(){
           set("mainMode","desktop");set("detailMode","desktop");
           set("acrylic",false);set("dim",26);set("opacity",77);set("blur",3);
           set("uiScale",100);set("lightMode",false);set("fontFamily","Segoe UI");
-          set("fontSize",12);set("theme","plexo");set("material","ice");set("indicator","blue-purple");
+          set("fontSize",12);set("theme","plexo");set("material","ice-edge");set("tintHue",265);set("tintStrength",22);set("indicator","blue-purple");
         }}><RotateCcw size={15}/> Restore default Glass appearance</button>
       </>;
       case "Advanced":return <>

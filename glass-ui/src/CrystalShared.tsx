@@ -48,7 +48,7 @@ export type Appearance = {
   theme: string; wallMain: string; wallDetail: string; mainMode: BackgroundMode;
   detailMode: BackgroundMode; dim: number; opacity: number; blur: number;
   acrylic: boolean; autoPopups: boolean; uiScale: number;
-  lightMode: boolean; fontFamily: string; fontSize: number; material: string; indicator: string; clipboardMode: string
+  lightMode: boolean; fontFamily: string; fontSize: number; material: string; indicator: string; clipboardMode: string; tintHue: number; tintStrength: number
 };
 const key = "mh-glass-";
 const stored = (name: string, fallback: string) => {
@@ -57,7 +57,7 @@ const stored = (name: string, fallback: string) => {
 };
 export function loadAppearance(): Appearance {
   return {
-    theme: stored("theme", "plexo"), material: stored("material", "ice"), indicator: stored("indicator", "blue-purple"), clipboardMode: stored("clipboard-mode", "offer"),
+    theme: stored("theme", "plexo"), material: ["ice-edge","smoked-crystal","frosted-layers","aero-gloss","prismatic-glass","liquid-glass","obsidian-glass","diamond-facet","holographic-film","pearl-mist","aurora-veil","brushed-glass"].includes(stored("material", "ice-edge")) ? stored("material", "ice-edge") : "ice-edge", tintHue: Number(stored("tint-hue", "265")), tintStrength: Number(stored("tint-strength", "22")), indicator: stored("indicator", "blue-purple"), clipboardMode: stored("clipboard-mode", "offer"),
     wallMain: stored("wall-main", ""), wallDetail: stored("wall-detail", ""),
     mainMode: stored("back-main", "desktop") as BackgroundMode,
     detailMode: stored("back-details", "desktop") as BackgroundMode,
@@ -70,7 +70,7 @@ export function loadAppearance(): Appearance {
   };
 }
 const keys: Record<keyof Appearance, string> = {
-  theme: "theme", material: "material", indicator: "indicator", clipboardMode: "clipboard-mode", wallMain: "wall-main", wallDetail: "wall-detail",
+  theme: "theme", material: "material", tintHue: "tint-hue", tintStrength: "tint-strength", indicator: "indicator", clipboardMode: "clipboard-mode", wallMain: "wall-main", wallDetail: "wall-detail",
   mainMode: "back-main", detailMode: "back-details", dim: "dim",
   opacity: "opacity", blur: "blur", acrylic: "acrylic",
   autoPopups: "auto-popups", uiScale: "ui-scale",
@@ -256,7 +256,7 @@ export function CrystalWindow({ children, target = "main" }: {
           if(box.clientHeight>0&&box.scrollHeight>box.clientHeight+2)ratio=Math.min(ratio,box.clientHeight/box.scrollHeight);
           if(box.clientWidth>0&&box.scrollWidth>box.clientWidth+2)ratio=Math.min(ratio,box.clientWidth/box.scrollWidth);
         }
-        if(ratio<.998)setFit(old=>Math.max(target === "main" ? .85 : .4,old*ratio*.99));
+        if(ratio<.998)setFit(old=>Math.max(target === "main" ? .85 : .7,old*ratio*.99));
       });
     };
     const reset=()=>{setFit(baseScale());measure()};
@@ -274,21 +274,20 @@ export function CrystalWindow({ children, target = "main" }: {
   const video = /\.(mp4|webm|mov|m4v)$/i.test(path);
   useEffect(() => {
     const w = getCurrentWindow();
-    if (mode === "desktop" && (appearance.acrylic || appearance.material === "acrylic"))
+    if (mode === "desktop" && appearance.acrylic)
       void w.setEffects({ effects: [Effect.Acrylic], state: EffectState.Active }).catch(() => undefined);
-    else if (mode === "desktop" && appearance.material === "mica")
-      void w.setEffects({ effects: [Effect.Mica], state: EffectState.Active }).catch(() => undefined);
     else void w.clearEffects().catch(() => undefined);
   }, [mode, appearance.acrylic, appearance.material]);
   const style = {
     "--accent": appearance.lightMode ? (({plexo:"#086e84",ocean:"#146c9b",purple:"#7050b5",pink:"#b73962",gold:"#8a5b05",green:"#19765b",silver:"#4c6680",navy:"#394ea2",orange:"#ad4700",rose:"#a42b70"} as Record<string,string>)[theme.id]??"#086e84") : theme.accent,
     "--accent-secondary": theme.secondary,
     "--accent-rgb": appearance.lightMode ? (({plexo:"8,110,132",ocean:"20,108,155",purple:"112,80,181",pink:"183,57,98",gold:"138,91,5",green:"25,118,91",silver:"76,102,128",navy:"57,78,162",orange:"173,71,0",rose:"164,43,112"} as Record<string,string>)[theme.id]??"8,110,132") : theme.rgb,
+    "--glass-tint": `hsl(${Math.max(0,Math.min(360,appearance.tintHue))} 85% 64% / ${Math.max(0,Math.min(65,appearance.tintStrength))/100})`,
     "--panel-opacity": Math.min(.94, Math.max(.45, appearance.opacity / 100)),
     "--crystal-blur": appearance.blur + "px",
     "--ui-scale": 1,
-    "--fit-scale": Math.max(.4,fit),
-    "--font-family": appearance.fontFamily === "Inter" ? "Inter, Segoe UI, sans-serif" : appearance.fontFamily === "Arial" ? "Arial, sans-serif" : appearance.fontFamily === "Consolas" ? "Consolas, monospace" : "Segoe UI Variable, Segoe UI, sans-serif",
+    "--fit-scale": Math.max(.7,fit),
+    "--font-family": ({"Segoe UI":"Segoe UI Variable, Segoe UI, sans-serif", "Inter":"Inter, Segoe UI, sans-serif", "Arial":"Arial, sans-serif", "Consolas":"Consolas, monospace", "Trebuchet MS":"Trebuchet MS, sans-serif", "Verdana":"Verdana, sans-serif", "Georgia":"Georgia, serif", "Candara":"Candara, sans-serif", "Century Gothic":"Century Gothic, sans-serif", "Palatino Linotype":"Palatino Linotype, serif", "Tahoma":"Tahoma, sans-serif"} as Record<string,string>)[appearance.fontFamily] ?? "Segoe UI Variable, Segoe UI, sans-serif",
     "--min-text-size": (12/Math.max(.4,fit))+"px",
     "--min-icon-size": (16/Math.min(1,Math.max(.4,fit)))+"px",
     "--min-window-button": (30/Math.min(1,Math.max(.4,fit)))+"px",

@@ -1,4 +1,6 @@
 import CrystalPrompt from "./CrystalPrompts";
+import CrystalHelpers from "./CrystalHelpers";
+import { CrystalWindow, WindowTop } from "./CrystalShared";
 import CrystalDelete from "./CrystalDialog";
 import CrystalConfirm from "./CrystalConfirm";
 import React from "react";
@@ -33,6 +35,7 @@ function Main() {
   if(query.get("tool")==="duplicate"||query.get("tool")==="queue") return <CrystalPrompt kind={query.get("tool") as "duplicate"|"queue"} lease={Number(query.get("lease"))}/>;
   if(query.get("tool")==="batch") return <CrystalBatch/>;
   if(query.get("tool")==="grabber") return <CrystalGrabber/>;
+  if(query.get("tool")==="helpers") return <CrystalWindow target="details"><WindowTop title="Video and gallery tools"/><main className="cg-page cg-tool-body"><CrystalHelpers/></main></CrystalWindow>;
   if(query.get("tool")==="video") return <CrystalVideo/>;
   if(query.get("tool")==="gallery") return <CrystalGallery/>;
   if(query.has("tool")) return <CrystalTool kind={query.get("tool")??""} id={Number(query.get("id"))||0}/>;

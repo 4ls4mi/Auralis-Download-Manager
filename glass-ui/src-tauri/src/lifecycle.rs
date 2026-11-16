@@ -14,7 +14,9 @@ pub fn fit_size(app:&AppHandle,width:f64,height:f64)->(f64,f64) {
 }
 
 pub fn open(app: &AppHandle, label: &str, route: &str, width: f64, height: f64) -> ApiResult<()> {
+    let priority = label.starts_with("info-") || label.starts_with("tool-video-");
     if let Some(w) = app.get_webview_window(label) {
+        if priority { let _ = w.set_always_on_top(true); }
         w.show().map_err(|e| e.to_string())?;
         let _ = w.unminimize();
         let _ = w.set_focus();
@@ -24,8 +26,8 @@ pub fn open(app: &AppHandle, label: &str, route: &str, width: f64, height: f64) 
     let mut builder=WebviewWindowBuilder::new(app, label, WebviewUrl::App(format!("index.html?{route}").into()));
     if let Some(args)=test_browser_args(){builder=builder.additional_browser_args(&args);}
     builder
-        .title("Mister Hybrid Glass").inner_size(width, height)
-        .min_inner_size(width.min(520.0), height.min(360.0)).center().decorations(false)
+        .title("Mister Hybrid Glass").always_on_top(priority).inner_size(width, height)
+        .min_inner_size(width.min(440.0), height.min(320.0)).center().decorations(false)
         .transparent(true).shadow(false).resizable(true).build()
         .map(|_| ()).map_err(|e| e.to_string())
 }
@@ -33,6 +35,7 @@ pub fn open(app: &AppHandle, label: &str, route: &str, width: f64, height: f64) 
 pub fn start(app: AppHandle) {
     thread::spawn(move || {
         let mut previous: Option<HashMap<u64, String>> = None;
+        let mut helpers_checked = false;
         let mut last_info = 0;
         let mut last_power = 0;
         let mut last_import = 0;
@@ -43,6 +46,14 @@ pub fn start(app: AppHandle) {
             thread::sleep(Duration::from_millis(650));
             if !current_backend().is_ok_and(|b|b.headless&&b.glass) {continue;}
             let Ok(snapshot) = request_snapshot() else { continue; };
+            if !helpers_checked {
+                let helpers=send_ipc(&mdm_ipc::Command{query:Some("glass-helpers".into()),..Default::default()}).ok().and_then(|s|serde_json::from_str::<serde_json::Value>(&s).ok());
+                if let Some(tools)=helpers.as_ref().and_then(|v|v["tools"].as_array()) {
+                    helpers_checked=true;
+                    if tools.iter().any(|tool|tool["version"].is_null()) {let _=open(&app,"tool-helpers","tool=helpers",680.0,520.0);}
+                }
+            }
+
             let config = send_ipc(&mdm_ipc::Command {query:Some("glass-settings".into()),..Default::default()})
                 .ok().and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok());
             let complete = config.as_ref().and_then(|c| c["show_complete"].as_bool()).unwrap_or(false);
