@@ -132,6 +132,9 @@ try{
   await main.getByRole('button',{name:'Tasks',exact:true}).click();await main.getByRole('button',{name:'Download video from a page…',exact:true}).click();
   const videoWindow=await pageFor('tool=video');await videoWindow.getByLabel('Video page URL').waitFor();await videoWindow.locator('.cg-tool-body').getByRole('button',{name:'Close',exact:true}).click();
   passed('Video page quality lookup reaches the original engine from a Glass window');
+  await assert.rejects(invoke(main,'glass_tool',{action:'gallery',payload:{url:'not-a-url',folder:'',limit:null,start:false}}));
+  await main.getByRole('button',{name:'Tasks',exact:true}).click();await main.getByRole('button',{name:'Download gallery…',exact:true}).click();const gallery=await pageFor('tool=gallery');await gallery.getByLabel('Gallery page URL').waitFor();await gallery.locator('.cg-tool-body').getByRole('button',{name:'Close',exact:true}).click();
+  passed('Gallery window opens and invalid addresses are rejected by MDM');
  }
 
  await capture('fixture-eight.zip');let info=await pageFor('request=');await info.waitForSelector('.cg-file-info');await wait(350);

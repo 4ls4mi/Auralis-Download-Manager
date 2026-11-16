@@ -129,7 +129,7 @@ pub async fn choose_download_path(current:String) -> ApiResult<Option<String>> {
 
 #[tauri::command]
 pub async fn glass_tool(action:String,payload:Option<serde_json::Value>) -> ApiResult<serde_json::Value> {
-    if !matches!(action.as_str(),"category"|"queues"|"schedule"|"power"|"power-state"|"original-settings"|"original-setting"|"batch"|"grabber"|"grabber-state"|"categories"|"accounts"|"account"|"prompts"|"prompt"|"helpers"|"helpers-install"|"upstream-status"|"upstream-check") {return Err("Unsupported tool".into());}
+    if !matches!(action.as_str(),"category"|"queues"|"schedule"|"power"|"power-state"|"original-settings"|"original-setting"|"batch"|"grabber"|"grabber-state"|"categories"|"accounts"|"account"|"prompts"|"prompt"|"helpers"|"helpers-install"|"upstream-status"|"upstream-check"|"gallery") {return Err("Unsupported tool".into());}
     tauri::async_runtime::spawn_blocking(move||{
         let mut cmd=mdm_ipc::Command::default();
         if action=="queues" {cmd.query=Some("glass-queues".into());}

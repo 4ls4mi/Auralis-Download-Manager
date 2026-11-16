@@ -84,10 +84,21 @@ impl App {
             return Some(json!({"categories":Category::all().into_iter().map(|c|json!({"key":c.key(),"name":c.label(),"types":c.types_text(),"folder":self.settings.category_dir(c,&self.downloads),"editable":c.editable()})).collect::<Vec<_>>()} ).to_string());
         }
         let action=cmd.action.as_deref()?;
-        if !matches!(action,"glass-batch"|"glass-grabber"|"glass-category"){return None;}
+        if !matches!(action,"glass-batch"|"glass-grabber"|"glass-category"|"glass-gallery"){return None;}
         let data:Value=serde_json::from_str(cmd.queue.as_deref().unwrap_or("")).unwrap_or(Value::Null);
         let fail=|error:&str|Some(json!({"error":error}).to_string());
         match action {
+            "glass-gallery"=>{
+                let Some(page)=data["url"].as_str().filter(|url|url.len()<=8192).and_then(|url|url::Url::parse(url.trim()).ok()).filter(|url|matches!(url.scheme(),"http"|"https")) else{return fail("Enter a valid gallery URL");};
+                if mdm_tools::tools_dir().as_deref().and_then(mdm_tools::gallery::installed).is_none(){return fail("Install gallery-dl in Settings → Advanced → Video and gallery helpers");}
+                let folder=match data["folder"].as_str().filter(|s|!s.trim().is_empty()) {Some(path)=>dialogs::resolve_path(path),None=>self.settings.category_dir(Category::General,&self.downloads)};
+                if !folder.is_absolute(){return fail("Choose an absolute folder");}
+                if let Err(error)=std::fs::create_dir_all(&folder){return Some(json!({"error":error.to_string()}).to_string());}
+                let limit=match &data["limit"] {Value::Null=>None,v=>match v.as_u64().filter(|n|*n>0){Some(n)=>Some(n),None=>return fail("Choose a positive file limit")}};
+                let name=mdm_tools::gallery::name_of(&page);
+                self.add_gallery(crate::gallerydlg::GalleryAdd{page,folder:folder.join(&name),name,limit,start_now:data["start"]!=false});
+                Some(json!({"ok":true}).to_string())
+            },
             "glass-batch"=>{
                 let urls=match crate::batch::Batch::glass_pattern(&data){Ok(urls)=>urls,Err(e)=>return fail(e)};
                 if data["commit"]==true {

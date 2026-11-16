@@ -12,6 +12,7 @@ import CrystalScheduler from "./CrystalScheduler";
 import CrystalPower from "./CrystalPower";
 import CrystalTool from "./CrystalTool";
 import CrystalVideo from "./CrystalVideo";
+import CrystalGallery from "./CrystalGallery";
 import CrystalProperties from "./CrystalProperties";
 import { CrystalFileInfo, CrystalComplete } from "./CrystalLifecycle";
 import { CrystalProvider } from "./CrystalShared";
@@ -33,6 +34,7 @@ function Main() {
   if(query.get("tool")==="batch") return <CrystalBatch/>;
   if(query.get("tool")==="grabber") return <CrystalGrabber/>;
   if(query.get("tool")==="video") return <CrystalVideo/>;
+  if(query.get("tool")==="gallery") return <CrystalGallery/>;
   if(query.has("tool")) return <CrystalTool kind={query.get("tool")??""} id={Number(query.get("id"))||0}/>;
   if(query.has("request")) return <CrystalFileInfo id={Number(query.get("request"))}/>;
   if(query.has("complete")) return <CrystalComplete id={Number(query.get("complete"))}/>;
