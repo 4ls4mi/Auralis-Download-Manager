@@ -279,9 +279,9 @@ export function CrystalWindow({ children, target = "main" }: {
     else void w.clearEffects().catch(() => undefined);
   }, [mode, appearance.acrylic]);
   const style = {
-    "--accent": appearance.lightMode ? (({plexo:"#086e84",ocean:"#146c9b",purple:"#7050b5",pink:"#b73962",gold:"#8a5b05",green:"#19765b",silver:"#4c6680",navy:"#394ea2"} as Record<string,string>)[theme.id]??"#086e84") : theme.accent,
+    "--accent": appearance.lightMode ? (({plexo:"#086e84",ocean:"#146c9b",purple:"#7050b5",pink:"#b73962",gold:"#8a5b05",green:"#19765b",silver:"#4c6680",navy:"#394ea2",orange:"#ad4700",rose:"#a42b70"} as Record<string,string>)[theme.id]??"#086e84") : theme.accent,
     "--accent-secondary": theme.secondary,
-    "--accent-rgb": appearance.lightMode ? (({plexo:"8,110,132",ocean:"20,108,155",purple:"112,80,181",pink:"183,57,98",gold:"138,91,5",green:"25,118,91",silver:"76,102,128",navy:"57,78,162"} as Record<string,string>)[theme.id]??"8,110,132") : theme.rgb,
+    "--accent-rgb": appearance.lightMode ? (({plexo:"8,110,132",ocean:"20,108,155",purple:"112,80,181",pink:"183,57,98",gold:"138,91,5",green:"25,118,91",silver:"76,102,128",navy:"57,78,162",orange:"173,71,0",rose:"164,43,112"} as Record<string,string>)[theme.id]??"8,110,132") : theme.rgb,
     "--panel-opacity": Math.min(.94, Math.max(.45, appearance.opacity / 100)),
     "--crystal-blur": appearance.blur + "px",
     "--ui-scale": 1,

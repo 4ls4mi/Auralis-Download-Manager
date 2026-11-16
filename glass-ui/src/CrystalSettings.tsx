@@ -199,7 +199,7 @@ export default function CrystalSettings(){
           set("mainMode","desktop");set("detailMode","desktop");
           set("acrylic",false);set("dim",26);set("opacity",77);set("blur",3);
           set("uiScale",100);set("lightMode",false);set("fontFamily","Segoe UI");
-          set("fontSize",12);set("theme","plexo");
+          set("fontSize",12);set("theme","plexo");set("material","ice");set("indicator","blue-purple");
         }}><RotateCcw size={15}/> Restore default Glass appearance</button>
       </>;
       case "Advanced":return <>
