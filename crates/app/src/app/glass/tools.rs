@@ -1,7 +1,35 @@
 //! Glass adapters delegate parsing, imports, categories and queueing to original MDM code.
 use super::*;
+use std::sync::{Mutex, OnceLock};
+
+// One helper installation at a time. The original verified installers own all
+// download, signature/checksum verification and atomic replacement logic.
+static GLASS_HELPER_JOB: OnceLock<Mutex<Option<(String,String)>>> = OnceLock::new();
+fn helper_job() -> &'static Mutex<Option<(String,String)>> { GLASS_HELPER_JOB.get_or_init(|| Mutex::new(None)) }
+
 impl App {
     pub(super) fn glass_tools(&mut self,cmd:&ipc::Command)->Option<String>{
+        if cmd.query.as_deref()==Some("glass-helpers") {
+            let Some(dir)=mdm_tools::tools_dir() else {return Some(json!({"error":"Helper tools folder is unavailable"}).to_string());};
+            let status=helper_job().lock().unwrap_or_else(|e|e.into_inner()).clone();
+            let entry=|name:&str,found:Option<mdm_tools::Installed>|json!({"name":name,"version":found.as_ref().map(|x|&x.version),"path":found.as_ref().map(|x|x.exe.to_string_lossy().into_owned())});
+            return Some(json!({"tools":[entry("yt-dlp",mdm_tools::installed(&dir)),entry("ffmpeg",mdm_tools::ffmpeg::installed(&dir)),entry("gallery-dl",mdm_tools::gallery::installed(&dir))],"job":status.map(|(name,state)|json!({"name":name,"state":state}))}).to_string());
+        }
+        if cmd.action.as_deref()==Some("glass-helpers") {
+            let data:Value=serde_json::from_str(cmd.queue.as_deref().unwrap_or("")).unwrap_or(Value::Null);
+            let Some(name)=data["name"].as_str().filter(|n|matches!(*n,"yt-dlp"|"ffmpeg"|"gallery-dl")) else{return Some(json!({"error":"Choose a helper"}).to_string());};
+            let Some(dir)=mdm_tools::tools_dir() else{return Some(json!({"error":"Helper tools folder is unavailable"}).to_string());};
+            let mut job=helper_job().lock().unwrap_or_else(|e|e.into_inner());
+            if job.as_ref().is_some_and(|(_,state)|state=="installing"){return Some(json!({"error":"Another helper is being installed"}).to_string());}
+            let name=name.to_owned();*job=Some((name.clone(),"installing".into()));drop(job);
+            let net=crate::settings::own_net();
+            self.rt.spawn(async move {
+                let result=match name.as_str(){"ffmpeg"=>mdm_tools::ffmpeg::install_latest(&dir,&net,None).await,"gallery-dl"=>mdm_tools::gallery::install_latest(&dir,&net,None).await,_=>mdm_tools::install_latest(&dir,&net,None).await};
+                let state=match result {Ok(_) => "ready".to_owned(),Err(e)=>format!("Error: {}",crate::errors::tools(&e))};
+                *helper_job().lock().unwrap_or_else(|e|e.into_inner())=Some((name,state));
+            });
+            return Some(json!({"ok":true}).to_string());
+        }
         if cmd.query.as_deref()==Some("glass-grabber-status") {return Some(json!({"version":self.glass_import_serial,"pending":self.grabber.is_some()}).to_string());}
         if cmd.query.as_deref()==Some("glass-grabber-state") {
             return Some(json!({"version":self.glass_import_serial,"data":self.grabber.as_mut().map(crate::grabber::Grabber::glass_view)}).to_string());

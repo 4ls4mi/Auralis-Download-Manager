@@ -1,4 +1,5 @@
 import CrystalAccounts from "./CrystalAccounts";
+import CrystalHelpers from "./CrystalHelpers";
 import CrystalOriginalSettings from "./CrystalOriginalSettings";
 import { useEffect, useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
@@ -202,6 +203,7 @@ export default function CrystalSettings(){
         }}><RotateCcw size={15}/> Restore default Glass appearance</button>
       </>;
       case "Advanced":return <>
+        <CrystalHelpers/>
         <h3>Original MDM configuration</h3>
         <p>Proxy, DNS and site authentication are in Connection → More options. Browser capture rules are in Browser Integration → More options.</p>
 

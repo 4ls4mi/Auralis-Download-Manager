@@ -4,7 +4,7 @@
 ## Mister Hybrid Glass — Windows x64 integration
 
 - **In development:** expanded glass materials and independent indicator gradients; colorful action highlights, compact progress presentation, clipboard modes and movable confirmations. Windows x64 validation is required.
-- **In development:** completed-file Move/Rename and live list refresh; native drag/drop behavior and upstream helper updates still require further integration and verification.
+- **In development:** completed-file Move/Rename and live list refresh; native drag/drop behavior still requires further integration and verification. A Glass helper manager delegates yt-dlp, FFmpeg and gallery-dl installs to the original verified installers; Windows testing remains pending.
 
 - **In validation:** compact MDM status fields; independently measured selected-count chunks (8/32/N), percentage and speed history; persistent dark/light crystal material and neon controls.
 - **In validation:** original native-host capture to Download File Info before starting; original request-context and resume handling; native completion-window replacement and tray restoration.
