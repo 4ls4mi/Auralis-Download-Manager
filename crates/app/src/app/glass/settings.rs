@@ -5,6 +5,8 @@ use super::*;
 impl App {
     pub(super) fn glass_original_settings(&self)->Value {
         let mut fields:Vec<Value>=Vec::new();
+        fields.push(json!({"key":"clipboard_autostart","label":"Offer copied download links","section":"General","kind":"boolean","value":self.settings.clipboard_autostart}));
+        fields.push(json!({"key":"glass_clipboard_auto_download","label":"Download copied links automatically","section":"General","kind":"boolean","value":self.settings.glass_clipboard_auto_download}));
         fields.push(json!({"key":"limiter_on_startup","label":"Enable the speed limiter on startup","section":"General","kind":"boolean","value":self.settings.limiter_on_startup}));
         fields.push(json!({"key":"global_only_active","label":"Apply the total cap only while the computer is in use","section":"General","kind":"boolean","value":self.settings.global_only_active}));
         fields.push(json!({"key":"delete_files_too","label":"Remember disk deletion in the delete confirmation","section":"General","kind":"boolean","value":self.settings.delete_files_too}));
@@ -89,6 +91,8 @@ impl App {
         let mut next=self.settings.clone();
         let apply=(||->Result<(),String>{
             match key {
+                "clipboard_autostart" => next.clipboard_autostart=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?,
+                "glass_clipboard_auto_download" => next.glass_clipboard_auto_download=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?,
                 "limiter_on_startup" => next.limiter_on_startup=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?,
                 "global_only_active" => next.global_only_active=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?,
                 "delete_files_too" => next.delete_files_too=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?,

@@ -42,13 +42,13 @@ export default function CrystalProgress({id}:{id:number}){
   <main className="cg-page cg-minimal-progress">
    {!item?<div className="cg-empty">Waiting for download information…</div>:tab==='Download status'?<>
     <section className="cg-glass cg-mdm-details"><div className="cg-download-url" title={item.url}>{item.url}</div><dl>{metadata.map(([label,value])=><div key={label}><dt>{label}</dt><dd title={value}>{label==='Server'&&<CountryFlag place={server?.place}/>} {value}</dd></div>)}</dl></section>
-    <div className="cg-overall"><GradientBar percent={pct(item)} showLabel/></div>
+    <div className="cg-indicator-row"><div className="cg-overall"><GradientBar percent={pct(item)} showLabel/></div>
     <section className="cg-glass cg-progress-section cg-selected-chunks"><div className="cg-section-title"><h3>Download chunks</h3></div><ChunkMap segments={visual?.segments} size={item.size} count={visual?.chunk_count} active={visual?.active_connections}/>
      <details className="cg-connection-details"><summary>Connection details ({connectionCount})</summary>
       <table className="cg-connections"><thead><tr><th>N.</th><th>Downloaded</th><th>Speed</th><th>Info</th></tr></thead><tbody>{visual?.connections.slice(page*pageSize,page*pageSize+pageSize).map(c=><tr key={c.id}><td>{c.id+1}</td><td>{units(c.downloaded)}</td><td>{rate(c.speed)}</td><td>{c.state}</td></tr>)}</tbody></table>
       {pages>1&&<div className="cg-pagination"><button disabled={!page} onClick={()=>setConnectionPage(p=>p-1)}>Previous</button><span>{page+1} / {pages}</span><button disabled={page>=pages-1} onClick={()=>setConnectionPage(p=>p+1)}>Next</button></div>}
      </details>
-    </section>
+    </section></div>
     <section className="cg-glass cg-progress-section cg-progress-speed"><div className="cg-section-title"><h3>Transfer speed</h3><small>{rate(item.speed)} · last {Math.round(values.length*1.2)} sec</small></div><div className="cg-speed-axis"><span>{rate(Math.max(0,...values))}</span><span>0 B/s</span></div><SpeedGraph values={values}/></section>
     {item.error&&<p className="cg-error">{item.error}</p>}
    </>:tab==='Speed Limiter'?<section className="cg-glass cg-progress-section"><h3>Speed Limiter</h3><label className="cg-toggle"><span><strong>Use Speed Limiter</strong><small>Remember the limit after pause and resume</small></span><input type="checkbox" checked={limited} disabled={!limit||busy} onChange={e=>setLimited(e.target.checked)}/></label><label className="cg-field">Maximum speed (KB/sec)<input type="number" min="1" value={kb} disabled={!limited||busy} onChange={e=>setKb(e.target.value)}/></label><button className="cg-btn cg-btn-primary" disabled={!limit||busy} onClick={()=>void save()}><Save size={16}/>Apply limit</button></section>:<CrystalCompletionOptions id={id}/>}

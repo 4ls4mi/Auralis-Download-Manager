@@ -4202,6 +4202,7 @@ impl App {
         if mdm_engine::supported(&url) && self.settings.clipboard_type(&name) {
             let cmd = ipc::Command {
                 url: Some(text),
+                silent: self.glass_owned() && self.settings.glass_clipboard_auto_download,
                 ..Default::default()
             };
             self.handle_command(cmd, ctx);

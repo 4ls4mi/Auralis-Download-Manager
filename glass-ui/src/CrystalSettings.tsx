@@ -3,7 +3,7 @@ import CrystalOriginalSettings from "./CrystalOriginalSettings";
 import { useEffect, useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Activity, Check, CheckCircle2, Download, Folder, Gauge, Globe2, Image, Network, Palette, RotateCcw, Settings, SlidersHorizontal } from "lucide-react";
-import { CrystalWindow, WindowTop, themes, useCrystal, openWindow } from "./CrystalShared";
+import { CrystalWindow, WindowTop, themes, indicatorPalettes, useCrystal, openWindow } from "./CrystalShared";
 import type { Appearance, BackgroundMode, Queue } from "./CrystalShared";
 
 type EngineSettings = {
@@ -91,6 +91,7 @@ export default function CrystalSettings(){
     switch(tab){
       case "General":return <>
         <p>Browser captures wait for Download File Info so you can confirm the destination and download options.</p>
+        <label className="cg-field">Copied download links<select value={appearance.clipboardMode} disabled={busy} onChange={async e=>{const mode=e.target.value;setBusy(true);setError('');try{await invoke('glass_tool',{action:'original-setting',payload:{key:'glass_clipboard_auto_download',value:mode==='auto'}});await invoke('glass_tool',{action:'original-setting',payload:{key:'clipboard_autostart',value:mode==='auto'||mode==='offer'}});set('clipboardMode',mode);setNotice('Saved.')}catch(e){setError(String(e))}finally{setBusy(false)}}}><option value="offer">Ask when a link is copied</option><option value="auto">Download matching copied links automatically</option><option value="paste">Paste when Add URL opens</option><option value="off">Do nothing</option></select></label>
         {check("only_add_to_queue","Queue silent download requests","Applies when an address is added without a confirmation dialog")}
         {check("confirm_delete","Ask before deleting","Protect items and downloaded files")}
         {check("double_click_open","Double-click opens a finished file","When off, double-click displays download details")}
@@ -154,6 +155,9 @@ export default function CrystalSettings(){
         <div className="cg-color-choices">{themes.map(t=><button key={t.id} className={appearance.theme===t.id?"selected":""}
           onClick={()=>set("theme",t.id)}><i style={{background:`linear-gradient(140deg,${t.accent},${t.secondary})`}}/>{t.name}
         </button>)}</div>
+        <h3>Glass material</h3>
+        <div className="cg-wall-choice">{[["ice","Ice glass"],["aero","Aero"],["acrylic","Acrylic"],["frost","Frost"],["mica","Mica"],["plexo","Plexo"],["black","Pure black"]].map(([id,label])=><button key={id} className={`cg-btn ${appearance.material===id?"cg-btn-primary":""}`} onClick={()=>set("material",id)}>{label}</button>)}</div>
+        <h3>Indicator gradients</h3><div className="cg-color-choices">{Object.entries(indicatorPalettes).map(([id,p])=><button key={id} className={appearance.indicator===id?"selected":""} onClick={()=>set("indicator",id)}><i style={{background:`linear-gradient(90deg,${p.colors.join(",")})`}}/>{p.label}</button>)}</div>
         <h3>Light or dark crystal material</h3>
         <div className="cg-wall-choice">
           <button className={`cg-btn ${!appearance.lightMode?"cg-btn-primary":""}`}
@@ -161,7 +165,7 @@ export default function CrystalSettings(){
           <button className={`cg-btn ${appearance.lightMode?"cg-btn-primary":""}`}
             onClick={()=>set("lightMode",true)}>Light crystal</button>
         </div>
-        <div className="cg-settings-fallback">The interface theme affects glass reflections and controls. Download progress, actual chunks and transfer-speed graphs always use navy blue to purple regardless of theme.</div>
+        <div className="cg-settings-fallback">The interface theme affects glass reflections and controls. Download progress, actual chunks and transfer-speed graphs use your chosen indicator gradient independently of the interface theme.</div>
         </>}
         {appearanceTab==="Backgrounds"&&<>
         <h3>Independent translucent backgrounds</h3>

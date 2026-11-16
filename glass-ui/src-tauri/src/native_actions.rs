@@ -44,3 +44,14 @@ pub async fn choose_move(id:u64) -> ApiResult<Option<serde_json::Value>> {
         Ok(Some(v))
     }).await.map_err(|e|e.to_string())?
 }
+
+/// Read only when the user opens Add URL and has chosen clipboard prefill.
+#[tauri::command]
+pub async fn clipboard_text() -> ApiResult<String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        #[cfg(windows)]
+        { arboard::Clipboard::new().and_then(|mut c| c.get_text()).map_err(|e| e.to_string()) }
+        #[cfg(not(windows))]
+        { Err("Clipboard prefill is available on Windows".into()) }
+    }).await.map_err(|e|e.to_string())?
+}

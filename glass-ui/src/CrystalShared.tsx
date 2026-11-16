@@ -39,14 +39,16 @@ export const themes: Theme[] = [
   { id: "gold", name: "Amber Frost", accent: "#ffbb62", secondary: "#ff7c73", rgb: "255,187,98" },
   { id: "green", name: "Emerald", accent: "#43e7ae", secondary: "#70c9fc", rgb: "67,231,174" },
   { id: "silver", name: "Graphite", accent: "#b1c9e0", secondary: "#70a2cc", rgb: "177,201,224" },
-  { id: "navy", name: "Deep Indigo", accent: "#748cff", secondary: "#a679fd", rgb: "116,140,255" }
+  { id: "navy", name: "Deep Indigo", accent: "#748cff", secondary: "#a679fd", rgb: "116,140,255" },
+  { id: "orange", name: "Black Orange", accent: "#ff942f", secondary: "#ff5136", rgb: "255,148,47" },
+  { id: "rose", name: "Rose Quartz", accent: "#ff82bb", secondary: "#b986ff", rgb: "255,130,187" }
 ];
 export type BackgroundMode = "desktop" | "wallpaper" | "solid";
 export type Appearance = {
   theme: string; wallMain: string; wallDetail: string; mainMode: BackgroundMode;
   detailMode: BackgroundMode; dim: number; opacity: number; blur: number;
   acrylic: boolean; autoPopups: boolean; uiScale: number;
-  lightMode: boolean; fontFamily: string; fontSize: number
+  lightMode: boolean; fontFamily: string; fontSize: number; material: string; indicator: string; clipboardMode: string
 };
 const key = "mh-glass-";
 const stored = (name: string, fallback: string) => {
@@ -55,7 +57,7 @@ const stored = (name: string, fallback: string) => {
 };
 export function loadAppearance(): Appearance {
   return {
-    theme: stored("theme", "plexo"),
+    theme: stored("theme", "plexo"), material: stored("material", "ice"), indicator: stored("indicator", "blue-purple"), clipboardMode: stored("clipboard-mode", "offer"),
     wallMain: stored("wall-main", ""), wallDetail: stored("wall-detail", ""),
     mainMode: stored("back-main", "desktop") as BackgroundMode,
     detailMode: stored("back-details", "desktop") as BackgroundMode,
@@ -68,7 +70,7 @@ export function loadAppearance(): Appearance {
   };
 }
 const keys: Record<keyof Appearance, string> = {
-  theme: "theme", wallMain: "wall-main", wallDetail: "wall-detail",
+  theme: "theme", material: "material", indicator: "indicator", clipboardMode: "clipboard-mode", wallMain: "wall-main", wallDetail: "wall-detail",
   mainMode: "back-main", detailMode: "back-details", dim: "dim",
   opacity: "opacity", blur: "blur", acrylic: "acrylic",
   autoPopups: "auto-popups", uiScale: "ui-scale",
@@ -114,6 +116,14 @@ export function progressColor(fraction: number) {
   const aa=parse(PROGRESS_PALETTE[a]),bb=parse(PROGRESS_PALETTE[b]);
   return "rgb("+aa.map((v,i)=>Math.round(v+(bb[i]-v)*w)).join(",")+")";
 }
+export const indicatorPalettes: Record<string,{label:string; colors:[string,string,string]}> = {
+  "blue-purple":{label:"Blue / Purple",colors:["#1778ff","#755cff","#d04eff"]},
+  ocean:{label:"Ocean",colors:["#00aaff","#00d6d1","#4cf0a8"]},
+  sunset:{label:"Sunset",colors:["#ffb52e","#ff6450","#f54eca"]},
+  aurora:{label:"Aurora",colors:["#38efb5","#26baff","#c967ff"]},
+  silver:{label:"Silver",colors:["#a0b3cc","#e4f2ff","#ffffff"]}
+};
+export function indicatorColors(id:string){return (indicatorPalettes[id]??indicatorPalettes["blue-purple"]).colors}
 export function pct(d: Download) {
   return d.size && d.size > 0 ? Math.max(0, Math.min(100, 100 * d.downloaded / d.size))
     : d.status === "Complete" ? 100 : 0;
@@ -133,12 +143,13 @@ export function timeLeft(d: Download) {
 // One continuous, factual total-file percentage. Its gradient stays in the
 // same absolute position as the file fills—purple is only reached near 100%.
 export function GradientBar({percent,showLabel=false}:{percent:number;showLabel?:boolean}){
+  const {appearance}=useCrystal();const colors=indicatorColors(appearance.indicator);
   const fill=Math.max(0,Math.min(100,percent));
   return <div className="cg-percent-wrap" aria-label={`Download ${fill.toFixed(1)} percent completed`}>
     <div className="cg-percent-track">
       {fill>0&&<span className="cg-percent-fill" style={{
         width:`${fill}%`,
-        backgroundImage:PROGRESS_GRADIENT,
+        backgroundImage:`linear-gradient(90deg,${colors.join(",")})`,
         backgroundSize:`${10000/fill}% 100%`
       }}/>}
     </div>{showLabel&&<strong>{fill.toFixed(0)}%</strong>}
@@ -149,6 +160,7 @@ export function GradientBar({percent,showLabel=false}:{percent:number;showLabel?
 export function ChunkMap({segments,size,count,active,compact=false}:{
   segments:Segment[]|undefined;size:number|null;count?:number;active?:number;compact?:boolean
 }){
+  const {appearance}=useCrystal();const colors=indicatorColors(appearance.indicator);
   const n=Math.max(1,Math.min(128,count??segments?.length??1));
   const known=Boolean(segments?.length&&size&&size>0);
   const chunks=selectedChunks(n,size??0,segments??[]);
@@ -162,7 +174,7 @@ export function ChunkMap({segments,size,count,active,compact=false}:{
         const c=chunks[i],fill=known?(c?.percent??0):0;
         return <span key={i} className={fill>0?"active":""}
           title={known&&c?`Chunk ${i+1}: bytes ${c.start.toLocaleString()}–${c.end.toLocaleString()}, ${fill.toFixed(1)}% received`: `Chunk ${i+1}: byte-range data unavailable`}>
-          {fill>0&&<i style={{width:`${fill}%`,background:progressColor(i/Math.max(1,n-1))}}/>}
+          {fill>0&&<i style={{width:`${fill}%`,background:colors[Math.min(colors.length-1,Math.floor(i/Math.max(1,n-1)*(colors.length-1)))]}}/>}
         </span>;
       })}
     </div>
@@ -173,6 +185,7 @@ export function ChunkMap({segments,size,count,active,compact=false}:{
 // Live connection/speed data only—one unique SVG gradient ID per graph, so
 // many small row graphs never collide with each other or the footer graph.
 export function SpeedGraph({values,small=false}:{values:number[];small?:boolean}){
+  const {appearance}=useCrystal();const colors=indicatorColors(appearance.indicator);
   const id=useId().replace(/:/g,"-");
   const seq=values.length>1?values:[0,0],peak=Math.max(1,...seq)*1.12;
   const points=seq.map((v,i)=>(i/(seq.length-1)*100).toFixed(2)+","+(58-v/peak*48).toFixed(2)).join(" ");
@@ -181,13 +194,12 @@ export function SpeedGraph({values,small=false}:{values:number[];small?:boolean}
     preserveAspectRatio="none" role="img" aria-label="Real measured transfer-speed history">
     <defs>
       <linearGradient id={`${id}-line`} x1="0%" x2="100%" y1="0%" y2="0%">
-        <stop offset="0%" stopColor="#315dbd"/><stop offset="45%" stopColor="#477af4"/>
-        <stop offset="77%" stopColor="#8155df"/><stop offset="100%" stopColor="#b461ef"/>
+        <stop offset="0%" stopColor={colors[0]}/><stop offset="50%" stopColor={colors[1]}/><stop offset="100%" stopColor={colors[2]}/>
       </linearGradient>
       <linearGradient id={`${id}-fill`} x1="0%" x2="100%" y1="0%" y2="0%">
-        <stop offset="0%" stopColor="#315dbd" stopOpacity=".16"/>
-        <stop offset="50%" stopColor="#477af4" stopOpacity=".23"/>
-        <stop offset="100%" stopColor="#b461ef" stopOpacity=".25"/>
+        <stop offset="0%" stopColor={colors[0]} stopOpacity=".22"/>
+        <stop offset="50%" stopColor={colors[1]} stopOpacity=".30"/>
+        <stop offset="100%" stopColor={colors[2]} stopOpacity=".36"/>
       </linearGradient>
     </defs>
     {[15,37,57].map(y=><line key={y} x1="0" x2="100" y1={y} y2={y}
@@ -280,7 +292,7 @@ export function CrystalWindow({ children, target = "main" }: {
     "--min-window-button": (30/Math.min(1,Math.max(.4,fit)))+"px",
     "--font-size": Math.max(Math.min(20,Math.max(12,appearance.fontSize)),12/Math.max(.4,fit))+"px"
   } as CSSProperties;
-  return <div className={`cg-window cg-mode-${mode} ${appearance.lightMode?"cg-light":"cg-dark"}`} style={style}>
+  return <div className={`cg-window cg-mode-${mode} cg-material-${appearance.material} ${appearance.lightMode?"cg-light":"cg-dark"}`} style={style}>
     {mode === "wallpaper" && <div className="cg-wallpaper">
       {video ? <video key={src} autoPlay loop muted playsInline src={src} /> :
         <div style={{ backgroundImage: `url("${src}")` }} />}

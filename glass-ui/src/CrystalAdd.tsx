@@ -1,11 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Download, FileArchive, Link2, Plus, X } from "lucide-react";
-import { CrystalWindow, WindowTop } from "./CrystalShared";
+import { CrystalWindow, WindowTop, useCrystal } from "./CrystalShared";
 
 export default function CrystalAdd({ mode }: { mode:"url"|"torrent" }) {
   const [url,setUrl]=useState(""),[later,setLater]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(""),[done,setDone]=useState("");
+  const {appearance}=useCrystal();
+  useEffect(()=>{if(mode!=="url"||appearance.clipboardMode!=="paste")return;let active=true;void invoke<string>("clipboard_text").then(text=>{if(active&&/^(https?|ftp):\/\//i.test(text.trim()))setUrl(old=>old||text.trim())}).catch(()=>undefined);return()=>{active=false}},[mode,appearance.clipboardMode]);
   const save=async()=>{
     if(!url.trim()){setError("Enter a download URL or magnet link.");return}
     setBusy(true);setError("");

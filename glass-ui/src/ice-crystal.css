@@ -67,3 +67,24 @@
 .cg-sidebar .cg-side-queue{font-size:max(var(--min-text-size),calc(var(--font-size) * .8333))}
 @media(max-width:900px){.cg-toolbar>button[data-action="delete-completed"]{flex:1.4}.cg-toolbar>button[data-action="delete-completed"] span{overflow-wrap:normal}}
 @media(max-height:600px){.cg-toolbar{min-height:70px}.cg-toolbar>button{min-height:58px}}
+/* Distinct, vivid actions; the entire surface lights up on hover. */
+.cg-window:is(.cg-dark,.cg-light) .cg-toolbar>button[data-action="add"],.cg-window:is(.cg-dark,.cg-light) .cg-toolbar>button[data-action="torrent"]{--tone:#45eb8e;--tone-rgb:69,235,142}
+.cg-window:is(.cg-dark,.cg-light) .cg-toolbar>button[data-action="start"],.cg-window:is(.cg-dark,.cg-light) .cg-toolbar>button[data-action="queue-start"]{--tone:#56a9ff;--tone-rgb:86,169,255}
+.cg-window:is(.cg-dark,.cg-light) .cg-toolbar>button[data-action="stop"],.cg-window:is(.cg-dark,.cg-light) .cg-toolbar>button[data-action="stop-all"]{--tone:#ffbd4a;--tone-rgb:255,189,74}
+.cg-window:is(.cg-dark,.cg-light) .cg-toolbar>button[data-action="delete"],.cg-window:is(.cg-dark,.cg-light) .cg-toolbar>button[data-action="delete-completed"]{--tone:#ff6d62;--tone-rgb:255,109,98}
+.cg-window:is(.cg-dark,.cg-light) .cg-toolbar>button[data-action="settings"]{--tone:#c888ff;--tone-rgb:200,136,255}
+.cg-window:is(.cg-dark,.cg-light) .cg-toolbar>button[data-action="scheduler"]{--tone:#37e5ca;--tone-rgb:55,229,202}
+.cg-window:is(.cg-dark,.cg-light) :is(.cg-toolbar>button,.cg-btn):hover:not(:disabled){background:linear-gradient(140deg,rgba(var(--tone-rgb),.52),rgba(var(--tone-rgb),.22));box-shadow:0 0 18px rgba(var(--tone-rgb),.38),inset 0 1px rgba(255,255,255,.3)}
+.cg-light :is(.cg-toolbar>button,.cg-btn){filter:saturate(1.35)}
+.cg-light .cg-toolbar>button[data-action="add"],.cg-light .cg-toolbar>button[data-action="torrent"]{--tone:#087e3d!important}
+.cg-light .cg-toolbar>button[data-action="start"],.cg-light .cg-toolbar>button[data-action="queue-start"]{--tone:#0757bd!important}
+.cg-light .cg-toolbar>button[data-action="stop"],.cg-light .cg-toolbar>button[data-action="stop-all"]{--tone:#8d5400!important}
+.cg-light .cg-toolbar>button[data-action="delete"],.cg-light .cg-toolbar>button[data-action="delete-completed"]{--tone:#bc3028!important}
+.cg-light .cg-toolbar>button[data-action="settings"]{--tone:#7132b6!important}
+.cg-light .cg-toolbar>button[data-action="scheduler"]{--tone:#007d70!important}
+.cg-window .cg-winbuttons button:hover{color:#fff!important;box-shadow:0 0 14px currentColor}
+.cg-window .cg-winbuttons .tray:hover{background:#008da5!important}.cg-window .cg-winbuttons .minimize:hover{background:#aa6c06!important}.cg-window .cg-winbuttons .maximize:hover{background:#7952c7!important}.cg-window .cg-winbuttons .close:hover{background:#dc354d!important}
+.cg-graph polyline{filter:drop-shadow(0 0 2px #8874ff)}
+.cg-material-black.cg-dark .cg-content{background:rgba(0,0,0,.94)!important}.cg-material-frost .cg-content{backdrop-filter:blur(20px) saturate(135%)!important}.cg-material-acrylic .cg-content{backdrop-filter:blur(26px) saturate(145%)!important}.cg-material-mica .cg-content{backdrop-filter:blur(12px) saturate(90%)!important}.cg-material-aero .cg-content{box-shadow:inset 0 1px rgba(255,255,255,.55),0 18px 50px rgba(0,30,70,.35)!important}.cg-material-plexo .cg-content{box-shadow:inset 0 1px rgba(255,255,255,.42),0 0 25px rgba(var(--accent-rgb),.22)!important}
+
+.cg-row-progress{display:grid;grid-template-columns:minmax(64px,1fr) minmax(75px,1.2fr);align-items:center;gap:4px 7px}.cg-row-progress .cg-graph-small{grid-column:1/-1}.cg-row-progress .cg-chunk-label{font-size:max(var(--min-text-size),calc(var(--font-size)*.75))}.cg-indicator-row{display:grid;grid-template-columns:minmax(100px,.65fr) minmax(0,1.35fr);gap:9px;align-items:start}.cg-indicator-row .cg-overall{padding-top:15px}.cg-indicator-row .cg-selected-chunks{min-width:0}@media(max-width:600px){.cg-indicator-row{grid-template-columns:1fr}.cg-indicator-row .cg-overall{padding-top:0}}

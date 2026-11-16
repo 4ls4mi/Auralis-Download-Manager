@@ -160,6 +160,8 @@ pub struct Settings {
     /// to the clipboard. On by default: without the browser extension, copying a link is the
     /// quickest way in.
     pub clipboard_autostart: bool,
+    /// Glass: immediately add matching copied links instead of asking for File Info.
+    pub glass_clipboard_auto_download: bool,
     /// General: Minimize hides the main window, and a download's progress window, to the
     /// notification area, as closing the main window does (#63). On by default (the
     /// maintainer's choice), for existing lists too. Only where a tray shows MDM's icon.
@@ -443,6 +445,7 @@ impl Default for Settings {
             helpers_asked: false,
             extension_never_ask: false,
             clipboard_autostart: true,
+            glass_clipboard_auto_download: false,
             minimize_to_tray: true,
             close_to_tray: true,
             show_hide_hotkey: String::new(),

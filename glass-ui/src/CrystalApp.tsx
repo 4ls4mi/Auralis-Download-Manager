@@ -167,10 +167,8 @@ export default function CrystalApp(){
     if(action==="properties"){if(item)props(item.id);return}
     if(action==="hide"){void import("@tauri-apps/api/window").then(m=>m.getCurrentWindow().close());return}
     if(action==="exit"){
-      if(window.confirm("Exit Mister Hybrid Glass and stop active downloads? Download progress will be saved.")){
-        setBusy(true);try{await invoke("quit_glass")}catch(e){setError(String(e))}finally{setBusy(false)}
-      }
-      return;
+      localStorage.setItem("glass-confirm-request",JSON.stringify({action:"exit"}));
+      openWindow("tool-confirm","/?tool=confirm",560,300);return;
     }
     if(!online){setError("The download service is unavailable.");return}
     setBusy(true);
@@ -190,7 +188,7 @@ export default function CrystalApp(){
         if(action==="stop")await invoke("close_progress_windows",{ids:result.done});
         if(result.skipped.length)setError(result.skipped.map(x=>x.why).join("; "));
       }else if(item&&(action==="open"||action==="folder"||action==="redownload")){
-        if(action==="redownload"&&!window.confirm(`Redownload "${item.file}" from the beginning?`))return;
+        if(action==="redownload"){localStorage.setItem("glass-confirm-request",JSON.stringify({action:"redownload",id:item.id,name:item.file}));openWindow("tool-confirm","/?tool=confirm",560,300);return;}
         await invoke("file_operation",{id:item.id,operation:action,value:null});
       }
       await refresh();
