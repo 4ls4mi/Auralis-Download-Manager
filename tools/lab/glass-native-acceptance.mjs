@@ -101,7 +101,8 @@ try{
     const finished=await until(async()=>{const data=await invoke(main,'glass_tool',{action:'helpers',payload:null});return data.job?.name===name&&data.job.state!=='installing'?data:null},name+' installation did not finish',360000);
     assert.equal(finished.job.state,'ready',name+' installation failed: '+finished.job.state);
     const tool=finished.tools.find(t=>t.name===name);assert(tool?.version&&tool.path,name+' not reported after installation');await access(tool.path);
-    passed('Original MDM verified installer makes '+name+' available');
+    const probe=spawnSync(tool.path,[name==='ffmpeg'?'-version':'--version'],{encoding:'utf8',timeout:30000});assert.equal(probe.status,0,name+' did not run: '+(probe.stderr||probe.error?.message||''));
+    passed('Original MDM verified installer makes '+name+' available and runnable');
    }
   }
 
