@@ -21,7 +21,9 @@ pub fn open(app: &AppHandle, label: &str, route: &str, width: f64, height: f64) 
         return Ok(());
     }
     let (width,height)=fit_size(app,width,height);
-    WebviewWindowBuilder::new(app, label, WebviewUrl::App(format!("index.html?{route}").into()))
+    let mut builder=WebviewWindowBuilder::new(app, label, WebviewUrl::App(format!("index.html?{route}").into()));
+    if let Some(args)=test_browser_args(){builder=builder.additional_browser_args(&args);}
+    builder
         .title("Mister Hybrid Glass").inner_size(width, height)
         .min_inner_size(width.min(520.0), height.min(360.0)).center().decorations(false)
         .transparent(true).shadow(false).resizable(true).build()

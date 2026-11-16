@@ -433,7 +433,14 @@ async fn select_wallpaper(app: AppHandle, target: String) -> ApiResult<Option<St
     }).await.map_err(|e| e.to_string())?
 }
 
+fn test_browser_args()->Option<String>{
+    let port=std::env::var("GLASS_TEST_CDP_PORT").ok()?.parse::<u16>().ok().filter(|p|*p>1023)?;
+    Some(format!("--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --remote-debugging-port={port} --remote-debugging-address=127.0.0.1 --remote-allow-origins=*"))
+}
+
 fn main() {
+    let mut context=tauri::generate_context!();
+    if let Some(args)=test_browser_args(){if let Some(window)=context.config_mut().app.windows.first_mut(){window.additional_browser_args=Some(args);}}
     tauri::Builder::default()
         // Glass is the one and only UI process: a second launch restores it.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -517,6 +524,6 @@ fn main() {
             add_download, select_wallpaper, queue_action, glass_settings, update_glass_setting,
             browser_integration, bulk_action, file_operation, add_torrent_file, quit_glass, open_upstream_releases
         ])
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("error starting Mister Hybrid glass desktop");
 }
