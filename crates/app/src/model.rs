@@ -467,6 +467,9 @@ pub struct Item {
     /// settings for this file on download stop/resume"): used again whenever it starts.
     #[serde(default)]
     pub own_limit: Option<u64>,
+    /// The user's chosen logical chunk/connection limit, kept across pause and restart.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chunk_count: Option<u32>,
     /// A video from a page, downloaded by yt-dlp (its `url` is the page).
     #[serde(default)]
     pub video: Option<VideoSpec>,
@@ -968,6 +971,7 @@ impl Item {
             checksum: None,
             added: Some(now_stamp()),
             own_limit: None,
+            chunk_count: None,
             video: None,
             torrent: None,
             gallery: None,

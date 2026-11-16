@@ -3,7 +3,7 @@
 name: Mister Hybrid Glass React Check
 on:
   push:
-    branches: ["feature/progress-chunks-windows"]
+    branches: ["feature/progress-chunks-windows", "feature/ice-crystal-parity-windows"]
   workflow_dispatch:
 permissions:
   contents: read
@@ -26,6 +26,10 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           if ($LASTEXITCODE -ne 0) { throw "npm install failed" }
+      - name: Check selected chunk counts and engine byte accounting
+        run: |
+          npm test
+          if ($LASTEXITCODE -ne 0) { throw "Chunk accounting tests failed" }
       - name: Check React and TypeScript
         run: |
           npm run build

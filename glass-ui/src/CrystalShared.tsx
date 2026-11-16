@@ -1,10 +1,12 @@
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { getCurrentWindow, Effect, EffectState } from "@tauri-apps/api/window";
 type ResizeDirection = Parameters<ReturnType<typeof getCurrentWindow>["startResizeDragging"]>[0];
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { useEffect, useState, useId, createContext, useContext } from "react";
+import { useEffect, useState, useLayoutEffect, useRef, useId, createContext, useContext } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import { AppWindow, Maximize2, Minus, X } from "lucide-react";
+import { AppWindow, Maximize2, Minus, X, PanelBottomClose } from "lucide-react";
+
+import { selectedChunks } from "./chunks";
 
 export type Status = "Queued" | "Downloading" | "Stopped" | "Complete" | "Error";
 export type Download = {
@@ -16,7 +18,7 @@ export type Queue = { name: string; running: boolean; ids: number[] };
 export type Segment = { start: number; cursor: number; end: number };
 export type Connection = { id: number; downloaded: number; speed: number; state: string };
 export type DownloadVisual = {
-  id: number; segments: Segment[]; connections: Connection[]; resumable: boolean | null;
+  id: number; chunk_count: number; active_connections:number; segments: Segment[]; connections: Connection[]; resumable: boolean | null;
   server: {hostname:string|null;ip:string|null;country_code:string|null;rtt_ms:number|null;cdn:string|null;proxied:boolean};
   last_try:string|null;added:string|null;referer:string|null;page:string|null;
   description:string;category:string;is_torrent:boolean
@@ -90,6 +92,7 @@ export function CrystalProvider({ children }: { children: ReactNode }) {
     window.addEventListener("storage", listener);
     return () => window.removeEventListener("storage", listener);
   }, []);
+  useEffect(()=>{void invoke("window_preferences",{autoProgress:appearance.autoPopups}).catch(()=>undefined)},[appearance.autoPopups]);
   const set = <K extends keyof Appearance>(name: K, value: Appearance[K]) => {
     localStorage.setItem(key + keys[name], String(value));
     setAppearance(prev => ({ ...prev, [name]: value }));
@@ -141,37 +144,28 @@ export function GradientBar({percent,showLabel=false}:{percent:number;showLabel?
   </div>;
 }
 
-// Engine segment ranges, NOT an animation of the overall percent.
-// Each small block covers a real byte interval; its fill is the overlap
-// with the engine's actual [segment.start, segment.cursor] downloaded ranges.
-export function ChunkMap({segments,size,compact=false}:{
-  segments:Segment[]|undefined;size:number|null;compact?:boolean
+// Exactly the selected 8 / 32 / N chunks, filled from original engine bytes.
+export function ChunkMap({segments,size,count,active,compact=false}:{
+  segments:Segment[]|undefined;size:number|null;count?:number;active?:number;compact?:boolean
 }){
-  const range= Math.max(0,size??0,...(segments??[]).map(s=>s.end));
-  const valid=(segments??[]).filter(s=>s.end>s.start&&s.cursor>=s.start);
-  if(!valid.length||!Number.isFinite(range)||range<=0)
-    return <div className={`cg-chunk-unavailable ${compact?"compact":""}`} title="MDM engine reports no segment ranges for this download">
-      Segment data unavailable
-    </div>;
-  const blocks=compact?20:144, columns=compact?20:24;
-  return <div className={`cg-chunk-map ${compact?"compact":""}`}
-    style={{gridTemplateColumns:`repeat(${columns},minmax(0,1fr))`}}
-    aria-label={`Actual segment byte map, ${valid.length} engine segments`}>
-    {Array.from({length:blocks},(_,i)=>{
-      const lo=range*i/blocks,hi=range*(i+1)/blocks;
-      let received=0,active=false;
-      for(const seg of valid){
-        if(seg.end>lo&&seg.start<hi){
-          active=true;
-          received+=Math.max(0,Math.min(hi,seg.cursor)-Math.max(lo,seg.start));
-        }
-      }
-      const filled=Math.max(0,Math.min(100,100*received/(hi-lo)));
-      return <span key={i} title={`Byte range ${Math.floor(lo).toLocaleString()}–${Math.floor(hi).toLocaleString()}: ${filled.toFixed(0)}% received`}
-        className={active?"active":""}>
-        {filled>0&&<i style={{width:`${filled}%`,background:progressColor(i/Math.max(1,blocks-1))}}/>}
-      </span>;
-    })}
+  const n=Math.max(1,Math.min(128,count??segments?.length??1));
+  const known=Boolean(segments?.length&&size&&size>0);
+  const chunks=selectedChunks(n,size??0,segments??[]);
+  return <div className={"cg-chunks "+(compact?"compact":"")}>
+    <div className="cg-chunk-label"><span>{count??(known?n:"—")} chunks</span>
+      {!compact&&active!==undefined&&<small>{active} active connections</small>}</div>
+    <div className={"cg-chunk-map "+(compact?"compact":"")}
+      style={{gridTemplateColumns:`repeat(${Math.min(32,n)},minmax(0,1fr))`}}
+      aria-label={`${n} selected download chunks; ${known?"received bytes from the MDM engine":"byte-range data unavailable"}`}>
+      {Array.from({length:n},(_,i)=>{
+        const c=chunks[i],fill=known?(c?.percent??0):0;
+        return <span key={i} className={fill>0?"active":""}
+          title={known&&c?`Chunk ${i+1}: bytes ${c.start.toLocaleString()}–${c.end.toLocaleString()}, ${fill.toFixed(1)}% received`: `Chunk ${i+1}: byte-range data unavailable`}>
+          {fill>0&&<i style={{width:`${fill}%`,background:progressColor(i/Math.max(1,n-1))}}/>}
+        </span>;
+      })}
+    </div>
+    {!known&&!compact&&<small className="cg-muted">Waiting for byte-range data</small>}
   </div>;
 }
 
@@ -212,6 +206,7 @@ export function ResizeGrips() {
 export function WindowButtons({ noMax = false }: { noMax?: boolean }) {
   const w = getCurrentWindow();
   return <div className="cg-winbuttons">
+    <button title="Hide to tray" onClick={() => void w.hide()}><PanelBottomClose size={16}/></button>
     <button title="Minimize" onClick={() => void w.minimize()}><Minus size={17} /></button>
     {!noMax && <button title="Maximize or restore" onClick={() => void w.toggleMaximize()}><Maximize2 size={16} /></button>}
     <button className="close" title="Close" onClick={() => void w.close()}><X size={20} /></button>
@@ -232,6 +227,15 @@ export function CrystalWindow({ children, target = "main" }: {
   children: ReactNode; target?: "main" | "details"
 }) {
   const { appearance, theme } = useCrystal();
+  const frame=useRef<HTMLDivElement>(null);
+  const [fit,setFit]=useState(1);
+  useLayoutEffect(()=>{
+    const el=frame.current;if(!el)return;
+    const query=new URLSearchParams(location.search);
+    const base=query.has("settings")?[880,700]:query.has("detail")?[720,640]:query.has("request")?[720,500]:query.has("complete")?[660,390]:query.has("properties")?[680,580]:target==="main"?[1040,620]:[600,420];
+    const resize=()=>setFit(Math.min(appearance.uiScale/100,el.clientWidth/base[0],el.clientHeight/base[1]));
+    const observer=new ResizeObserver(resize);observer.observe(el);resize();return()=>observer.disconnect();
+  },[appearance.uiScale,target]);
   const main = target === "main", mode = main ? appearance.mainMode : appearance.detailMode;
   const path = main ? appearance.wallMain : (appearance.wallDetail || appearance.wallMain);
   const src = path ? convertFileSrc(path) : "/alpine.svg";
@@ -243,11 +247,13 @@ export function CrystalWindow({ children, target = "main" }: {
     else void w.clearEffects().catch(() => undefined);
   }, [mode, appearance.acrylic]);
   const style = {
-    "--accent": theme.accent, "--accent-secondary": theme.secondary,
-    "--accent-rgb": theme.rgb,
+    "--accent": appearance.lightMode ? (({plexo:"#086e84",ocean:"#146c9b",purple:"#7050b5",pink:"#b73962",gold:"#8a5b05",green:"#19765b",silver:"#4c6680",navy:"#394ea2"} as Record<string,string>)[theme.id]??"#086e84") : theme.accent,
+    "--accent-secondary": theme.secondary,
+    "--accent-rgb": appearance.lightMode ? (({plexo:"8,110,132",ocean:"20,108,155",purple:"112,80,181",pink:"183,57,98",gold:"138,91,5",green:"25,118,91",silver:"76,102,128",navy:"57,78,162"} as Record<string,string>)[theme.id]??"8,110,132") : theme.rgb,
     "--panel-opacity": Math.min(.94, Math.max(.45, appearance.opacity / 100)),
     "--crystal-blur": appearance.blur + "px",
-    "--ui-scale": appearance.uiScale / 100,
+    "--ui-scale": 1,
+    "--fit-scale": Math.max(.35,fit),
     "--font-family": appearance.fontFamily === "Inter" ? "Inter, Segoe UI, sans-serif" : appearance.fontFamily === "Arial" ? "Arial, sans-serif" : appearance.fontFamily === "Consolas" ? "Consolas, monospace" : "Segoe UI Variable, Segoe UI, sans-serif",
     "--font-size": Math.min(20,Math.max(10,appearance.fontSize))+"px"
   } as CSSProperties;
@@ -258,7 +264,7 @@ export function CrystalWindow({ children, target = "main" }: {
       <span style={{ background: `rgba(3,9,19,${appearance.dim / 100})` }} />
     </div>}
     {mode === "solid" && <div className="cg-solid" />}
-    <div className="cg-content">{children}</div>
+    <div className="cg-content" ref={frame}><div className="cg-fit-content">{children}</div></div>
     <ResizeGrips />
   </div>;
 }
@@ -267,7 +273,7 @@ export function openWindow(label: string, url: string, width: number, height: nu
     if (w) { void w.unminimize(); void w.show(); void w.setFocus(); return; }
     new WebviewWindow(label, {
       url, title: "Mister Hybrid Glass", width, height, minWidth: Math.min(540, width),
-      minHeight: Math.min(420, height), center: true, decorations: false, resizable: true,
+      minHeight: Math.min(500, height), center: true, decorations: false, resizable: true,
       transparent: true, shadow: false, backgroundColor: "#00000000"
     });
   }).catch(e => { window.alert("Couldn't open window: " + String(e)); });

@@ -8,18 +8,22 @@ import {
 } from "lucide-react";
 import {
   CrystalWindow, WindowTop, GradientBar, ChunkMap, SpeedGraph, pct, rate, units,
-  timeLeft, openWindow, useCrystal
+  timeLeft, openWindow
 } from "./CrystalShared";
 import type { Dashboard, Download as MdmFile, DownloadVisual, VisualDashboard } from "./CrystalShared";
 
+import { DeleteDialog } from "./CrystalDialog";
+import type { DeleteRequest } from "./CrystalDialog";
+
 type Menu = "Tasks" | "File" | "Downloads" | "View" | "Help";
-type MenuEntry = { label: string; action: string; disabled?: boolean; shortcut?: string };
+type MenuEntry = { label: string; action: string; disabled?: boolean; shortcut?: string; children?:MenuEntry[] };
 const menus: Menu[]=["Tasks","File","Downloads","View","Help"];
 const blank:Dashboard={downloads:[],speed:0,queues:[],categories:[]};
-const pop = (id:number)=>openWindow("download-"+id,"/?detail="+id,750,810);
-const settings = (tab="General")=>openWindow("settings","/?settings="+encodeURIComponent(tab),880,695);
+const pop = (id:number)=>openWindow("download-"+id,"/?detail="+id,880,680);
+const settings = (tab="General")=>openWindow("settings","/?settings=1&tab="+encodeURIComponent(tab),880,695);
 const add=(torrent=false)=>openWindow(torrent?"add-torrent":"add-url",`/?add=${torrent?"torrent":"url"}`,590,390);
-const props=(id:number)=>openWindow("properties-"+id,"/?properties="+id,610,490);
+const props=(id:number)=>openWindow("properties-"+id,"/?properties="+id,760,600);
+const tool=(kind:string,id:number)=>openWindow(`tool-${kind}-${id}`,`/?tool=${kind}&id=${id}`,700,500);
 function FileSymbol({name}:{name:string}){
   const ext=name.split(".").pop()?.toLowerCase();
   const Icon=["mp4","mkv","mov","avi","webm"].includes(ext??"")?Film:
@@ -40,10 +44,12 @@ export default function CrystalApp(){
   const [fileRates,setFileRates]=useState<Record<number,number[]>>({});
   const [doubleClickOpen,setDoubleClickOpen]=useState(false);
   const [showCategories,setShowCategories]=useState(true);
-  const {appearance}=useCrystal();
-  const autoRef=useRef(appearance.autoPopups),previous=useRef<Map<number,string>|null>(null);
+  const [deletion,setDeletion]=useState<DeleteRequest|null>(null);
+  const [confirmDelete,setConfirmDelete]=useState(true);
+  const [page,setPage]=useState(0),[capacity,setCapacity]=useState(8);
+  const viewport=useRef<HTMLDivElement|null>(null);
+  useEffect(()=>{const el=viewport.current;if(!el)return;const observer=new ResizeObserver(()=>setCapacity(Math.max(1,Math.floor((el.clientHeight-38)/82))));observer.observe(el);return()=>observer.disconnect()},[]);
   const pending=useRef(false),searchRef=useRef<HTMLInputElement|null>(null);
-  useEffect(()=>{autoRef.current=appearance.autoPopups},[appearance.autoPopups]);
   const refresh=useCallback(async()=>{
     if(pending.current)return;
     pending.current=true;
@@ -64,12 +70,6 @@ export default function CrystalApp(){
       const telemetry=await invoke<VisualDashboard>("dashboard_visuals").catch(()=>null);
       if(telemetry?.downloads)
         setVisuals(Object.fromEntries(telemetry.downloads.map(x=>[x.id,x])));
-      if(previous.current&&autoRef.current){
-        for(const item of next.downloads){
-          if(item.status==="Downloading"&&previous.current.get(item.id)!=="Downloading")pop(item.id);
-        }
-      }
-      previous.current=new Map(next.downloads.map(x=>[x.id,x.status]));
     }catch(e){setOnline(false);setMessage(String(e))}
     finally{pending.current=false}
   },[]);
@@ -78,8 +78,8 @@ export default function CrystalApp(){
     void invoke<string>("boot_engine").then(text=>{
       if(!mounted)return;
       setMessage(text);void refresh();
-      void invoke<{double_click_open:boolean}>("glass_settings").then(s=>{
-        if(mounted)setDoubleClickOpen(Boolean(s.double_click_open));
+      void invoke<{double_click_open:boolean;confirm_delete:boolean}>("glass_settings").then(s=>{
+        if(mounted){setDoubleClickOpen(Boolean(s.double_click_open));setConfirmDelete(Boolean(s.confirm_delete));}
       }).catch(()=>undefined);
     }).catch(e=>{if(mounted){setOnline(false);setMessage(String(e))}});
     const timer=window.setInterval(()=>{if(mounted)void refresh()},1200);
@@ -104,8 +104,32 @@ export default function CrystalApp(){
   const picked=data.downloads.find(i=>i.id===chosen)??null;
   const anyRunning=counts.downloading>0,anyComplete=counts.finished>0;
   const mainQueue=data.queues[0];
+  const remove=async(request:DeleteRequest)=>{
+    setBusy(true);setError("");
+    try{
+      for(let start=0;start<request.ids.length;start+=100){
+        const result=await invoke<{skipped:{why:string}[]}>("download_action",{action:request.disk?"delete":"remove",ids:request.ids.slice(start,start+100)});
+        if(result.skipped.length)throw Error(result.skipped.map(x=>x.why).join("; "));
+      }
+      if(request.dontAsk){await invoke("update_glass_setting",{key:"confirm_delete",value:"false"});setConfirmDelete(false)}
+      setDeletion(null);await refresh();
+    }catch(e){setError(String(e))}finally{setBusy(false)}
+  };
   const execute=async(action:string,item:MdmFile|null=picked)=>{
     setOpenMenu(null);setContext(null);setError("");
+    if(["remove","delete","delete-completed"].includes(action)){
+      const items=action==="delete-completed"?data.downloads.filter(x=>x.status==="Complete"):item?[item]:[];
+      if(!items.length)return;
+      const request:DeleteRequest={ids:items.map(x=>x.id),name:items.length===1?items[0].file:`${items.length} completed downloads`,disk:action==="delete",dontAsk:false};
+      if(confirmDelete)setDeletion(request);else await remove(request);
+      return;
+    }
+    if(action==="open-with"&&item){try{await invoke("file_operation",{id:item.id,operation:"open-with",value:null})}catch(e){setError(String(e))}return}
+    if(action==="move"&&item){try{await invoke("choose_move",{id:item.id});await refresh()}catch(e){setError(String(e))}return}
+    if(["checksum","extract","refresh-address"].includes(action)&&item){tool(action,item.id);return}
+    if(action.startsWith("queue-add:")&&item){try{await invoke("file_operation",{id:item.id,operation:"queue-add",value:action.slice(10)});await refresh()}catch(e){setError(String(e))}return}
+    if(action==="queue-remove"&&item){try{await invoke("file_operation",{id:item.id,operation:"queue-remove",value:null});await refresh()}catch(e){setError(String(e))}return}
+    if(action==="double-open"||action==="double-properties"){try{const on=action==="double-open";await invoke("update_glass_setting",{key:"double_click_open",value:String(on)});setDoubleClickOpen(on)}catch(e){setError(String(e))}return}
     if(action==="add")return add();
     if(action==="torrent")return add(true);
     if(action==="settings")return settings();
@@ -130,15 +154,13 @@ export default function CrystalApp(){
     setBusy(true);
     try{
       if(action==="stop-all"||action==="delete-completed"){
-        if(action==="delete-completed"&&!window.confirm("Remove all completed downloads from the list? Downloaded files are kept."))return;
+
         const result=await invoke<{done:number[];skipped:{why:string}[]}>("bulk_action",{action});
         if(result.skipped.length)setError(result.skipped.map(x=>x.why).join("; "));
       }else if(action==="queue-start"||action==="queue-stop"){
         if(!mainQueue)throw Error("No main queue exists");
         await invoke("queue_action",{name:mainQueue.name,action:action==="queue-start"?"start_queue":"stop_queue"});
       }else if(item&&(action==="start"||action==="stop"||action==="remove"||action==="delete")){
-        if((action==="delete"||action==="remove")&&!window.confirm(
-          action==="delete"?`Delete "${item.file}" and its downloaded files?`:`Remove "${item.file}" from the list and keep its files?`))return;
         const result=await invoke<{done:number[];skipped:{why:string}[]}>("download_action",{
           action:action==="stop"?"pause":action,ids:[item.id]
         });
@@ -164,10 +186,10 @@ export default function CrystalApp(){
       case "File":return [
         {label:"Open",action:"open",disabled:!picked||picked.status!=="Complete"},
         {label:"Open folder",action:"folder",disabled:!picked},
-        {label:"Move/Rename…",action:"move",disabled:true},
+        {label:"Move/Rename…",action:"move",disabled:!picked||picked.status==="Downloading"},
         {label:"Redownload",action:"redownload",disabled:!picked||picked.status==="Downloading"},
         {label:"Remove",action:"remove",disabled:!picked||picked.status==="Downloading",shortcut:"Delete"},
-        {label:"Remove with files",action:"delete",disabled:!picked||picked.status==="Downloading"},
+        {label:"Remove with files",action:"delete",shortcut:"Shift+Delete",disabled:!picked||picked.status==="Downloading"},
         {label:"Properties",action:"properties",disabled:!picked}];
       case "Downloads":return [
         {label:"Pause All / Stop All",action:"stop-all",disabled:!anyRunning},
@@ -224,24 +246,28 @@ export default function CrystalApp(){
   ];
   const contextItems:MenuEntry[]=[
     {label:"Open",action:"open",disabled:!picked||picked.status!=="Complete"},
-    {label:"Open with…",action:"open-with",disabled:true},
+    {label:"Open with…",action:"open-with",disabled:!picked||picked.status!=="Complete"},
     {label:"Open folder",action:"folder",disabled:!picked},
-    {label:"Move/Rename…",action:"move",disabled:true},
+    {label:"Move/Rename…",action:"move",disabled:!picked||picked.status==="Downloading",shortcut:"Ctrl+M"},
     {label:"Redownload",action:"redownload",disabled:!picked||picked.status==="Downloading"},
     {label:"Resume Download",action:"start",disabled:!picked||picked.status==="Downloading"||picked.status==="Complete"},
     {label:"Stop Download",action:"stop",disabled:!picked||picked.status!=="Downloading"},
-    {label:"Refresh download address",action:"refresh-address",disabled:true},
-    {label:"Verify checksum…",action:"checksum",disabled:true},
-    {label:"Extract archive",action:"extract",disabled:true},
-    {label:"Remove from list",action:"remove",disabled:!picked||picked.status==="Downloading"},
+    {label:"Refresh download address",action:"refresh-address",disabled:!picked||picked.status==="Downloading"||picked.status==="Complete"},
+    {label:"Verify checksum…",action:"checksum",disabled:!picked},
+    {label:"Extract",action:"extract",disabled:!picked||picked.status!=="Complete"||!(/\.(zip|7z|rar|tar|gz|xz)$/i.test(picked.file))},
+    {label:"Remove",action:"remove",shortcut:"Delete",disabled:!picked||picked.status==="Downloading"},
     {label:"Remove with files",action:"delete",disabled:!picked||picked.status==="Downloading"},
-    {label:"Add / Move to queue",action:"move-queue",disabled:true},
+    {label:"Add to queue",action:"move-queue",children:data.queues.map(q=>({label:q.name,action:"queue-add:"+q.name}))},
+    {label:"Delete from queue",action:"queue-remove",disabled:!picked||!data.queues.some(q=>q.ids.includes(picked.id))},
+    {label:"On Double-click",action:"double",children:[{label:"Open",action:"double-open"},{label:"Properties",action:"double-properties"}]},
     {label:"Properties",action:"properties",disabled:!picked}
   ];
   const rowDouble=(d:MdmFile)=>{
     if(d.status==="Complete"&&doubleClickOpen)void execute("open",d);
+    else if(d.status==="Complete")openWindow(`complete-${d.id}`,`/?complete=${d.id}`,720,420);
     else pop(d.id);
   };
+  const pageCount=Math.max(1,Math.ceil(shown.length/capacity)),safePage=Math.min(page,pageCount-1);
   return <CrystalWindow><WindowTop title="Mister Hybrid Glass — Download Manager">
     <span className="cg-muted" style={{fontSize:10,whiteSpace:"nowrap",marginRight:9}}>{online?"● RUST ENGINE CONNECTED":"○ ENGINE OFFLINE"}</span>
   </WindowTop>
@@ -256,7 +282,7 @@ export default function CrystalApp(){
       </div>)}
     </div>
     <div className="cg-toolbar cg-glass">
-      {toolbar.map((b,i)=><button key={i} className={`${b.primary?"primary":""} ${b.danger?"danger":""}`}
+      {toolbar.map((b,i)=><button key={i} data-action={b.key} className={`${b.primary?"primary":""} ${b.danger?"danger":""}`}
         disabled={busy||b.disabled} title={b.name} onClick={()=>void execute(b.key)}><b.icon size={19}/><span>{b.name}</span></button>)}
     </div>
     <div className="cg-workspace">
@@ -276,9 +302,9 @@ export default function CrystalApp(){
           <small>{shown.length} of {data.downloads.length} downloads • Double-click for the floating progress window</small></div>
           <label className="cg-search"><Search size={17}/><input ref={searchRef} placeholder="Search downloads..." value={term} onChange={e=>setTerm(e.target.value)}/></label>
         </header>
-        <div className="cg-table-viewport"><div className="cg-table">
+        <div className="cg-table-viewport" ref={viewport}><div className="cg-table">
           <header className="cg-cols"><span>FILE NAME</span><span>SIZE</span><span>STATUS</span><span>PROGRESS</span><span>SPEED</span><span>TIME LEFT</span></header>
-          {shown.map(d=><button className={"cg-row "+(chosen===d.id?"selected":"")} key={d.id}
+          {shown.slice(safePage*capacity,(safePage+1)*capacity).map(d=><button className={"cg-row "+(chosen===d.id?"selected":"")} key={d.id}
             onClick={()=>{setChosen(d.id);setContext(null)}} onDoubleClick={()=>rowDouble(d)}
             onContextMenu={e=>{
               e.preventDefault();setChosen(d.id);setOpenMenu(null);
@@ -289,7 +315,7 @@ export default function CrystalApp(){
             <span>{units(d.size)}</span><StatusBadge item={d}/>
             <span className="cg-row-progress">
               <GradientBar percent={pct(d)} showLabel/>
-              <ChunkMap segments={visuals[d.id]?.segments} size={d.size} compact/>
+              <ChunkMap segments={visuals[d.id]?.segments} size={d.size} count={visuals[d.id]?.chunk_count} active={visuals[d.id]?.active_connections} compact/>
               <SpeedGraph values={fileRates[d.id]??[d.speed,d.speed]} small/>
             </span>
             <span>{d.status==="Downloading"?rate(d.speed):"—"}</span>
@@ -300,6 +326,7 @@ export default function CrystalApp(){
             {online&&<button className="cg-btn cg-btn-primary" onClick={()=>add()}><Plus size={15}/> Add URL</button>}
           </div>}
         </div></div>
+        <div className="cg-pagination"><span>{shown.length} downloads</span><span className="cg-action-space"/><button disabled={!safePage} onClick={()=>setPage(p=>p-1)}>Previous</button><span>{safePage+1} / {pageCount}</span><button disabled={safePage>=pageCount-1} onClick={()=>setPage(p=>p+1)}>Next</button></div>
       </section>
     </div>
     <footer className="cg-footer cg-glass">
@@ -310,8 +337,7 @@ export default function CrystalApp(){
       <span className="cg-footer-message" title={error||message}>{error||message}</span>
     </footer>
     {context&&picked&&picked.id===context.id&&<div className="cg-context" style={{left:Math.max(10,context.x),top:Math.max(10,context.y)}}
-      onContextMenu={e=>e.preventDefault()}>{contextItems.map((x,i)=>
-        <button key={x.label} disabled={x.disabled} onClick={()=>void execute(x.action,picked)}>{x.label}
-          {i===contextItems.length-1&&<ChevronDown size={13}/>}</button>)}</div>}
+      onContextMenu={e=>e.preventDefault()}>{contextItems.map(x=>x.children?<details key={x.label}><summary>{x.label}<ChevronDown size={13}/></summary><div className="cg-context-submenu">{x.children.map(c=><button key={c.label} onClick={()=>void execute(c.action,picked)}>{c.label}</button>)}</div></details>:<button key={x.label} disabled={x.disabled} onClick={()=>void execute(x.action,picked)}><span>{x.label}</span>{x.shortcut&&<kbd>{x.shortcut}</kbd>}</button>)}</div>}
+    {deletion&&<DeleteDialog request={deletion} busy={busy} onChange={setDeletion} onCancel={()=>setDeletion(null)} onConfirm={()=>void remove(deletion)}/>}
   </div></CrystalWindow>;
 }

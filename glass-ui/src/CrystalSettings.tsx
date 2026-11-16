@@ -23,6 +23,7 @@ const tabs:{name:Tab;icon:typeof Settings}[]=[
 export default function CrystalSettings(){
   const initial=new URLSearchParams(location.search).get("tab") as Tab|null;
   const [tab,setTab]=useState<Tab>(tabs.some(t=>t.name===initial)?initial!:"General");
+  const [appearanceTab,setAppearanceTab]=useState("Theme");
   const [cfg,setCfg]=useState<EngineSettings|null>(null);
   const [queues,setQueues]=useState<Queue[]>([]);
   const [busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
@@ -43,7 +44,7 @@ export default function CrystalSettings(){
     try{
       await invoke("update_glass_setting",{key,value:String(value)});
       const result=await invoke<EngineSettings>("glass_settings");
-      setCfg(result);setNotice("Saved to the active Rust downloader.");
+      setCfg(result);setNotice("Saved.");
     }catch(e){setError(String(e))}finally{setBusy(false)}
   };
   const check=(key:EngineKey,title:string,detail:string)=>
@@ -90,7 +91,7 @@ export default function CrystalSettings(){
         {check("confirm_delete","Ask before deleting","Protect items and downloaded files")}
         {check("double_click_open","Double-click opens a finished file","When off, double-click displays download details")}
         {check("show_complete","Show download complete dialog","Restore original completion notifications")}
-        {check("show_progress","Open a download progress window","The Plexo-inspired floating status window")}
+        {check("show_progress","Open a download progress window","A separate movable status window")}
       </>;
       case "Downloads":return <>
         <p>MDM's original directories are preserved and the Rust backend continues saving downloads there.</p>
@@ -140,6 +141,8 @@ export default function CrystalSettings(){
         {!queues.length&&<p>No queues reported by the engine.</p>}
       </>;
       case "Appearance":return <>
+        <nav className="cg-appearance-tabs" aria-label="Appearance sections">{["Theme","Backgrounds","Glass & scaling","Typography"].map(name=><button key={name} className={appearanceTab===name?"selected":""} onClick={()=>setAppearanceTab(name)}>{name}</button>)}</nav>
+        {appearanceTab==="Theme"&&<>
         <h3>Crystalline ice color themes</h3>
         <div className="cg-color-choices">{themes.map(t=><button key={t.id} className={appearance.theme===t.id?"selected":""}
           onClick={()=>set("theme",t.id)}><i style={{background:`linear-gradient(140deg,${t.accent},${t.secondary})`}}/>{t.name}
@@ -152,12 +155,20 @@ export default function CrystalSettings(){
             onClick={()=>set("lightMode",true)}>Light crystal</button>
         </div>
         <div className="cg-settings-fallback">The interface theme affects glass reflections and controls. Download progress, actual chunks and transfer-speed graphs always use navy blue to purple regardless of theme.</div>
+        </>}
+        {appearanceTab==="Backgrounds"&&<>
         <h3>Independent translucent backgrounds</h3>
         {mode("main")}{mode("details")}
+        </>}
+        {appearanceTab==="Glass & scaling"&&<>
         {slider("opacity","Crystal glass opacity",45,94,"%")}
         {slider("blur","Wallpaper blur",0,20," px")}
         {slider("dim","Wallpaper darkness",0,80,"%")}
         {slider("uiScale","Interface size",80,150,"%")}
+        <label className="cg-toggle"><span><strong>Native Windows Acrylic</strong><small>Blur the desktop behind see-through windows when supported</small></span>
+          <input type="checkbox" checked={appearance.acrylic} onChange={e=>set("acrylic",e.target.checked)}/></label>
+        </>}
+        {appearanceTab==="Typography"&&<>
         <h3>Typography and contrast</h3>
         <label className="cg-field">Font family
           <select value={appearance.fontFamily} onChange={e=>set("fontFamily",e.target.value)}>
@@ -169,8 +180,7 @@ export default function CrystalSettings(){
         </label>
         {slider("fontSize","Text size",10,20," px")}
         <p>Text contrast automatically adjusts for light/dark material. Glass panels keep a readable text backing even over bright wallpapers.</p>
-        <label className="cg-toggle"><span><strong>Native Windows Acrylic</strong><small>Blur the desktop behind see-through windows when supported</small></span>
-          <input type="checkbox" checked={appearance.acrylic} onChange={e=>set("acrylic",e.target.checked)}/></label>
+        </>}
         <label className="cg-toggle"><span><strong>Show actual download popup automatically</strong><small>Open the separate floating progress window when a download starts</small></span>
           <input type="checkbox" checked={appearance.autoPopups} onChange={e=>set("autoPopups",e.target.checked)}/></label>
         <button className="cg-btn" style={{marginTop:15}} onClick={()=>{
@@ -199,7 +209,7 @@ export default function CrystalSettings(){
       {tabs.map(t=>{const Icon=t.icon;return <button key={t.name} className={tab===t.name?"selected":""} onClick={()=>setTab(t.name)}><Icon size={17}/><span>{t.name}</span></button>})}
     </aside><div className="cg-settings-body cg-glass">
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <div><h2>{tab}</h2><p>Unified Rust download manager and Glass appearance options</p></div>
+        <div><h2>{tab}</h2><p>Download and appearance preferences</p></div>
         <span className="cg-status-message">{busy?"Saving…":cfg?<><Check size={14}/> Connected</>:"Connecting"}</span>
       </div>
       {error&&<p className="cg-error">{error}</p>}

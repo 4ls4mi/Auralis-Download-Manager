@@ -1,6 +1,8 @@
 //! The main window (notes/ui-spec/main-window.md): menu bar, toolbar, Categories tree and the
 //! download list at IDM 6.42's measured positions, plus the download actions behind them.
 
+mod glass;
+
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -858,6 +860,8 @@ pub struct App {
     queues_open: bool,
     add_url: Option<AddUrl>,
     file_info: Option<FileInfo>,
+    glass_info_serial: u64,
+    glass_checks: glass::CheckSlots,
     /// Addresses (and their browser context) waiting for Download File Info to close.
     file_info_waiting: std::collections::VecDeque<(dialogs::NewUrl, ipc::Command)>,
     /// Download File Info's open answers, for the download each was given to (by id) to start
@@ -1618,6 +1622,8 @@ impl App {
             started: Instant::now(),
             update_checked_this_run: None,
             file_info: None,
+            glass_info_serial: 0,
+            glass_checks: Default::default(),
             file_info_waiting: Default::default(),
             kept_answers: Default::default(),
             progress: Vec::new(),
@@ -2276,6 +2282,7 @@ impl App {
         item.referer = context.referer.clone().filter(|r| !r.is_empty());
         // The page it was started from (#607), whole: Refresh download address opens it.
         item.page = context.page_url.clone().filter(|p| !p.is_empty());
+        item.chunk_count = Some(context.connections.unwrap_or_else(|| self.settings.connections_for(&item.url)).clamp(1, 128));
         item.context = context;
         self.items.push(item);
         self.dirty = true;
@@ -2882,6 +2889,12 @@ impl App {
         // Without a window (#157): an address, magnet or .torrent is added as a paired device's
         // is (no Download File Info, no Add torrent); nothing else opens anything.
         if self.headless {
+            if self.glass_owned() && !cmd.remote && !cmd.silent
+                && let Some(url) = cmd.url.as_deref().and_then(|u| url::Url::parse(u).ok()).filter(mdm_engine::supported)
+            {
+                self.open_file_info(dialogs::NewUrl { url, login: None }, cmd, ctx);
+                return;
+            }
             if cmd.start_queue {
                 self.start_queue(0);
             }
@@ -3268,6 +3281,10 @@ impl App {
         // Download File Info's open answer for it, if it has one (#28); used once.
         let kept = self.kept_answers.remove(&id);
         // The file's own remembered limit, else the Speed Limiter's.
+        if let Some(item) = self.item(id) {
+            let count = *item.chunk_count.get_or_insert(opts.max_connections);
+            opts.max_connections = count.clamp(1, 128);
+        }
         opts.speed_limit = own_limit.or(self.settings.speed_limit());
         opts.checksum = checksum;
         // A new download from Download File Info has nothing of its own on the disk yet: nothing
@@ -5855,6 +5872,9 @@ impl App {
     /// is on, whatever the automation API's switch: it may list, add and act, nothing else.
     fn answer(&mut self, cmd: &ipc::Command) -> String {
         use ipc::api::{ApiAnswer, DownloadInfo, ErrorAnswer, ListAnswer, line};
+        if self.glass_owned() && !cmd.remote
+            && let Some(answer) = self.glass_answer(cmd)
+        { return answer; }
         // The browser's quality menu (its native host asks): whatever the automation API's
         // switch, and never for a paired device.
         if !cmd.remote
@@ -5879,7 +5899,7 @@ impl App {
             self.settings.automation_api = on;
             self.dirty = true;
             return line(&ApiAnswer { api: on });
-        } else if !self.settings.automation_api {
+        } else if !self.settings.automation_api && !self.glass_owned() {
             return line(&ErrorAnswer {
                 error: "the automation API is off (misterdownloadmanager-cli api on)".into(),
                 code: Some(ipc::api::API_OFF.into()),
@@ -5940,6 +5960,8 @@ impl App {
                 serde_json::json!({
                     "id": i.id,
                     "segments": segments,
+                    "chunk_count": i.chunk_count.unwrap_or_else(|| self.settings.connections_for(&i.url)),
+                    "active_connections": connections.iter().filter(|c| c["state"] == "Receiving" || c["state"] == "Connecting").count(),
                     "connections": connections,
                     "resumable": i.snap.as_ref().and_then(|snap| snap.resumable).or(i.resumable),
                     "server": {
@@ -6141,6 +6163,7 @@ impl App {
                     return serde_json::json!({
                         "id": id,
                         "own_limit_kb": it.own_limit.map(|n| n / 1024),
+                        "checksum": it.checksum.as_ref().map(mdm_engine::verify::Hash::display),
                         "file": it.file_name,
                         "status": format!("{:?}", it.status),
                         "is_torrent": it.torrent.is_some(),
@@ -9247,6 +9270,7 @@ impl App {
         );
         fi.remember = self.settings.change_folder_on_last;
         fi.folders = self.settings.folder_history.clone();
+        self.glass_info_serial = self.glass_info_serial.wrapping_add(1);
         self.file_info = Some(fi);
     }
 

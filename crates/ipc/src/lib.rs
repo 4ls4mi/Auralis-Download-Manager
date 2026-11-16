@@ -28,6 +28,9 @@ pub struct Command {
     pub name: Option<String>,
     /// `/a`: add to the main queue, don't start.
     pub later: bool,
+    /// Optional per-download connection/chunk limit. The app validates 1..=128.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub connections: Option<u32>,
     /// `/n`: silent — no Download File Info dialog.
     pub silent: bool,
     /// `/s`: start the main queue.

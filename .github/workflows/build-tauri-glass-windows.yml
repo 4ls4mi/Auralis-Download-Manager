@@ -3,7 +3,7 @@ name: Mister Hybrid Glass Windows x64
 
 on:
   push:
-    branches: ["feature/progress-chunks-windows"]
+    branches: ["feature/progress-chunks-windows", "feature/ice-crystal-parity-windows"]
   workflow_dispatch:
 
 permissions:
@@ -14,6 +14,7 @@ permissions:
 # running Windows build, and queued reruns must not block a newer build.
 jobs:
   windows:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.ref_name != 'feature/ice-crystal-parity-windows' || contains(github.event.head_commit.message, '[windows installer]') }}
     runs-on: windows-latest
     timeout-minutes: 120
     steps:
@@ -34,6 +35,11 @@ jobs:
           rustup default stable
           rustup target add x86_64-pc-windows-msvc
 
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            glass-ui/src-tauri -> target
       - name: Install Windows native build dependencies
         shell: pwsh
         run: |

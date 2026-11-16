@@ -13,6 +13,7 @@ export default function CrystalAdd({ mode }: { mode:"url"|"torrent" }) {
       const result=await invoke<string>("add_download",{url:url.trim(),later});
       const parsed=JSON.parse(result) as {id?:number;pending?:boolean;error?:string};
       if(parsed.error)throw Error(parsed.error);
+      if(mode==="url"&&parsed.pending){await getCurrentWindow().close();return;}
       setDone(parsed.pending?"Torrent metadata lookup started.":`Download ${parsed.id?"#"+parsed.id:""} added successfully.`);
       setUrl("");
     }catch(e){setError(String(e))}finally{setBusy(false)}

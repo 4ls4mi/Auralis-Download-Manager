@@ -2,6 +2,10 @@
 // Windows-only Tauri shell. Keeps MDM's production download engine as a
 // bundled, hidden legacy process until app-only logic has been extracted.
 // Frontend never accesses MDM's token or loopback socket directly.
+mod lifecycle;
+mod native_actions;
+use lifecycle::{pending_file_info, file_info_action, choose_download_path, window_preferences, glass_tool, choose_folder};
+use native_actions::{drag_download, choose_move};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -187,13 +191,10 @@ async fn add_download(url: String, later: bool) -> ApiResult<String> {
         return Err("Supported links start with http://, https://, ftp:// or magnet:".into());
     }
     tauri::async_runtime::spawn_blocking(move || {
-        send_ipc(&mdm_ipc::Command {
-            url: Some(url),
-            later,
-            silent: true,
-            ..Default::default()
-        })
-    }).await.map_err(|e| e.to_string())?
+        mdm_ipc::send(&mdm_ipc::Command {url:Some(url),later,silent:false,..Default::default()})
+            .map_err(|e|e.to_string())?;
+        Ok(serde_json::json!({"pending":true}).to_string())
+    }).await.map_err(|e|e.to_string())?
 }
 
 fn suffix(path: &Path) -> Option<String> {
@@ -300,7 +301,7 @@ async fn bulk_action(action: String) -> ApiResult<mdm_ipc::api::ActAnswer> {
 #[tauri::command]
 async fn file_operation(id: u64, operation: String, value: Option<String>) -> ApiResult<serde_json::Value> {
     if !matches!(operation.as_str(), "details" | "redownload" | "speed-limit" |
-        "open" | "folder") {
+        "open" | "folder" | "open-with" | "queue-add" | "queue-remove" | "refresh-address" | "checksum" | "checksum-result" | "extract" | "extract-status" | "extract-password" | "extract-cancel") {
         return Err("Unsupported file operation".into());
     }
     tauri::async_runtime::spawn_blocking(move || {
@@ -380,7 +381,8 @@ async fn update_glass_setting(key: String, value: String) -> ApiResult<serde_jso
         "global_limit_on", "global_limit_kb", "start_immediately",
         "only_add_to_queue", "confirm_delete", "torrent_keep_sharing",
         "torrent_dht", "torrent_lsd", "proxy_from_browser",
-        "capture_opened", "net_adapter"
+        "capture_opened", "net_adapter", "show_complete", "show_progress",
+        "advanced_integration", "double_click_open"
     ];
     if !VALID.contains(&key.as_str()) || value.len() > 256 {
         return Err("Unsupported settings change".into());
@@ -440,7 +442,8 @@ fn main() {
         .setup(|app| {
             let show = MenuItem::with_id(app, "show", "Open Mister Hybrid Glass", true, None::<&str>)?;
             let exit = MenuItem::with_id(app, "quit", "Exit Glass and stop downloads", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show, &exit])?;
+            let downloads = MenuItem::with_id(app, "downloads", "Restore download windows", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&show, &downloads, &exit])?;
             TrayIconBuilder::with_id("glass-tray")
                 .icon(app.default_window_icon().cloned().ok_or("No packaged tray icon")?)
                 .tooltip("Mister Hybrid Glass — Rust download engine")
@@ -448,6 +451,11 @@ fn main() {
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "show" => show_main(app),
+                    "downloads" => {
+                        for (label,w) in app.webview_windows() {
+                            if label != "main" { let _=w.show(); let _=w.unminimize(); }
+                        }
+                    },
                     "quit" => {
                         // This is an explicit EXIT, not closing/minimizing.
                         // The headless service persists its state on exit.
@@ -471,9 +479,15 @@ fn main() {
                     }
                 })
                 .build(app)?;
+            lifecycle::start(app.handle().clone());
             Ok(())
         })
         .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { .. } = event {
+                if let Some(id)=window.label().strip_prefix("info-").and_then(|s|s.parse::<u64>().ok()) {
+                    thread::spawn(move || {let _=send_ipc(&mdm_ipc::Command {action:Some("glass-file-info".into()),category:Some("cancel".into()),ids:vec![id],..Default::default()});});
+                }
+            }
             if window.label() == "main" {
                 if let WindowEvent::CloseRequested { api, .. } = event {
                     // Closing the X hides the glass window, never exits the
@@ -484,6 +498,7 @@ fn main() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            pending_file_info, file_info_action, choose_download_path, window_preferences, glass_tool, choose_folder, drag_download, choose_move,
             boot_engine, dashboard_snapshot, dashboard_visuals, download_action,
             add_download, select_wallpaper, queue_action, glass_settings, update_glass_setting,
             browser_integration, bulk_action, file_operation, add_torrent_file, quit_glass, open_upstream_releases
