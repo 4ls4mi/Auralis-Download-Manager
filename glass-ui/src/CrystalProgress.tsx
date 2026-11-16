@@ -4,7 +4,7 @@ import type { CSSProperties } from "react";
 import { Activity, CheckCircle2, Clock3, Gauge, HardDrive, Pause, Play, Save, Shield, X } from "lucide-react";
 import {
   CrystalWindow, WindowTop, ChunkMap, GradientBar, SpeedGraph, pct, units, rate, timeLeft,
-  PROGRESS_GRADIENT, progressColor
+  progressColor
 } from "./CrystalShared";
 import type { Dashboard, Download as FileDownload, DownloadVisual, VisualDashboard } from "./CrystalShared";
 
