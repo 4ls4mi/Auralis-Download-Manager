@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Trash2 } from 'lucide-react';
@@ -7,6 +7,7 @@ export type DeleteRequest={ids:number[];name:string;disk:boolean;dontAsk:boolean
 export default function CrystalDelete(){
  const [request,setRequest]=useState<DeleteRequest|null>(()=>{try{return JSON.parse(localStorage.getItem('glass-delete-request')??'null')}catch{return null}});
  const [busy,setBusy]=useState(false),[error,setError]=useState('');
+ useEffect(()=>{const receive=(event:StorageEvent)=>{if(event.key==='glass-delete-request'&&event.newValue){try{setRequest(JSON.parse(event.newValue));setError('')}catch{setError('The deletion request could not be read.')}}};window.addEventListener('storage',receive);return()=>window.removeEventListener('storage',receive)},[]);
  const close=()=>getCurrentWindow().close();
  const remove=async()=>{if(!request)return;setBusy(true);setError('');try{
   for(let n=0;n<request.ids.length;n+=100){const result=await invoke<{skipped:{why:string}[]}>('download_action',{action:request.disk?'delete':'remove',ids:request.ids.slice(n,n+100)});if(result.skipped.length)throw Error(result.skipped.map(x=>x.why).join('; '))}
