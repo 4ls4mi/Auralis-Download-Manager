@@ -129,7 +129,7 @@ try{
  console.log('Windows native acceptance passed. Screenshots and result evidence are in the proof artifact.');
 }catch(error){
  await writeFile(path.join(output,'shell-startup.txt'),JSON.stringify({exit:shellExit,output:shellError},null,2));
- const diagnostic=spawnSync('powershell.exe',['-NoProfile','-Command',"Get-Process | Where-Object {$_.ProcessName -match 'mister|msedge|WebView'} | Select-Object ProcessName,Id,SessionId,MainWindowTitle | Format-Table -AutoSize"],{encoding:'utf8'});
+ const diagnostic=spawnSync('powershell.exe',['-NoProfile','-Command',"Get-CimInstance Win32_Process | Where-Object {$_.Name -match 'mister|msedge|webview'} | Select-Object Name,ProcessId,CommandLine | Format-List"],{encoding:'utf8'});
  await writeFile(path.join(output,'processes.txt'),diagnostic.stdout||diagnostic.stderr||'No process diagnostics');
  const desktop=spawnSync('powershell.exe',['-NoProfile','-Command',"Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $bounds=[System.Windows.Forms.SystemInformation]::VirtualScreen; $bitmap=New-Object System.Drawing.Bitmap $bounds.Width,$bounds.Height; $graphics=[System.Drawing.Graphics]::FromImage($bitmap); $graphics.CopyFromScreen($bounds.Left,$bounds.Top,0,0,$bitmap.Size); $bitmap.Save('"+path.join(output,'windows-desktop.png').replaceAll("'","''")+"'); $graphics.Dispose(); $bitmap.Dispose()"],{encoding:'utf8'});
  if(desktop.status!==0)await writeFile(path.join(output,'desktop-capture.txt'),desktop.stderr||desktop.stdout||'No interactive desktop');
