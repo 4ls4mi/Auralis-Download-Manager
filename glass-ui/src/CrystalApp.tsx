@@ -117,7 +117,10 @@ export default function CrystalApp(){
       (filter==="Finished"&&d.status==="Complete")||
       (filter.startsWith("cat:")&&d.category===filter.slice(4))||
       (filter.startsWith("queue:")&&data.queues.find(q=>q.name===filter.slice(6))?.ids.includes(d.id));
-    return match&&(d.file+" "+d.url+" "+d.path).toLowerCase().includes(term.toLowerCase())
+    const normalize=(value:string)=>value.normalize("NFKD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase();
+    const words=normalize(term).trim().split(/\s+/).filter(Boolean);
+    const searchable=normalize(`${d.file} ${d.url} ${d.path} ${d.category}`);
+    return match&&words.every(word=>searchable.includes(word))
   }),[data.downloads,data.queues,filter,term]);
   const picked=data.downloads.find(i=>i.id===chosen)??null;
   const anyRunning=counts.downloading>0,anyComplete=counts.finished>0;
