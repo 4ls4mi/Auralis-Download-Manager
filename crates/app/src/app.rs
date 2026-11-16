@@ -5897,6 +5897,73 @@ impl App {
                 "ipc": "local-authenticated",
             }).to_string();
         }
+        // The original download engine's real segment cursors and connection
+        // snapshots for the Glass views. Separate from the public automation
+        // schema so third-party and paired remote clients are unaffected.
+        // Never fabricate a segment map from the overall completion percent.
+        if !cmd.remote && glass_owned && cmd.query.as_deref() == Some("glass-visuals") {
+            let files = self.items.iter().map(|i| {
+                let server = i.snap.as_ref()
+                    .and_then(|snap| snap.server.as_ref())
+                    .map(crate::whereis::Seen::from)
+                    .or_else(|| i.server.clone());
+                let country_code = server.as_ref().and_then(|seen| seen.ip)
+                    .and_then(mdm_geo::country)
+                    .map(|country| country.code().to_owned());
+                let segments = i.snap.as_ref().map(|snap| {
+                    snap.segments.iter().take(256).map(|part| {
+                        serde_json::json!({
+                            "start": part.start,
+                            "cursor": part.cursor,
+                            "end": part.end
+                        })
+                    }).collect::<Vec<_>>()
+                }).unwrap_or_default();
+                let connections = i.snap.as_ref().map(|snap| {
+                    snap.connections.iter().take(128).map(|conn| {
+                        let state = match &conn.status {
+                            mdm_engine::download::ConnStatus::Connecting => "Connecting",
+                            mdm_engine::download::ConnStatus::Receiving => "Receiving",
+                            mdm_engine::download::ConnStatus::Retrying(_) => "Retrying",
+                            mdm_engine::download::ConnStatus::Finished => "Finished",
+                            mdm_engine::download::ConnStatus::Failed(_) => "Failed",
+                            mdm_engine::download::ConnStatus::Retired { .. } => "Retired",
+                        };
+                        serde_json::json!({
+                            "id": conn.id,
+                            "downloaded": conn.downloaded,
+                            "speed": conn.speed,
+                            "state": state
+                        })
+                    }).collect::<Vec<_>>()
+                }).unwrap_or_default();
+                serde_json::json!({
+                    "id": i.id,
+                    "segments": segments,
+                    "connections": connections,
+                    "resumable": i.snap.as_ref().and_then(|snap| snap.resumable).or(i.resumable),
+                    "server": {
+                        "hostname": i.snap.as_ref()
+                            .and_then(|snap| snap.url.host_str())
+                            .or_else(|| i.file_url.as_ref().and_then(url::Url::host_str))
+                            .or_else(|| i.url.host_str()),
+                        "ip": server.as_ref().and_then(|seen| seen.ip).map(|ip| ip.to_string()),
+                        "country_code": country_code,
+                        "rtt_ms": server.as_ref().and_then(|seen| seen.rtt_ms),
+                        "cdn": server.as_ref().and_then(|seen| seen.cdn.as_ref()),
+                        "proxied": server.as_ref().is_some_and(|seen| seen.proxied),
+                    },
+                    "last_try": i.last_try,
+                    "added": i.added,
+                    "referer": i.referer,
+                    "page": i.page,
+                    "description": i.description,
+                    "category": i.category.key(),
+                    "is_torrent": i.torrent.is_some(),
+                })
+            }).collect::<Vec<_>>();
+            return serde_json::json!({ "downloads": files }).to_string();
+        }
         if !cmd.remote && cmd.query.as_deref() == Some("glass-settings") {
             if !glass_owned {
                 return line(&ErrorAnswer { error: "glass backend not active".into(), code: None });
