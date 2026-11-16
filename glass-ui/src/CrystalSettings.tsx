@@ -151,15 +151,12 @@ export default function CrystalSettings(){
       </>;
       case "Accounts":return <CrystalAccounts/>;
       case "Appearance":return <>
-        <nav className="cg-appearance-tabs" aria-label="Appearance sections">{["Theme","Backgrounds","Glass & scaling","Typography"].map(name=><button key={name} className={appearanceTab===name?"selected":""} onClick={()=>setAppearanceTab(name)}>{name}</button>)}</nav>
+        <nav className="cg-appearance-tabs" aria-label="Appearance sections">{["Theme","Materials","Indicators","Backgrounds","Glass & scaling","Typography"].map(name=><button key={name} className={appearanceTab===name?"selected":""} onClick={()=>setAppearanceTab(name)}>{name}</button>)}</nav>
         {appearanceTab==="Theme"&&<>
         <h3>Crystalline ice color themes</h3>
         <div className="cg-color-choices">{themes.map(t=><button key={t.id} className={appearance.theme===t.id?"selected":""}
           onClick={()=>set("theme",t.id)}><i style={{background:`linear-gradient(140deg,${t.accent},${t.secondary})`}}/>{t.name}
         </button>)}</div>
-        <h3>Glass material</h3>
-        <div className="cg-wall-choice">{[["ice","Ice glass"],["aero","Aero"],["acrylic","Acrylic"],["frost","Frost"],["mica","Mica"],["plexo","Plexo"],["black","Pure black"]].map(([id,label])=><button key={id} className={`cg-btn ${appearance.material===id?"cg-btn-primary":""}`} onClick={()=>set("material",id)}>{label}</button>)}</div>
-        <h3>Indicator gradients</h3><div className="cg-color-choices">{Object.entries(indicatorPalettes).map(([id,p])=><button key={id} className={appearance.indicator===id?"selected":""} onClick={()=>set("indicator",id)}><i style={{background:`linear-gradient(90deg,${p.colors.join(",")})`}}/>{p.label}</button>)}</div>
         <h3>Light or dark crystal material</h3>
         <div className="cg-wall-choice">
           <button className={`cg-btn ${!appearance.lightMode?"cg-btn-primary":""}`}
@@ -169,6 +166,9 @@ export default function CrystalSettings(){
         </div>
         <div className="cg-settings-fallback">The interface theme affects glass reflections and controls. Download progress, actual chunks and transfer-speed graphs use your chosen indicator gradient independently of the interface theme.</div>
         </>}
+        {appearanceTab==="Materials"&&<><h3>Glass material</h3>
+        <div className="cg-wall-choice">{[["ice","Ice glass"],["aero","Aero"],["acrylic","Acrylic"],["frost","Frost"],["mica","Mica"],["plexo","Plexo"],["black","Pure black"]].map(([id,label])=><button key={id} className={`cg-btn ${appearance.material===id?"cg-btn-primary":""}`} onClick={()=>set("material",id)}>{label}</button>)}</div><p>Choose a surface style for light and dark windows.</p></>}
+        {appearanceTab==="Indicators"&&<><h3>Indicator gradients</h3><div className="cg-color-choices">{Object.entries(indicatorPalettes).map(([id,p])=><button key={id} className={appearance.indicator===id?"selected":""} onClick={()=>set("indicator",id)}><i style={{background:`linear-gradient(90deg,${p.colors.join(",")})`}}/>{p.label}</button>)}</div><p>The progress bar, actual chunks and measured speed graph use this palette independently of your interface theme.</p></>}
         {appearanceTab==="Backgrounds"&&<>
         <h3>Independent translucent backgrounds</h3>
         {mode("main")}{mode("details")}

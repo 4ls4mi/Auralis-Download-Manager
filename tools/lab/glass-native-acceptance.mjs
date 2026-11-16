@@ -61,7 +61,7 @@ async function assertFits(page,name){
  },name+' has clipped content or would require page scrolling'); } catch(error) { throw new Error(error.message+': '+JSON.stringify(lastOverflow)); }
 }
 async function resizeWindow(page,label,width,height){await invoke(page,'plugin:window|set_size',{label,value:{Logical:{width,height}}});await wait(450);}
-async function setTheme(settings,light){await settings.getByRole('button',{name:'Appearance',exact:true}).click();await settings.getByRole('button',{name:light?'Light crystal':'Dark crystal',exact:true}).click();await wait(350);}
+async function setTheme(settings,light){await settings.getByRole('button',{name:'Appearance',exact:true}).click();await settings.getByRole('button',{name:'Theme',exact:true}).click();await settings.getByRole('button',{name:light?'Light crystal':'Dark crystal',exact:true}).click();await wait(350);}
 async function bothThemes(page,name,settings){for(const light of [false,true]){await setTheme(settings,light);await until(()=>page.locator(light?'.cg-light':'.cg-dark').count(),'Appearance did not reach '+name);await screenshot(page,name+(light?'-light':'-dark'));}}
 try{
  shell=spawn(process.env.GLASS_E2E_EXE,[],{env:{...process.env,MDM_DATA_DIR:data,MDM_REMOTE:'off',GLASS_TEST_CDP_PORT:String(port),WEBVIEW2_USER_DATA_FOLDER:path.join(folder,'webview'),WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS:`--remote-debugging-port=${port} --remote-debugging-address=127.0.0.1 --remote-allow-origins=*`},stdio:['ignore','pipe','pipe']});
@@ -135,7 +135,7 @@ try{
  passed('Original native host capture opens FileInfo before transfer and preserves browser context');
  passed('Chosen destination and eight independently measured chunks reach both windows');
  await bothThemes(progress,'progress',settings);await bothThemes(main,'main',settings);
- await settings.getByRole('button',{name:'Sunset',exact:true}).click();await until(async()=>(await progress.locator('.cg-percent-fill').first().getAttribute('style'))?.includes('255, 181, 46'),'Indicator palette did not propagate to progress');await settings.getByRole('button',{name:'Blue / Purple',exact:true}).click();passed('Indicator palette changes propagate independently across windows');
+ await settings.getByRole('button',{name:'Indicators',exact:true}).click();await assertFits(settings,'Indicator settings');await settings.getByRole('button',{name:'Sunset',exact:true}).click();await until(async()=>(await progress.locator('.cg-percent-fill').first().getAttribute('style'))?.includes('255, 181, 46'),'Indicator palette did not propagate to progress');await settings.getByRole('button',{name:'Blue / Purple',exact:true}).click();passed('Indicator palette changes propagate independently across windows');
  await progress.locator('.cg-connection-details>summary').click();await assertFits(progress,'Expanded connection details');await screenshot(progress,'progress-expanded-connections');
  await resizeWindow(progress,'download-'+first.id,620,500);await assertFits(progress,'Small progress window with expanded connections');await screenshot(progress,'progress-small-expanded');
  await progress.locator('.cg-connection-details>summary').click();await resizeWindow(progress,'download-'+first.id,880,680);
