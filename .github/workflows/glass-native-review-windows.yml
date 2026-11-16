@@ -57,6 +57,7 @@ jobs:
         shell: pwsh
         run: npm install --no-audit --no-fund
       - name: Real native acceptance
+        timeout-minutes: 7
         shell: pwsh
         run: |
           node tools/lab/glass-native-acceptance.mjs

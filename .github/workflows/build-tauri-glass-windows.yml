@@ -98,6 +98,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Tauri Windows packaging failed" }
 
       - name: Exercise real Windows native dialogs and original transfers
+        timeout-minutes: 7
         shell: pwsh
         run: |
           $testRoot = Join-Path $env:RUNNER_TEMP 'glass-native-acceptance'
