@@ -2,9 +2,9 @@ import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity, Archive, CheckCircle2, Clock3, Download as DownloadIcon, File,
-  FileArchive, Film, Folder, FolderOpen, Gauge, Globe2, HardDrive, HelpCircle,
-  Pause, Play, Plus, Search, Settings, Square, Trash2, X, ChevronDown,
-  ListFilter, RefreshCw
+  FileArchive, Film, Folder, FolderOpen,
+  Pause, Play, Plus, Search, Settings, Square, Trash2, ChevronDown,
+  ListFilter
 } from "lucide-react";
 import {
   CrystalWindow, WindowTop, GradientBar, SpeedGraph, pct, rate, units,
