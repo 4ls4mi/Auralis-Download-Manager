@@ -152,3 +152,6 @@ pub fn open_glass_window(app:AppHandle,label:String,url:String,width:f64,height:
     if label.is_empty()||label.len()>100||!label.chars().all(|c|c.is_ascii_alphanumeric()||c=='-'||c=='_')||!url.starts_with("/?")||url.len()>1024||url.contains(['\\',':'])||!width.is_finite()||!height.is_finite(){return Err("Invalid download window".into());}
     open(&app,&label,&url[2..],width.clamp(360.0,1800.0),height.clamp(280.0,1200.0))
 }
+
+#[tauri::command]
+pub fn close_progress_windows(app:AppHandle,ids:Vec<u64>){for id in ids{if let Some(w)=app.get_webview_window(&format!("download-{id}")){let _=w.close();}}}

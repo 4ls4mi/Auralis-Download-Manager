@@ -46,3 +46,6 @@
 .cg-window :is(.cg-toolbar,.cg-sidebar){overflow:hidden}.cg-window:is(.cg-dark,.cg-light) .cg-toolbar>button svg{color:inherit}.cg-light .cg-solid{background:linear-gradient(145deg,#e9f3fb,#f8fbff)}
 
 .cg-window-notice{position:absolute;left:20px;right:20px;bottom:20px;z-index:100;display:flex;align-items:center;gap:12px;background:var(--popover)}.cg-window-notice>span{flex:1;overflow-wrap:anywhere}
+
+.cg-window .cg-winbuttons .tray{color:#36d9ef}.cg-window .cg-winbuttons .minimize{color:#ffc566}.cg-window .cg-winbuttons .maximize{color:#b99aff}.cg-window .cg-winbuttons .close{color:#ff728d}.cg-window .cg-toolbar button svg,.cg-window .cg-btn svg{transition:transform .18s ease,filter .18s ease}.cg-window .cg-toolbar button:hover svg,.cg-window .cg-btn:hover svg{transform:translateY(-2px) scale(1.12);filter:drop-shadow(0 0 5px currentColor)}.cg-window button:active svg{transform:scale(.88)}.cg-percent-fill{box-shadow:0 0 10px rgba(111,96,255,.8),0 0 20px rgba(86,114,255,.35)}.cg-chunk-map>span.active{box-shadow:0 0 8px rgba(113,91,255,.65),inset 0 1px rgba(255,255,255,.35)}.cg-chunk-map>span>i{box-shadow:0 0 8px rgba(130,99,255,.7)}
+@media(prefers-reduced-motion:reduce){.cg-window .cg-toolbar button svg,.cg-window .cg-btn svg{transition:none}.cg-window .cg-toolbar button:hover svg,.cg-window .cg-btn:hover svg,.cg-window button:active svg{transform:none}}

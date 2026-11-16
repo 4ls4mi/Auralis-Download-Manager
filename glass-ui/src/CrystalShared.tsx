@@ -207,9 +207,9 @@ export function ResizeGrips() {
 export function WindowButtons({ noMax = false }: { noMax?: boolean }) {
   const w = getCurrentWindow();
   return <div className="cg-winbuttons">
-    <button title="Hide to tray" onClick={() => void w.hide()}><PanelBottomClose size={16}/></button>
-    <button title="Minimize" onClick={() => void w.minimize()}><Minus size={17} /></button>
-    {!noMax && <button title="Maximize or restore" onClick={() => void w.toggleMaximize()}><Maximize2 size={16} /></button>}
+    <button className="tray" title="Hide to tray" onClick={() => void w.hide()}><PanelBottomClose size={16}/></button>
+    <button className="minimize" title="Minimize" onClick={() => void w.minimize()}><Minus size={17} /></button>
+    {!noMax && <button className="maximize" title="Maximize or restore" onClick={() => void w.toggleMaximize()}><Maximize2 size={16} /></button>}
     <button className="close" title="Close" onClick={() => void w.close()}><X size={20} /></button>
   </div>;
 }

@@ -12,7 +12,7 @@ import {
 } from "./CrystalShared";
 import type { Dashboard, Download as MdmFile, DownloadVisual, VisualDashboard } from "./CrystalShared";
 
-import { DeleteDialog } from "./CrystalDialog";
+
 import type { DeleteRequest } from "./CrystalDialog";
 
 type Menu = "Tasks" | "File" | "Downloads" | "View" | "Help";
@@ -44,8 +44,7 @@ export default function CrystalApp(){
   const [fileRates,setFileRates]=useState<Record<number,number[]>>({});
   const [doubleClickOpen,setDoubleClickOpen]=useState(false);
   const [showCategories,setShowCategories]=useState(true);
-  const [deletion,setDeletion]=useState<DeleteRequest|null>(null);
-  const [confirmDelete,setConfirmDelete]=useState(true),[deleteFilesToo,setDeleteFilesToo]=useState(false);
+
   const [page,setPage]=useState(0),[capacity,setCapacity]=useState(8);
   const contextRef=useRef<HTMLDivElement>(null);
   const viewport=useRef<HTMLDivElement|null>(null);
@@ -93,7 +92,7 @@ export default function CrystalApp(){
       if(!mounted)return;
       setMessage(text);void refresh();
       void invoke<{double_click_open:boolean;confirm_delete:boolean;delete_files_too:boolean}>("glass_settings").then(s=>{
-        if(mounted){setDoubleClickOpen(Boolean(s.double_click_open));setConfirmDelete(Boolean(s.confirm_delete));setDeleteFilesToo(Boolean(s.delete_files_too));}
+        if(mounted){setDoubleClickOpen(Boolean(s.double_click_open));}
       }).catch(()=>undefined);
     }).catch(e=>{if(mounted){setOnline(false);setMessage(String(e))}});
     const timer=window.setInterval(()=>{if(mounted)void refresh()},1200);
@@ -125,9 +124,9 @@ export default function CrystalApp(){
         const result=await invoke<{skipped:{why:string}[]}>("download_action",{action:request.disk?"delete":"remove",ids:request.ids.slice(start,start+100)});
         if(result.skipped.length)throw Error(result.skipped.map(x=>x.why).join("; "));
       }
-      await invoke("glass_tool",{action:"original-setting",payload:{key:"delete_files_too",value:request.disk}});setDeleteFilesToo(request.disk);
-      if(request.dontAsk){await invoke("update_glass_setting",{key:"confirm_delete",value:"false"});setConfirmDelete(false)}
-      setDeletion(null);await refresh();
+      await invoke("glass_tool",{action:"original-setting",payload:{key:"delete_files_too",value:request.disk}});
+      if(request.dontAsk){await invoke("update_glass_setting",{key:"confirm_delete",value:"false"});}
+      await refresh();
     }catch(e){setError(String(e))}finally{setBusy(false)}
   };
   const execute=async(action:string,item:MdmFile|null=picked)=>{
@@ -135,8 +134,10 @@ export default function CrystalApp(){
     if(["remove","delete","delete-completed"].includes(action)){
       const items=action==="delete-completed"?data.downloads.filter(x=>x.status==="Complete"):item?[item]:[];
       if(!items.length)return;
-      const request:DeleteRequest={ids:items.map(x=>x.id),name:items.length===1?items[0].file:`${items.length} completed downloads`,disk:action==="delete"||deleteFilesToo,dontAsk:false};
-      if(confirmDelete)setDeletion(request);else await remove(request);
+      const request:DeleteRequest={ids:items.map(x=>x.id),name:items.length===1?items[0].file:`${items.length} completed downloads`,disk:action==="delete",dontAsk:false};
+      const latest=await invoke<{confirm_delete:boolean;delete_files_too:boolean}>("glass_settings");
+      request.disk=action==="delete"||latest.delete_files_too;
+      if(latest.confirm_delete){localStorage.setItem("glass-delete-request",JSON.stringify(request));openWindow("tool-delete","/?tool=delete",620,410)}else await remove(request);
       return;
     }
     if(action==="open-with"&&item){try{await invoke("file_operation",{id:item.id,operation:"open-with",value:null})}catch(e){setError(String(e))}return}
@@ -172,6 +173,7 @@ export default function CrystalApp(){
       if(action==="stop-all"||action==="delete-completed"){
 
         const result=await invoke<{done:number[];skipped:{why:string}[]}>("bulk_action",{action});
+        if(action==="stop-all")await invoke("close_progress_windows",{ids:result.done});
         if(result.skipped.length)setError(result.skipped.map(x=>x.why).join("; "));
       }else if(action==="queue-start"||action==="queue-stop"){
         if(!mainQueue)throw Error("No main queue exists");
@@ -180,6 +182,7 @@ export default function CrystalApp(){
         const result=await invoke<{done:number[];skipped:{why:string}[]}>("download_action",{
           action:action==="stop"?"pause":action,ids:[item.id]
         });
+        if(action==="stop")await invoke("close_progress_windows",{ids:result.done});
         if(result.skipped.length)setError(result.skipped.map(x=>x.why).join("; "));
       }else if(item&&(action==="open"||action==="folder"||action==="redownload")){
         if(action==="redownload"&&!window.confirm(`Redownload "${item.file}" from the beginning?`))return;
@@ -355,6 +358,6 @@ export default function CrystalApp(){
     </footer>
     {context&&picked&&picked.id===context.id&&<div ref={contextRef} className="cg-context" style={{left:Math.max(10,context.x),top:Math.max(10,context.y)}}
       onContextMenu={e=>e.preventDefault()}>{contextItems.map(x=>x.children?<details key={x.label}><summary>{x.label}<ChevronDown size={13}/></summary><div className="cg-context-submenu">{x.children.map(c=><button key={c.label} onClick={()=>void execute(c.action,picked)}>{c.label}</button>)}</div></details>:<button key={x.label} disabled={x.disabled} onClick={()=>void execute(x.action,picked)}><span>{x.label}</span>{x.shortcut&&<kbd>{x.shortcut}</kbd>}</button>)}</div>}
-    {deletion&&<DeleteDialog request={deletion} busy={busy} onChange={setDeletion} onCancel={()=>setDeletion(null)} onConfirm={()=>void remove(deletion)}/>}
+
   </div></CrystalWindow>;
 }

@@ -1,4 +1,5 @@
 import CrystalPrompt from "./CrystalPrompts";
+import CrystalDelete from "./CrystalDialog";
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { CrystalBatch, CrystalGrabber } from "./CrystalImports";
@@ -24,6 +25,7 @@ function Main() {
   const url = query.get("add") === "url";
   if(query.has("schedule")) return <CrystalScheduler/>;
   if(query.has("power")) return <CrystalPower id={Number(query.get("power"))}/>;
+  if(query.get("tool")==="delete") return <CrystalDelete/>;
   if(query.get("tool")==="duplicate"||query.get("tool")==="queue") return <CrystalPrompt kind={query.get("tool") as "duplicate"|"queue"} lease={Number(query.get("lease"))}/>;
   if(query.get("tool")==="batch") return <CrystalBatch/>;
   if(query.get("tool")==="grabber") return <CrystalGrabber/>;
