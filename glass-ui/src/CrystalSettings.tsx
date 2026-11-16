@@ -89,8 +89,8 @@ export default function CrystalSettings(){
   const body=()=>{
     switch(tab){
       case "General":return <>
-        {check("start_immediately","Start downloads immediately","Use MDM's original download behavior")}
-        {check("only_add_to_queue","Add new downloads to queue","Use queue instead of immediate start")}
+        <p>Browser captures wait for Download File Info so you can confirm the destination and download options.</p>
+        {check("only_add_to_queue","Queue silent download requests","Applies when an address is added without a confirmation dialog")}
         {check("confirm_delete","Ask before deleting","Protect items and downloaded files")}
         {check("double_click_open","Double-click opens a finished file","When off, double-click displays download details")}
         {check("show_complete","Show download complete dialog","Restore original completion notifications")}

@@ -41,3 +41,5 @@
 .cg-import-links th:first-child{width:28px}.cg-import-links th:nth-child(2){width:52%}.cg-import-links td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cg-input-row textarea{flex:1;min-width:0;resize:none;font:inherit;padding:8px;border:1px solid var(--edge);border-radius:7px;background:var(--surface);color:var(--ink)}
 
 .cg-accounts{display:flex;flex-direction:column;gap:14px}.cg-account-row{display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--edge)}.cg-account-row>span{flex:1;min-width:0;font-size:calc(var(--font-size)*.92)}.cg-account-row small{display:block;color:var(--muted);margin-top:5px}.cg-account-row .cg-btn{padding:6px}
+
+.cg-country-flag{display:inline-block;width:16px;height:12px;background-image:url(/country-flags.png);background-size:256px 192px;margin-right:6px;vertical-align:-1px;border:1px solid rgba(150,170,190,.35);box-sizing:content-box;border-radius:1px}

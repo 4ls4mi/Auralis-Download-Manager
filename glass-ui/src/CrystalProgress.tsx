@@ -3,12 +3,12 @@ import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useEffect, useState } from 'react';
 import { FileText, Pause, Play, Save } from 'lucide-react';
-import { CrystalWindow, WindowTop, ChunkMap, GradientBar, SpeedGraph, pct, units, rate, timeLeft, openWindow } from './CrystalShared';
+import { CrystalWindow, CountryFlag, WindowTop, ChunkMap, GradientBar, SpeedGraph, pct, units, rate, timeLeft, openWindow } from './CrystalShared';
 import type { Dashboard, Download, DownloadVisual, VisualDashboard } from './CrystalShared';
 type Tab='Download status'|'Speed Limiter'|'Options on completion';
 type Limit={own_limit_kb:number|null;is_torrent:boolean};
 const country=(code:string|null|undefined)=>{if(!code)return 'Unavailable';try{return new Intl.DisplayNames(['en'],{type:'region'}).of(code)??code}catch{return code}};
-const flag=(code:string|null|undefined)=>code&&/^[A-Z]{2}$/.test(code)?String.fromCodePoint(...Array.from(code).map(c=>127397+c.charCodeAt(0))):'';
+
 export default function CrystalProgress({id}:{id:number}){
  const [item,setItem]=useState<Download|null>(null),[visual,setVisual]=useState<DownloadVisual|null>(null),[tab,setTab]=useState<Tab>('Download status');
  const [values,setValues]=useState<number[]>([]),[error,setError]=useState(''),[busy,setBusy]=useState(false);
@@ -32,13 +32,13 @@ export default function CrystalProgress({id}:{id:number}){
   ['Status',statusText],['File size',units(item.size)],['Downloaded',`${units(item.downloaded)} (${pct(item).toFixed(2)}%)`],
   ['Transfer rate',item.status==='Downloading'?rate(item.speed):'—'],['Time left',timeLeft(item)],
   ['Resume capability',visual?.resumable===true?'Yes':visual?.resumable===false?'No':'Unknown'],
-  ['Server',`${flag(server?.country_code)} ${country(server?.country_code)}${server?.rtt_ms!=null?` · about ${server.rtt_ms} ms`:''}`]
+  ['Server',`${server?.place?.name??country(server?.country_code)}${server?.rtt_ms!=null?` · about ${server.rtt_ms} ms${server.place?.reach?` (${server.place.reach})`:""}`:''}`]
  ]:[];
  return <CrystalWindow target="details"><WindowTop title={`${item?pct(item).toFixed(0)+'% ':''}${item?.file??'Download'}`}/>
   <nav className="cg-page-tabs">{(['Download status','Speed Limiter','Options on completion'] as Tab[]).map(t=><button className={tab===t?'active':''} key={t} onClick={()=>setTab(t)}>{t}</button>)}</nav>
   <main className="cg-page cg-minimal-progress">
    {!item?<div className="cg-empty">Waiting for download information…</div>:tab==='Download status'?<>
-    <section className="cg-glass cg-mdm-details"><div className="cg-download-url" title={item.url}>{item.url}</div><dl>{metadata.map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl></section>
+    <section className="cg-glass cg-mdm-details"><div className="cg-download-url" title={item.url}>{item.url}</div><dl>{metadata.map(([label,value])=><div key={label}><dt>{label}</dt><dd>{label==='Server'&&<CountryFlag place={server?.place}/>} {value}</dd></div>)}</dl></section>
     <div className="cg-overall"><GradientBar percent={pct(item)} showLabel/></div>
     <section className="cg-glass cg-progress-section cg-selected-chunks"><div className="cg-section-title"><h3>Download chunks</h3></div><ChunkMap segments={visual?.segments} size={item.size} count={visual?.chunk_count} active={visual?.active_connections}/>
      <details className="cg-connection-details"><summary>Connection details ({connectionCount})</summary>

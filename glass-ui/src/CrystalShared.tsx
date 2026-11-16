@@ -16,9 +16,11 @@ export type Download = {
 export type Queue = { name: string; running: boolean; ids: number[] };
 export type Segment = { start: number; cursor: number; end: number };
 export type Connection = { id: number; downloaded: number; speed: number; state: string };
+export type ServerPlace={name:string|null;flag_cell:[number,number]|null;reach:string|null};
+export function CountryFlag({place}:{place?:ServerPlace|null}){return place?.flag_cell?<span className="cg-country-flag" aria-label="Country flag" style={{backgroundPosition:`-${place.flag_cell[0]/2}px -${place.flag_cell[1]/2}px`}}/>:null;}
 export type DownloadVisual = {
   id: number; chunk_count: number; active_connections:number; segments: Segment[]; connections: Connection[]; resumable: boolean | null;
-  server: {hostname:string|null;ip:string|null;country_code:string|null;rtt_ms:number|null;cdn:string|null;proxied:boolean};
+  server: {hostname:string|null;ip:string|null;country_code:string|null;place?:ServerPlace|null;rtt_ms:number|null;cdn:string|null;proxied:boolean};
   last_try:string|null;added:string|null;referer:string|null;page:string|null;
   description:string;category:string;is_torrent:boolean
 };
@@ -230,16 +232,14 @@ export function CrystalWindow({ children, target = "main" }: {
   const [fit,setFit]=useState(1);
   useLayoutEffect(()=>{
     const el=frame.current;if(!el)return;
-    const query=new URLSearchParams(location.search);
-    const base=query.has("settings")?[880,700]:query.has("detail")?[720,640]:query.has("request")?[720,500]:query.has("complete")?[660,390]:query.has("properties")?[680,580]:target==="main"?[1040,620]:[600,420];
     let disposed=false,raf=0;
-    const baseScale=()=>Math.min(appearance.uiScale/100,el.clientWidth/base[0],el.clientHeight/base[1]);
+    const baseScale=()=>appearance.uiScale/100;
     const measure=()=>{
       cancelAnimationFrame(raf);raf=requestAnimationFrame(()=>{
         if(disposed)return;
         const fit=el.querySelector<HTMLElement>('.cg-fit-content');if(!fit)return;
         let ratio=1;
-        for(const box of [fit,...el.querySelectorAll<HTMLElement>('.cg-page,.cg-settings-body,.cg-sidebar,.cg-original-editor')]){
+        for(const box of [fit,...el.querySelectorAll<HTMLElement>('.cg-page,.cg-settings-body,.cg-settings-nav,.cg-sidebar,.cg-main-body,.cg-workspace,.cg-table,.cg-original-editor')]){
           if(box.clientHeight>0&&box.scrollHeight>box.clientHeight+2)ratio=Math.min(ratio,box.clientHeight/box.scrollHeight);
           if(box.clientWidth>0&&box.scrollWidth>box.clientWidth+2)ratio=Math.min(ratio,box.clientWidth/box.scrollWidth);
         }

@@ -34,6 +34,8 @@ pub fn start(app: AppHandle) {
         let mut last_info = 0;
         let mut last_power = 0;
         let mut last_import = 0;
+        let mut last_duplicate = 0;
+        let mut last_queue = 0;
         loop {
             thread::sleep(Duration::from_millis(650));
             if !current_backend().is_ok_and(|b|b.headless&&b.glass) {continue;}
@@ -66,6 +68,9 @@ pub fn start(app: AppHandle) {
             let imported=send_ipc(&mdm_ipc::Command{query:Some("glass-grabber-status".into()),..Default::default()}).ok().and_then(|s|serde_json::from_str::<serde_json::Value>(&s).ok());
             let import=imported.as_ref().filter(|g|g["pending"]==true).and_then(|g|g["version"].as_u64()).filter(|v|*v!=last_import);
             if let Some(v)=import{last_import=v;}
+            let prompts=send_ipc(&mdm_ipc::Command{query:Some("glass-prompts".into()),..Default::default()}).ok().and_then(|s|serde_json::from_str::<serde_json::Value>(&s).ok());
+            let duplicate=prompts.as_ref().and_then(|p|p["duplicate"]["lease"].as_u64()).filter(|id|*id!=last_duplicate);if let Some(id)=duplicate{last_duplicate=id;}
+            let queue=prompts.as_ref().and_then(|p|p["queue"]["lease"].as_u64()).filter(|id|*id!=last_queue);if let Some(id)=queue{last_queue=id;}
             let owner = app.clone();
             let _ = app.run_on_main_thread(move || {
                 for (id, status) in transitions {
@@ -77,6 +82,8 @@ pub fn start(app: AppHandle) {
                     }
                 }
                 if exit {let _=mdm_ipc::send(&mdm_ipc::Command{exit:true,..Default::default()});owner.exit(0);return;}
+                if let Some(id)=duplicate{let _=open(&owner,&format!("tool-duplicate-{id}"),&format!("tool=duplicate&lease={id}"),620.0,400.0);}
+                if let Some(id)=queue{let _=open(&owner,&format!("tool-queue-{id}"),&format!("tool=queue&lease={id}"),600.0,340.0);}
                 if import.is_some(){let _=open(&owner,"tool-grabber","tool=grabber",900.0,680.0);}
                 if let Some(id)=power_id {let _=open(&owner,&format!("power-{id}"),&format!("power={id}"),590.0,330.0);}
                 if let Some(id) = request { let _ = open(&owner,&format!("info-{id}"),&format!("request={id}"),780.0,560.0); }
@@ -120,11 +127,11 @@ pub async fn choose_download_path(current:String) -> ApiResult<Option<String>> {
 
 #[tauri::command]
 pub async fn glass_tool(action:String,payload:Option<serde_json::Value>) -> ApiResult<serde_json::Value> {
-    if !matches!(action.as_str(),"category"|"queues"|"schedule"|"power"|"power-state"|"original-settings"|"original-setting"|"batch"|"grabber"|"grabber-state"|"categories"|"accounts"|"account") {return Err("Unsupported tool".into());}
+    if !matches!(action.as_str(),"category"|"queues"|"schedule"|"power"|"power-state"|"original-settings"|"original-setting"|"batch"|"grabber"|"grabber-state"|"categories"|"accounts"|"account"|"prompts"|"prompt") {return Err("Unsupported tool".into());}
     tauri::async_runtime::spawn_blocking(move||{
         let mut cmd=mdm_ipc::Command::default();
         if action=="queues" {cmd.query=Some("glass-queues".into());}
-        else if action=="grabber-state"||action=="categories"||action=="accounts"{cmd.query=Some(format!("glass-{action}"));}
+        else if action=="grabber-state"||action=="categories"||action=="accounts"||action=="prompts"{cmd.query=Some(format!("glass-{action}"));}
         else if action=="power-state" {cmd.query=Some("glass-power".into());}
         else if action=="original-settings" {cmd.query=Some("glass-original-settings".into());}
         else {cmd.action=Some(format!("glass-{action}"));cmd.queue=payload.map(|p|p.to_string());}

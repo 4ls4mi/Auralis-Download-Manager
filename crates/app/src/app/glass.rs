@@ -3,6 +3,7 @@
 mod settings;
 mod tools;
 mod accounts;
+mod prompts;
 use super::*;
 use serde_json::{Value, json};
 
@@ -23,6 +24,7 @@ impl App {
     }
 
     pub(super) fn glass_answer(&mut self, cmd: &ipc::Command) -> Option<String> {
+        if let Some(answer)=self.glass_prompts(cmd){return Some(answer);}
         if let Some(answer)=self.glass_accounts(cmd){return Some(answer);}
         if let Some(answer)=self.glass_tools(cmd){return Some(answer);}
         if cmd.query.as_deref()==Some("glass-original-settings"){return Some(self.glass_original_settings().to_string());}

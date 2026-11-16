@@ -45,7 +45,7 @@ export default function CrystalApp(){
   const [doubleClickOpen,setDoubleClickOpen]=useState(false);
   const [showCategories,setShowCategories]=useState(true);
   const [deletion,setDeletion]=useState<DeleteRequest|null>(null);
-  const [confirmDelete,setConfirmDelete]=useState(true);
+  const [confirmDelete,setConfirmDelete]=useState(true),[deleteFilesToo,setDeleteFilesToo]=useState(false);
   const [page,setPage]=useState(0),[capacity,setCapacity]=useState(8);
   const contextRef=useRef<HTMLDivElement>(null);
   const viewport=useRef<HTMLDivElement|null>(null);
@@ -54,7 +54,7 @@ export default function CrystalApp(){
     const menu=contextRef.current;if(!menu)return;
     const fit=menu.closest<HTMLElement>('.cg-fit-content');if(!fit)return;
     const place=()=>{
-      const box=menu.getBoundingClientRect(),host=fit.getBoundingClientRect(),scale=host.width/fit.offsetWidth;
+      const host=fit.getBoundingClientRect(),scale=host.width/fit.offsetWidth;
       const maxHeight=(host.height-16)/scale;
       menu.style.zoom=String(Math.min(1,maxHeight/menu.scrollHeight));
       const resized=menu.getBoundingClientRect();
@@ -92,8 +92,8 @@ export default function CrystalApp(){
     void invoke<string>("boot_engine").then(text=>{
       if(!mounted)return;
       setMessage(text);void refresh();
-      void invoke<{double_click_open:boolean;confirm_delete:boolean}>("glass_settings").then(s=>{
-        if(mounted){setDoubleClickOpen(Boolean(s.double_click_open));setConfirmDelete(Boolean(s.confirm_delete));}
+      void invoke<{double_click_open:boolean;confirm_delete:boolean;delete_files_too:boolean}>("glass_settings").then(s=>{
+        if(mounted){setDoubleClickOpen(Boolean(s.double_click_open));setConfirmDelete(Boolean(s.confirm_delete));setDeleteFilesToo(Boolean(s.delete_files_too));}
       }).catch(()=>undefined);
     }).catch(e=>{if(mounted){setOnline(false);setMessage(String(e))}});
     const timer=window.setInterval(()=>{if(mounted)void refresh()},1200);
@@ -125,6 +125,7 @@ export default function CrystalApp(){
         const result=await invoke<{skipped:{why:string}[]}>("download_action",{action:request.disk?"delete":"remove",ids:request.ids.slice(start,start+100)});
         if(result.skipped.length)throw Error(result.skipped.map(x=>x.why).join("; "));
       }
+      await invoke("glass_tool",{action:"original-setting",payload:{key:"delete_files_too",value:request.disk}});setDeleteFilesToo(request.disk);
       if(request.dontAsk){await invoke("update_glass_setting",{key:"confirm_delete",value:"false"});setConfirmDelete(false)}
       setDeletion(null);await refresh();
     }catch(e){setError(String(e))}finally{setBusy(false)}
@@ -134,7 +135,7 @@ export default function CrystalApp(){
     if(["remove","delete","delete-completed"].includes(action)){
       const items=action==="delete-completed"?data.downloads.filter(x=>x.status==="Complete"):item?[item]:[];
       if(!items.length)return;
-      const request:DeleteRequest={ids:items.map(x=>x.id),name:items.length===1?items[0].file:`${items.length} completed downloads`,disk:action==="delete",dontAsk:false};
+      const request:DeleteRequest={ids:items.map(x=>x.id),name:items.length===1?items[0].file:`${items.length} completed downloads`,disk:action==="delete"||deleteFilesToo,dontAsk:false};
       if(confirmDelete)setDeletion(request);else await remove(request);
       return;
     }
@@ -234,7 +235,8 @@ export default function CrystalApp(){
       else if(e.ctrlKey&&e.key.toLowerCase()==="f"){e.preventDefault();searchRef.current?.focus()}
       else if(e.ctrlKey&&e.key===","){e.preventDefault();void execute("settings")}
       else if(e.key==="F5"){e.preventDefault();void refresh()}
-      else if(e.key==="Delete"&&picked&&document.activeElement?.tagName!=="INPUT"){e.preventDefault();void execute("remove")}
+      else if(e.ctrlKey&&e.key.toLowerCase()==="m"&&picked){e.preventDefault();void execute("move")}
+      else if(e.key==="Delete"&&picked&&document.activeElement?.tagName!=="INPUT"){e.preventDefault();void execute(e.shiftKey?"delete":"remove")}
       else if(e.key==="Enter"&&picked&&document.activeElement?.tagName!=="INPUT"){e.preventDefault();pop(picked.id)}
     };
     const click=(e:MouseEvent)=>{

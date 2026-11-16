@@ -862,6 +862,7 @@ pub struct App {
     file_info: Option<FileInfo>,
     glass_info_serial: u64,
     glass_import_serial: u64,
+    glass_duplicate_serial:u64,
     glass_account: Option<(mdm_debrid::ServiceKind,crate::debrid::SignIn)>,
     glass_checks: glass::CheckSlots,
     glass_exit_requested: bool,
@@ -1628,6 +1629,7 @@ impl App {
             file_info: None,
             glass_info_serial: 0,
             glass_import_serial: 0,
+            glass_duplicate_serial:0,
             glass_account: None,
             glass_checks: Default::default(),
             glass_exit_requested: false,
@@ -2905,7 +2907,7 @@ impl App {
             if self.glass_owned() && !cmd.remote && !cmd.silent
                 && let Some(url) = cmd.url.as_deref().and_then(|u| url::Url::parse(u).ok()).filter(mdm_engine::supported)
             {
-                self.open_file_info(dialogs::NewUrl { url, login: None }, cmd, ctx);
+                if self.duplicate_gate(&url,||Pending::Command(Box::new(cmd.clone()))){self.open_file_info(dialogs::NewUrl { url, login: None }, cmd, ctx);}
                 return;
             }
             if cmd.start_queue {
@@ -5944,16 +5946,19 @@ impl App {
                     .and_then(mdm_geo::country)
                     .map(|country| country.code().to_owned());
                 let segments = i.snap.as_ref().map(|snap| {
-                    snap.segments.iter().take(256).map(|part| {
+                    snap.segments.iter().map(|part| {
                         serde_json::json!({
                             "start": part.start,
                             "cursor": part.cursor,
                             "end": part.end
                         })
                     }).collect::<Vec<_>>()
-                }).unwrap_or_default();
+                }).unwrap_or_else(|| {
+                    // A persisted Complete result is the engine's confirmation that every byte arrived.
+                    if i.status==Status::Complete {i.size.map(|size|vec![serde_json::json!({"start":0,"cursor":size,"end":size})]).unwrap_or_default()}else{Vec::new()}
+                });
                 let connections = i.snap.as_ref().map(|snap| {
-                    snap.connections.iter().take(128).map(|conn| {
+                    snap.connections.iter().map(|conn| {
                         let state = match &conn.status {
                             mdm_engine::download::ConnStatus::Connecting => "Connecting",
                             mdm_engine::download::ConnStatus::Receiving => "Receiving",
@@ -5984,6 +5989,7 @@ impl App {
                             .or_else(|| i.url.host_str()),
                         "ip": server.as_ref().and_then(|seen| seen.ip).map(|ip| ip.to_string()),
                         "country_code": country_code,
+                        "place":server.as_ref().map(crate::whereis::glass),
                         "rtt_ms": server.as_ref().and_then(|seen| seen.rtt_ms),
                         "cdn": server.as_ref().and_then(|seen| seen.cdn.as_ref()),
                         "proxied": server.as_ref().is_some_and(|seen| seen.proxied),
@@ -6012,6 +6018,7 @@ impl App {
                 "start_immediately": self.settings.start_immediately,
                 "only_add_to_queue": self.settings.only_add_to_queue,
                 "confirm_delete": self.settings.confirm_delete,
+                "delete_files_too":self.settings.delete_files_too,
                 "torrent_keep_sharing": self.settings.torrent_keep_sharing,
                 "torrent_dht": self.settings.torrent_dht,
                 "torrent_lsd": self.settings.torrent_lsd,
@@ -9325,6 +9332,7 @@ impl App {
             .unwrap_or_default();
         let ask = (dup, pending, dialogs::Duplicate::new(name));
         if self.duplicate.is_none() {
+            self.glass_duplicate_serial=self.glass_duplicate_serial.wrapping_add(1);
             self.duplicate = Some(ask);
         } else {
             self.duplicates_waiting.push_back(ask);

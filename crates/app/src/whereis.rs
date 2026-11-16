@@ -106,6 +106,13 @@ fn is_local(ip: IpAddr) -> bool {
     }
 }
 
+/// Safe server metadata shared by the Glass windows, using the original location rules.
+pub(crate) fn glass(seen:&Seen)->serde_json::Value {
+    let place=place(seen);
+    let flag=place.as_ref().and_then(|(_,mark)|match mark{Some(Mark::Flag(c))=>c.flag_cell(),_=>None});
+    serde_json::json!({"name":place.map(|(name,_)|name),"flag_cell":flag,"reach":seen.rtt_ms.map(|ms|reach_word(reach(ms)))})
+}
+
 /// Where a place's picture comes from: its country's flag, or a Tango icon for this computer
 /// and the local network, which have no country.
 enum Mark {

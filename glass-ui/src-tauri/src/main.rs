@@ -490,6 +490,11 @@ fn main() {
         })
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { .. } = event {
+                for kind in ["queue","duplicate"]{
+                    if let Some(lease)=window.label().strip_prefix(&format!("tool-{kind}-")).and_then(|s|s.parse::<u64>().ok()){
+                        thread::spawn(move||{let _=send_ipc(&mdm_ipc::Command{action:Some("glass-prompt".into()),queue:Some(serde_json::json!({"kind":kind,"lease":lease,"cancel":true}).to_string()),..Default::default()});});
+                    }
+                }
                 if let Some(id)=window.label().strip_prefix("power-").and_then(|s|s.parse::<u64>().ok()) {
                     thread::spawn(move || {let _=send_ipc(&mdm_ipc::Command {action:Some("glass-power".into()),queue:Some(serde_json::json!({"id":id,"action":"cancel"}).to_string()),..Default::default()});});
                 }

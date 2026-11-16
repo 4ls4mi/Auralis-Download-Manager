@@ -1298,7 +1298,7 @@ impl FileInfo {
             "remember": self.remember, "size": self.size(),
             "probing": self.info.is_none(),
             "error": self.info.as_ref().and_then(|r| r.as_ref().err()),
-            "server": { "country_code": country, "rtt_ms": server.as_ref().and_then(|s| s.rtt_ms) },
+            "server": { "country_code": country, "place":server.as_ref().map(crate::whereis::glass), "rtt_ms": server.as_ref().and_then(|s| s.rtt_ms) },
         })
     }
 

@@ -2,11 +2,11 @@ import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useEffect, useRef, useState } from 'react';
 import { CheckCheck, ExternalLink, FileArchive, FolderOpen, Move, Plus, X } from 'lucide-react';
-import { CrystalWindow, WindowTop, units, openWindow } from './CrystalShared';
-import type { Dashboard, Download } from './CrystalShared';
+import { CrystalWindow, CountryFlag, WindowTop, units, openWindow } from './CrystalShared';
+import type { Dashboard, Download, ServerPlace } from './CrystalShared';
 
 const close=()=>getCurrentWindow().close();
-type Pending={categories?:Dashboard['categories'];id:number;waiting:number;info:null|{url:string;save_as:string;category:string;description:string;remember:boolean;size:number|null;probing:boolean;error:string|null;server:{country_code:string|null;rtt_ms:number|null}}};
+type Pending={categories?:Dashboard['categories'];id:number;waiting:number;info:null|{url:string;save_as:string;category:string;description:string;remember:boolean;size:number|null;probing:boolean;error:string|null;server:{country_code:string|null;place?:ServerPlace|null;rtt_ms:number|null}}};
 export function CrystalFileInfo({id}:{id:number}){
  const [pending,setPending]=useState<Pending|null>(null),[categories,setCategories]=useState<Dashboard['categories']>([]);
  const [form,setForm]=useState({save_as:'',description:'',remember:false,chunks:8});
@@ -40,9 +40,9 @@ export function CrystalFileInfo({id}:{id:number}){
      <button className="cg-btn" title="Choose save location" onClick={async()=>{try{const path=await invoke<string|null>('choose_download_path',{current:form.save_as});if(path){pathEdited.current=true;setForm(old=>({...old,save_as:path}))}}catch(e){setError(String(e))}}}><FolderOpen size={16}/></button></div></label>
     <div className="cg-remember-path"><label><input type="checkbox" checked={form.remember} onChange={e=>setForm(old=>({...old,remember:e.target.checked}))}/> Remember this path for “{categories.find(c=>c.key===info?.category)?.name??info?.category}” category</label>
      <input readOnly disabled={!form.remember} aria-label="Remembered folder" value={form.save_as.replace(/[\\/][^\\/]*$/,'')}/></div>
-   </div><div className="cg-info-file"><FileArchive size={36}/><strong>{units(info?.size)}</strong><small>{info?.probing?'Checking file…':'Archive / file'}</small><button className="cg-btn" disabled title="Preview is available after a transfer has created a previewable file">Preview</button></div></div>
+   </div><div className="cg-info-file"><FileArchive size={36}/><strong>{units(info?.size)}</strong><small>{info?.probing?'Checking file…':'Archive / file'}</small><button className="cg-btn" disabled title="Preview is not available in the original File Info dialog">Preview</button></div></div>
    <label className="cg-field">Description<input value={form.description} onChange={e=>setForm(old=>({...old,description:e.target.value}))}/></label>
-   <div className="cg-info-bottom"><span className="cg-muted">Server　{info?.server.country_code??'Not yet observed'}{info?.server.rtt_ms!=null?` · ${info.server.rtt_ms} ms`:''}</span>
+   <div className="cg-info-bottom"><span className="cg-muted">Server　<CountryFlag place={info?.server.place}/>{info?.server.place?.name??info?.server.country_code??'Not yet observed'}{info?.server.rtt_ms!=null?` · ${info.server.rtt_ms} ms`:''}</span>
     <label className="cg-inline-field">Chunks / connections<select value={form.chunks} onChange={e=>setForm(old=>({...old,chunks:Number(e.target.value)}))}>{[1,2,4,8,16,32,64,128].includes(form.chunks)?null:<option>{form.chunks}</option>}{[1,2,4,8,16,32,64,128].map(n=><option key={n} value={n}>{n}</option>)}</select></label></div>
    {error&&<p className="cg-error" role="alert">{error}</p>}
    {info?.error&&<p className="cg-error">{info.error}</p>}

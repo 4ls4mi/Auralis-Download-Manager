@@ -1,0 +1,14 @@
+import { invoke } from '@tauri-apps/api/core';
+import { getCurrentWindow } from '@tauri-apps/api/window';
+import { useEffect, useState } from 'react';
+import { CrystalWindow, WindowTop } from './CrystalShared';
+type Pending={duplicate:{lease:number;file:string}|null;queue:{lease:number;count:number;queues:string[]}|null};
+export default function CrystalPrompt({kind,lease}:{kind:'duplicate'|'queue';lease:number}){
+ const [pending,setPending]=useState<Pending|null>(null),[choice,setChoice]=useState('1'),[name,setName]=useState(''),[start,setStart]=useState(false),[error,setError]=useState(''),[busy,setBusy]=useState(false);
+ useEffect(()=>{let active=true;const load=async()=>{try{const data=await invoke<Pending>('glass_tool',{action:'prompts',payload:null});if(!active)return;if(data[kind]?.lease!==lease){await getCurrentWindow().close();return;}setPending(data);setName(old=>old||data.queue?.queues[0]||'')}catch(e){if(active)setError(String(e))}};void load();const timer=setInterval(()=>void load(),1000);return()=>{active=false;clearInterval(timer)}},[kind,lease]);
+ const submit=async(cancel:boolean)=>{setBusy(true);setError('');try{await invoke('glass_tool',{action:'prompt',payload:{kind,lease,cancel,choice:Number(choice),name,start}});await getCurrentWindow().close()}catch(e){setError(String(e));setBusy(false)}};
+ return <CrystalWindow target="details"><WindowTop noMax title={kind==='duplicate'?'Duplicate download link':'Download later'}/><main className="cg-page cg-tool-body">
+  {kind==='duplicate'?<><h2>Duplicate download link</h2><p className="cg-muted">“{pending?.duplicate?.file}” is already in the download list.</p><label className="cg-field">Choose what to do<select value={choice} onChange={e=>setChoice(e.target.value)}><option value="1">Add a numbered copy</option><option value="2">Replace the existing download and file</option><option value="3">Open or resume the existing download</option></select></label>{choice==='2'&&<p className="cg-error">The existing download and its file will be replaced.</p>}</>:<><h2>Add {pending?.queue?.count??''} downloads to a queue</h2><label className="cg-field">Queue<select value={name} onChange={e=>setName(e.target.value)}>{pending?.queue?.queues.map(q=><option key={q}>{q}</option>)}</select></label><label className="cg-toggle"><span>Start the queue now</span><input type="checkbox" checked={start} onChange={e=>setStart(e.target.checked)}/></label></>}
+  {error&&<p className="cg-error">{error}</p>}<div className="cg-bottom-actions" style={{marginTop:'auto'}}><button className="cg-btn" disabled={busy} onClick={()=>void submit(true)}>Cancel</button><span className="cg-action-space"/><button className="cg-btn cg-btn-primary" disabled={busy||!pending} onClick={()=>void submit(false)}>OK</button></div>
+ </main></CrystalWindow>;
+}

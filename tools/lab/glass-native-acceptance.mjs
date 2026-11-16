@@ -20,12 +20,12 @@ const wait=ms=>new Promise(r=>setTimeout(r,ms));
 const until=async(fn,message,timeout=45000)=>{const start=Date.now();let last;while(Date.now()-start<timeout){try{const value=await fn();if(value)return value;}catch(e){last=e;}await wait(180);}throw new Error(message+(last?': '+last.message:''));};
 const results=[];
 const passed=name=>{results.push({name,status:'passed'});console.log('PASS: '+name);};
-let requests=0,headersPreserved=0,browser,shell;
+let headersPreserved=0,browser,shell;
+let shellError='',shellExit=null;
 const size=16*1024*1024;
 const block=Buffer.alloc(64*1024,0x47);
 const expectedHash=createHash('sha256');for(let n=0;n<size;n+=block.length)expectedHash.update(block);const expected=expectedHash.digest('hex');
 const server=createServer((req,res)=>{
- requests++;
  if(req.headers.cookie!=='glass_acceptance=1'||!req.headers.referer||!req.headers['user-agent']?.includes('Firefox/')){res.writeHead(403);res.end('Missing original browser request context');return;}
  headersPreserved++;
  const range=/^bytes=(\d+)-(\d*)$/.exec(req.headers.range||'');
@@ -56,9 +56,10 @@ async function screenshot(page,name){await page.screenshot({path:path.join(outpu
 async function setTheme(settings,light){await settings.getByRole('button',{name:'Appearance',exact:true}).click();await settings.getByRole('button',{name:light?'Light crystal':'Dark crystal',exact:true}).click();await wait(350);}
 async function bothThemes(page,name,settings){for(const light of [false,true]){await setTheme(settings,light);await until(()=>page.locator(light?'.cg-light':'.cg-dark').count(),'Appearance did not reach '+name);await screenshot(page,name+(light?'-light':'-dark'));}}
 try{
- shell=spawn(process.env.GLASS_E2E_EXE,[],{env:{...process.env,MDM_DATA_DIR:data,MDM_REMOTE:'off',WEBVIEW2_USER_DATA_FOLDER:path.join(folder,'webview'),WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS:`--remote-debugging-port=${port} --remote-debugging-address=127.0.0.1 --remote-allow-origins=* --disable-gpu`},stdio:'ignore'});
- shell.on('error',e=>{throw e;});
- browser=await until(async()=>{try{return await chromium.connectOverCDP(`http://127.0.0.1:${port}`)}catch{return null}},'WebView2 CDP was not available',90000);
+ shell=spawn(process.env.GLASS_E2E_EXE,[],{env:{...process.env,MDM_DATA_DIR:data,MDM_REMOTE:'off',WEBVIEW2_USER_DATA_FOLDER:path.join(folder,'webview'),WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS:`--remote-debugging-port=${port} --remote-debugging-address=127.0.0.1 --remote-allow-origins=*`},stdio:['ignore','pipe','pipe']});
+ shell.stdout.on('data',b=>{shellError+=b.toString()});shell.stderr.on('data',b=>{shellError+=b.toString()});
+ shell.on('error',e=>{shellError+=e.message;shellExit='spawn error'});shell.on('exit',(code,signal)=>{shellExit={code,signal}});
+ browser=await until(async()=>{if(shellExit!==null)throw new Error('Glass exited before WebView2 started: '+JSON.stringify(shellExit)+' '+shellError);try{return await chromium.connectOverCDP(`http://127.0.0.1:${port}`,{timeout:3000})}catch{return null}},'WebView2 CDP was not available',90000);
  const main=await until(()=>browser.contexts().flatMap(c=>c.pages()).find(p=>!p.url().includes('?')),'Main native WebView did not appear');
  await main.waitForSelector('.cg-toolbar');await until(async()=>{const d=await ipc({query:'glass-backend'});return d.headless&&d.glass},'Original headless backend did not start',60000);
  passed('One Glass shell connects to the original headless MDM backend');
@@ -67,8 +68,8 @@ try{
  await settings.getByLabel('Show download complete dialog').check();
  await until(async()=>(await invoke(main,'glass_settings')).show_complete,'Completion setting failed through the actual Tauri bridge');
  passed('Completion-dialog checkbox saves through the real native bridge');
- const before=requests;await capture('fixture-eight.zip');let info=await pageFor('request=');await info.waitForSelector('.cg-file-info');await wait(350);
- assert.equal((await ipc({query:'list'})).downloads.length,0,'Capture must wait for user confirmation');assert.equal(requests,before,'Browser metadata must not start a transfer before confirmation');
+ await capture('fixture-eight.zip');let info=await pageFor('request=');await info.waitForSelector('.cg-file-info');await wait(350);
+ assert.equal((await ipc({query:'list'})).downloads.length,0,'Capture must wait for user confirmation');assert.equal((await ipc({query:'list'})).downloads.some(f=>f.status==='Downloading'),false,'Metadata probing must not create a running download before confirmation');
  await bothThemes(info,'file-info',settings);
  const destination=path.join(folder,'downloads','fixture-eight.zip');
  await info.getByLabel('Save As',{exact:true}).fill(destination);await info.getByLabel('Chunks / connections').selectOption('8');await info.getByRole('button',{name:'Start Download',exact:true}).click();
@@ -110,6 +111,9 @@ try{
  await writeFile(path.join(output,'results.json'),JSON.stringify({platform:process.platform,arch:process.arch,results},null,2));
  console.log('Windows native acceptance passed. Screenshots and result evidence are in the proof artifact.');
 }catch(error){
+ await writeFile(path.join(output,'shell-startup.txt'),JSON.stringify({exit:shellExit,output:shellError},null,2));
+ const diagnostic=spawnSync('powershell.exe',['-NoProfile','-Command',"Get-Process | Where-Object {$_.ProcessName -match 'mister|msedge|WebView'} | Select-Object ProcessName,Id,SessionId,MainWindowTitle | Format-Table -AutoSize"],{encoding:'utf8'});
+ await writeFile(path.join(output,'processes.txt'),diagnostic.stdout||diagnostic.stderr||'No process diagnostics');
  console.error(error.stack||error.message);results.push({name:error.message,status:'failed'});
  if(browser)for(const [i,page] of browser.contexts().flatMap(c=>c.pages()).entries())if(!page.isClosed())await screenshot(page,'failure-'+i).catch(()=>{});
  await writeFile(path.join(output,'results.json'),JSON.stringify({platform:process.platform,arch:process.arch,results},null,2));process.exitCode=1;
