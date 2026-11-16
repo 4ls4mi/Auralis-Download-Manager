@@ -274,10 +274,12 @@ export function CrystalWindow({ children, target = "main" }: {
   const video = /\.(mp4|webm|mov|m4v)$/i.test(path);
   useEffect(() => {
     const w = getCurrentWindow();
-    if (mode === "desktop" && appearance.acrylic)
+    if (mode === "desktop" && (appearance.acrylic || appearance.material === "acrylic"))
       void w.setEffects({ effects: [Effect.Acrylic], state: EffectState.Active }).catch(() => undefined);
+    else if (mode === "desktop" && appearance.material === "mica")
+      void w.setEffects({ effects: [Effect.Mica], state: EffectState.Active }).catch(() => undefined);
     else void w.clearEffects().catch(() => undefined);
-  }, [mode, appearance.acrylic]);
+  }, [mode, appearance.acrylic, appearance.material]);
   const style = {
     "--accent": appearance.lightMode ? (({plexo:"#086e84",ocean:"#146c9b",purple:"#7050b5",pink:"#b73962",gold:"#8a5b05",green:"#19765b",silver:"#4c6680",navy:"#394ea2",orange:"#ad4700",rose:"#a42b70"} as Record<string,string>)[theme.id]??"#086e84") : theme.accent,
     "--accent-secondary": theme.secondary,
