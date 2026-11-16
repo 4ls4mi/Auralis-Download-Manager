@@ -96,3 +96,5 @@
 .cg-light .cg-toolbar>button[data-action="remove"]{--tone:#bc3028!important}
 .cg-row-progress .cg-chunk-map.compact>span{height:8px;border-radius:2px}.cg-row-progress .cg-graph-small{height:18px}
 .cg-video-choice{display:flex;align-items:center;gap:10px;padding:8px;border-bottom:1px solid var(--edge)}.cg-video-choice span{flex:1}.cg-video-choice small{color:var(--muted)}
+.cg-window button svg{transition:transform .18s ease,filter .18s ease}.cg-window button:hover:not(:disabled) svg{transform:translateY(-1px) scale(1.1);filter:drop-shadow(0 0 4px currentColor)}.cg-window button:active:not(:disabled) svg{transform:scale(.9)}
+@media(prefers-reduced-motion:reduce){.cg-window button svg{transition:none}.cg-window button:hover:not(:disabled) svg,.cg-window button:active:not(:disabled) svg{transform:none;filter:none}}

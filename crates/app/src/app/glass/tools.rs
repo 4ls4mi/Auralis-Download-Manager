@@ -10,7 +10,7 @@ static GLASS_UPSTREAM_CHECK: OnceLock<Mutex<Option<crate::help::Slot>>> = OnceLo
 fn upstream_check() -> &'static Mutex<Option<crate::help::Slot>> { GLASS_UPSTREAM_CHECK.get_or_init(|| Mutex::new(None)) }
 
 impl App {
-    pub(super) fn glass_tools(&mut self,cmd:&ipc::Command)->Option<String>{
+    pub(in crate::app) fn glass_tools(&mut self,cmd:&ipc::Command)->Option<String>{
         if cmd.query.as_deref()==Some("glass-upstream-check") {
             let slot=upstream_check().lock().unwrap_or_else(|e|e.into_inner()).clone();
             let value=match slot {
