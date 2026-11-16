@@ -11433,6 +11433,13 @@ impl App {
         }
         crate::crash::step(crate::crash::Step::Limits);
         self.apply_global_limit();
+        // Glass is a desktop shell with its own windows even though its MDM backend is
+        // headless. Reuse the original asynchronous clipboard watch and capture rules;
+        // ordinary headless servers still have no clipboard integration.
+        if self.glass_owned() {
+            crate::crash::step(crate::crash::Step::Clipboard);
+            self.watch_clipboard(ctx);
+        }
         // A server (#157) has no screen, clipboard or tray, and is updated by its image.
         if !self.headless {
             crate::crash::step(crate::crash::Step::UpdateCheck);
