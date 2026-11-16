@@ -63,3 +63,7 @@
 @media(max-height:600px){.cg-sidebar{padding:3px 5px}.cg-sidebar .cg-side-heading{display:none}.cg-sidebar .cg-side-separator{margin:3px 5px 1px;font-size:max(var(--min-text-size),11px);line-height:14px}.cg-sidebar button,.cg-sidebar .cg-side-queue{min-height:23px;padding:2px 5px;line-height:17px}.cg-sidebar button b{padding:1px 4px}.cg-toolbar{padding:4px;gap:4px}.cg-toolbar>button{padding:3px;gap:2px}.cg-main-body{gap:5px;padding-bottom:5px}.cg-footer{min-height:38px;padding:4px 8px}}
 
 @media(max-width:900px){.cg-workspace{grid-template-columns:max(135px,calc(125px / var(--fit-scale))) minmax(0,1fr)}}
+
+.cg-sidebar .cg-side-queue{font-size:max(var(--min-text-size),calc(var(--font-size) * .8333))}
+@media(max-width:900px){.cg-toolbar>button[data-action="delete-completed"]{flex:1.4}.cg-toolbar>button[data-action="delete-completed"] span{overflow-wrap:normal}}
+@media(max-height:600px){.cg-toolbar{min-height:70px}.cg-toolbar>button{min-height:58px}}
