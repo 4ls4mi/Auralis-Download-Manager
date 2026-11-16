@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Activity, Bell, Cable, Check, CheckCircle2, Download, Folder, Gauge, Globe2, Image, Monitor, Network, Palette, RotateCcw, Settings, Shield, SlidersHorizontal } from "lucide-react";
+import { Activity, Check, CheckCircle2, Download, Folder, Gauge, Globe2, Image, Network, Palette, RotateCcw, Settings, Shield, SlidersHorizontal } from "lucide-react";
 import { CrystalWindow, WindowTop, themes, useCrystal } from "./CrystalShared";
 import type { Appearance, BackgroundMode, Queue } from "./CrystalShared";
 
@@ -25,9 +25,9 @@ export default function CrystalSettings(){
   const [tab,setTab]=useState<Tab>(tabs.some(t=>t.name===initial)?initial!:"General");
   const [cfg,setCfg]=useState<EngineSettings|null>(null);
   const [queues,setQueues]=useState<Queue[]>([]);
-  const [busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]="".split() as string[];
+  const [busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
   const [browser,setBrowser]=useState("");
-  const {appearance,set,theme}=useCrystal();
+  const {appearance,set}=useCrystal();
   const load=useCallback(async()=>{
     try{
       const [settings,data]=await Promise.all([
