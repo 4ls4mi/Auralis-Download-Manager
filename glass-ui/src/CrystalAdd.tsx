@@ -45,7 +45,7 @@ export default function CrystalAdd({ mode }: { mode:"url"|"torrent" }) {
           {mode==="url"?"Continue":later?"Add to queue":"Start Download"}
         </button>
       </div>
-      <div className="cg-muted" style={{fontSize:10,marginTop:15}}>
+      <div className="cg-muted" style={{fontSize:"var(--min-text-size)",marginTop:15}}>
         <Link2 size={13}/>{mode==="url"?"Choose the save location in the next window.":"Torrent metadata is read before transfer begins."}
       </div>
     </div>

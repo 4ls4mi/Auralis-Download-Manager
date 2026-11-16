@@ -289,7 +289,7 @@ export default function CrystalApp(){
   };
   const pageCount=Math.max(1,Math.ceil(shown.length/capacity)),safePage=Math.min(page,pageCount-1);
   return <CrystalWindow><WindowTop title="Mister Hybrid Glass — Download Manager">
-    <span className="cg-muted" style={{fontSize:10,whiteSpace:"nowrap",marginRight:9}}>{online?"● RUST ENGINE CONNECTED":"○ ENGINE OFFLINE"}</span>
+    <span className="cg-muted" style={{fontSize:"var(--min-text-size)",whiteSpace:"nowrap",marginRight:9}}>{online?"● Connected":"○ Offline"}</span>
   </WindowTop>
   <div className="cg-main-body" onContextMenu={e=>e.preventDefault()}>
     <div className="cg-menubar">
