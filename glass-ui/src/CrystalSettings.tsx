@@ -179,6 +179,7 @@ export default function CrystalSettings(){
         {slider("blur","Wallpaper blur",0,20," px")}
         {slider("dim","Wallpaper darkness",0,80,"%")}
         {slider("uiScale","Interface size",80,150,"%")}
+        <label className="cg-toggle"><span><strong>Windows backdrop blur</strong><small>Use native blur behind see-through windows when supported</small></span><input type="checkbox" checked={appearance.acrylic} onChange={e=>set("acrylic",e.target.checked)}/></label>
         </>}
         {appearanceTab==="Typography"&&<>
         <h3>Typography and contrast</h3>
@@ -192,6 +193,7 @@ export default function CrystalSettings(){
           </select>
         </label>
         {slider("fontSize","Text size",12,20," px")}
+        <label className="cg-toggle"><span><strong>High-contrast text</strong><small>Improve readability across materials</small></span><input type="checkbox" checked={appearance.highContrast} onChange={e=>set("highContrast",e.target.checked)}/></label>
         <p>Text contrast automatically adjusts for light/dark material. Glass panels keep a readable text backing even over bright wallpapers.</p>
         </>}
         <label className="cg-toggle"><span><strong>Show actual download popup automatically</strong><small>Open the separate floating progress window when a download starts</small></span>
@@ -200,7 +202,7 @@ export default function CrystalSettings(){
           set("mainMode","desktop");set("detailMode","desktop");
           set("acrylic",false);set("dim",26);set("opacity",77);set("blur",3);
           set("uiScale",100);set("lightMode",false);set("fontFamily","Segoe UI");
-          set("fontSize",12);set("theme","plexo");set("material","ice-edge");set("tintHue",265);set("tintStrength",22);set("indicator","blue-purple");
+          set("fontSize",12);set("highContrast",true);set("theme","plexo");set("material","ice-edge");set("tintHue",265);set("tintStrength",22);set("indicator","blue-purple");
         }}><RotateCcw size={15}/> Restore default Glass appearance</button>
       </>;
       case "Advanced":return <>

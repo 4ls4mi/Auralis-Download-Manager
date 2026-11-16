@@ -1,3 +1,4 @@
+import GlassRenderer from "./GlassRenderer";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { getCurrentWindow, Effect, EffectState } from "@tauri-apps/api/window";
 type ResizeDirection = Parameters<ReturnType<typeof getCurrentWindow>["startResizeDragging"]>[0];
@@ -47,7 +48,7 @@ export type BackgroundMode = "desktop" | "wallpaper" | "solid";
 export type Appearance = {
   theme: string; wallMain: string; wallDetail: string; mainMode: BackgroundMode;
   detailMode: BackgroundMode; dim: number; opacity: number; blur: number;
-  acrylic: boolean; autoPopups: boolean; uiScale: number;
+  acrylic: boolean; autoPopups: boolean; uiScale: number; highContrast: boolean;
   lightMode: boolean; fontFamily: string; fontSize: number; material: string; indicator: string; clipboardMode: string; tintHue: number; tintStrength: number
 };
 const key = "mh-glass-";
@@ -63,7 +64,7 @@ export function loadAppearance(): Appearance {
     detailMode: stored("back-details", "desktop") as BackgroundMode,
     dim: Number(stored("dim", "26")), opacity: Number(stored("opacity", "77")),
     blur: Number(stored("blur", "3")), acrylic: stored("acrylic", "false") === "true",
-    autoPopups: stored("auto-popups", "true") === "true",
+    autoPopups: stored("auto-popups", "true") === "true", highContrast: stored("high-contrast", "true") === "true",
     uiScale: Number(stored("ui-scale", "100")),
     lightMode: stored("light-mode", "false") === "true",
     fontFamily: stored("font-family","Segoe UI"),fontSize:Number(stored("font-size","12"))
@@ -73,7 +74,7 @@ const keys: Record<keyof Appearance, string> = {
   theme: "theme", material: "material", tintHue: "tint-hue", tintStrength: "tint-strength", indicator: "indicator", clipboardMode: "clipboard-mode", wallMain: "wall-main", wallDetail: "wall-detail",
   mainMode: "back-main", detailMode: "back-details", dim: "dim",
   opacity: "opacity", blur: "blur", acrylic: "acrylic",
-  autoPopups: "auto-popups", uiScale: "ui-scale",
+  autoPopups: "auto-popups", uiScale: "ui-scale", highContrast: "high-contrast",
   lightMode: "light-mode", fontFamily: "font-family", fontSize: "font-size"
 };
 type AppearanceValue = {
@@ -252,7 +253,7 @@ export function CrystalWindow({ children, target = "main" }: {
         if(disposed)return;
         const fit=el.querySelector<HTMLElement>('.cg-fit-content');if(!fit)return;
         let ratio=1;
-        for(const box of [fit,...el.querySelectorAll<HTMLElement>('.cg-page,.cg-window-add,.cg-settings-body,.cg-settings-nav,.cg-sidebar,.cg-main-body,.cg-workspace,.cg-table,.cg-toolbar,.cg-window-top,.cg-original-editor')]){
+        for(const box of [fit,...el.querySelectorAll<HTMLElement>('.cg-page,.cg-window-add,.cg-settings-body,.cg-settings-nav,.cg-main-body,.cg-workspace,.cg-toolbar,.cg-window-top,.cg-original-editor')]){
           if(box.clientHeight>0&&box.scrollHeight>box.clientHeight+2)ratio=Math.min(ratio,box.clientHeight/box.scrollHeight);
           if(box.clientWidth>0&&box.scrollWidth>box.clientWidth+2)ratio=Math.min(ratio,box.clientWidth/box.scrollWidth);
         }
@@ -274,7 +275,7 @@ export function CrystalWindow({ children, target = "main" }: {
   const video = /\.(mp4|webm|mov|m4v)$/i.test(path);
   useEffect(() => {
     const w = getCurrentWindow();
-    if (mode === "desktop")
+    if (mode === "desktop" && appearance.acrylic)
       void w.setEffects({ effects: [Effect.Acrylic], state: EffectState.Active }).catch(() => w.clearEffects().catch(() => undefined));
     else void w.clearEffects().catch(() => undefined);
   }, [mode, appearance.acrylic, appearance.material]);
@@ -293,14 +294,14 @@ export function CrystalWindow({ children, target = "main" }: {
     "--min-window-button": (30/Math.min(1,Math.max(.4,fit)))+"px",
     "--font-size": Math.max(Math.min(20,Math.max(12,appearance.fontSize)),12/Math.max(.4,fit))+"px"
   } as CSSProperties;
-  return <div className={`cg-window cg-mode-${mode} cg-material-${appearance.material} ${appearance.lightMode?"cg-light":"cg-dark"}`} style={style}>
+  return <div className={`cg-window cg-mode-${mode} cg-material-${appearance.material} ${appearance.lightMode?"cg-light":"cg-dark"} ${appearance.highContrast?"cg-high-contrast":""}`} style={style}>
     {mode === "wallpaper" && <div className="cg-wallpaper">
       {video ? <video key={src} autoPlay loop muted playsInline src={src} /> :
         <div style={{ backgroundImage: `url("${src}")` }} />}
       <span style={{ background: `rgba(3,9,19,${appearance.dim / 100})` }} />
     </div>}
     {mode === "solid" && <div className="cg-solid" />}
-    <div className="cg-content" ref={frame}><div className="cg-fit-content">{children}</div></div>
+    <div className="cg-content" ref={frame}><GlassRenderer material={appearance.material} hue={appearance.tintHue} strength={appearance.tintStrength} light={appearance.lightMode}/><div className="cg-fit-content">{children}</div></div>
     {windowError&&<aside className="cg-window-notice cg-error" role="alert"><span>{windowError}</span><button title="Dismiss" onClick={()=>setWindowError("")}><X size={15}/></button></aside>}
     <ResizeGrips />
   </div>;

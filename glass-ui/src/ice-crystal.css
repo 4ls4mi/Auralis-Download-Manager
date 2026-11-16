@@ -162,3 +162,36 @@
 .cg-material-smoked-crystal.cg-dark .cg-content{background:linear-gradient(135deg,var(--glass-tint),transparent 60%),rgba(4,8,19,var(--panel-opacity))!important}
 .cg-material-obsidian-glass.cg-dark .cg-content{background:linear-gradient(135deg,var(--glass-tint),transparent 55%),rgba(0,0,0,var(--panel-opacity))!important}
 @media(max-width:720px){.cg-selected-chunks .cg-chunk-label{position:static;min-width:0;margin:4px 0 0;gap:4px;flex-wrap:wrap}.cg-selected-chunks .cg-chunk-map{margin-top:6px}.cg-selected-chunks .cg-section-title h3{overflow-wrap:anywhere}.cg-compact-speed .cg-section-title{display:flex;flex-wrap:wrap;gap:2px 8px}}
+/* Bundled GPU material light layer; the native desktop backdrop remains separate. */
+.cg-content .cg-material-renderer{position:absolute;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;border-radius:inherit}
+.cg-content .cg-fit-content{z-index:1}
+/* User-scrollable list and navigation keep their content readable. */
+.cg-window .cg-sidebar{overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:var(--accent) transparent}
+.cg-table-viewport{overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:var(--accent) transparent}
+.cg-window:is(.cg-dark,.cg-light) .cg-cols{position:sticky;top:0;z-index:3;background:var(--popover)}
+.cg-list-count{padding:6px 3px;color:var(--muted)}
+/* Keep the three independent visualizations in their own grid cells. */
+.cg-row-progress{grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:auto;align-items:center;gap:8px;overflow:hidden}
+.cg-row-progress .cg-percent-wrap{height:auto;min-width:0;overflow:hidden}
+.cg-row-progress .cg-percent-track{height:14px;min-width:0}
+.cg-row-progress .cg-chunks{min-width:0;overflow:hidden}
+.cg-row-progress .cg-graph-small{grid-column:auto;width:100%;height:30px;min-width:0;overflow:hidden}
+@media(max-width:1000px){.cg-row-progress{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:auto auto;gap:4px}.cg-row-progress .cg-graph-small{grid-column:1/-1;height:18px}}
+/* Material-specific progress contours; width remains the engine percentage. */
+.cg-material-water-bubble .cg-percent-track,.cg-material-liquid-glass .cg-percent-track{border-radius:40% 50% 45% 35% / 70% 45% 65% 45%;box-shadow:inset 0 2px 4px #ffffff70,0 0 9px #7cecff55}
+.cg-material-water-bubble .cg-percent-fill,.cg-material-liquid-glass .cg-percent-fill{border-radius:42% 55% 40% 45% / 55% 70% 45% 70%;box-shadow:inset 0 3px 5px #ffffff70}
+.cg-material-ice-edge .cg-percent-track,.cg-material-diamond-facet .cg-percent-track,.cg-material-prismatic-glass .cg-percent-track{border-radius:0;clip-path:polygon(3% 0,97% 0,100% 50%,97% 100%,3% 100%,0 50%)}
+.cg-material-aero-gloss .cg-percent-track,.cg-material-frosted-layers .cg-percent-track,.cg-material-pearl-mist .cg-percent-track{border-radius:999px;box-shadow:inset 0 2px 4px #ffffff65}
+.cg-material-smoked-crystal .cg-percent-track,.cg-material-obsidian-glass .cg-percent-track{border-radius:4px;box-shadow:inset 0 2px 5px #000b,0 1px #ffffff45}
+.cg-high-contrast.cg-dark{--ink:#fff;--muted:#dce9f5;--subtle:#c3d6e8}
+.cg-high-contrast.cg-light{--ink:#0b1e2d;--muted:#243f52;--subtle:#385568}
+.cg-window :is(.cg-btn,.cg-pagination button,.cg-appearance-tabs button,.cg-dropdown button,.cg-context button){--action-hue:195}
+.cg-window :is(.cg-btn,.cg-pagination button,.cg-appearance-tabs button,.cg-dropdown button,.cg-context button):nth-of-type(5n+1){--action-hue:152}
+.cg-window :is(.cg-btn,.cg-pagination button,.cg-appearance-tabs button,.cg-dropdown button,.cg-context button):nth-of-type(5n+2){--action-hue:276}
+.cg-window :is(.cg-btn,.cg-pagination button,.cg-appearance-tabs button,.cg-dropdown button,.cg-context button):nth-of-type(5n+3){--action-hue:35}
+.cg-window :is(.cg-btn,.cg-pagination button,.cg-appearance-tabs button,.cg-dropdown button,.cg-context button):nth-of-type(5n+4){--action-hue:342}
+.cg-window.cg-dark :is(.cg-btn,.cg-pagination button,.cg-appearance-tabs button,.cg-dropdown button,.cg-context button):not(:disabled){color:hsl(var(--action-hue) 95% 76%)!important}
+.cg-window.cg-light :is(.cg-btn,.cg-pagination button,.cg-appearance-tabs button,.cg-dropdown button,.cg-context button):not(:disabled){color:hsl(var(--action-hue) 90% 27%)!important}
+.cg-window :is(.cg-btn,.cg-pagination button,.cg-appearance-tabs button,.cg-dropdown button,.cg-context button):hover:not(:disabled){background:hsl(var(--action-hue) 85% 52% / .42)!important;box-shadow:inset 0 1px #ffffff60,0 0 14px hsl(var(--action-hue) 90% 60% / .32)}
+.cg-cols,.cg-row{grid-template-columns:minmax(140px,1.45fr) 65px 84px minmax(245px,2.3fr) 70px 55px}
+@media(max-width:1000px){.cg-cols,.cg-row{grid-template-columns:minmax(125px,1.4fr) 58px 76px minmax(155px,1.8fr) 65px 50px;gap:6px}}

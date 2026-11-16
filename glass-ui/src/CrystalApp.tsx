@@ -45,10 +45,7 @@ export default function CrystalApp(){
   const [doubleClickOpen,setDoubleClickOpen]=useState(false);
   const [showCategories,setShowCategories]=useState(true);
 
-  const [page,setPage]=useState(0),[capacity,setCapacity]=useState(8);
   const contextRef=useRef<HTMLDivElement>(null);
-  const viewport=useRef<HTMLDivElement|null>(null);
-  useEffect(()=>{const el=viewport.current;if(!el)return;const observer=new ResizeObserver(()=>setCapacity(Math.max(1,Math.floor((el.clientHeight-38)/82))));observer.observe(el);return()=>observer.disconnect()},[]);
   useLayoutEffect(()=>{
     const menu=contextRef.current;if(!menu)return;
     const fit=menu.closest<HTMLElement>('.cg-fit-content');if(!fit)return;
@@ -297,7 +294,6 @@ export default function CrystalApp(){
     else if(d.status==="Complete")openWindow(`complete-${d.id}`,`/?complete=${d.id}`,720,420);
     else pop(d.id);
   };
-  const pageCount=Math.max(1,Math.ceil(shown.length/capacity)),safePage=Math.min(page,pageCount-1);
   return <CrystalWindow><WindowTop title="Mister Hybrid Glass — Download Manager">
     <span className="cg-muted" style={{fontSize:"var(--min-text-size)",whiteSpace:"nowrap",marginRight:9}}>{online?"● Connected":"○ Offline"}</span>
   </WindowTop>
@@ -332,9 +328,9 @@ export default function CrystalApp(){
           <small>{shown.length} of {data.downloads.length} downloads • Double-click for the floating progress window</small></div>
           <label className="cg-search"><Search size={17}/><input ref={searchRef} placeholder="Search downloads..." value={term} onChange={e=>setTerm(e.target.value)}/></label>
         </header>
-        <div className="cg-table-viewport" ref={viewport}><div className="cg-table">
+        <div className="cg-table-viewport" tabIndex={0} aria-label="Downloads list"><div className="cg-table">
           <header className="cg-cols"><span>FILE NAME</span><span>SIZE</span><span>STATUS</span><span>PROGRESS</span><span>SPEED</span><span>TIME LEFT</span></header>
-          {shown.slice(safePage*capacity,(safePage+1)*capacity).map(d=><button className={"cg-row "+(chosen===d.id?"selected":"")} key={d.id}
+          {shown.map(d=><button className={"cg-row "+(chosen===d.id?"selected":"")} key={d.id}
             onClick={()=>{setChosen(d.id);setContext(null)}} onDoubleClick={()=>rowDouble(d)}
             onContextMenu={e=>{
               e.preventDefault();setChosen(d.id);setOpenMenu(null);
@@ -356,7 +352,7 @@ export default function CrystalApp(){
             {online&&<button className="cg-btn cg-btn-primary" onClick={()=>add()}><Plus size={15}/> Add URL</button>}
           </div>}
         </div></div>
-        <div className="cg-pagination"><span>{shown.length} downloads</span><span className="cg-action-space"/><button disabled={!safePage} onClick={()=>setPage(p=>p-1)}>Previous</button><span>{safePage+1} / {pageCount}</span><button disabled={safePage>=pageCount-1} onClick={()=>setPage(p=>p+1)}>Next</button></div>
+        <div className="cg-list-count">{shown.length} downloads</div>
       </section>
     </div>
     <footer className="cg-footer cg-glass">
