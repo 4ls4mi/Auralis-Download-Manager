@@ -4217,7 +4217,11 @@ impl App {
                 silent: automatic,
                 ..Default::default()
             };
-            self.handle_command(cmd, ctx);
+            if automatic {
+                let _ = self.remote_add_from(cmd, true);
+            } else {
+                self.handle_command(cmd, ctx);
+            }
         }
     }
 
@@ -6367,7 +6371,11 @@ impl App {
     /// or a magnet link or .torrent file as Add torrent's Download Now with every file, in the
     /// category and queue it chose (by file type, and started now, when it chose none). No
     /// window opens. Answered with its id, or `pending` while a torrent's files are looked up.
-    fn remote_add(&mut self, mut cmd: ipc::Command) -> String {
+    fn remote_add(&mut self, cmd: ipc::Command) -> String {
+        self.remote_add_from(cmd, false)
+    }
+
+    fn remote_add_from(&mut self, mut cmd: ipc::Command, from_clipboard: bool) -> String {
         use ipc::api::{AddAnswer, ErrorAnswer, line};
         let fail = |code: &str, error: &str| {
             line(&ErrorAnswer {
@@ -6445,8 +6453,13 @@ impl App {
             None,
             None,
             cmd,
-            // i18n: where a download came from (its Properties): a phone or computer paired in Options → Remote
-            crate::i18n::mark("from a paired device"),
+            if from_clipboard {
+                // i18n: where an automatically added download came from.
+                crate::i18n::mark("from clipboard")
+            } else {
+                // i18n: where a download came from: a phone or computer paired in Options → Remote.
+                crate::i18n::mark("from a paired device")
+            },
         );
         self.name_guessed(id, true);
         match queue {
