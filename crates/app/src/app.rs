@@ -1422,6 +1422,7 @@ impl App {
         // headless servers do not perform a desktop helper update here.
         if self.glass_owned() {
             crate::videodlg::refresh_ytdlp(&self.rt);
+            self.glass_refresh_helpers();
             if self.settings.update_check {
                 let request=ipc::Command{action:Some("glass-upstream-check".into()),..Default::default()};
                 let _=self.glass_tools(&request);

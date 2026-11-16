@@ -10,6 +10,30 @@ static GLASS_UPSTREAM_CHECK: OnceLock<Mutex<Option<crate::help::Slot>>> = OnceLo
 fn upstream_check() -> &'static Mutex<Option<crate::help::Slot>> { GLASS_UPSTREAM_CHECK.get_or_init(|| Mutex::new(None)) }
 
 impl App {
+    /// Check already-installed, MDM-managed FFmpeg and gallery-dl once per Glass session.
+    /// The original installers preserve user-selected programs, verify releases,
+    /// and keep the previous working version on a failed update.
+    pub(in crate::app) fn glass_refresh_helpers(&self) {
+        let Some(dir)=mdm_tools::tools_dir() else{return;};
+        let mut names=Vec::new();
+        if mdm_tools::ffmpeg::installed(&dir).is_some_and(|tool|!tool.is_system()){names.push("ffmpeg");}
+        if mdm_tools::gallery::installed(&dir).is_some_and(|tool|!tool.is_system()){names.push("gallery-dl");}
+        if names.is_empty(){return;}
+        let mut job=helper_job().lock().unwrap_or_else(|e|e.into_inner());
+        if job.as_ref().is_some_and(|(_,state)|state=="installing"){return;}
+        *job=Some((names[0].to_owned(),"installing".into()));drop(job);
+        let net=crate::settings::own_net();
+        self.rt.spawn(async move {
+            for name in names {
+                *helper_job().lock().unwrap_or_else(|e|e.into_inner())=Some((name.to_owned(),"installing".into()));
+                let result=if name=="ffmpeg" {mdm_tools::ffmpeg::install_latest(&dir,&net,None).await} else {mdm_tools::gallery::install_latest(&dir,&net,None).await};
+                if let Err(error)=&result {tracing::warn!("Glass helper update failed for {name}: {error}");}
+                let state=match result {Ok(_)=>"ready".to_owned(),Err(e)=>format!("Error: {}",crate::errors::tools(&e))};
+                *helper_job().lock().unwrap_or_else(|e|e.into_inner())=Some((name.to_owned(),state));
+            }
+        });
+    }
+
     pub(in crate::app) fn glass_tools(&mut self,cmd:&ipc::Command)->Option<String>{
         if cmd.query.as_deref()==Some("glass-upstream-check") {
             let slot=upstream_check().lock().unwrap_or_else(|e|e.into_inner()).clone();
