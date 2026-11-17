@@ -13,6 +13,20 @@ pub fn fit_size(app:&AppHandle,width:f64,height:f64)->(f64,f64) {
         .unwrap_or((width,height))
 }
 
+// Completion may be raised while another app is foreground. Keep it briefly
+// above other windows while Windows displays it, then release topmost status.
+fn release_priority(window: &tauri::WebviewWindow, label: &str) {
+    if label.starts_with("complete-") {
+        let window = window.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(1200));
+            let _ = window.set_always_on_top(false);
+        });
+    } else {
+        let _ = window.set_always_on_top(false);
+    }
+}
+
 pub fn open(app: &AppHandle, label: &str, route: &str, width: f64, height: f64) -> ApiResult<()> {
     let priority = label.starts_with("info-") || label.starts_with("tool-video-") || label.starts_with("complete-");
     if let Some(w) = app.get_webview_window(label) {
@@ -21,7 +35,7 @@ pub fn open(app: &AppHandle, label: &str, route: &str, width: f64, height: f64) 
         w.show().map_err(|e| e.to_string())?;
         let _ = w.unminimize();
         let _ = w.set_focus();
-        if priority { let _ = w.set_always_on_top(false); }
+        if priority { release_priority(&w, label); }
         return Ok(());
     }
     let (width,height)=fit_size(app,width,height);
@@ -32,7 +46,7 @@ pub fn open(app: &AppHandle, label: &str, route: &str, width: f64, height: f64) 
         .min_inner_size(width.min(440.0), height.min(320.0)).center().decorations(false)
         .transparent(true).shadow(false).resizable(true).build()
         .map_err(|e| e.to_string())?;
-    if priority { let _ = w.show(); let _ = w.set_focus(); let _ = w.set_always_on_top(false); }
+    if priority { let _ = w.show(); let _ = w.set_focus(); release_priority(&w, label); }
     Ok(())
 }
 

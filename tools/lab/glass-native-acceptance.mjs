@@ -209,8 +209,10 @@ try{
  // Main-window timers must not own completion lifecycle.
  await invoke(main,'plugin:window|hide',{label:'main'});
  const complete=await pageFor('complete='+first.id);await complete.waitForSelector('.cg-complete-page');
- const completionWindowState=await Promise.all([invoke(complete,'plugin:window|is_always_on_top',{label:`complete-${first.id}`}),invoke(complete,'plugin:window|is_focused',{label:`complete-${first.id}`})]).catch(()=>null);
- if(completionWindowState){assert.equal(completionWindowState[0],false,'Completion window must not remain always on top');if(completionWindowState[1])passed('Completion window received focus without remaining always on top');else results.push({name:'Completion window foreground focus',status:'manual Windows review still required'});}else results.push({name:'Completion window focus and topmost state',status:'manual Windows review still required'});
+ const completionFocused=await invoke(complete,'plugin:window|is_focused',{label:`complete-${first.id}`}).catch(()=>null);
+ const topState=await invoke(complete,'plugin:window|is_always_on_top',{label:`complete-${first.id}`}).catch(()=>null);
+ if(topState===null)results.push({name:'Completion window topmost release',status:'manual Windows review still required'});else{await until(async()=>await invoke(complete,'plugin:window|is_always_on_top',{label:`complete-${first.id}`})===false,'Completion window remained always on top',5000);passed('Completion window releases its temporary topmost state');}
+ if(completionFocused)passed('Completion window received focus');else results.push({name:'Completion window foreground focus',status:'manual Windows review still required'});
  assert.equal(await complete.getByTitle('Drag the file into a folder or an app').isEnabled(),true,'Completed file drag control should be available');assert.equal(await complete.getByTitle('Hide to tray').isVisible(),true,'Completed window must offer a tray control');
  await until(()=>progress.isClosed(),'Progress window did not close on completion');
  await invoke(main,'plugin:window|show',{label:'main'});
