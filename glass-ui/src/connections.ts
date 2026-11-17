@@ -9,3 +9,11 @@ export function connectionIndicators(connections:EngineConnection[],ranges:Conne
   return {...c,assigned:total||null,received:total?received:null,percent:total?100*received/total:null};
  });
 }
+
+/** Fit engine workers in rows of at most eight, with a bounded height. */
+export function connectionGrid(count:number,compact:boolean){
+ const n=Number.isFinite(count)?Math.max(1,Math.floor(count)):1;
+ const columns=Math.min(8,n),rows=Math.ceil(n/8);
+ const height=compact?Math.min(26,Math.max(12,rows*10)):Math.min(128,Math.max(24,rows*24));
+ return {columns,rows,height};
+}

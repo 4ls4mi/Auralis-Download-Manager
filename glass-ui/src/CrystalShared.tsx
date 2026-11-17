@@ -7,7 +7,7 @@ import { useEffect, useState, useLayoutEffect, useRef, useId, createContext, use
 import type { CSSProperties, ReactNode } from "react";
 import { AppWindow, Maximize2, Minus, X, PanelBottomClose } from "lucide-react";
 
-import { connectionIndicators } from "./connections";
+import { connectionGrid, connectionIndicators } from "./connections";
 
 export type Status = "Queued" | "Downloading" | "Stopped" | "Complete" | "Error";
 export type Download = {
@@ -161,12 +161,12 @@ export function GradientBar({percent,showLabel=false}:{percent:number;showLabel?
 // Each block represents an engine worker and only its currently assigned ranges.
 export function ConnectionMap({segments,connections,downloading,compact=false}:{segments:Segment[]|undefined;connections:Connection[]|undefined;downloading:boolean;compact?:boolean}){
   const {appearance}=useCrystal();const colors=indicatorColors(appearance.indicator);
-  const items=connectionIndicators(connections??[],segments??[]);
+  const items=connectionIndicators(connections??[],segments??[]);const grid=connectionGrid(items.length,compact);
   return <div className={"cg-chunks "+(compact?"compact":"")}>
     <div className="cg-chunk-label"><span>{connections?`${items.length} connections`:"Connections unavailable"}</span>{!compact&&<small>{items.filter(c=>downloading&&c.state==="Receiving").length} receiving</small>}</div>
-    {items.length>0&&<div className={"cg-chunk-map "+(compact?"compact ":"")+(items.length>32?"dense":"")} style={{gridTemplateColumns:`repeat(${items.length},minmax(0,1fr))`}} aria-label={`${items.length} engine connections`}>
+    {items.length>0&&<div className={"cg-chunk-map "+(compact?"compact ":"")+((compact?grid.rows>=4:grid.rows>8)?"dense":"")} style={{gridTemplateColumns:`repeat(${grid.columns},minmax(0,1fr))`,gridTemplateRows:`repeat(${grid.rows},minmax(0,1fr))`,height:grid.height}} aria-label={`${items.length} engine connections`}>
      {items.map(c=>{const fill=c.percent;const label=`Connection ${c.id+1}: ${downloading?c.state:"Not active"}; downloaded ${units(c.downloaded)}; ${rate(c.speed)}; ${fill===null?"assigned range unavailable":`${units(c.received)} of ${units(c.assigned)} (${fill.toFixed(1)}%)`}`;
-      return <span key={c.id} className={downloading&&c.state==="Receiving"?"active":""} title={label} aria-label={label} tabIndex={0}>{fill!==null&&fill>0&&<i style={{width:`${fill}%`,backgroundImage:`linear-gradient(90deg,${colors.join(",")})`}}/>}{!compact&&items.length<=8&&<em className="cg-connection-text">{c.id+1}{fill!==null?` · ${fill.toFixed(0)}%`:""}</em>}{downloading&&c.state==="Receiving"&&!compact&&<b className="cg-connection-active"/>}</span>})}
+      return <span key={c.id} className={downloading&&c.state==="Receiving"?"active":""} title={label} aria-label={label} tabIndex={0}>{fill!==null&&fill>0&&<i style={{width:`${fill}%`,backgroundImage:`linear-gradient(90deg,${colors.join(",")})`}}/>}{!compact&&grid.rows<=2&&<em className="cg-connection-text">{c.id+1}{fill!==null?` · ${fill.toFixed(0)}%`:""}</em>}{downloading&&c.state==="Receiving"&&!compact&&<b className="cg-connection-active"/>}</span>})}
     </div>}
     {items.length===0&&!compact&&<small className="cg-muted">No connection data available</small>}
   </div>;

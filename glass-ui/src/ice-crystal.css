@@ -235,6 +235,11 @@
 .cg-window.cg-progress-shape-wave .cg-chunk-map>span{border-radius:40% 50% 45% 35% / 70% 45% 65% 45%}
 
 .cg-window .cg-chunk-map.dense{gap:0}
-.cg-window .cg-chunk-map.dense>span{border:0;box-shadow:inset 0 0 0 1px #a4c8ee66;border-radius:0}
+.cg-window .cg-chunk-map.dense>span{border:0;box-shadow:inset 0 0 0 .5px #a4c8ee66}
 
 .cg-window .cg-connection-text{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-style:normal;font-weight:600;white-space:nowrap;text-shadow:0 1px 3px #06101d;pointer-events:none}
+
+/* Fixed eight-column connection grid: rows share the available height. */
+.cg-window .cg-chunk-map{gap:2px;min-width:0;overflow:hidden}
+.cg-window .cg-chunk-map>span,.cg-window .cg-chunk-map.compact>span{height:100%;min-height:0;align-self:stretch}
+.cg-window .cg-chunk-map.dense{gap:0}
