@@ -76,13 +76,19 @@ float4 ps(Vertex i):SV_Target {
    float2 b=abs(local)-halfSize+radius;
    float d=length(max(b,0))+min(max(b.x,b.y),0)-radius;
    float inside=1-smoothstep(-1.2,1.2,d);
-   float border=exp(-abs(d)*.32);
+   // A narrow directional meniscus replaces the broad, uniformly bright
+   // outline. Derivatives keep the highlight attached to the real panel
+   // contour as its dimensions change.
+   float2 panelNormal=normalize(float2(ddx(d),ddy(d))+float2(.0001,.0001));
+   float border=exp(-abs(d)*.75);
+   float panelSpec=pow(saturate(dot(panelNormal,normalize(float2(-.55,-.83)))),3);
+   float innerRim=exp(-abs(d+4)*.24);
    float panelTop=pow(saturate(1-abs(local.y+halfSize.y-5)/18),3);
    float3 panelBase=lerp(float3(.015,.055,.09),float3(.78,.89,.94),light);
    panelBase=lerp(panelBase,accent.rgb,clamp(options.x*.45,0,.28));
-   base=lerp(base,panelBase,inside*.58);
-   base+=inside*float3(.28,.48,.56)*panelTop*.12;
-   base+=float3(.40,.72,.78)*border*.28;
+   base=lerp(base,panelBase,inside*.36);
+   base+=inside*float3(.28,.48,.56)*panelTop*.13;
+   base+=float3(.40,.72,.78)*(border*(.08+.35*panelSpec)+innerRim*.035);
   }
  }
  float alpha=host>.5?clamp(accent.a,.45,.94):1.0;
