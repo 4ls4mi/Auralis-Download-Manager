@@ -3,13 +3,15 @@
 Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 `.github/workflows/release.yml`).
 
-## Mister Hybrid Glass — Windows x64 preview
+## Mister Hybrid Glass — Windows x64
 
-- Added a Tauri/WebView2 glass-style frontend backed by the original MDM engine and extension.
-- Added separate progress, completion, file-information, settings and confirmation windows, with appearance controls and configurable indicators.
-- Added 32 responsive progress-window connection slots based on engine-reported data and a live indicator preview.
-- Reduced overlapping visual layers and added a manually selected Netscape cookie file for video helpers.
-- Fork updater and Google-account autodetection remain unfinished; Windows visual and integration testing is required.
+- Added a Tauri/WebView2 glass-style frontend backed by the original MDM engine and browser extension.
+- Added separate progress, completion, file-information, settings and confirmation windows, appearance controls and configurable indicators.
+- Added 32 responsive progress-window connection slots based on engine telemetry, with interruption/retry and paused states shown distinctly, plus a live indicator preview.
+- Added a fork-specific in-app updater that checks this repository's public releases, displays release notes, downloads the Windows x64 installer, verifies its published SHA-256 digest, and offers restart-and-install. The original MDM release checker remains separate.
+- The real public release update was exercised from inside the installed app, including download, verification, installation and restart, in [Windows Actions run 44159354623](https://github.com/4ls4mi/misterdownloadmanager/actions/runs/44159354623) (successful; proof artifacts retained through 2026-12-01).
+- Reduced overlapping visual layers and added manual Netscape-format cookie-file selection for video helpers. Google-account autodetection/direct connection remains unfinished.
+- Remaining manual Windows checks include physical DPI/transparency review and native drag-to-Explorer/application behavior. Automated success does not establish complete original-MDM feature parity.
 
 ## [Unreleased]
 
