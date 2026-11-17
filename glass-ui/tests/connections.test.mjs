@@ -14,3 +14,12 @@ test('retains assigned progress for a worker after its ranges are released',()=>
  const a=connectionIndicators(workers,[{start:0,cursor:20,end:20,worker:null,last_worker:1},{start:20,cursor:25,end:40,worker:null,last_worker:1}]);
  assert.equal(a[0].assigned,40);assert.equal(a[0].percent,62.5);
 });
+test('shows one wide-capable indicator when a requested pool is reduced to one engine worker',()=>{
+ const workers=[{id:0,downloaded:40,speed:2,state:'Receiving'},...Array.from({length:15},(_,i)=>({id:i+1,downloaded:0,speed:0,state:'Retired'}))];
+ const a=connectionIndicators(workers,[{start:0,cursor:40,end:100,worker:0}]);
+ assert.equal(a.length,1);assert.equal(a[0].percent,40);
+});
+test('does not impose a display limit on the number of reported connections',()=>{
+ const workers=Array.from({length:160},(_,id)=>({id,downloaded:0,speed:0,state:'Connecting'}));
+ assert.equal(connectionIndicators(workers,[]).length,160);
+});
