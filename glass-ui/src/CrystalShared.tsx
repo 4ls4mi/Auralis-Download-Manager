@@ -253,7 +253,7 @@ export function CrystalWindow({ children, target = "main", experimentalWater = f
       if(!active)return;observe();const ratio=window.devicePixelRatio||1;
       const panels=nodes().map(node=>{const r=node.getBoundingClientRect();return [r.left*ratio,r.top*ratio,r.width*ratio,r.height*ratio].map(v=>Math.round(v*10)/10)}).filter(r=>r[2]>0&&r[3]>0);
       const key=JSON.stringify(panels);if(key===last)return;last=key;setWaterPanelsReady(false);
-      queued=queued.then(()=>active?invoke<boolean>('experimental_water_panels',{panels}):false).then(ok=>{if(active&&last===key){setWaterPanelsReady(ok&&panels.length>0);if(ok)setWaterPanelsRevision(r=>r+1)}}).catch(()=>{if(active&&last===key){last="";setWaterPanelsReady(false)}});
+      queued=queued.then(()=>active&&last===key?invoke<boolean>('experimental_water_panels',{panels}):false).then(ok=>{if(active&&last===key){setWaterPanelsReady(ok&&panels.length>0);if(ok)setWaterPanelsRevision(r=>r+1)}}).catch(()=>{if(active&&last===key){last="";setWaterPanelsReady(false)}});
     })};
     const observer=new ResizeObserver(update);observer.observe(root);observe();
     const mutations=new MutationObserver(update);mutations.observe(root,{childList:true,subtree:true});
