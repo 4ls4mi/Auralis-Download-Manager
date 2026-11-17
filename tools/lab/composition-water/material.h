@@ -18,9 +18,9 @@ struct LabMaterial {
  Microsoft::WRL::ComPtr<ID3D11PixelShader> pixel;
  Microsoft::WRL::ComPtr<ID3D11Buffer> constants;
  Microsoft::WRL::ComPtr<ID3D11RasterizerState> raster;
- unsigned width=0,height=0;
+ unsigned width=0,height=0; float panelRects[12]{};
  static constexpr const char* source=R"HLSL(
- cbuffer Params:register(b0){float2 size;float2 pad;};
+ cbuffer Params:register(b0){float2 size;float2 pad;float4 panels[3];};
  struct V{float4 position:SV_Position;};
  V vs(uint i:SV_VertexID){float2 a[3]={float2(-1,-1),float2(-1,3),float2(3,-1)};V o;o.position=float4(a[i],0,1);return o;}
  float spec(float2 uv,float2 at,float2 scale,float power){return pow(saturate(1-length((uv-at)*scale)),power);}
@@ -47,6 +47,27 @@ struct LabMaterial {
    // Gentle interior caustic waves stay behind text; no extra DOM overlay.
    float caustic=exp(-pow((uv.y-(.90+.018*sin(uv.x*7)))*28,2));
    color+=float3(.01,.07,.09)*caustic;
+   // Panels use the WebView's measured rectangles, but their material is
+   // drawn here in the same pass as the outer glass.
+   [unroll] for(int i=0;i<3;i++){
+     float4 rect=panels[i];if(rect.z>1 && rect.w>1){
+       float2 halfSize=rect.zw*.5;float radius=min(32.0,min(halfSize.x,halfSize.y)*.33);
+       float2 local=input.position.xy-(rect.xy+halfSize);
+       float2 b=abs(local)-halfSize+radius;
+       float dist=length(max(b,0))+min(max(b.x,b.y),0)-radius;
+       float inside=1-smoothstep(-1.2,1.2,dist);
+       float2 normal=normalize(float2(ddx(dist),ddy(dist))+.0001);
+       float angle=pow(saturate(dot(normal,normalize(float2(-.55,-.83)))),2);
+       float rim=exp(-abs(dist)*.40);
+       float inner=exp(-abs(dist+5)*.23);
+       float vertical=saturate((local.y+halfSize.y)/max(rect.w,1));
+       float3 panel=lerp(float3(.012,.080,.105),float3(.005,.030,.050),vertical);
+       color=lerp(color,panel,inside*.64);
+       color+=float3(.20,.49,.56)*(rim*(.08+.56*angle)+inner*.035);
+       float highlight=inside*exp(-pow((local.y+halfSize.y-5)/12,2));
+       color+=float3(.12,.30,.34)*highlight*.30;
+     }
+   }
    float a=.78;return float4(saturate(color)*a,a);
  }
  )HLSL";
@@ -61,12 +82,12 @@ struct LabMaterial {
   if(FAILED(hr=device->CreateVertexShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&vertex)))return hr;code.Reset();error.Reset();
   if(FAILED(hr=D3DCompile(source,strlen(source),nullptr,nullptr,nullptr,"ps","ps_4_0",0,0,&code,&error)))return hr;
   if(FAILED(hr=device->CreatePixelShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&pixel)))return hr;
-  D3D11_BUFFER_DESC bd{};bd.ByteWidth=16;bd.Usage=D3D11_USAGE_DEFAULT;bd.BindFlags=D3D11_BIND_CONSTANT_BUFFER;if(FAILED(hr=device->CreateBuffer(&bd,nullptr,&constants)))return hr;
+  D3D11_BUFFER_DESC bd{};bd.ByteWidth=64;bd.Usage=D3D11_USAGE_DEFAULT;bd.BindFlags=D3D11_BIND_CONSTANT_BUFFER;if(FAILED(hr=device->CreateBuffer(&bd,nullptr,&constants)))return hr;
   D3D11_RASTERIZER_DESC rd{};rd.FillMode=D3D11_FILL_SOLID;rd.CullMode=D3D11_CULL_NONE;rd.DepthClipEnable=TRUE;return device->CreateRasterizerState(&rd,&raster);
  }
  HRESULT draw(unsigned w,unsigned h){
   if(!w||!h)return S_OK;HRESULT hr=S_OK;if(w!=width||h!=height||!target){context->OMSetRenderTargets(0,nullptr,nullptr);target.Reset();if(FAILED(hr=swap->ResizeBuffers(0,w,h,DXGI_FORMAT_UNKNOWN,0)))return hr;
    Microsoft::WRL::ComPtr<ID3D11Texture2D> back;if(FAILED(hr=swap->GetBuffer(0,IID_PPV_ARGS(&back))))return hr;if(FAILED(hr=device->CreateRenderTargetView(back.Get(),nullptr,&target)))return hr;width=w;height=h;}
-  float data[4]={float(w),float(h),0,0};context->UpdateSubresource(constants.Get(),0,nullptr,data,0,0);auto rt=target.Get();auto cb=constants.Get();context->OMSetRenderTargets(1,&rt,nullptr);D3D11_VIEWPORT vp{0,0,float(w),float(h),0,1};context->RSSetViewports(1,&vp);context->RSSetState(raster.Get());context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);context->VSSetShader(vertex.Get(),nullptr,0);context->PSSetShader(pixel.Get(),nullptr,0);context->PSSetConstantBuffers(0,1,&cb);context->Draw(3,0);return swap->Present(1,0);
+  float data[16]={float(w),float(h),0,0};for(int i=0;i<12;i++)data[i+4]=panelRects[i];context->UpdateSubresource(constants.Get(),0,nullptr,data,0,0);auto rt=target.Get();auto cb=constants.Get();context->OMSetRenderTargets(1,&rt,nullptr);D3D11_VIEWPORT vp{0,0,float(w),float(h),0,1};context->RSSetViewports(1,&vp);context->RSSetState(raster.Get());context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);context->VSSetShader(vertex.Get(),nullptr,0);context->PSSetShader(pixel.Get(),nullptr,0);context->PSSetConstantBuffers(0,1,&cb);context->Draw(3,0);return swap->Present(1,0);
  }
 };
