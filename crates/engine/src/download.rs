@@ -778,6 +778,8 @@ pub struct ConnView {
     pub status: ConnStatus,
     /// Last actual network retry/failure, retained briefly for sampled Glass displays.
     pub last_disconnect: Option<std::time::Instant>,
+    /// A failed connection has not yet resumed receiving.
+    pub reconnecting_after_loss: bool,
     /// Bytes/s over the current response (0 while not receiving).
     pub speed: u64,
 }
@@ -794,6 +796,7 @@ impl ConnView {
             self.status = ConnStatus::Finished;
         }
         self.speed = 0;
+        self.reconnecting_after_loss = false;
     }
 }
 
@@ -1402,6 +1405,7 @@ impl Shared {
                     downloaded: 0,
                     status: ConnStatus::Connecting,
                     last_disconnect: None,
+                    reconnecting_after_loss: false,
                     speed: 0,
                 });
                 v.connections.len() - 1
@@ -1411,6 +1415,10 @@ impl Shared {
         f(&mut v.connections[i]);
         if !was_disconnected && matches!(v.connections[i].status, ConnStatus::Retrying(_) | ConnStatus::Failed(_)) {
             v.connections[i].last_disconnect = Some(std::time::Instant::now());
+            v.connections[i].reconnecting_after_loss = true;
+        }
+        if matches!(v.connections[i].status, ConnStatus::Receiving | ConnStatus::Finished | ConnStatus::Retired { .. }) {
+            v.connections[i].reconnecting_after_loss = false;
         }
     }
 

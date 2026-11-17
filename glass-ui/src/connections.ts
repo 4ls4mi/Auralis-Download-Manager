@@ -1,5 +1,5 @@
 export type ConnectionRange={start:number;cursor:number;end:number;worker?:number|null;last_worker?:number|null};
-export type EngineConnection={id:number;downloaded:number;speed:number;state:string;recent_disconnect?:boolean};
+export type EngineConnection={id:number;downloaded:number;speed:number;state:string;recent_disconnect?:boolean;reconnecting_after_loss?:boolean};
 /** Display only workers reported by the engine; never infer ownership from
  * equal divisions of the whole file. Assigned ranges may change dynamically. */
 export function connectionIndicators(connections:EngineConnection[],ranges:ConnectionRange[]){
@@ -17,5 +17,5 @@ export function connectionSlots<T>(workers:T[],compact=false):(T|null)[]{
 
 /** A connection loss is reported by the engine, never inferred from low speed. */
 export function connectionLost(c:EngineConnection,downloading:boolean):boolean {
- return downloading && (c.state==='Retrying'||c.state==='Failed'||c.recent_disconnect===true);
+ return downloading && c.state!=='Finished' && (c.state==='Retrying'||c.state==='Failed'||c.reconnecting_after_loss===true||c.recent_disconnect===true);
 }

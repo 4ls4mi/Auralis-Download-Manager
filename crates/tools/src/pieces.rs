@@ -516,6 +516,7 @@ pub async fn download(
             downloaded: 0,
             status: ConnStatus::Connecting,
             last_disconnect: None,
+            reconnecting_after_loss: false,
             speed: 0,
         })
         .collect();
@@ -651,6 +652,7 @@ async fn connection(run: Arc<Run>, c: usize) -> Result<(), PieceError> {
                     return Ok(());
                 }
                 Err(PieceError::Busy(e, wait)) => {
+                    mark_connection_loss(&run, c);
                     failures += 1;
                     if failures > run.max_retries {
                         if run.files.is_some() {
@@ -681,12 +683,14 @@ async fn connection(run: Arc<Run>, c: usize) -> Result<(), PieceError> {
                     break;
                 }
                 Err(PieceError::Dead(e)) => {
+                    mark_connection_loss(&run, c);
                     run.shared.note(format!("Piece {}: {e}", i + 1));
                     if !relist(&run, generation).await {
                         return Err(PieceError::Dead(e));
                     }
                 }
                 Err(PieceError::Again(e)) => {
+                    mark_connection_loss(&run, c);
                     failures += 1;
                     if failures > run.max_retries {
                         return Err(PieceError::Again(format!("piece {}: {e}", i + 1)));
@@ -755,6 +759,17 @@ async fn relist(run: &Run, generation: u64) -> bool {
 fn set_conn(run: &Run, c: usize, f: impl FnOnce(&mut ConnView)) {
     if let Some(v) = run.shared.conns.lock().unwrap().get_mut(c) {
         f(v);
+        if matches!(v.status, ConnStatus::Receiving | ConnStatus::Finished | ConnStatus::Retired { .. }) {
+            v.reconnecting_after_loss = false;
+        }
+    }
+}
+
+fn mark_connection_loss(run: &Run, c: usize) {
+    if let Some(v) = run.shared.conns.lock().unwrap().get_mut(c) {
+        v.last_disconnect = Some(Instant::now());
+        v.reconnecting_after_loss = true;
+        v.speed = 0;
     }
 }
 

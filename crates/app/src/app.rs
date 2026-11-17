@@ -6024,7 +6024,8 @@ impl App {
                             "downloaded": conn.downloaded,
                             "speed": conn.speed,
                             "state": state,
-                            "recent_disconnect": conn.last_disconnect.is_some_and(|at| at.elapsed().as_millis() < 2500)
+                            "recent_disconnect": conn.last_disconnect.is_some_and(|at| at.elapsed().as_millis() < 2500),
+                            "reconnecting_after_loss": conn.reconnecting_after_loss
                         })
                     }).collect::<Vec<_>>()
                 }).unwrap_or_default();
