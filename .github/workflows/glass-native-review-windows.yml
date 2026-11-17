@@ -14,6 +14,11 @@ on:
         required: false
         type: boolean
         default: false
+      rebuild_ui:
+        description: 'Rebuild the current shell against the candidate backend'
+        required: false
+        type: boolean
+        default: false
 permissions:
   contents: read
   actions: read
@@ -79,7 +84,7 @@ jobs:
         shell: pwsh
         run: npm install --no-audit --no-fund
       - name: Rebuild the current Glass interface against the candidate backend
-        if: ${{ contains(github.event.head_commit.message, '[rebuild ui]') }}
+        if: ${{ inputs.rebuild_ui || contains(github.event.head_commit.message, '[rebuild ui]') }}
         shell: pwsh
         run: |
           rustup toolchain install stable --profile minimal
