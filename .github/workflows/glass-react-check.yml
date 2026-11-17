@@ -229,6 +229,10 @@ jobs:
             [void][WaterLabInput]::GetClientRect($handle, [ref]$rect)
             if ($rect.right -ne 720 -or $rect.bottom -ne 520) { throw 'Window did not adopt test size' }
             $width = $rect.right; $height = $rect.bottom
+            [void][WaterLabInput]::SendMessage($handle, 0x8001, [IntPtr]::Zero, [IntPtr]::Zero)
+            $layoutOk = $false
+            for ($i=0; $i -lt 10; $i++) { Start-Sleep -Milliseconds 300; $lab.Refresh(); if ($lab.MainWindowTitle -like '*Layout OK*') { $layoutOk=$true; break } }
+            if (-not $layoutOk) { throw "Resized layout overlaps: $($lab.MainWindowTitle)" }
             $bitmap = New-Object System.Drawing.Bitmap $bounds.Width,$bounds.Height
             $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
             try { $graphics.CopyFromScreen($bounds.Left,$bounds.Top,0,0,$bitmap.Size); $bitmap.Save((Join-Path $env:RUNNER_TEMP 'composition-water-resized.png')) }
