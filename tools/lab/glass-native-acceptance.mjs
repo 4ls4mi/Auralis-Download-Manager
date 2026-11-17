@@ -167,6 +167,7 @@ try{
  const labels=await progress.locator('.cg-chunk-map>span').allTextContents();assert(labels.length>0,'Live connections should be represented');passed('Live connection blocks follow engine workers and owned byte ranges');
  await progress.getByRole('button',{name:'Pause',exact:true}).click();await until(async()=>(await ipc({query:'list'})).downloads.find(f=>f.id===first.id)?.status==='Stopped','Transfer did not pause');
  assert.equal(progress.isClosed(),false,'Pausing in the progress window keeps it open');
+ await until(async()=>await progress.locator('.cg-chunk-map>span.active').count()===0,'Paused connection blocks must not appear active');
  await progress.getByRole('button',{name:'Resume',exact:true}).click();
  await until(async()=>(await ipc({query:'list'})).downloads.find(f=>f.id===first.id)?.status==='Downloading','Transfer did not resume');
  await main.locator('.cg-row').first().click();await main.locator('.cg-toolbar').getByRole('button',{name:'Stop',exact:true}).click();
