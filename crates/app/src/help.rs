@@ -187,6 +187,23 @@ pub fn check(rt: &tokio::runtime::Handle, ctx: &egui::Context) -> Slot {
     slot
 }
 
+/// Check the independent Glass fork's public releases, using its own version rather than MDM's.
+pub fn check_glass(rt: &tokio::runtime::Handle, current: String) -> Slot {
+    let slot: Slot = Arc::new(Mutex::new(None));
+    let out = slot.clone();
+    let task = rt.spawn(async move {
+        let feed = "https://api.github.com/repos/4ls4mi/misterdownloadmanager/releases/latest";
+        let net = crate::settings::own_net();
+        let client = mdm_engine::net::client_builder(&net.dns, &net.route, feed)
+            .map_err(|e| e.to_string())?
+            .user_agent("MisterHybridGlass/updates")
+            .timeout(Duration::from_secs(20)).build().map_err(|e| e.to_string())?;
+        fetch(&client, feed, &current).await
+    });
+    rt.spawn(async move { *out.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(settled(task.await)); });
+    slot
+}
+
 /// The check's task ended: its answer, or a failed check when it panicked (or was cancelled).
 fn settled(joined: Result<Result<Found, String>, tokio::task::JoinError>) -> Result<Found, String> {
     joined.unwrap_or_else(|e| {
