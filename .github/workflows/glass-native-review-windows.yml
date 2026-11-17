@@ -27,6 +27,11 @@ on:
         required: false
         type: boolean
         default: false
+      package_experimental:
+        description: 'Package a standalone experimental water test after acceptance'
+        required: false
+        type: boolean
+        default: false
       rebuild_ui:
         description: 'Rebuild the current shell against the candidate backend'
         required: false
@@ -123,6 +128,24 @@ jobs:
         run: |
           node tools/lab/glass-native-acceptance.mjs
           if ($LASTEXITCODE -ne 0) { throw 'Native acceptance failed; inspect proof artifact' }
+      - name: Prepare standalone experimental Water Bubble test
+        if: ${{ inputs.package_experimental && inputs.rebuild_ui && success() }}
+        shell: pwsh
+        run: |
+          $portable = Join-Path $env:RUNNER_TEMP 'water-portable'
+          New-Item -ItemType Directory -Force $portable | Out-Null
+          Copy-Item (Join-Path $env:GLASS_E2E_DIR 'mister-hybrid-glass.exe') $portable
+          Copy-Item (Join-Path $env:GLASS_E2E_DIR 'mdm-legacy.exe') $portable
+          Copy-Item (Join-Path $env:GLASS_E2E_DIR 'misterdownloadmanager-nmhost.exe') $portable
+          Copy-Item tools/lab/water-portable/Start-Water-Test.cmd $portable
+          Copy-Item tools/lab/water-portable/README.txt $portable
+      - uses: actions/upload-artifact@v4
+        if: ${{ inputs.package_experimental && inputs.rebuild_ui && success() }}
+        with:
+          name: mister-hybrid-glass-experimental-water-windows-x64
+          path: ${{ runner.temp }}/water-portable/
+          if-no-files-found: error
+          retention-days: 7
       - uses: actions/upload-artifact@v4
         if: always()
         with:
