@@ -32,10 +32,10 @@ try{
  await settings.getByRole('button',{name:'Download update',exact:true}).click();
  await settings.getByText('Update downloaded and verified. Restart to install it.',{exact:true}).waitFor({timeout:240000});
  await settings.screenshot({path:path.join(proof,'update-ready.png')});
- try{await settings.getByRole('button',{name:'Restart and install',exact:true}).click({timeout:15000})}catch(e){if(old.exitCode===null)throw e}
+ try{await settings.getByRole('button',{name:'Restart and install',exact:true}).click({timeout:15000})}catch(e){await wait(2000);if(old.exitCode===null)throw e}
  await until(()=>old.exitCode!==null,'The app did not exit to install the update',45000);
  await until(()=>{const p=powershell("if ((Test-Path $env:MHG_TEST_EXE) -and ((Get-Item $env:MHG_TEST_EXE).VersionInfo.ProductVersion -like '0.3.1*') -and (Get-Process -Name 'mister-hybrid-glass' -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $env:MHG_TEST_EXE })) { exit 0 } else { exit 1 }");return p.status===0},'The public update did not install and restart the app',180000);
- const endpoint=await until(async()=>{const ep=JSON.parse(await readFile(path.join(data,'ipc.json'),'utf8'));return ep.port?ep:null},'The original backend did not restart',45000);assert(endpoint.port,'The original backend data remains available');
+ await until(async()=>{const ep=JSON.parse(await readFile(path.join(data,'ipc.json'),'utf8'));return await new Promise(resolve=>{let reply='';const socket=net.connect({host:'127.0.0.1',port:ep.port},()=>socket.write(JSON.stringify({token:ep.token,query:'glass-backend'})+'\n'));socket.setTimeout(3000,()=>socket.destroy());socket.on('data',b=>{reply+=b.toString();if(reply.includes('\n')){socket.end();try{const answer=JSON.parse(reply.split('\n')[0]);resolve(answer.headless&&answer.glass)}catch{resolve(false)}}});socket.on('error',()=>resolve(false));socket.on('close',()=>resolve(false))})},'The original backend did not restart',45000);
  passed=true;await writeFile(path.join(proof,'results.json'),JSON.stringify({status:'passed',flow:'real public 0.3.1 release: check, changelog, download, verify, restart and install'},null,2));
  console.log('PASS: real in-app update to public 0.3.1 completed and restarted');
 }catch(e){
