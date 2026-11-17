@@ -233,6 +233,8 @@ try{
   await checkClip();await checkMetadata();
   await resizeWindow(progress,`download-${first.id}`,600,400);await checkClip();await checkMetadata();await assertFits(progress,'Small experimental progress window');
   await resizeWindow(progress,`download-${first.id}`,880,500);await checkClip();await checkMetadata();
+  const graphHeight=await progress.locator('.cg-compact-speed .cg-graph').evaluate(el=>el.getBoundingClientRect().height);
+  assert(graphHeight<=65,'The transfer-speed graph must remain compact when the window grows');
   await screenshot(progress,'experimental-water-webview');
   const out=path.join(output,'experimental-water-desktop.png').replaceAll("'","''");
   const shot=spawnSync('powershell.exe',['-NoProfile','-Command',"Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $bounds=[System.Windows.Forms.SystemInformation]::VirtualScreen; $bitmap=New-Object System.Drawing.Bitmap $bounds.Width,$bounds.Height; $graphics=[System.Drawing.Graphics]::FromImage($bitmap); $graphics.CopyFromScreen($bounds.Left,$bounds.Top,0,0,$bitmap.Size); $bitmap.Save('"+out+"'); $graphics.Dispose(); $bitmap.Dispose()"],{encoding:'utf8'});

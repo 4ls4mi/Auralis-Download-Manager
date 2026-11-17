@@ -38,6 +38,8 @@ pub fn open(app: &AppHandle, label: &str, route: &str, width: f64, height: f64) 
         if priority { release_priority(&w, label); }
         return Ok(());
     }
+    // The experimental water progress view starts compact; users can still resize it.
+    let height=if label.starts_with("download-") && std::env::var_os("MHG_EXPERIMENTAL_WATER").as_deref()==Some(std::ffi::OsStr::new("1")) { height.min(420.0) } else { height };
     let (width,height)=fit_size(app,width,height);
     let mut builder=WebviewWindowBuilder::new(app, label, WebviewUrl::App(format!("index.html?{route}").into()));
     // Match the independently verified host-backdrop experiment only for the
