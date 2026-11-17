@@ -433,3 +433,14 @@ proptest! {
         world.finish();
     }
 }
+
+#[test]
+fn completed_segment_retains_its_last_worker_for_progress_display() {
+    let mut p = Planner::new(100, 1);
+    let a = p.assign(7, None).expect("worker receives the file range");
+    assert_eq!(a.from, 0);
+    assert_eq!(p.claim(7, 0, 100), Claim::Granted(100));
+    assert_eq!(p.commit(7, 100), Some(100));
+    assert_eq!(p.segments()[0].worker, None);
+    assert_eq!(p.segments()[0].last_worker, Some(7));
+}

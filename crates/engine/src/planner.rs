@@ -31,6 +31,8 @@ pub struct Segment {
     /// Exclusive end; moves down when the segment is split.
     pub end: u64,
     pub worker: Option<WorkerId>,
+    /// Most recent owner in this session, retained after an assignment completes.
+    pub last_worker: Option<WorkerId>,
     /// The worker has received data for this assignment (it can no longer be preempted).
     pub receiving: bool,
     /// When the current worker got it.
@@ -127,6 +129,7 @@ impl Planner {
                 reserved: s.cursor,
                 end: s.end,
                 worker: None,
+                last_worker: None,
                 receiving: false,
                 given_at: None,
             })
@@ -327,6 +330,7 @@ impl Planner {
     fn give(&mut self, i: usize, w: WorkerId, preempted: Option<WorkerId>) -> Assignment {
         let s = &mut self.segs[i];
         s.worker = Some(w);
+        s.last_worker = Some(w);
         s.receiving = false;
         s.given_at = Some(std::time::Instant::now());
         s.reserved = s.cursor;
@@ -346,6 +350,7 @@ fn fresh(start: u64, end: u64, worker: Option<WorkerId>) -> Segment {
         reserved: start,
         end,
         worker,
+        last_worker: worker,
         receiving: false,
         given_at: worker.map(|_| std::time::Instant::now()),
     }

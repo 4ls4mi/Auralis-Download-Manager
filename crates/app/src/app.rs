@@ -6000,6 +6000,7 @@ impl App {
                         serde_json::json!({
                             "start": part.start,
                             "worker": part.worker,
+                            "last_worker": part.last_worker,
                             "cursor": part.cursor,
                             "end": part.end
                         })

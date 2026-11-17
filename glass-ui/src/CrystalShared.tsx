@@ -16,7 +16,7 @@ export type Download = {
   category: string; error?: string | null
 };
 export type Queue = { name: string; running: boolean; ids: number[] };
-export type Segment = { start: number; cursor: number; end: number; worker?:number|null };
+export type Segment = { start: number; cursor: number; end: number; worker?:number|null; last_worker?:number|null };
 export type Connection = { id: number; downloaded: number; speed: number; state: string };
 export type ServerPlace={name:string|null;flag_cell:[number,number]|null;reach:string|null};
 export function CountryFlag({place}:{place?:ServerPlace|null}){return place?.flag_cell?<span className="cg-country-flag" aria-label="Country flag" style={{backgroundPosition:`-${place.flag_cell[0]/2}px -${place.flag_cell[1]/2}px`}}/>:null;}

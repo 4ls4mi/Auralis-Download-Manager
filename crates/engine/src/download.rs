@@ -799,6 +799,8 @@ impl ConnView {
 pub struct SegmentView {
     /// Current planner owner, if any; ranges can be reassigned dynamically.
     pub worker: Option<WorkerId>,
+    /// Most recent owner, only valid for this engine session.
+    pub last_worker: Option<WorkerId>,
     pub start: u64,
     pub cursor: u64,
     pub end: u64,
@@ -1346,6 +1348,7 @@ impl Shared {
                 .iter()
                 .map(|g| SegmentView {
                 worker: g.worker,
+                last_worker: g.last_worker,
                     start: g.start,
                     cursor: g.cursor,
                     end: g.end,

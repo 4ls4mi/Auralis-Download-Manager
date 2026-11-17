@@ -373,6 +373,7 @@ impl Shared {
                 };
                 SegmentView {
                     worker: None,
+                last_worker: None,
                     start,
                     cursor: start + ((end - start) as f64 * frac) as u64,
                     end,

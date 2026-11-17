@@ -713,6 +713,7 @@ fn tool_snapshot(p: mdm_tools::video::Progress, url: &Url) -> mdm_engine::Snapsh
         size.map(|t| {
             vec![mdm_engine::download::SegmentView {
                 worker: None,
+                last_worker: None,
                 start: 0,
                 cursor: p.downloaded.min(t),
                 end: t,

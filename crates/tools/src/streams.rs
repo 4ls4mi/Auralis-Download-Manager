@@ -532,6 +532,7 @@ fn segments(sizes: &[Option<u64>], at: usize, now: &[SegmentView]) -> Vec<Segmen
         if i < at {
             out.push(SegmentView {
                 worker: None,
+                last_worker: None,
                 start: offset,
                 cursor: offset + len,
                 end: offset + len,
@@ -539,6 +540,7 @@ fn segments(sizes: &[Option<u64>], at: usize, now: &[SegmentView]) -> Vec<Segmen
         } else if i == at {
             out.extend(now.iter().map(|s| SegmentView {
                 worker: s.worker,
+                last_worker: s.last_worker,
                 start: offset + s.start,
                 cursor: offset + s.cursor,
                 end: offset + s.end,
@@ -546,6 +548,7 @@ fn segments(sizes: &[Option<u64>], at: usize, now: &[SegmentView]) -> Vec<Segmen
         } else if len > 0 {
             out.push(SegmentView {
                 worker: None,
+                last_worker: None,
                 start: offset,
                 cursor: offset,
                 end: offset + len,
@@ -1029,12 +1032,14 @@ mod tests {
         let now = [
             SegmentView {
                 worker: None,
+                last_worker: None,
                 start: 0,
                 cursor: 25,
                 end: 50,
             },
             SegmentView {
                 worker: None,
+                last_worker: None,
                 start: 50,
                 cursor: 60,
                 end: 100,
@@ -1046,6 +1051,7 @@ mod tests {
             map[2],
             SegmentView {
                 worker: None,
+                last_worker: None,
                 start: 100,
                 cursor: 100,
                 end: 150
@@ -1057,6 +1063,7 @@ mod tests {
             map[0],
             SegmentView {
                 worker: None,
+                last_worker: None,
                 start: 0,
                 cursor: 100,
                 end: 100
@@ -1066,6 +1073,7 @@ mod tests {
             map[1],
             SegmentView {
                 worker: None,
+                last_worker: None,
                 start: 100,
                 cursor: 125,
                 end: 150
