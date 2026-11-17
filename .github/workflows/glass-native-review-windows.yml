@@ -124,6 +124,27 @@ jobs:
           Get-Process 'mister-hybrid-glass','mdm-legacy' -ErrorAction SilentlyContinue | Stop-Process -Force
           Copy-Item glass-ui/src-tauri/target/release/mister-hybrid-glass.exe $env:GLASS_E2E_EXE -Force
 
+      - name: Build isolated composition telemetry lab
+        if: ${{ inputs.package_experimental && inputs.rebuild_ui }}
+        shell: pwsh
+        run: |
+          $sdk = Join-Path $env:RUNNER_TEMP 'webview-sdk\build\native'
+          Invoke-WebRequest 'https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/1.0.2903.40' -OutFile "$env:RUNNER_TEMP\webview-sdk.zip"
+          Expand-Archive "$env:RUNNER_TEMP\webview-sdk.zip" -DestinationPath "$env:RUNNER_TEMP\webview-sdk"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $vs) { throw 'Visual C++ tools not found' }
+          $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
+          $lab = Join-Path $env:RUNNER_TEMP 'composition-telemetry-lab'
+          New-Item -ItemType Directory -Force $lab | Out-Null
+          $exe = Join-Path $lab 'composition-water-lab.exe'
+          $batch = Join-Path $env:RUNNER_TEMP 'compile-composition-telemetry.cmd'
+          @("@call `"$vcvars`" >nul", "cl /nologo /utf-8 /EHsc /std:c++20 /I`"$sdk\include`" tools\lab\composition-water\main.cpp /link /subsystem:windows /out:`"$exe`" `"$sdk\x64\WebView2Loader.dll.lib`"", '@exit /b %errorlevel%') | Set-Content -Encoding ascii $batch
+          & cmd.exe /d /c $batch
+          if ($LASTEXITCODE -ne 0) { throw 'Composition telemetry lab failed to compile' }
+          Copy-Item "$sdk\x64\WebView2Loader.dll" $lab
+          "GLASS_COMPOSITION_LAB=$exe" >> $env:GITHUB_ENV
+
       - name: Real native acceptance
         timeout-minutes: 7
         shell: pwsh
