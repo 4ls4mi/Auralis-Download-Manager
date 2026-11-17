@@ -21,3 +21,4 @@ open = "5"
 
 [target.'cfg(windows)'.dependencies]
 arboard = { version = "3.7.0", default-features = false }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_UI_WindowsAndMessaging"] }

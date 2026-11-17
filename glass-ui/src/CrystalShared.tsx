@@ -270,6 +270,13 @@ export function CrystalWindow({ children, target = "main" }: {
     window.addEventListener('resize',reset);reset();
     return()=>{disposed=true;cancelAnimationFrame(raf);observer.disconnect();mutations.disconnect();el.removeEventListener('click',sectionClick);el.removeEventListener('change',reset);el.removeEventListener('toggle',reset,true);window.removeEventListener('resize',reset)};
   },[appearance.uiScale,appearance.fontSize,appearance.fontFamily,target]);
+  useEffect(()=>{
+    let disposed=false, timer:ReturnType<typeof setTimeout>|undefined;
+    const apply=()=>{if(!disposed)void invoke("set_material_window_shape",{material:appearance.material}).catch(e=>{if(!disposed)setWindowError(`Material outline unavailable: ${String(e)}`)});};
+    const resize=()=>{clearTimeout(timer);timer=setTimeout(apply,75)};
+    window.addEventListener("resize",resize);apply();
+    return()=>{disposed=true;clearTimeout(timer);window.removeEventListener("resize",resize)};
+  },[appearance.material]);
   const main = target === "main", mode = main ? appearance.mainMode : appearance.detailMode;
   const path = main ? appearance.wallMain : (appearance.wallDetail || appearance.wallMain);
   const src = path ? convertFileSrc(path) : "/alpine.svg";
