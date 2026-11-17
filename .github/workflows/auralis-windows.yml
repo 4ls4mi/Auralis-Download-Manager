@@ -99,7 +99,7 @@ jobs:
         run: |
           $version = (Get-Content glass-ui/src-tauri/Cargo.toml -Raw | Select-String -Pattern '(?m)^version\s*=\s*"([^"]+)"').Matches[0].Groups[1].Value
           $folder = "glass-ui/src-tauri/target/release/bundle/nsis"
-          $installer = Join-Path $folder "Auralis.Download.Manager_${version}_x64-setup.exe"
+          $installer = Join-Path $folder "Auralis Download Manager_${version}_x64-setup.exe"
           if (-not (Test-Path $installer)) { throw "Missing Auralis installer: $installer" }
           Copy-Item $installer (Join-Path $folder "Mister.Hybrid.Glass_${version}_x64-setup.exe")
 
