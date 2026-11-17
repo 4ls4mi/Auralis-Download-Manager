@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.3.2]
+
+### Added
+
+- Rebranded the Windows glass desktop as **Auralis Download Manager**, with a new crystalline A/download mark and matching Windows app icon generated during the Tauri build.
+- Expanded the shared notification-area menu with the original MDM tray actions: add URL, batch download, batch-from-clipboard entry, downloads in progress, speed limiter, scheduler, start/stop main queue, Options and Exit.
+- Added per-download restore entries to the shared tray. Hiding a floating progress window records it there; selecting its own entry restores only that window.
+
+### Changed
+
+- Updated the app's display name and installer identity while retaining its existing Tauri application identifier so upgrades preserve the installed app-data location.
+- Corrected the fork updater's expected release installer filename for Auralis.
+
+### Validation
+
+- Pending Windows build and tray acceptance tests. This release is not published until those checks pass.
+
+
 Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 `.github/workflows/release.yml`).
 
