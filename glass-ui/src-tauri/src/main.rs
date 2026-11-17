@@ -115,7 +115,7 @@ fn boot_existing_engine(app: &AppHandle) -> ApiResult<String> {
     Err("Headless downloader did not initialize. See its crash logs in the original MDM data directory.".into())
 }
 
-fn build_tray_menu(app: &AppHandle) -> ApiResult<Menu> {
+fn build_tray_menu(app: &AppHandle) -> ApiResult<Menu<tauri::Wry>> {
     let menu = Menu::new(app).map_err(|e| e.to_string())?;
     let show = MenuItem::with_id(app, "show", "Open Auralis Download Manager", true, None::<&str>).map_err(|e| e.to_string())?;
     let add = MenuItem::with_id(app, "add", "Add new download…", true, None::<&str>).map_err(|e| e.to_string())?;
