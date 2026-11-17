@@ -79,6 +79,15 @@ jobs:
         working-directory: glass-ui
         run: npm run tauri -- build --bundles nsis
 
+      - name: Keep the 0.3.1 updater's installer filename compatible
+        shell: pwsh
+        run: |
+          $version = (Get-Content glass-ui/src-tauri/Cargo.toml -Raw | Select-String -Pattern '(?m)^version\s*=\s*"([^"]+)"').Matches[0].Groups[1].Value
+          $folder = "glass-ui/src-tauri/target/release/bundle/nsis"
+          $installer = Join-Path $folder "Auralis.Download.Manager_${version}_x64-setup.exe"
+          if (-not (Test-Path $installer)) { throw "Missing Auralis installer: $installer" }
+          Copy-Item $installer (Join-Path $folder "Mister.Hybrid.Glass_${version}_x64-setup.exe")
+
       - name: Upload Auralis Windows candidate
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
