@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FolderOpen, Plus, Download, ListPlus } from 'lucide-react';
 import { CrystalWindow, WindowTop, units } from './CrystalShared';
 const tool=<T,>(action:string,payload:unknown=null)=>invoke<T>('glass_tool',{action,payload});
@@ -21,6 +21,10 @@ type Link={id:number;package:number;url:string;name:string;size:number|null;sele
 type Grabber={packages:Package[];links:Link[];hide_pages:boolean};
 export function CrystalGrabber(){
  const [data,setData]=useState<Grabber|null>(null),[text,setText]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false),[page,setPage]=useState(0),[selected,setSelected]=useState(0),[editing,setEditing]=useState(false);
+ const clipboardImported=useRef(false);
+ useEffect(()=>{if(clipboardImported.current||new URLSearchParams(location.search).get('clipboard')!=='1')return;clipboardImported.current=true;
+  void invoke<string>('clipboard_text').then(text=>{if(text.trim())return tool('grabber',{operation:'import',text});return null}).catch(e=>setError('Could not read clipboard: '+String(e)));
+ },[]);
  const load=async()=>{const result=await tool<{data:Grabber|null}>('grabber-state');setData(result.data)};
  useEffect(()=>{let active=true;const update=()=>{if(active&&!editing)void load().catch(e=>setError(String(e)))};update();const timer=setInterval(update,1400);return()=>{active=false;clearInterval(timer)}},[editing]);
  const act=async(payload:unknown)=>{setBusy(true);setError('');try{await tool('grabber',payload);await load()}catch(e){setError(String(e))}finally{setBusy(false)}};
