@@ -163,6 +163,8 @@ try{
  const first=await until(async()=>{const d=await ipc({query:'list'});return d.downloads.find(f=>f.file==='fixture-eight.zip');},'Original engine did not add the chosen file');
  let progress=await pageFor('detail='+first.id);await progress.waitForSelector('.cg-mdm-details');
  await until(async()=>(await ipc({query:'list'})).downloads.find(f=>f.id===first.id)?.downloaded>0,'Original HTTP engine received no bytes');
+ await until(async()=>{const v=(await invoke(main,'dashboard_visuals')).downloads.find(f=>f.id===first.id);if(!v||!v.connections.some(c=>c.state==='Receiving')||!v.segments.some(s=>s.worker!=null))return false;const n=v.connections.filter(c=>c.state!=='Retired'&&c.state!=='Failed'&&!(c.state==='Finished'&&c.downloaded===0)).length;return (await progress.locator('.cg-chunk-map>span').count())===n},'Live engine workers and assigned ranges did not reach connection indicators');
+ const labels=await progress.locator('.cg-chunk-map>span').allTextContents();assert(labels.length>0,'Live connections should be represented');passed('Live connection blocks follow engine workers and owned byte ranges');
  await progress.getByRole('button',{name:'Pause',exact:true}).click();await until(async()=>(await ipc({query:'list'})).downloads.find(f=>f.id===first.id)?.status==='Stopped','Transfer did not pause');
  assert.equal(progress.isClosed(),false,'Pausing in the progress window keeps it open');
  await progress.getByRole('button',{name:'Resume',exact:true}).click();
