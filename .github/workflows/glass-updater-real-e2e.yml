@@ -1,0 +1,72 @@
+name: Glass real public updater test
+on:
+  push:
+    branches: ['feature/connection-loss-updater-windows']
+permissions:
+  contents: read
+jobs:
+  update:
+    if: contains(github.event.head_commit.message, '[updater-e2e]')
+    runs-on: windows-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Rust stable Windows x64
+        shell: pwsh
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add x86_64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          workspaces: |
+            . -> target
+            glass-ui/src-tauri -> target
+      - name: Windows packaging prerequisites
+        shell: pwsh
+        run: |
+          choco install nasm --version 2.16.3 --no-progress -y
+          'C:\Program Files\NASM' >> $env:GITHUB_PATH
+          choco install nsis --no-progress -y
+          $runtime = Join-Path $env:RUNNER_TEMP 'MicrosoftEdgeWebview2Setup.exe'
+          Invoke-WebRequest 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile $runtime
+          Start-Process $runtime -ArgumentList '/silent /install' -Wait | Out-Null
+      - name: Build original engine and browser helper
+        shell: pwsh
+        run: |
+          cargo build --release --target x86_64-pc-windows-msvc -p mdm-app -p mdm-nmhost
+          if ($LASTEXITCODE -ne 0) { throw 'Engine build failed' }
+          New-Item -ItemType Directory -Force glass-ui/src-tauri/resources,glass-ui/src-tauri/icons | Out-Null
+          Copy-Item target/x86_64-pc-windows-msvc/release/misterdownloadmanager.exe glass-ui/src-tauri/resources/mdm-legacy.exe
+          Copy-Item target/x86_64-pc-windows-msvc/release/misterdownloadmanager-nmhost.exe glass-ui/src-tauri/resources/misterdownloadmanager-nmhost.exe
+          Copy-Item crates/app/assets/icons/app/mdm.ico glass-ui/src-tauri/icons/icon.ico
+      - name: Build isolated older version with the updater
+        shell: pwsh
+        working-directory: glass-ui
+        run: |
+          foreach ($file in @('package.json','src-tauri/Cargo.toml','src-tauri/tauri.conf.json')) {
+            $content = Get-Content $file -Raw
+            if (!$content.Contains('0.3.1')) { throw "Version not found in $file" }
+            Set-Content -NoNewline -Encoding utf8 $file ($content.Replace('0.3.1','0.3.0'))
+          }
+          npm install --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { throw 'npm install failed' }
+          npm run tauri -- build --bundles nsis
+          if ($LASTEXITCODE -ne 0) { throw 'Isolated test build failed' }
+      - name: Exercise the real in-app public release update
+        shell: pwsh
+        run: |
+          node tools/lab/glass-updater-e2e.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'In-app updater test failed' }
+      - name: Upload updater screenshots and results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: glass-updater-real-e2e-proof
+          path: ${{ runner.temp }}/glass-updater-e2e/proof/
+          if-no-files-found: warn
+          retention-days: 14
