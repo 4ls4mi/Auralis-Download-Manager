@@ -187,6 +187,16 @@ try{
  const separated=await main.locator('.cg-row-progress').first().evaluate(el=>{const items=[el.querySelector('.cg-percent-wrap'),el.querySelector('.cg-chunks'),el.querySelector('.cg-graph-small')];if(items.some(x=>!x))return false;const rects=items.map(x=>x.getBoundingClientRect());return rects.every((a,i)=>rects.every((b,j)=>i===j||a.right<=b.left+1||b.right<=a.left+1||a.bottom<=b.top+1||b.bottom<=a.top+1))});assert(separated,'Main list indicators must not overlap');passed('Main list percentage, engine connections and speed graph occupy separate areas');
  const scrolling=await main.evaluate(()=>{const el=document.querySelector('.cg-table-viewport'),table=el?.querySelector('.cg-table'),row=table?.querySelector('.cg-row');if(!el||!table||!row)return false;const clones=[];for(let i=0;i<16;i++){const clone=row.cloneNode(true);clone.setAttribute('data-scroll-probe','');table.appendChild(clone);clones.push(clone)}const old=el.scrollTop;el.scrollTop=el.scrollHeight;const ok=el.scrollTop>0;el.scrollTop=old;clones.forEach(x=>x.remove());return ok});assert(scrolling,'Download list must scroll when it contains more rows than fit');passed('Main download list scrolls independently when rows overflow');
  await bothThemes(progress,'progress',settings);await bothThemes(main,'main',settings);
+ if(process.env.MHG_EXPERIMENTAL_WATER==='1'){
+  await until(()=>progress.locator('.cg-native-water-experiment').count(),'Native Water Bubble did not initialize in the real download window');
+  await progress.bringToFront().catch(()=>{});
+  await screenshot(progress,'experimental-water-webview');
+  const out=path.join(output,'experimental-water-desktop.png').replaceAll("'","''");
+  const shot=spawnSync('powershell.exe',['-NoProfile','-Command',"Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $bounds=[System.Windows.Forms.SystemInformation]::VirtualScreen; $bitmap=New-Object System.Drawing.Bitmap $bounds.Width,$bounds.Height; $graphics=[System.Drawing.Graphics]::FromImage($bitmap); $graphics.CopyFromScreen($bounds.Left,$bounds.Top,0,0,$bitmap.Size); $bitmap.Save('"+out+"'); $graphics.Dispose(); $bitmap.Dispose()"],{encoding:'utf8'});
+  if(shot.status!==0)await writeFile(path.join(output,'experimental-water-desktop-error.txt'),shot.stderr||shot.stdout||'No interactive desktop available');
+  passed('Experimental Direct2D surface initialized in a real download window; desktop visibility still requires screenshot review');
+ }
+
  await settings.getByRole('button',{name:'Theme',exact:true}).click();await assertFits(settings,'Theme settings');
  const previousAccent=await progress.locator('.cg-window').evaluate(e=>getComputedStyle(e).getPropertyValue('--accent-rgb'));
  const alternate=settings.locator('.cg-color-choices button:not(.selected)').first();
