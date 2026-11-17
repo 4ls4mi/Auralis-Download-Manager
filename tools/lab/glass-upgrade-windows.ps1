@@ -7,17 +7,22 @@ $state = Join-Path $env:RUNNER_TEMP 'glass-upgrade-data'
 $exe = Join-Path $root 'mister-hybrid-glass.exe'
 $newSetup = @(Get-ChildItem 'glass-ui/src-tauri/target/release/bundle/nsis' -Filter '*.exe' -File)
 if ($newSetup.Count -ne 1) { throw 'Expected exactly one new installer' }
+Write-Host 'Downloading the published 0.3.0 installer for the isolated test'
 Invoke-WebRequest 'https://github.com/4ls4mi/misterdownloadmanager/releases/download/v0.3.0-glass-preview.1/Mister.Hybrid.Glass_0.3.0_x64-setup.exe' -OutFile $oldSetup
 if ((Get-FileHash $oldSetup -Algorithm SHA256).Hash.ToLowerInvariant() -ne '3ba9925fa271728eeb1785d760d157ca49996ccfc1f96c3304e56b29c9f2bc04') { throw 'Old preview digest differs from the released installer' }
 $previousData = $env:MDM_DATA_DIR
 $env:MDM_DATA_DIR = $state
 try {
-    $old = Start-Process -FilePath $oldSetup -ArgumentList @('/S', "/D=$root") -Wait -PassThru
+    Write-Host 'Installing 0.3.0 into the isolated directory'
+    $old = Start-Process -FilePath $oldSetup -ArgumentList @('/S', "/D=$root") -PassThru
+    if (!$old.WaitForExit(180000)) { throw 'The old-version installer did not exit in time' }
     if ($old.ExitCode -ne 0 -or !(Test-Path $exe)) { throw "Isolated old-version install failed: $($old.ExitCode)" }
     if (!(Test-Path (Join-Path $root 'uninstall.exe'))) { throw 'Installed updater could not find the NSIS uninstaller' }
+    Write-Host 'Upgrading the isolated installation and requesting restart'
     $new = Start-Process -FilePath $newSetup[0].FullName -ArgumentList @('/S','/UPDATE','/R', "/D=$root") -PassThru
     if (!$new.WaitForExit(180000)) { throw 'The isolated upgrade installer did not exit in time' }
     if ($new.ExitCode -ne 0) { throw "Isolated upgrade failed: $($new.ExitCode)" }
+    Write-Host 'Checking the installed version and restarted process'
     $version = (Get-Item $exe).VersionInfo.ProductVersion
     if ($version -notlike '0.3.1*') { throw "Expected 0.3.1 after upgrade, got $version" }
     $restarted = $null
