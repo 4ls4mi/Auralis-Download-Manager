@@ -16,7 +16,7 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tauri::{
-    menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
+    menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle, Manager, WindowEvent,
 };
@@ -141,7 +141,14 @@ fn build_tray_menu(app: &AppHandle) -> ApiResult<Menu> {
             .map_err(|e| e.to_string())?;
         downloads.append(&empty).map_err(|e| e.to_string())?;
     }
-    let speed = MenuItem::with_id(app, "speed-limit", "Speed Limiter…", true, None::<&str>).map_err(|e| e.to_string())?;
+    let limiter_on = send_ipc(&mdm_ipc::Command { query: Some("glass-original-settings".into()), ..Default::default() })
+        .ok().and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+        .and_then(|v| v["speed_limit_on"].as_bool()).unwrap_or(false);
+    let speed = Submenu::with_id(app, "speed-limiter", "Speed Limiter", true).map_err(|e| e.to_string())?;
+    let speed_on = CheckMenuItem::with_id(app, "speed-limit-on", "Turn on", true, limiter_on, None::<&str>).map_err(|e| e.to_string())?;
+    let speed_off = CheckMenuItem::with_id(app, "speed-limit-off", "Turn off", true, !limiter_on, None::<&str>).map_err(|e| e.to_string())?;
+    speed.append(&speed_on).map_err(|e| e.to_string())?;
+    speed.append(&speed_off).map_err(|e| e.to_string())?;
     let scheduler = MenuItem::with_id(app, "scheduler", "Scheduler", true, None::<&str>).map_err(|e| e.to_string())?;
     let start = MenuItem::with_id(app, "start-queue", "Start main download queue", true, None::<&str>).map_err(|e| e.to_string())?;
     let stop = MenuItem::with_id(app, "stop-queue", "Stop main download queue", true, None::<&str>).map_err(|e| e.to_string())?;
@@ -153,7 +160,8 @@ fn build_tray_menu(app: &AppHandle) -> ApiResult<Menu> {
     menu.append(&PredefinedMenuItem::separator(app).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
     menu.append(&downloads).map_err(|e| e.to_string())?;
     menu.append(&PredefinedMenuItem::separator(app).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
-    for item in [&speed, &scheduler, &start, &stop, &options] {
+    menu.append(&speed).map_err(|e| e.to_string())?;
+    for item in [&scheduler, &start, &stop, &options] {
         menu.append(item).map_err(|e| e.to_string())?;
     }
     menu.append(&PredefinedMenuItem::separator(app).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
@@ -561,7 +569,15 @@ fn main() {
                     "add" => { let _ = lifecycle::open(app, "tray-add-url", "add=url", 590.0, 390.0); },
                     "batch" => { let _ = lifecycle::open(app, "tray-batch", "tool=batch", 760.0, 680.0); },
                     "batch-clipboard" => { let _ = lifecycle::open(app, "tray-grabber-clipboard", "tool=grabber&clipboard=1", 900.0, 680.0); },
-                    "speed-limit" => { let _ = lifecycle::open(app, "tray-settings", "settings=1&tab=Connection", 920.0, 700.0); },
+                    "speed-limit-on" | "speed-limit-off" => {
+                        let enabled = event.id.as_ref() == "speed-limit-on";
+                        let _ = send_ipc(&mdm_ipc::Command {
+                            action: Some("glass-original-setting".into()),
+                            queue: Some(serde_json::json!({"key":"speed_limit_on","value":enabled}).to_string()),
+                            ..Default::default()
+                        });
+                        refresh_tray_menu(app);
+                    },
                     "scheduler" => { let _ = lifecycle::open(app, "tray-scheduler", "schedule=1", 860.0, 660.0); },
                     "options" => { let _ = lifecycle::open(app, "tray-options", "settings=1", 920.0, 700.0); },
                     "start-queue" | "stop-queue" => {
