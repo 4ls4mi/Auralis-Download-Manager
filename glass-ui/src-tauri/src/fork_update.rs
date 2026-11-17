@@ -15,7 +15,7 @@ fn lock() -> Result<std::sync::MutexGuard<'static, Option<Candidate>>, String> {
 #[derive(Serialize)]
 pub struct UpdateStatus { state: &'static str, version: Option<String>, notes: Option<String> }
 fn client() -> Result<reqwest::blocking::Client, String> {
-    reqwest::blocking::Client::builder().user_agent("MisterHybridGlass/update-check")
+    reqwest::blocking::Client::builder().user_agent("AuralisDownloadManager/update-check")
         .timeout(Duration::from_secs(180)).build().map_err(|e| e.to_string())
 }
 fn candidate_from_release(value: &serde_json::Value, current: &str) -> Result<Option<Candidate>, String> {
@@ -24,7 +24,7 @@ fn candidate_from_release(value: &serde_json::Value, current: &str) -> Result<Op
     let current = semver::Version::parse(current).map_err(|_| "The installed version is invalid")?;
     if version <= current { return Ok(None); }
     let assets=value["assets"].as_array().ok_or("The release has no installer")?;
-    let expected_name=format!("Mister.Hybrid.Glass_{}_x64-setup.exe",version);
+    let expected_name=format!("Auralis.Download.Manager_{}_x64-setup.exe",version);
     let matches: Vec<_> = assets.iter().filter(|asset| asset["name"].as_str()==Some(expected_name.as_str())).collect();
     if matches.len()!=1 { return Err("This release must contain one Windows x64 Glass installer".into()); }
     let asset=matches[0];
@@ -79,7 +79,7 @@ pub async fn glass_update_install(app:AppHandle) -> Result<(),String> {
         let c=lock()?.clone().ok_or("Check for an update first")?;let installer=c.staged.ok_or("Download the update first")?;
         let (hash,size)=hash_file(&installer)?;if hash!=c.sha256||size!=c.size{return Err("The downloaded installer has changed; download again".into())}
         let exe=std::env::current_exe().map_err(|e|e.to_string())?;let dir=exe.parent().ok_or("Application folder is unavailable")?;
-        if !dir.join("uninstall.exe").is_file(){return Err("Automatic updates require the installed version of Mister Hybrid Glass".into())}
+        if !dir.join("uninstall.exe").is_file(){return Err("Automatic updates require the installed version of Auralis Download Manager".into())}
         // Paths travel as environment variables, never as PowerShell source.
         let script=r#"$ErrorActionPreference='Stop'; $p=[int]$env:MHG_UPDATE_PID; Wait-Process -Id $p -Timeout 90 -ErrorAction SilentlyContinue; if (Get-Process -Id $p -ErrorAction SilentlyContinue) { exit 1 }; $backend=Join-Path (Split-Path $env:MHG_UPDATE_OLD) 'mdm-legacy.exe'; for ($n=0; $n -lt 30; $n++) { $busy=Get-Process -Name 'mdm-legacy' -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $backend }; if (!$busy) { break }; Start-Sleep -Seconds 1 }; if ($busy) { Start-Process -FilePath $env:MHG_UPDATE_OLD; exit 1 }; try { $x=Start-Process -FilePath $env:MHG_UPDATE_INSTALLER -ArgumentList '/P','/UPDATE','/R' -PassThru; $x.WaitForExit(); if ($x.ExitCode -ne 0) { Start-Process -FilePath $env:MHG_UPDATE_OLD } } catch { Start-Process -FilePath $env:MHG_UPDATE_OLD }"#;
         std::process::Command::new("powershell.exe").args(["-NoProfile","-NonInteractive","-WindowStyle","Hidden","-Command",script])
