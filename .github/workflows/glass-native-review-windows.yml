@@ -144,6 +144,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Composition telemetry lab failed to compile' }
           Copy-Item "$sdk\x64\WebView2Loader.dll" $lab
           "GLASS_COMPOSITION_LAB=$exe" >> $env:GITHUB_ENV
+          cargo test --manifest-path tools/lab/composition-bridge/Cargo.toml --target x86_64-pc-windows-msvc
+          if ($LASTEXITCODE -ne 0) { throw 'Composition bridge tests failed' }
+          cargo build --release --manifest-path tools/lab/composition-bridge/Cargo.toml --target x86_64-pc-windows-msvc
+          if ($LASTEXITCODE -ne 0) { throw 'Composition bridge build failed' }
+          $bridge = Join-Path $PWD 'tools/lab/composition-bridge/target/x86_64-pc-windows-msvc/release/mhg-composition-bridge-lab.exe'
+          "GLASS_COMPOSITION_BRIDGE=$bridge" >> $env:GITHUB_ENV
 
       - name: Real native acceptance
         timeout-minutes: 7

@@ -8,7 +8,6 @@ import {createHash} from 'node:crypto';
 import {createRequire} from 'node:module';
 import {mkdir,readFile,writeFile,access} from 'node:fs/promises';
 import path from 'node:path';
-import {startLiveBridge} from './composition-water/bridge.mjs';
 const require=createRequire(import.meta.url);
 const {chromium}=require('../../glass-ui/node_modules/playwright-core');
 assert.equal(process.platform,'win32','Run native acceptance only on Windows x64.');
@@ -188,31 +187,33 @@ try{
  await progress.getByRole('button',{name:'Pause',exact:true}).click();await until(async()=>(await ipc({query:'list'})).downloads.find(f=>f.id===first.id)?.status==='Stopped','Transfer did not pause');
  assert.equal(progress.isClosed(),false,'Pausing in the progress window keeps it open');
  if(process.env.GLASS_COMPOSITION_LAB){
-  const lab=startLiveBridge({exe:process.env.GLASS_COMPOSITION_LAB,dataDir:data,id:first.id,intervalMs:500,env:{...process.env,WEBVIEW2_USER_DATA_FOLDER:path.join(folder,'composition-webview'),WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS:''}});
-  let labError='';lab.on('telemetry-error',e=>{labError=e.message});lab.stderr.on('data',b=>{labError+=b.toString()});
+  assert(process.env.GLASS_COMPOSITION_BRIDGE,'Missing isolated Rust composition bridge');
+  const bridge=spawn(process.env.GLASS_COMPOSITION_BRIDGE,[process.env.GLASS_COMPOSITION_LAB,String(first.id)],{env:{...process.env,MDM_DATA_DIR:data,WEBVIEW2_USER_DATA_FOLDER:path.join(folder,'composition-webview'),WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS:''},stdio:['ignore','pipe','pipe']});
+  let labError='',bridgeOutput='',labPid=0;bridge.stderr.on('data',b=>{labError+=b.toString()});bridge.stdout.on('data',b=>{bridgeOutput+=b.toString();const found=/LAB_PID:(\d+)/.exec(bridgeOutput);if(found)labPid=Number(found[1]);});
   try{
+   await until(()=>{if(bridge.exitCode!=null)throw Error('Rust composition bridge exited: '+bridge.exitCode+' '+labError);return labPid>0},'Rust bridge did not start the composition lab',30000);
    const stopped=(await ipc({query:'list'})).downloads.find(f=>f.id===first.id);assert(stopped.downloaded>0&&stopped.size>0,'Paused fixture must contain real bytes');
    const percent=(100*stopped.downloaded/stopped.size).toFixed(1)+'%';
    const visual=(await ipc({query:'glass-visuals'})).downloads.find(v=>v.id===first.id);const expected=(visual?.connections??[]).filter(c=>c.state!=='Retired'&&c.state!=='Failed'&&!(c.state==='Finished'&&c.downloaded===0)).length;
    const verified=await until(async()=>{
-    if(lab.exitCode!=null)throw Error('Composition lab exited: '+lab.exitCode+' '+labError);
-    const q=spawnSync('powershell.exe',['-NoProfile','-Command',`(Get-Process -Id ${lab.pid} -ErrorAction SilentlyContinue).MainWindowTitle`],{encoding:'utf8',timeout:5000});
+    if(bridge.exitCode!=null)throw Error('Composition bridge exited: '+bridge.exitCode+' '+labError);
+    const q=spawnSync('powershell.exe',['-NoProfile','-Command',`(Get-Process -Id ${labPid} -ErrorAction SilentlyContinue).MainWindowTitle`],{encoding:'utf8',timeout:5000});
     const title=(q.stdout||'').trim();if(!title.startsWith('MDM-LAB-VERIFY:'))return false;
     const state=JSON.parse(title.slice('MDM-LAB-VERIFY:'.length));
     return state.percent===percent&&state.status==='Stopped'&&state.workers===expected&&state.actionLabel==='Resume'&&!state.actionDisabled?state:false;
    },'Composition telemetry did not match original engine',45000);
    assert.equal(verified.actionLabel,'Resume','Stopped item must offer Resume');
-   const clickLab=()=>{const code=`Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class LabClick { [StructLayout(LayoutKind.Sequential)] public struct RECT { public int l,t,r,b; } [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr h,out RECT r); [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr h,uint m,IntPtr w,IntPtr l); }'; $h=(Get-Process -Id ${lab.pid}).MainWindowHandle; $r=New-Object LabClick+RECT; if(-not [LabClick]::GetClientRect($h,[ref]$r)){exit 2}; $x=$r.r-210; $y=$r.b-58; $p=[IntPtr](($y -shl 16) -bor $x); [void][LabClick]::SendMessage($h,0x201,[IntPtr]1,$p); [void][LabClick]::SendMessage($h,0x202,[IntPtr]0,$p)`;const r=spawnSync('powershell.exe',['-NoProfile','-Command',code],{encoding:'utf8',timeout:10000});assert.equal(r.status,0,'Could not click experimental action: '+(r.stderr||''));};
-   const labState=()=>{const q=spawnSync('powershell.exe',['-NoProfile','-Command',`(Get-Process -Id ${lab.pid} -ErrorAction SilentlyContinue).MainWindowTitle`],{encoding:'utf8',timeout:5000});const title=(q.stdout||'').trim();if(!title.startsWith('MDM-LAB-VERIFY:'))return null;try{return JSON.parse(title.slice('MDM-LAB-VERIFY:'.length))}catch{return null}};
+   const clickLab=()=>{const code=`Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class LabClick { [StructLayout(LayoutKind.Sequential)] public struct RECT { public int l,t,r,b; } [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr h,out RECT r); [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr h,uint m,IntPtr w,IntPtr l); }'; $h=(Get-Process -Id ${labPid}).MainWindowHandle; $r=New-Object LabClick+RECT; if(-not [LabClick]::GetClientRect($h,[ref]$r)){exit 2}; $x=$r.r-210; $y=$r.b-58; $p=[IntPtr](($y -shl 16) -bor $x); [void][LabClick]::SendMessage($h,0x201,[IntPtr]1,$p); [void][LabClick]::SendMessage($h,0x202,[IntPtr]0,$p)`;const r=spawnSync('powershell.exe',['-NoProfile','-Command',code],{encoding:'utf8',timeout:10000});assert.equal(r.status,0,'Could not click experimental action: '+(r.stderr||''));};
+   const labState=()=>{const q=spawnSync('powershell.exe',['-NoProfile','-Command',`(Get-Process -Id ${labPid} -ErrorAction SilentlyContinue).MainWindowTitle`],{encoding:'utf8',timeout:5000});const title=(q.stdout||'').trim();if(!title.startsWith('MDM-LAB-VERIFY:'))return null;try{return JSON.parse(title.slice('MDM-LAB-VERIFY:'.length))}catch{return null}};
    clickLab();await until(async()=>(await ipc({query:'list'})).downloads.find(f=>f.id===first.id)?.status==='Downloading','Experimental Resume did not start the original engine');
    await until(()=>{const state=labState();return state?.status==='Downloading'&&state.actionLabel==='Pause'&&!state.actionDisabled},'Experimental window did not show running state');
    const out=path.join(output,'composition-live-desktop.png').replaceAll("'","''");
-   const script=`Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class BringLab { [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h); }'; $h=(Get-Process -Id ${lab.pid}).MainWindowHandle; if($h -eq [IntPtr]::Zero){exit 2}; [void][BringLab]::SetForegroundWindow($h); Start-Sleep -Milliseconds 500; Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $bounds=[System.Windows.Forms.SystemInformation]::VirtualScreen; $bitmap=New-Object System.Drawing.Bitmap $bounds.Width,$bounds.Height; $graphics=[System.Drawing.Graphics]::FromImage($bitmap); $graphics.CopyFromScreen($bounds.Left,$bounds.Top,0,0,$bitmap.Size); $bitmap.Save('${out}'); $graphics.Dispose(); $bitmap.Dispose()`;
+   const script=`Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class BringLab { [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h); }'; $h=(Get-Process -Id ${labPid}).MainWindowHandle; if($h -eq [IntPtr]::Zero){exit 2}; [void][BringLab]::SetForegroundWindow($h); Start-Sleep -Milliseconds 500; Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $bounds=[System.Windows.Forms.SystemInformation]::VirtualScreen; $bitmap=New-Object System.Drawing.Bitmap $bounds.Width,$bounds.Height; $graphics=[System.Drawing.Graphics]::FromImage($bitmap); $graphics.CopyFromScreen($bounds.Left,$bounds.Top,0,0,$bitmap.Size); $bitmap.Save('${out}'); $graphics.Dispose(); $bitmap.Dispose()`;
    const shot=spawnSync('powershell.exe',['-NoProfile','-Command',script],{encoding:'utf8'});assert.equal(shot.status,0,'Could not capture live composition desktop: '+(shot.stderr||shot.stdout||shot.error?.message||'unknown'));
    clickLab();await until(async()=>(await ipc({query:'list'})).downloads.find(f=>f.id===first.id)?.status==='Stopped','Experimental Pause did not stop the original engine');
    await until(()=>{const state=labState();return state?.status==='Stopped'&&state.actionLabel==='Resume'&&!state.actionDisabled},'Experimental window did not show paused state');
    passed('Experimental composition host displays real engine progress and workers and controls pause/resume through authenticated IPC');
-  }finally{lab.kill();}
+  }finally{if(labPid)spawnSync('taskkill.exe',['/PID',String(labPid)],{encoding:'utf8'});bridge.kill();}
  }
  await until(async()=>await progress.locator('.cg-chunk-map>span.active').count()===0,'Paused connection blocks must not appear active');
  await progress.getByRole('button',{name:'Resume',exact:true}).click();
