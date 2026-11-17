@@ -292,6 +292,60 @@ jobs:
             try { $graphics.CopyFromScreen($bounds.Left,$bounds.Top,0,0,$bitmap.Size); $bitmap.Save((Join-Path $env:RUNNER_TEMP 'composition-smoked.png')) }
             finally { $graphics.Dispose(); $bitmap.Dispose() }
           } finally { if (-not $lab.HasExited) { Stop-Process -Id $lab.Id -Force } }
+      - name: Capture Frosted Layers geometry
+        shell: pwsh
+        run: |
+          $env:WEBVIEW2_USER_DATA_FOLDER = Join-Path $env:RUNNER_TEMP 'frost-lab-webview'
+          $lab = Start-Process -FilePath "$PWD\composition-water-lab.exe" -ArgumentList '--frost' -PassThru
+          try {
+            $ready=$false
+            for ($i=0; $i -lt 30; $i++) { Start-Sleep -Seconds 1; $lab.Refresh(); if ($lab.HasExited) { throw "Frosted Layers lab exited: $($lab.ExitCode)" }; if ($lab.MainWindowTitle -like '*composition lab*') { $ready=$true; break } }
+            if (-not $ready) { throw 'Frosted Layers composition did not initialize' }
+            Start-Sleep -Seconds 5
+            Add-Type -AssemblyName System.Windows.Forms
+            Add-Type -AssemblyName System.Drawing
+            $bounds=[System.Windows.Forms.SystemInformation]::VirtualScreen
+            $bitmap=New-Object System.Drawing.Bitmap $bounds.Width,$bounds.Height
+            $graphics=[System.Drawing.Graphics]::FromImage($bitmap)
+            try { $graphics.CopyFromScreen($bounds.Left,$bounds.Top,0,0,$bitmap.Size); $bitmap.Save((Join-Path $env:RUNNER_TEMP 'composition-frost.png')) }
+            finally { $graphics.Dispose(); $bitmap.Dispose() }
+          } finally { if (-not $lab.HasExited) { Stop-Process -Id $lab.Id -Force } }
+      - name: Capture Aero Gloss geometry
+        shell: pwsh
+        run: |
+          $env:WEBVIEW2_USER_DATA_FOLDER = Join-Path $env:RUNNER_TEMP 'aero-lab-webview'
+          $lab = Start-Process -FilePath "$PWD\composition-water-lab.exe" -ArgumentList '--aero' -PassThru
+          try {
+            $ready=$false
+            for ($i=0; $i -lt 30; $i++) { Start-Sleep -Seconds 1; $lab.Refresh(); if ($lab.HasExited) { throw "Aero Gloss lab exited: $($lab.ExitCode)" }; if ($lab.MainWindowTitle -like '*composition lab*') { $ready=$true; break } }
+            if (-not $ready) { throw 'Aero Gloss composition did not initialize' }
+            Start-Sleep -Seconds 5
+            Add-Type -AssemblyName System.Windows.Forms
+            Add-Type -AssemblyName System.Drawing
+            $bounds=[System.Windows.Forms.SystemInformation]::VirtualScreen
+            $bitmap=New-Object System.Drawing.Bitmap $bounds.Width,$bounds.Height
+            $graphics=[System.Drawing.Graphics]::FromImage($bitmap)
+            try { $graphics.CopyFromScreen($bounds.Left,$bounds.Top,0,0,$bitmap.Size); $bitmap.Save((Join-Path $env:RUNNER_TEMP 'composition-aero.png')) }
+            finally { $graphics.Dispose(); $bitmap.Dispose() }
+          } finally { if (-not $lab.HasExited) { Stop-Process -Id $lab.Id -Force } }
+      - name: Capture Prismatic Glass geometry
+        shell: pwsh
+        run: |
+          $env:WEBVIEW2_USER_DATA_FOLDER = Join-Path $env:RUNNER_TEMP 'prism-lab-webview'
+          $lab = Start-Process -FilePath "$PWD\composition-water-lab.exe" -ArgumentList '--prism' -PassThru
+          try {
+            $ready=$false
+            for ($i=0; $i -lt 30; $i++) { Start-Sleep -Seconds 1; $lab.Refresh(); if ($lab.HasExited) { throw "Prismatic Glass lab exited: $($lab.ExitCode)" }; if ($lab.MainWindowTitle -like '*composition lab*') { $ready=$true; break } }
+            if (-not $ready) { throw 'Prismatic Glass composition did not initialize' }
+            Start-Sleep -Seconds 5
+            Add-Type -AssemblyName System.Windows.Forms
+            Add-Type -AssemblyName System.Drawing
+            $bounds=[System.Windows.Forms.SystemInformation]::VirtualScreen
+            $bitmap=New-Object System.Drawing.Bitmap $bounds.Width,$bounds.Height
+            $graphics=[System.Drawing.Graphics]::FromImage($bitmap)
+            try { $graphics.CopyFromScreen($bounds.Left,$bounds.Top,0,0,$bitmap.Size); $bitmap.Save((Join-Path $env:RUNNER_TEMP 'composition-prism.png')) }
+            finally { $graphics.Dispose(); $bitmap.Dispose() }
+          } finally { if (-not $lab.HasExited) { Stop-Process -Id $lab.Id -Force } }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -301,6 +355,9 @@ jobs:
             ${{ runner.temp }}/composition-water-resized.png
             ${{ runner.temp }}/composition-ice.png
             ${{ runner.temp }}/composition-smoked.png
+            ${{ runner.temp }}/composition-frost.png
+            ${{ runner.temp }}/composition-aero.png
+            ${{ runner.temp }}/composition-prism.png
             composition-water-lab.exe
             WebView2Loader.dll
           if-no-files-found: warn

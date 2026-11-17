@@ -63,6 +63,22 @@ struct LabMaterial {
      color=float3(.025,.035,.075)+float3(.04,.06,.11)*(1-uv.y)+plane*float3(.012,.015,.03);
      color+=float3(.16,.24,.43)*bevel*.35+float3(.22,.32,.52)*edge;
    }
+   if(style==3){
+     // Frosted Layers: a soft pale field with curved, translucent strata.
+     float strata=.5+.5*cos(uv.x*5+uv.y*11);
+     color=float3(.58,.70,.85)+float3(.10,.11,.12)*(1-uv.y)+strata*float3(.025,.035,.05)+edge*float3(.16,.17,.19);
+   }
+   if(style==4){
+     // Aero Gloss: a blue glass volume with a strong curved upper sheen.
+     float sweep=exp(-pow((uv.y-(.12+.17*pow(uv.x-.5,2)))*10,2));
+     color=float3(.015,.08,.20)+float3(.02,.16,.35)*(1-uv.y)+sweep*float3(.07,.18,.28)+edge*float3(.16,.33,.50);
+   }
+   if(style==5){
+     // Prismatic: angular rainbow highlights on a pale crystal base.
+     float2 cell=frac(uv*float2(4,3));float shard=step(cell.x,cell.y);
+     float rainbow=pow(saturate(1-abs(frac(uv.x*3-uv.y*2)-.5)*2),8);
+     color=float3(.58,.70,.85)+shard*float3(.07,.07,.08)+rainbow*float3(.22,.12,.30)+edge*float3(.20,.21,.24);
+   }
    // Panels use the WebView's measured rectangles, but their material is
    // drawn here in the same pass as the outer glass.
    [unroll] for(int i=0;i<3;i++){
@@ -71,7 +87,7 @@ struct LabMaterial {
        float2 local=input.position.xy-(rect.xy+halfSize);
        float2 b=abs(local)-halfSize+radius;
        float dist=length(max(b,0))+min(max(b.x,b.y),0)-radius;
-       if(style>.5){float2 c=abs(local)-halfSize;dist=max(max(c.x,c.y),(c.x+c.y+min(halfSize.x,halfSize.y)*.25)*.7071);}
+       if(style==1 || style==2 || style==5){float2 c=abs(local)-halfSize;dist=max(max(c.x,c.y),(c.x+c.y+min(halfSize.x,halfSize.y)*.25)*.7071);}
        float inside=1-smoothstep(-1.2,1.2,dist);
        float2 normal=normalize(float2(ddx(dist),ddy(dist))+.0001);
        float angle=pow(saturate(dot(normal,normalize(float2(-.55,-.83)))),2);
@@ -80,14 +96,16 @@ struct LabMaterial {
        float vertical=saturate((local.y+halfSize.y)/max(rect.w,1));
        float3 panel=lerp(float3(.035,.21,.25),float3(.009,.075,.10),vertical);
        if(style>.5 && style<1.5)panel=lerp(float3(.81,.91,.96),float3(.62,.79,.88),vertical);
-       if(style>1.5)panel=lerp(float3(.11,.15,.25),float3(.025,.035,.075),vertical);
+       if(style==2)panel=lerp(float3(.11,.15,.25),float3(.025,.035,.075),vertical);
+       if(style==3 || style==5)panel=lerp(float3(.83,.89,.96),float3(.65,.76,.88),vertical);
+       if(style==4)panel=lerp(float3(.04,.19,.38),float3(.01,.045,.12),vertical);
        color=lerp(color,panel,inside*.60);
        color+=float3(.45,.75,.78)*(rim*(.18+.85*angle)+inner*.12);
        float highlight=inside*exp(-pow((local.y+halfSize.y-5)/12,2));
        color+=float3(.35,.70,.72)*highlight*.30;
      }
    }
-   float a=style>.5 && style<1.5?.94:.78;return float4(saturate(color)*a,a);
+   float a=(style==1||style==3||style==5)?.94:.78;return float4(saturate(color)*a,a);
  }
  )HLSL";
  HRESULT init(){
