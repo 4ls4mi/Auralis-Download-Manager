@@ -193,3 +193,12 @@
 /* Developer-only native surface; the regular UI is the fallback. */
 .cg-window.cg-native-water-experiment .cg-content{background:transparent;box-shadow:none;border-color:transparent}
 .cg-window.cg-native-water-experiment .cg-fit-content{padding:12px 28px 16px}
+
+/* In the experimental host path the native shader owns panel surfaces. */
+.cg-window.cg-native-water-experiment[data-native-water-panels="ready"] .cg-minimal-progress > .cg-glass,
+.cg-window.cg-native-water-experiment[data-native-water-panels="ready"] .cg-indicator-row > .cg-glass{background:transparent;border-color:transparent;box-shadow:none}
+.cg-window.cg-native-water-experiment .cg-window-top{border-radius:12px}
+.cg-window.cg-native-water-experiment .cg-minimal-progress > .cg-indicator-row{flex:1 0 auto;min-height:84px}
+.cg-window.cg-native-water-experiment .cg-progress-combined{min-height:0}
+.cg-window.cg-native-water-experiment .cg-compact-speed{flex:1;min-height:0}
+.cg-window.cg-native-water-experiment .cg-compact-speed .cg-graph{flex:1;min-height:32px}

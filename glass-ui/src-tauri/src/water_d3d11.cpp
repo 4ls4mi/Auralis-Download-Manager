@@ -17,7 +17,8 @@ extern "C" int mhg_water_composition_resize(void* value,unsigned w,unsigned h);
 extern "C" void mhg_water_composition_destroy(void* value);
 namespace {
 constexpr UINT_PTR kSubclass=0x4d484744;
-struct Uniforms { float width,height,light,host; float r,g,b,opacity; float tint,pad1,pad2,pad3; };
+struct Panel { float x,y,width,height; };
+struct Uniforms { float width,height,light,host; float r,g,b,opacity; float tint,panelCount,pad2,pad3; Panel panels[3]; };
 struct Renderer {
  ComPtr<ID3D11Device> device;
  ComPtr<ID3D11DeviceContext> context;
@@ -29,11 +30,12 @@ struct Renderer {
  ComPtr<ID3D11RasterizerState> rasterizer;
  UINT width=0,height=0,clipWidth=0,clipHeight=0;
  float r=0,g=0,b=0,opacity=.77f,tint=.22f;bool light=false,host=false;
+ Panel panels[3]{};unsigned panelCount=0;
  void* composition=nullptr;
  ~Renderer(){if(composition)mhg_water_composition_destroy(composition);}
 };
 const char shader[]=R"HLSL(
-cbuffer Parameters : register(b0) { float2 size; float light; float host; float4 accent; float4 options; };
+cbuffer Parameters : register(b0) { float2 size; float light; float host; float4 accent; float4 options; float4 panels[3]; };
 struct Vertex { float4 position:SV_Position; };
 Vertex vs(uint id:SV_VertexID) {
  float2 p[3]={float2(-1,-1),float2(-1,3),float2(3,-1)};
@@ -64,7 +66,25 @@ float4 ps(Vertex i):SV_Target {
  base+=lerp(float3(.04,.16,.22),float3(.05,.09,.10),light)*soft;
  base+=lerp(float3(.1,.5,.62),float3(.33,.54,.60),light)*(rim*(.3+.7*reflection)+inner*.16);
  base+=float3(.7,.9,.96)*(top*.13+bottom*.1+hot1*.5+hot2*.28);
-
+ // The app supplies the actual control bounds. Each panel is shaded in this
+ // same GPU pass; the WebView retains only the interactive contents above it.
+ [unroll] for(int n=0;n<3;n++){
+  if(n<(int)options.y){
+   float4 rect=panels[n];float2 halfSize=max(rect.zw*.5,float2(1,1));
+   float radius=min(26.0,min(halfSize.x,halfSize.y)*.35);
+   float2 local=i.position.xy-(rect.xy+halfSize);
+   float2 b=abs(local)-halfSize+radius;
+   float d=length(max(b,0))+min(max(b.x,b.y),0)-radius;
+   float inside=1-smoothstep(-1.2,1.2,d);
+   float border=exp(-abs(d)*.32);
+   float panelTop=pow(saturate(1-abs(local.y+halfSize.y-5)/18),3);
+   float3 panelBase=lerp(float3(.015,.055,.09),float3(.78,.89,.94),light);
+   panelBase=lerp(panelBase,accent.rgb,clamp(options.x*.45,0,.28));
+   base=lerp(base,panelBase,inside*.58);
+   base+=inside*float3(.28,.48,.56)*panelTop*.12;
+   base+=float3(.40,.72,.78)*border*.28;
+  }
+ }
  float alpha=host>.5?clamp(accent.a,.45,.94):1.0;
  return float4(saturate(base)*alpha,alpha);
 }
@@ -113,7 +133,9 @@ HRESULT render(HWND hwnd,Renderer& s){
   hr=s.device->CreateRenderTargetView(back.Get(),nullptr,&s.target);if(FAILED(hr))return hr;s.width=w;s.height=h;
   if(s.host&&!mhg_water_composition_resize(s.composition,w,h))return E_FAIL;
  }
- Uniforms u{static_cast<float>(w),static_cast<float>(h),s.light?1.f:0.f,s.host?1.f:0.f,s.r,s.g,s.b,s.opacity,s.tint,0,0,0};
+ Uniforms u{};u.width=static_cast<float>(w);u.height=static_cast<float>(h);u.light=s.light?1.f:0.f;u.host=s.host?1.f:0.f;
+ u.r=s.r;u.g=s.g;u.b=s.b;u.opacity=s.opacity;u.tint=s.tint;u.panelCount=static_cast<float>(s.panelCount);
+ for(unsigned i=0;i<s.panelCount&&i<3;i++)u.panels[i]=s.panels[i];
  s.context->UpdateSubresource(s.uniforms.Get(),0,nullptr,&u,0,0);ID3D11Buffer* buffer=s.uniforms.Get();ID3D11RenderTargetView* target=s.target.Get();
  s.context->OMSetRenderTargets(1,&target,nullptr);D3D11_VIEWPORT viewport{0,0,static_cast<float>(w),static_cast<float>(h),0,1};s.context->RSSetViewports(1,&viewport);s.context->RSSetState(s.rasterizer.Get());
  s.context->IASetInputLayout(nullptr);s.context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -138,4 +160,13 @@ extern "C" int mhg_d3d11_water_surface(HWND hwnd,unsigned rgb,int light,unsigned
  s->r=((rgb>>16)&255)/255.f;s->g=((rgb>>8)&255)/255.f;s->b=(rgb&255)/255.f;s->light=light!=0;s->opacity=std::clamp(opacity,45U,94U)/100.f;s->tint=std::min(tint,65U)/100.f;
  if(FAILED(render(hwnd,*s))||!clip(hwnd,*s)){mhg_d3d11_water_remove(hwnd);return 0;}
  InvalidateRect(hwnd,nullptr,FALSE);return s->host?2:1;
+}
+
+// Called on the window thread; bounds are physical client pixels.
+extern "C" int mhg_d3d11_water_panels(HWND hwnd,const float* values,unsigned count){
+ DWORD_PTR data=0;if(!GetWindowSubclass(hwnd,proc,kSubclass,&data))return 0;
+ auto* s=reinterpret_cast<Renderer*>(data);if(!s->host||count>3||(!values&&count))return 0;
+ s->panelCount=count;
+ for(unsigned i=0;i<count;i++)s->panels[i]={values[i*4],values[i*4+1],values[i*4+2],values[i*4+3]};
+ return SUCCEEDED(render(hwnd,*s))?1:0;
 }

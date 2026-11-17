@@ -231,6 +231,7 @@ export function CrystalWindow({ children, target = "main", experimentalWater = f
   const frame=useRef<HTMLDivElement>(null);
   const [fit,setFit]=useState(1),[windowError,setWindowError]=useState("");
   const [nativeWater,setNativeWater]=useState(0);
+  const [waterPanelsReady,setWaterPanelsReady]=useState(false);
   useEffect(()=>{
     if(!experimentalWater)return;
     let active=true;
@@ -239,6 +240,24 @@ export function CrystalWindow({ children, target = "main", experimentalWater = f
       .catch(()=>{if(active)setNativeWater(0)});
     return()=>{active=false};
   },[experimentalWater,theme.accent,appearance.lightMode,appearance.detailMode,appearance.opacity,appearance.tintStrength]);
+  useEffect(()=>{
+    const root=frame.current;
+    if(nativeWater!==2||!root){setWaterPanelsReady(false);return;}
+    let active=true,raf=0,last="";
+    const seen=new WeakSet<Element>();
+    const nodes=()=>Array.from(root.querySelectorAll<HTMLElement>('.cg-minimal-progress > .cg-glass, .cg-indicator-row > .cg-glass')).slice(0,3);
+    const observe=()=>{for(const node of nodes())if(!seen.has(node)){seen.add(node);observer.observe(node)}};
+    const update=()=>{cancelAnimationFrame(raf);raf=requestAnimationFrame(()=>{
+      if(!active)return;observe();const ratio=window.devicePixelRatio||1;
+      const panels=nodes().map(node=>{const r=node.getBoundingClientRect();return [r.left*ratio,r.top*ratio,r.width*ratio,r.height*ratio].map(v=>Math.round(v*10)/10)}).filter(r=>r[2]>0&&r[3]>0);
+      const key=JSON.stringify(panels);if(key===last)return;last=key;
+      void invoke<boolean>('experimental_water_panels',{panels}).then(ok=>{if(active&&last===key)setWaterPanelsReady(ok&&panels.length>0)}).catch(()=>{if(active&&last===key){last="";setWaterPanelsReady(false)}});
+    })};
+    const observer=new ResizeObserver(update);observer.observe(root);observe();
+    const mutations=new MutationObserver(update);mutations.observe(root,{childList:true,subtree:true});
+    window.addEventListener('resize',update);update();
+    return()=>{active=false;cancelAnimationFrame(raf);observer.disconnect();mutations.disconnect();window.removeEventListener('resize',update)};
+  },[nativeWater]);
   useEffect(()=>{const report=(event:Event)=>setWindowError(String((event as CustomEvent).detail));window.addEventListener("glass-window-error",report);return()=>window.removeEventListener("glass-window-error",report)},[]);
   useLayoutEffect(()=>{
     const el=frame.current;if(!el)return;
@@ -291,7 +310,7 @@ export function CrystalWindow({ children, target = "main", experimentalWater = f
     "--min-window-button": (30/Math.min(1,Math.max(.4,fit)))+"px",
     "--font-size": Math.max(Math.min(20,Math.max(12,appearance.fontSize)),12/Math.max(.4,fit))+"px"
   } as CSSProperties;
-  return <div className={`cg-window ${nativeWater?"cg-native-water-experiment":""} cg-mode-${mode} cg-progress-shape-${appearance.progressShape} ${appearance.lightMode?"cg-light":"cg-dark"} ${appearance.highContrast?"cg-high-contrast":""}`} data-native-water-backdrop={nativeWater===2?"host":nativeWater===1?"opaque":"off"} style={style}>
+  return <div className={`cg-window ${nativeWater?"cg-native-water-experiment":""} cg-mode-${mode} cg-progress-shape-${appearance.progressShape} ${appearance.lightMode?"cg-light":"cg-dark"} ${appearance.highContrast?"cg-high-contrast":""}`} data-native-water-backdrop={nativeWater===2?"host":nativeWater===1?"opaque":"off"} data-native-water-panels={waterPanelsReady?"ready":"fallback"} style={style}>
     {mode === "wallpaper" && <div className="cg-wallpaper">
       {video ? <video key={src} autoPlay loop muted playsInline src={src} /> :
         <div style={{ backgroundImage: `url("${src}")` }} />}

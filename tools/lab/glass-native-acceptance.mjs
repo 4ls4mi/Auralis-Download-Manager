@@ -208,6 +208,10 @@ try{
   if(process.env.MHG_EXPERIMENTAL_HOSTBACKDROP==='1'){
    results.push({name:'Experimental host backdrop initialization',status:backdropMode==='host'?'initialized; desktop visibility requires manual review':'opaque fallback; host backdrop unavailable'});
    console.log('Experimental host backdrop mode: '+backdropMode);
+   if(backdropMode==='host'){
+    await until(async()=>(await progress.locator('.cg-window').getAttribute('data-native-water-panels'))==='ready','GPU panel bounds did not reach the native renderer');
+    passed('Actual download panel bounds reach the native GPU renderer');
+   }
   }
 
   await invoke(progress,'plugin:window|show',{label:`download-${first.id}`});
