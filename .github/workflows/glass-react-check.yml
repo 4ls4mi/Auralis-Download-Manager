@@ -262,6 +262,17 @@ jobs:
             $graphics=[System.Drawing.Graphics]::FromImage($bitmap)
             try { $graphics.CopyFromScreen($bounds.Left,$bounds.Top,0,0,$bitmap.Size); $bitmap.Save((Join-Path $env:RUNNER_TEMP 'composition-ice.png')) }
             finally { $graphics.Dispose(); $bitmap.Dispose() }
+            Add-Type -TypeDefinition @'
+          using System;
+          using System.Runtime.InteropServices;
+          public static class IceLabInput {
+            [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
+          }
+          '@
+            [void][IceLabInput]::SendMessage($lab.MainWindowHandle, 0x8002, [IntPtr]::Zero, [IntPtr]::Zero)
+            $styleOk=$false
+            for($i=0;$i -lt 10;$i++){Start-Sleep -Milliseconds 300;$lab.Refresh();if($lab.MainWindowTitle -like '*Ice style OK*'){$styleOk=$true;break}}
+            if(-not $styleOk){throw "Ice active connection style missing: $($lab.MainWindowTitle)"}
           } finally { if (-not $lab.HasExited) { Stop-Process -Id $lab.Id -Force } }
       - uses: actions/upload-artifact@v4
         if: always()
