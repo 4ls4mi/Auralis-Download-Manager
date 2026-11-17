@@ -220,7 +220,7 @@ export default function CrystalSettings(){
       </>;
     }
   };
-  return <CrystalWindow target="details"><WindowTop title="Settings — Mister Hybrid Glass"/>
+  return <CrystalWindow target="details"><WindowTop title="Settings — Auralis Download Manager"/>
     <div className="cg-settings"><aside className="cg-settings-nav cg-glass">
       {tabs.map(t=>{const Icon=t.icon;return <button key={t.name} className={tab===t.name?"selected":""} onClick={()=>{setTab(t.name);setSettingsPanel("Main options")}}><Icon size={17}/><span>{t.name}</span></button>})}
     </aside><div className="cg-settings-body cg-glass">
