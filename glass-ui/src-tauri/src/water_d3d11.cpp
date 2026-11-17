@@ -35,21 +35,30 @@ Vertex vs(uint id:SV_VertexID) {
 }
 float4 ps(Vertex i):SV_Target {
  float2 uv=i.position.xy/size;
+ // A single shaded surface: curved meniscus, inner falloff and specular rim.
+ // This is procedural lighting, not a claim to refract the live desktop.
  float2 p=uv*2-1;
- float wave=.015*sin(uv.x*12)+.008*sin(uv.x*23);
- p.y+=wave;
- float2 q=abs(p)-float2(.96,.88);
+ p.y+=.012*sin(uv.x*12)+.006*sin(uv.x*23);
+ float2 q=abs(p)-float2(.91,.82);
  float edge=length(max(q,0))+min(max(q.x,q.y),0)-.08;
- float rim=exp(-abs(edge)*55);
- float top=pow(saturate(1-abs(uv.y-(.10+.02*sin(uv.x*5)))*12),3);
- float lower=pow(saturate(1-abs(uv.y-(.90+.018*sin(uv.x*8)))*20),4);
- float gleam=pow(saturate(1-length((uv-float2(.78,.12))*float2(2.2,7))),3);
- float3 dark=float3(.015,.045,.085), bright=float3(.72,.84,.9);
+ float2 gradient=float2(ddx(edge)*size.x,ddy(edge)*size.y);
+ float2 normal=normalize(gradient+float2(.0001,.0001));
+ float rim=exp(-abs(edge)*52);
+ float inner=exp(-abs(edge+.035)*35);
+ float reflection=pow(saturate(dot(normal,normalize(float2(-.5,-.85)))),3);
+ float top=pow(saturate(1-abs(uv.y-(.075+.014*sin(uv.x*6)))*16),3);
+ float bottom=pow(saturate(1-abs(uv.y-(.93+.012*sin(uv.x*7)))*20),4);
+ float hot1=pow(saturate(1-length((uv-float2(.18,.045))*float2(3.4,24))),4);
+ float hot2=pow(saturate(1-length((uv-float2(.83,.96))*float2(4,23))),4);
+ float soft=pow(saturate(1-length((uv-float2(.35,.08))*float2(1.1,5))),3);
+ float3 dark=float3(.014,.042,.085), bright=float3(.68,.81,.88);
  float3 base=lerp(dark,bright,light);
- base=lerp(base,accent.rgb,light>.5?.13:.23);
+ base=lerp(base,accent.rgb,light>.5?.16:.25);
  base*=.83+.17*(1-uv.y);
- base+=float3(.33,.51,.59)*(top*.22+lower*.14+gleam*.5);
- base+=lerp(float3(.16,.54,.67),float3(.42,.64,.7),light)*rim*.35;
+ base+=lerp(float3(.04,.16,.22),float3(.05,.09,.10),light)*soft;
+ base+=lerp(float3(.1,.5,.62),float3(.33,.54,.60),light)*(rim*(.3+.7*reflection)+inner*.16);
+ base+=float3(.7,.9,.96)*(top*.13+bottom*.1+hot1*.5+hot2*.28);
+
  return float4(saturate(base),1);
 }
 )HLSL";
