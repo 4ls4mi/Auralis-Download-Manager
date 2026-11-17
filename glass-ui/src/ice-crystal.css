@@ -233,3 +233,6 @@
 .cg-window.cg-progress-shape-faceted .cg-chunk-map>span{border-radius:0;clip-path:polygon(12% 0,88% 0,100% 50%,88% 100%,12% 100%,0 50%)}
 .cg-window.cg-progress-shape-square .cg-chunk-map>span{border-radius:3px}
 .cg-window.cg-progress-shape-wave .cg-chunk-map>span{border-radius:40% 50% 45% 35% / 70% 45% 65% 45%}
+
+.cg-window .cg-chunk-map.dense{gap:0}
+.cg-window .cg-chunk-map.dense>span{border:0;box-shadow:inset 0 0 0 1px #a4c8ee66;border-radius:0}
