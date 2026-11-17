@@ -166,7 +166,7 @@ export function ConnectionMap({segments,connections,compact=false}:{segments:Seg
     <div className="cg-chunk-label"><span>{connections?`${items.length} connections`:"Connections unavailable"}</span>{!compact&&<small>{items.filter(c=>c.state==="Receiving").length} receiving</small>}</div>
     {items.length>0&&<div className={"cg-chunk-map "+(compact?"compact ":"")+(items.length>32?"dense":"")} style={{gridTemplateColumns:`repeat(${items.length},minmax(0,1fr))`}} aria-label={`${items.length} engine connections`}>
      {items.map(c=>{const fill=c.percent;const label=`Connection ${c.id+1}: ${c.state}; downloaded ${units(c.downloaded)}; ${rate(c.speed)}; ${fill===null?"assigned range unavailable":`${units(c.received)} of ${units(c.assigned)} (${fill.toFixed(1)}%)`}`;
-      return <span key={c.id} className={c.state==="Receiving"?"active":""} title={label} aria-label={label} tabIndex={0}>{fill!==null&&fill>0&&<i style={{width:`${fill}%`,backgroundImage:`linear-gradient(90deg,${colors.join(",")})`}}/>}{c.state==="Receiving"&&!compact&&<b className="cg-connection-active"/>}</span>})}
+      return <span key={c.id} className={c.state==="Receiving"?"active":""} title={label} aria-label={label} tabIndex={0}>{fill!==null&&fill>0&&<i style={{width:`${fill}%`,backgroundImage:`linear-gradient(90deg,${colors.join(",")})`}}/>}{!compact&&items.length<=8&&<em className="cg-connection-text">{c.id+1}{fill!==null?` · ${fill.toFixed(0)}%`:""}</em>}{c.state==="Receiving"&&!compact&&<b className="cg-connection-active"/>}</span>})}
     </div>}
     {items.length===0&&!compact&&<small className="cg-muted">No connection data available</small>}
   </div>;
