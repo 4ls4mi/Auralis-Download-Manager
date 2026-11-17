@@ -158,7 +158,7 @@ jobs:
           $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
           $sdk = Join-Path $env:RUNNER_TEMP 'webview\build\native'
           $batch = Join-Path $env:RUNNER_TEMP 'compile-composition-water.cmd'
-          @("@call `"$vcvars`" >nul", "cl /nologo /EHsc /std:c++20 /I`"$sdk\include`" tools\lab\composition-water\main.cpp /link /subsystem:windows /out:composition-water-lab.exe `"$sdk\x64\WebView2Loader.dll.lib`"", '@exit /b %errorlevel%') | Set-Content -Encoding ascii $batch
+          @("@call `"$vcvars`" >nul", "cl /nologo /utf-8 /EHsc /std:c++20 /I`"$sdk\include`" tools\lab\composition-water\main.cpp /link /subsystem:windows /out:composition-water-lab.exe `"$sdk\x64\WebView2Loader.dll.lib`"", '@exit /b %errorlevel%') | Set-Content -Encoding ascii $batch
           & cmd.exe /d /c $batch
           if ($LASTEXITCODE -ne 0) { throw 'Composition lab compile failed' }
           Copy-Item "$sdk\x64\WebView2Loader.dll" .
