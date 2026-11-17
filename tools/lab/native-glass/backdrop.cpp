@@ -35,7 +35,7 @@ void resize(HWND hwnd){
 void attach(HWND hwnd){
  // Windows 11 22000+: enables host backdrop brushes for this window.
  BOOL enabled=TRUE;check_hresult(DwmSetWindowAttribute(hwnd,DWMWA_USE_HOSTBACKDROPBRUSH,&enabled,sizeof(enabled)));
- auto interop=compositor.as<ABI::Windows::UI::Composition::ICompositorDesktopInterop>();
+ auto interop=compositor.as<ABI::Windows::UI::Composition::Desktop::ICompositorDesktopInterop>();
  check_hresult(interop->CreateDesktopWindowTarget(hwnd,true,reinterpret_cast<ABI::Windows::UI::Composition::Desktop::IDesktopWindowTarget**>(put_abi(target))));
  surface=compositor.CreateSpriteVisual();surface.Brush(compositor.CreateHostBackdropBrush());resize(hwnd);target.Root(surface);
 }

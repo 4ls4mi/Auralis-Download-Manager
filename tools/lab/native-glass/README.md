@@ -16,7 +16,7 @@ This is an isolated geometry and gradient experiment with an opaque background. 
 `backdrop.cpp` separately tests a native Windows Composition host-backdrop brush on a Win32 window. It requires Windows 11 build 22000 or later for `DWMWA_USE_HOSTBACKDROPBRUSH`, and uses Windows Composition rather than capturing the screen. It is not yet integrated with WebView2 or the Direct2D surface. Compile on Windows with the x64 Visual Studio tools:
 
 ```bat
-cl /nologo /EHsc /std:c++17 tools\lab\native-glass\backdrop.cpp /link /subsystem:windows /out:host-backdrop-lab.exe
+cl /nologo /EHsc /std:c++20 tools\lab\native-glass\backdrop.cpp /link /subsystem:windows /out:host-backdrop-lab.exe
 host-backdrop-lab.exe
 ```
 
