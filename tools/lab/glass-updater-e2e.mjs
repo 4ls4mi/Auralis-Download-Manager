@@ -9,7 +9,7 @@ import path from 'node:path';
 const {chromium}=createRequire(import.meta.url)('../../glass-ui/node_modules/playwright-core');
 assert.equal(process.platform,'win32');assert.equal(process.arch,'x64');
 const temp=process.env.RUNNER_TEMP;assert(temp,'RUNNER_TEMP is required');
-const root=path.join(temp,'glass-updater-e2e'),install=path.join(root,'install'),data=path.join(root,'data'),proof=path.join(root,'proof');
+const root=path.join(temp,'glass-updater-e2e'),install=path.join(root,'install'),data=path.join(process.env.APPDATA,'misterdownloadmanager'),proof=path.join(root,'proof');
 await mkdir(data,{recursive:true});await mkdir(proof,{recursive:true});
 const setupDir=path.resolve('glass-ui/src-tauri/target/release/bundle/nsis');const setups=(await readdir(setupDir)).filter(x=>x.endsWith('.exe'));assert.equal(setups.length,1);
 const setup=path.join(setupDir,setups[0]),exe=path.join(install,'mister-hybrid-glass.exe');
@@ -20,7 +20,8 @@ let browser,old,passed=false;
 try{
  const initial=spawnSync(setup,['/S',`/D=${install}`],{encoding:'utf8',timeout:180000});assert.equal(initial.status,0,'Isolated old-version install failed: '+(initial.stderr||initial.error?.message||''));
  const portServer=net.createServer();await new Promise(r=>portServer.listen(0,'127.0.0.1',r));const port=portServer.address().port;await new Promise(r=>portServer.close(r));
- old=spawn(exe,[],{env:{...process.env,MDM_DATA_DIR:data,MDM_REMOTE:'off',GLASS_TEST_CDP_PORT:String(port),WEBVIEW2_USER_DATA_FOLDER:path.join(root,'webview'),WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS:`--remote-debugging-port=${port} --remote-debugging-address=127.0.0.1 --remote-allow-origins=*`},stdio:'ignore'});
+ const appEnv={...process.env,MDM_REMOTE:'off',GLASS_TEST_CDP_PORT:String(port),WEBVIEW2_USER_DATA_FOLDER:path.join(root,'webview'),WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS:`--remote-debugging-port=${port} --remote-debugging-address=127.0.0.1 --remote-allow-origins=*`};delete appEnv.MDM_DATA_DIR;
+ old=spawn(exe,[],{env:appEnv,stdio:'ignore'});
  browser=await until(async()=>{if(old.exitCode!==null)throw Error('Initial app exited: '+old.exitCode);try{return await chromium.connectOverCDP(`http://127.0.0.1:${port}`,{timeout:3000})}catch{return null}},'Initial WebView did not appear');
  const main=await until(()=>browser.contexts().flatMap(c=>c.pages()).find(p=>!p.url().includes('?')),'Main window not found');
  await main.locator('.cg-toolbar').getByRole('button',{name:'Settings',exact:true}).click();
