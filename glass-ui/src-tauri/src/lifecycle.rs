@@ -3,7 +3,7 @@
 use super::*;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use tauri::{WebviewUrl, WebviewWindowBuilder};
+use tauri::{Emitter, WebviewUrl, WebviewWindowBuilder};
 static AUTO_PROGRESS: AtomicBool = AtomicBool::new(true);
 
 pub fn fit_size(app:&AppHandle,width:f64,height:f64)->(f64,f64) {
@@ -14,22 +14,26 @@ pub fn fit_size(app:&AppHandle,width:f64,height:f64)->(f64,f64) {
 }
 
 pub fn open(app: &AppHandle, label: &str, route: &str, width: f64, height: f64) -> ApiResult<()> {
-    let priority = label.starts_with("info-") || label.starts_with("tool-video-") || label.starts_with("download-");
+    let priority = label.starts_with("info-") || label.starts_with("tool-video-");
     if let Some(w) = app.get_webview_window(label) {
         if priority { let _ = w.set_always_on_top(true); }
+        let _ = w.emit("glass-navigate", route);
         w.show().map_err(|e| e.to_string())?;
         let _ = w.unminimize();
         let _ = w.set_focus();
+        if priority { let _ = w.set_always_on_top(false); }
         return Ok(());
     }
     let (width,height)=fit_size(app,width,height);
     let mut builder=WebviewWindowBuilder::new(app, label, WebviewUrl::App(format!("index.html?{route}").into()));
     if let Some(args)=test_browser_args(){builder=builder.additional_browser_args(&args);}
-    builder
+    let w = builder
         .title("Mister Hybrid Glass").always_on_top(priority).inner_size(width, height)
         .min_inner_size(width.min(440.0), height.min(320.0)).center().decorations(false)
         .transparent(true).shadow(false).resizable(true).build()
-        .map(|_| ()).map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    if priority { let _ = w.show(); let _ = w.set_focus(); let _ = w.set_always_on_top(false); }
+    Ok(())
 }
 
 pub fn start(app: AppHandle) {

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import {
   Activity, Archive, CheckCircle2, Clock3, Download as DownloadIcon, File,
   FileArchive, Film, Folder, FolderOpen,
-  Pause, Play, Plus, Search, Settings, Square, Trash2, ChevronDown,
+  Pause, Play, Plus, Search, Settings, Square, Trash2, ListChecks, ChevronDown,
   ListFilter
 } from "lucide-react";
 import {
@@ -20,7 +20,7 @@ type MenuEntry = { label: string; action: string; disabled?: boolean; shortcut?:
 const menus: Menu[]=["Tasks","File","Downloads","View","Help"];
 const blank:Dashboard={downloads:[],speed:0,queues:[],categories:[]};
 const pop = (id:number)=>openWindow("download-"+id,"/?detail="+id,880,500);
-const settings = (tab="General")=>openWindow("settings","/?settings=1&tab="+encodeURIComponent(tab),880,695);
+const settings = (tab="General", panel="")=>openWindow("settings","/?settings=1&tab="+encodeURIComponent(tab)+"&panel="+encodeURIComponent(panel),880,695);
 const add=(torrent=false)=>openWindow(torrent?"add-torrent":"add-url",`/?add=${torrent?"torrent":"url"}`,590,390);
 const props=(id:number)=>openWindow("properties-"+id,"/?properties="+id,760,600);
 const tool=(kind:string,id:number)=>openWindow(`tool-${kind}-${id}`,`/?tool=${kind}&id=${id}`,700,500);
@@ -161,7 +161,7 @@ export default function CrystalApp(){
     if(action==="browser")return settings("Browser Integration");
     if(action==="appearance")return settings("Appearance");
     if(action==="limit")return settings("Connection");
-    if(action==="about")return settings("Advanced");
+    if(action==="about")return settings("Advanced", "Updates");
     if(action==="refresh")return void refresh();
     if(action==="search"){searchRef.current?.focus();return}
     if(action==="toggle-categories"){setShowCategories(v=>!v);return}
@@ -265,7 +265,7 @@ export default function CrystalApp(){
     {name:"Stop",key:"stop",icon:Square,disabled:!picked||picked.status!=="Downloading",danger:true},
     {name:"Stop All",key:"stop-all",icon:Pause,disabled:!anyRunning,danger:true},
     {name:"Delete",key:"remove",icon:Trash2,disabled:!picked||picked.status==="Downloading",danger:true},
-    {name:"Delete Completed",key:"delete-completed",icon:Trash2,disabled:!anyComplete,danger:true},
+    {name:"Delete Completed",key:"delete-completed",icon:ListChecks,disabled:!anyComplete,danger:true},
     {name:"Settings",key:"settings",icon:Settings},
     {name:"Scheduler",key:"scheduler",icon:Clock3},
     {name:"Start Queue",key:"queue-start",icon:Play,disabled:!mainQueue||mainQueue.running},

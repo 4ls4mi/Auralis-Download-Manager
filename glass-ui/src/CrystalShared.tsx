@@ -49,7 +49,7 @@ export type Appearance = {
   theme: string; wallMain: string; wallDetail: string; mainMode: BackgroundMode;
   detailMode: BackgroundMode; dim: number; opacity: number; blur: number;
   acrylic: boolean; autoPopups: boolean; uiScale: number; highContrast: boolean;
-  lightMode: boolean; fontFamily: string; fontSize: number; material: string; indicator: string; clipboardMode: string; tintHue: number; tintStrength: number
+  lightMode: boolean; fontFamily: string; fontSize: number; material: string; indicator: string; progressShape: string; clipboardMode: string; tintHue: number; tintStrength: number
 };
 const key = "mh-glass-";
 const stored = (name: string, fallback: string) => {
@@ -58,7 +58,7 @@ const stored = (name: string, fallback: string) => {
 };
 export function loadAppearance(): Appearance {
   return {
-    theme: stored("theme", "plexo"), material: ["ice-edge","smoked-crystal","frosted-layers","aero-gloss","prismatic-glass","liquid-glass","obsidian-glass","diamond-facet","holographic-film","pearl-mist","aurora-veil","brushed-glass","water-bubble"].includes(stored("material", "ice-edge")) ? stored("material", "ice-edge") : "ice-edge", tintHue: Number(stored("tint-hue", "265")), tintStrength: Number(stored("tint-strength", "22")), indicator: stored("indicator", "blue-purple"), clipboardMode: stored("clipboard-mode", "offer"),
+    theme: stored("theme", "plexo"), material: ["ice-edge","smoked-crystal","frosted-layers","aero-gloss","prismatic-glass","liquid-glass","obsidian-glass","diamond-facet","holographic-film","pearl-mist","aurora-veil","brushed-glass","water-bubble"].includes(stored("material", "ice-edge")) ? stored("material", "ice-edge") : "ice-edge", tintHue: Number(stored("tint-hue", "265")), tintStrength: Number(stored("tint-strength", "22")), indicator: stored("indicator", "blue-purple"), progressShape: stored("progress-shape", "rounded"), clipboardMode: stored("clipboard-mode", "offer"),
     wallMain: stored("wall-main", ""), wallDetail: stored("wall-detail", ""),
     mainMode: stored("back-main", "desktop") as BackgroundMode,
     detailMode: stored("back-details", "desktop") as BackgroundMode,
@@ -71,7 +71,7 @@ export function loadAppearance(): Appearance {
   };
 }
 const keys: Record<keyof Appearance, string> = {
-  theme: "theme", material: "material", tintHue: "tint-hue", tintStrength: "tint-strength", indicator: "indicator", clipboardMode: "clipboard-mode", wallMain: "wall-main", wallDetail: "wall-detail",
+  theme: "theme", material: "material", tintHue: "tint-hue", tintStrength: "tint-strength", indicator: "indicator", progressShape: "progress-shape", clipboardMode: "clipboard-mode", wallMain: "wall-main", wallDetail: "wall-detail",
   mainMode: "back-main", detailMode: "back-details", dim: "dim",
   opacity: "opacity", blur: "blur", acrylic: "acrylic",
   autoPopups: "auto-popups", uiScale: "ui-scale", highContrast: "high-contrast",
@@ -295,7 +295,7 @@ export function CrystalWindow({ children, target = "main" }: {
     "--min-window-button": (30/Math.min(1,Math.max(.4,fit)))+"px",
     "--font-size": Math.max(Math.min(20,Math.max(12,appearance.fontSize)),12/Math.max(.4,fit))+"px"
   } as CSSProperties;
-  return <div className={`cg-window cg-mode-${mode} cg-material-${appearance.material} ${appearance.lightMode?"cg-light":"cg-dark"} ${appearance.highContrast?"cg-high-contrast":""}`} style={style}>
+  return <div className={`cg-window cg-mode-${mode} cg-material-${appearance.material} cg-progress-shape-${appearance.progressShape} ${appearance.lightMode?"cg-light":"cg-dark"} ${appearance.highContrast?"cg-high-contrast":""}`} style={style}>
     {mode === "wallpaper" && <div className="cg-wallpaper">
       {video ? <video key={src} autoPlay loop muted playsInline src={src} /> :
         <div style={{ backgroundImage: `url("${src}")` }} />}

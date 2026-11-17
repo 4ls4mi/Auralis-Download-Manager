@@ -214,3 +214,10 @@
 .cg-window button:not(:disabled,.cg-row,.cg-resize,.cg-toolbar>button,.cg-winbuttons button):hover{background:hsl(var(--button-hue) 88% 52% / .38)!important;box-shadow:inset 0 1px #ffffff70,0 0 14px hsl(var(--button-hue) 90% 60% / .30)}
 @media(prefers-reduced-motion:reduce){.cg-window button:not(:disabled){transition:none!important;animation:none!important;transform:none!important}}
 @media(max-width:690px){.cg-window .cg-sidebar{overflow-x:auto;overflow-y:hidden}}
+
+/* Progress geometry is chosen independently of the glass material. */
+.cg-window[class*="cg-progress-shape-"] .cg-percent-track {clip-path:none; border-radius:999px}
+.cg-window[class*="cg-progress-shape-"] .cg-percent-fill {border-radius:999px}
+.cg-window.cg-progress-shape-faceted .cg-percent-track {border-radius:0;clip-path:polygon(3% 0,97% 0,100% 50%,97% 100%,3% 100%,0 50%)}
+.cg-window.cg-progress-shape-square .cg-percent-track,.cg-window.cg-progress-shape-square .cg-percent-fill {border-radius:3px}
+.cg-window.cg-progress-shape-wave .cg-percent-track {border-radius:40% 50% 45% 35% / 70% 45% 65% 45%;clip-path:polygon(0 23%,3% 4%,10% 0,18% 12%,26% 20%,34% 8%,42% 1%,50% 13%,58% 21%,66% 9%,74% 1%,82% 12%,90% 19%,97% 5%,100% 23%,100% 77%,97% 95%,90% 100%,82% 88%,74% 80%,66% 92%,58% 99%,50% 87%,42% 79%,34% 91%,26% 99%,18% 88%,10% 81%,3% 95%,0 77%)}

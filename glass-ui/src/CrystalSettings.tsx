@@ -1,3 +1,4 @@
+import { listen } from "@tauri-apps/api/event";
 import CrystalAccounts from "./CrystalAccounts";
 import CrystalHelpers from "./CrystalHelpers";
 import CrystalUpstream from "./CrystalUpstream";
@@ -27,7 +28,11 @@ const tabs:{name:Tab;icon:typeof Settings}[]=[
 export default function CrystalSettings(){
   const initial=new URLSearchParams(location.search).get("tab") as Tab|null;
   const [tab,setTab]=useState<Tab>(tabs.some(t=>t.name===initial)?initial!:"General");
-  const [settingsPanel,setSettingsPanel]=useState("Main options");
+  const [settingsPanel,setSettingsPanel]=useState(new URLSearchParams(location.search).get("panel")==="Updates"?"Updates":"Main options");
+  useEffect(()=>{let unlisten:(()=>void)|undefined; let active=true;
+    void listen<string>("glass-navigate",event=>{const route=new URLSearchParams(event.payload);const target=route.get("tab") as Tab|null;if(target&&tabs.some(t=>t.name===target)){setTab(target);setSettingsPanel(route.get("panel")==="Updates"?"Updates":"Main options");}}).then(stop=>{if(active)unlisten=stop;else stop()});
+    return ()=>{active=false;unlisten?.()};
+  },[]);
   const [appearanceTab,setAppearanceTab]=useState("Theme");
   const [materialPage,setMaterialPage]=useState(0);
   const [cfg,setCfg]=useState<EngineSettings|null>(null);
@@ -169,7 +174,7 @@ export default function CrystalSettings(){
         </>}
         {appearanceTab==="Materials"&&<><h3>Glass material</h3>
         <div className="cg-wall-choice">{[["ice-edge","Ice Edge"],["smoked-crystal","Smoked Crystal"],["frosted-layers","Frosted Layers"],["aero-gloss","Aero Gloss"],["prismatic-glass","Prismatic Glass"],["liquid-glass","Liquid Glass"],["obsidian-glass","Obsidian Glass"],["diamond-facet","Diamond Facet"],["holographic-film","Holographic Film"],["pearl-mist","Pearl Mist"],["aurora-veil","Aurora Veil"],["brushed-glass","Brushed Glass"],["water-bubble","Water Bubble Glass"]].slice(materialPage*5,materialPage*5+5).map(([id,label])=><button key={id} className={`cg-btn ${appearance.material===id?"cg-btn-primary":""}`} onClick={()=>set("material",id)}>{label}</button>)}</div><div className="cg-pagination"><button disabled={materialPage===0} onClick={()=>setMaterialPage(n=>n-1)}>Previous</button><span>{materialPage+1} / 3</span><button disabled={materialPage===2} onClick={()=>setMaterialPage(n=>n+1)}>Next</button></div><p>Choose a surface style for light and dark windows.</p>{slider("tintHue","Glass tint color",0,360,"°")}{slider("tintStrength","Glass tint strength",0,65,"%")}</>}
-        {appearanceTab==="Indicators"&&<><h3>Indicator gradients</h3><div className="cg-color-choices">{Object.entries(indicatorPalettes).map(([id,p])=><button key={id} className={appearance.indicator===id?"selected":""} onClick={()=>set("indicator",id)}><i style={{background:`linear-gradient(90deg,${p.colors.join(",")})`}}/>{p.label}</button>)}</div><p>The progress bar, actual chunks and measured speed graph use this palette independently of your interface theme.</p></>}
+        {appearanceTab==="Indicators"&&<><h3>Progress bar shape</h3><div className="cg-wall-choice">{[["rounded","Rounded"],["faceted","Faceted"],["wave","Water wave"],["square","Square"]].map(([id,label])=><button key={id} className={`cg-btn ${appearance.progressShape===id?"cg-btn-primary":""}`} onClick={()=>set("progressShape",id)}>{label}</button>)}</div><h3>Indicator gradients</h3><div className="cg-color-choices">{Object.entries(indicatorPalettes).map(([id,p])=><button key={id} className={appearance.indicator===id?"selected":""} onClick={()=>set("indicator",id)}><i style={{background:`linear-gradient(90deg,${p.colors.join(",")})`}}/>{p.label}</button>)}</div><p>The progress bar, actual chunks and measured speed graph use this palette independently of your interface theme.</p></>}
         {appearanceTab==="Backgrounds"&&<>
         <h3>Independent translucent backgrounds</h3>
         {mode("main")}{mode("details")}
@@ -220,7 +225,7 @@ export default function CrystalSettings(){
       </div>
       {error&&<p className="cg-error">{error}</p>}
       {notice&&<p className="cg-success"><CheckCircle2 size={14}/> {notice}</p>}
-      {tab!=="Appearance"&&tab!=="Accounts"&&<nav className="cg-appearance-tabs"><button className={settingsPanel==="Main options"?"selected":""} onClick={()=>setSettingsPanel("Main options")}>Main options</button><button className={settingsPanel==="More options"?"selected":""} onClick={()=>setSettingsPanel("More options")}>More options</button>{tab==="Advanced"&&<button className={settingsPanel==="Updates"?"selected":""} onClick={()=>setSettingsPanel("Updates")}>Updates</button>}</nav>}
+      {tab!=="Appearance"&&tab!=="Accounts"&&<nav className="cg-appearance-tabs"><button className={settingsPanel==="Main options"?"selected":""} onClick={()=>setSettingsPanel("Main options")}>Common settings</button><button className={settingsPanel==="More options"?"selected":""} onClick={()=>setSettingsPanel("More options")}>All original settings</button>{tab==="Advanced"&&<button className={settingsPanel==="Updates"?"selected":""} onClick={()=>setSettingsPanel("Updates")}>Updates</button>}</nav>}
       <div>{tab==="Advanced"&&settingsPanel==="Updates"?<><CrystalUpstream/>{cfg&&<label className="cg-field">Preferred network adapter<input defaultValue={cfg.net_adapter} key={cfg.net_adapter} onBlur={e=>{if(e.target.value!==cfg.net_adapter)void change("net_adapter",e.target.value)}}/></label>}</>:tab==="Appearance"||tab==="Accounts"||settingsPanel==="Main options"?body():<CrystalOriginalSettings section={tab}/>}</div>
     </div></div>
     <footer className="cg-bottom-actions" style={{padding:"9px 18px"}}><span className="cg-muted" style={{marginRight:"auto",fontSize:"var(--min-text-size)"}}>Windows x64 • Changes are saved automatically</span>
