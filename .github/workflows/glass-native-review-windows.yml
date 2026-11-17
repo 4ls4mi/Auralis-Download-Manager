@@ -101,6 +101,12 @@ jobs:
         working-directory: glass-ui
         shell: pwsh
         run: npm install --no-audit --no-fund
+      - uses: Swatinem/rust-cache@v2
+        if: ${{ inputs.rebuild_ui || contains(github.event.head_commit.message, '[rebuild ui]') }}
+        with:
+          cache-on-failure: true
+          workspaces: |
+            glass-ui/src-tauri -> target
       - name: Rebuild the current Glass interface against the candidate backend
         if: ${{ inputs.rebuild_ui || contains(github.event.head_commit.message, '[rebuild ui]') }}
         shell: pwsh
