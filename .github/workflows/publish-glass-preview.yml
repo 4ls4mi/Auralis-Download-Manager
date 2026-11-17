@@ -1,0 +1,33 @@
+name: Publish approved Windows preview
+on:
+  push:
+    branches: ["feature/indicator-glass-fixes"]
+permissions:
+  actions: read
+  contents: write
+jobs:
+  publish:
+    if: contains(github.event.head_commit.message, '[publish-preview-44131486405]')
+    runs-on: windows-latest
+    steps:
+      - name: Retrieve and verify approved Windows installer
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download 44131486405 --repo 4ls4mi/misterdownloadmanager --name mister-hybrid-glass-windows-x64-candidate --dir installer
+          if ($LASTEXITCODE -ne 0) { throw "Could not retrieve approved installer" }
+          $files = @(Get-ChildItem installer -Filter '*.exe' -File)
+          if ($files.Count -ne 1) { throw "Expected exactly one installer" }
+          $hash = (Get-FileHash $files[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($hash -ne '3ba9925fa271728eeb1785d760d157ca49996ccfc1f96c3304e56b29c9f2bc04') { throw "Installer checksum did not match the tested artifact" }
+      - name: Attach installer and publish requested preview
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $installer = (Get-ChildItem installer -Filter '*.exe' -File)[0].FullName
+          gh release upload v0.3.0-glass-preview.1 $installer --repo 4ls4mi/misterdownloadmanager --clobber
+          if ($LASTEXITCODE -ne 0) { throw "Installer upload failed" }
+          gh release edit v0.3.0-glass-preview.1 --repo 4ls4mi/misterdownloadmanager --draft=false
+          if ($LASTEXITCODE -ne 0) { throw "Release publication failed" }
