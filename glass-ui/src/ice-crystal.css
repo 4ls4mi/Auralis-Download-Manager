@@ -238,3 +238,26 @@
 .cg-window .cg-chunk-map.dense>span{border:0;box-shadow:inset 0 0 0 1px #a4c8ee66;border-radius:0}
 
 .cg-window .cg-connection-text{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-style:normal;font-weight:600;white-space:nowrap;text-shadow:0 1px 3px #06101d;pointer-events:none}
+
+/* One glass treatment: avoid stacking separate material images and repeated blur. */
+.cg-window[class*="cg-material-"] .cg-content::after{content:none!important}
+.cg-window .cg-content .cg-glass{backdrop-filter:none!important}
+/* An opaque title bar prevents title buttons from windows behind showing through. */
+.cg-window.cg-dark .cg-window-top{background:#101c30!important;backdrop-filter:none!important}
+.cg-window.cg-light .cg-window-top{background:#d7e7f2!important;backdrop-filter:none!important}
+.cg-window .cg-selected-chunks .cg-fixed-connections{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));grid-auto-rows:clamp(12px,3.2vh,28px);gap:4px;max-width:340px;margin-top:10px}
+.cg-window .cg-fixed-connections>span{height:100%;width:100%;border-radius:5px;background:#344155;box-shadow:none}
+.cg-window .cg-fixed-connections>span.paused{background:#e13d50!important;border-color:#ff7888;box-shadow:inset 0 1px #ffffff50}
+.cg-window .cg-fixed-connections>span.cg-connection-empty{background:#344155;opacity:.62}
+.cg-window .cg-fixed-connections>span:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.cg-indicator-preview{display:grid;gap:8px;margin:12px 0;padding:12px;border:1px solid var(--edge);border-radius:12px;background:var(--surface)}
+.cg-indicator-preview>div{display:grid;grid-template-columns:90px minmax(0,1fr);align-items:center;gap:10px}
+.cg-indicator-preview .cg-graph{height:36px;width:100%}.cg-indicator-preview .cg-chunk-label{display:none}
+.cg-indicator-preview .cg-chunk-map{display:grid;gap:3px}.cg-indicator-preview .cg-chunk-map>span{height:20px}
+/* Every ordinary button receives a varied color and full-surface hover. */
+.cg-window button:not(:disabled,.cg-row,.cg-toolbar>button,.cg-winbuttons button){--button-hue:285}
+.cg-window button:not(:disabled,.cg-row,.cg-toolbar>button,.cg-winbuttons button):nth-of-type(5n+1){--button-hue:150}
+.cg-window button:not(:disabled,.cg-row,.cg-toolbar>button,.cg-winbuttons button):nth-of-type(5n+2){--button-hue:275}
+.cg-window button:not(:disabled,.cg-row,.cg-toolbar>button,.cg-winbuttons button):nth-of-type(5n+3){--button-hue:36}
+.cg-window button:not(:disabled,.cg-row,.cg-toolbar>button,.cg-winbuttons button):nth-of-type(5n+4){--button-hue:342}
+.cg-window button:not(:disabled,.cg-row,.cg-toolbar>button,.cg-winbuttons button):hover{background:hsl(var(--button-hue) 85% 49% / .42)!important;color:var(--ink)!important}

@@ -9,3 +9,8 @@ export function connectionIndicators(connections:EngineConnection[],ranges:Conne
   return {...c,assigned:total||null,received:total?received:null,percent:total?100*received/total:null};
  });
 }
+
+/** The detail window reserves exactly 32 places; empty places are not workers. */
+export function connectionSlots<T>(workers:T[],compact=false):(T|null)[]{
+ return compact?workers:Array.from({length:32},(_,index)=>workers[index]??null);
+}

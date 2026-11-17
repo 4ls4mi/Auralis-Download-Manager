@@ -1,5 +1,3 @@
-import MaterialSurface from "./MaterialSurface";
-import GlassRenderer from "./GlassRenderer";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { getCurrentWindow, Effect, EffectState } from "@tauri-apps/api/window";
 type ResizeDirection = Parameters<ReturnType<typeof getCurrentWindow>["startResizeDragging"]>[0];
@@ -7,7 +5,7 @@ import { useEffect, useState, useLayoutEffect, useRef, useId, createContext, use
 import type { CSSProperties, ReactNode } from "react";
 import { AppWindow, Maximize2, Minus, X, PanelBottomClose } from "lucide-react";
 
-import { connectionIndicators } from "./connections";
+import { connectionIndicators, connectionSlots } from "./connections";
 
 export type Status = "Queued" | "Downloading" | "Stopped" | "Complete" | "Error";
 export type Download = {
@@ -159,16 +157,21 @@ export function GradientBar({percent,showLabel=false}:{percent:number;showLabel?
 }
 
 // Each block represents an engine worker and only its currently assigned ranges.
-export function ConnectionMap({segments,connections,downloading,compact=false}:{segments:Segment[]|undefined;connections:Connection[]|undefined;downloading:boolean;compact?:boolean}){
+export function ConnectionMap({segments,connections,downloading,paused=false,compact=false}:{segments:Segment[]|undefined;connections:Connection[]|undefined;downloading:boolean;paused?:boolean;compact?:boolean}){
   const {appearance}=useCrystal();const colors=indicatorColors(appearance.indicator);
   const items=connectionIndicators(connections??[],segments??[]);
+  const last=useRef<typeof items>([]);
+  if(downloading&&items.length>0)last.current=items;
+  const visible=paused&&items.length===0?last.current:items;
+  const shown=compact?visible:visible.slice(0,32);
+  const slots=connectionSlots(shown,compact);
   return <div className={"cg-chunks "+(compact?"compact":"")}>
-    <div className="cg-chunk-label"><span>{connections?`${items.length} connections`:"Connections unavailable"}</span>{!compact&&<small>{items.filter(c=>downloading&&c.state==="Receiving").length} receiving</small>}</div>
-    {items.length>0&&<div className={"cg-chunk-map "+(compact?"compact ":"")+(items.length>32?"dense":"")} style={{gridTemplateColumns:`repeat(${items.length},minmax(0,1fr))`}} aria-label={`${items.length} engine connections`}>
-     {items.map(c=>{const fill=c.percent;const label=`Connection ${c.id+1}: ${downloading?c.state:"Not active"}; downloaded ${units(c.downloaded)}; ${rate(c.speed)}; ${fill===null?"assigned range unavailable":`${units(c.received)} of ${units(c.assigned)} (${fill.toFixed(1)}%)`}`;
-      return <span key={c.id} className={downloading&&c.state==="Receiving"?"active":""} title={label} aria-label={label} tabIndex={0}>{fill!==null&&fill>0&&<i style={{width:`${fill}%`,backgroundImage:`linear-gradient(90deg,${colors.join(",")})`}}/>}{!compact&&items.length<=8&&<em className="cg-connection-text">{c.id+1}{fill!==null?` · ${fill.toFixed(0)}%`:""}</em>}{downloading&&c.state==="Receiving"&&!compact&&<b className="cg-connection-active"/>}</span>})}
-    </div>}
-    {items.length===0&&!compact&&<small className="cg-muted">No connection data available</small>}
+    {compact&&<div className="cg-chunk-label"><span>{connections?`${visible.length} connections`:"Connections unavailable"}</span></div>}
+    <div className={"cg-chunk-map "+(compact?"compact":"cg-fixed-connections")} style={compact?{gridTemplateColumns:`repeat(${Math.max(1,slots.length)},minmax(0,1fr))`}:undefined} role="group" aria-label={connections?`${visible.length} engine connections${visible.length>32?', first 32 shown':''}`:"Connections unavailable"}>
+     {slots.map((c,index)=>{if(!c)return <span key={`empty-${index}`} className="cg-connection-empty" aria-hidden="true"/>;
+      const fill=c.percent;const active=downloading&&c.state==="Receiving";const label=`Connection ${c.id+1}: ${paused?"Paused":downloading?c.state:"Not active"}; downloaded ${units(c.downloaded)}; ${rate(c.speed)}; ${fill===null?"assigned range unavailable":`${units(c.received)} of ${units(c.assigned)} (${fill.toFixed(1)}%)`}`;
+      return <span key={c.id} data-worker={c.id} className={paused?"paused":active?"active":""} title={label} aria-label={label} tabIndex={0}>{active&&fill!==null&&fill>0&&<i style={{width:`${fill}%`,backgroundImage:`linear-gradient(90deg,${colors.join(",")})`}}/>}</span>})}
+    </div>
   </div>;
 }
 
@@ -298,7 +301,7 @@ export function CrystalWindow({ children, target = "main" }: {
       <span style={{ background: `rgba(3,9,19,${appearance.dim / 100})` }} />
     </div>}
     {mode === "solid" && <div className="cg-solid" />}
-    <div className="cg-content" ref={frame}><GlassRenderer material={appearance.material} hue={appearance.tintHue} strength={appearance.tintStrength} light={appearance.lightMode}/><MaterialSurface material={appearance.material}/><div className="cg-fit-content">{children}</div></div>
+    <div className="cg-content" ref={frame}><div className="cg-fit-content">{children}</div></div>
     {windowError&&<aside className="cg-window-notice cg-error" role="alert"><span>{windowError}</span><button title="Dismiss" onClick={()=>setWindowError("")}><X size={15}/></button></aside>}
     <ResizeGrips />
   </div>;
