@@ -6,7 +6,7 @@ mod lifecycle;
 #[cfg(windows)] mod fork_update;
 mod material_window;
 mod native_actions;
-use lifecycle::{pending_file_info, file_info_action, choose_download_path, window_preferences, glass_tool, choose_folder, open_glass_window, close_progress_windows};
+use lifecycle::{pending_file_info, file_info_action, choose_download_path, window_preferences, glass_tool, choose_folder, open_glass_window, close_progress_windows, hide_download_to_tray};
 use native_actions::{drag_download, drag_state, choose_move, clipboard_text, video_tool, browser_video};
 use std::{
     fs,
@@ -559,7 +559,8 @@ fn main() {
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "show" => show_main(app),
                     "add" => { let _ = lifecycle::open(app, "tray-add-url", "add=url", 590.0, 390.0); },
-                    "batch" | "batch-clipboard" => { let _ = lifecycle::open(app, "tray-batch", "tool=batch", 760.0, 680.0); },
+                    "batch" => { let _ = lifecycle::open(app, "tray-batch", "tool=batch", 760.0, 680.0); },
+                    "batch-clipboard" => { let _ = lifecycle::open(app, "tray-grabber-clipboard", "tool=grabber&clipboard=1", 900.0, 680.0); },
                     "speed-limit" => { let _ = lifecycle::open(app, "tray-settings", "settings=1&tab=Connection", 920.0, 700.0); },
                     "scheduler" => { let _ = lifecycle::open(app, "tray-scheduler", "schedule=1", 860.0, 660.0); },
                     "options" => { let _ = lifecycle::open(app, "tray-options", "settings=1", 920.0, 700.0); },
