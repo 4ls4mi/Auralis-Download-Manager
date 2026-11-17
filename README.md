@@ -22,6 +22,10 @@ These are screenshots captured from the Windows acceptance run, not design mocku
 
 ![Download complete window](docs/images/glass/completion.png)
 
+A real test of an interrupted connection: its red background remains visible behind the retained progress fill.
+
+![A single interrupted connection highlighted in red](docs/images/glass/connection-loss-031.png)
+
 ## What the fork changes
 
 ### Interface and appearance
@@ -46,7 +50,7 @@ These are screenshots captured from the Windows acceptance run, not design mocku
 - Offers clipboard modes for automatic capture, offering a copied URL, or pasting it when Add URL is opened.
 - Exposes the original helper management for **yt-dlp**, **ffmpeg** and **gallery-dl**, plus video-quality and available subtitle selection.
 - Supports a browser/profile for helper cookies and a user-selected Netscape-format `cookies.txt` file for video helpers. A cookie file contains your signed-in session; keep it private.
-- Keeps the original MDM release check separate from the fork so upstream updates do not automatically replace the Glass interface.
+- Keeps the original MDM release check separate from fork updates. Version 0.3.1 adds a fork release checker, release notes, download and digest verification, followed by an option to restart and install.
 
 ## Install
 
@@ -61,7 +65,7 @@ The Glass installer is a Windows x64 preview. Windows WebView2 is required. See 
 - This fork is built and tested for **Windows x64**. Upstream's other platforms and installers belong to the original MDM project.
 - The approved material concepts are design goals; the current desktop backdrop and surfaces need further rendering work and visual comparison on real Windows hardware.
 - Browser security can block helper access to cookies, especially with Edge or Chrome. A manual cookie file can help, but YouTube account challenges, VPNs and site changes may still prevent a lookup. Google account autodetection/direct connection is not implemented.
-- A fork-specific automatic installer and restart updater is not included in the current release. Download fork updates from [Releases](https://github.com/4ls4mi/misterdownloadmanager/releases).
+- Version 0.3.0 does not contain the fork updater; install 0.3.1 manually once from [Releases](https://github.com/4ls4mi/misterdownloadmanager/releases). The installer upgrade and restart were tested on an isolated Windows installation; a complete app-to-later-release update test remains outstanding. The updater verifies GitHub’s SHA-256 digest rather than an independent code signature.
 - Automated Windows checks passed for the preview's engine, dialogs, transfers and appearance screenshots. Physical Windows review of native drag to Explorer/apps, DPI and transparency remains necessary. A successful installer build alone is not proof of complete feature parity.
 
 ## Credits and license

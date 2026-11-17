@@ -3,6 +3,13 @@
 Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 `.github/workflows/release.yml`).
 
+## Mister Hybrid Glass 0.3.1 — Windows x64
+
+- Added an independent red background for a connection that is interrupted or retrying, while keeping its reported gradient progress visible. A short interruption remains observable between refreshes; the red indication stays while reconnecting. The existing paused appearance remains.
+- Added fork release checks, a closable changelog, installer download and SHA-256 digest verification, and a restart-and-install option. The original MDM release check remains separate.
+- The [Windows x64 run](https://github.com/4ls4mi/misterdownloadmanager/actions/runs/44151010931) passed a real interrupted-connection test, engine and UI checks, and an isolated 0.3.0-to-0.3.1 installer upgrade and restart. A complete in-app update to a later release, Explorer/app dragging, and physical DPI/transparency review remain to be tested.
+- Version 0.3.0 requires a one-time manual install of 0.3.1. Installer verification uses GitHub’s release digest, not an independent code signature.
+
 ## Mister Hybrid Glass — Windows x64 preview
 
 This fork-specific summary describes work in the Glass frontend and its original MDM backend integration. The [complete fork development history](https://github.com/4ls4mi/misterdownloadmanager/compare/c3a7843fddfb5a990c58be9ad7f7ef5c1759b2c9...34b36cff2a0d13b2274e1a41a7a621b33ec2b652) contains the individual changes behind this summary. The upstream MDM changelog follows below. See the [public preview release](https://github.com/4ls4mi/misterdownloadmanager/releases/tag/v0.3.0-glass-preview.1) for the installer and validation details.
