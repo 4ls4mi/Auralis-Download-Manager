@@ -1,0 +1,36 @@
+name: Publish verified Glass 0.3.1
+on:
+  push:
+    branches: ['feature/connection-loss-updater-windows']
+permissions:
+  actions: read
+  contents: write
+jobs:
+  publish:
+    if: contains(github.event.head_commit.message, '[publish-glass-031]')
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Verify the tested run and installer
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $run = gh run view 44151010931 --repo 4ls4mi/misterdownloadmanager --json conclusion,headSha | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $run.conclusion -ne 'success' -or $run.headSha -ne '27cecfe10f96940fae24459986804b4ee9a9fecf') { throw 'The approved Windows run did not pass for the expected commit' }
+          gh run download 44151010931 --repo 4ls4mi/misterdownloadmanager --name mister-hybrid-glass-windows-x64-candidate --dir installer
+          if ($LASTEXITCODE -ne 0) { throw 'Could not retrieve tested installer' }
+          $files = @(Get-ChildItem installer -Filter '*.exe' -File)
+          if ($files.Count -ne 1) { throw 'Expected one tested installer' }
+          $hash = (Get-FileHash $files[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($hash -ne 'a3a42ada57405931e3384f34d5e8aa46c034e0f2e8191a9069d50b40a07c523b') { throw 'Installer checksum differs from the tested artifact' }
+      - name: Attach installer and publish the requested release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $installer = (Get-ChildItem installer -Filter '*.exe' -File)[0].FullName
+          gh release upload v0.3.1 $installer --repo 4ls4mi/misterdownloadmanager --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Installer upload failed' }
+          gh release edit v0.3.1 --repo 4ls4mi/misterdownloadmanager --draft=false --latest
+          if ($LASTEXITCODE -ne 0) { throw 'Release publication failed' }
