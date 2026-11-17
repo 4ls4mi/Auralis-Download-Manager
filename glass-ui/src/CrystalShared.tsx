@@ -224,12 +224,21 @@ export function WindowTop({ title, children, noMax = false }: {
     </div>{children}<WindowButtons noMax={noMax} />
   </header>;
 }
-export function CrystalWindow({ children, target = "main" }: {
-  children: ReactNode; target?: "main" | "details"
+export function CrystalWindow({ children, target = "main", experimentalWater = false }: {
+  children: ReactNode; target?: "main" | "details"; experimentalWater?: boolean
 }) {
   const { appearance, theme } = useCrystal();
   const frame=useRef<HTMLDivElement>(null);
   const [fit,setFit]=useState(1),[windowError,setWindowError]=useState("");
+  const [nativeWater,setNativeWater]=useState(false);
+  useEffect(()=>{
+    if(!experimentalWater || appearance.detailMode !== "desktop"){setNativeWater(false);return;}
+    let active=true;
+    void invoke<boolean>("experimental_water_surface",{rgb:parseInt(theme.accent.slice(1),16),light:appearance.lightMode})
+      .then(enabled=>{if(active)setNativeWater(enabled)})
+      .catch(()=>{if(active)setNativeWater(false)});
+    return()=>{active=false};
+  },[experimentalWater,theme.accent,appearance.lightMode,appearance.detailMode]);
   useEffect(()=>{const report=(event:Event)=>setWindowError(String((event as CustomEvent).detail));window.addEventListener("glass-window-error",report);return()=>window.removeEventListener("glass-window-error",report)},[]);
   useLayoutEffect(()=>{
     const el=frame.current;if(!el)return;
@@ -282,7 +291,7 @@ export function CrystalWindow({ children, target = "main" }: {
     "--min-window-button": (30/Math.min(1,Math.max(.4,fit)))+"px",
     "--font-size": Math.max(Math.min(20,Math.max(12,appearance.fontSize)),12/Math.max(.4,fit))+"px"
   } as CSSProperties;
-  return <div className={`cg-window cg-mode-${mode} cg-progress-shape-${appearance.progressShape} ${appearance.lightMode?"cg-light":"cg-dark"} ${appearance.highContrast?"cg-high-contrast":""}`} style={style}>
+  return <div className={`cg-window ${nativeWater?"cg-native-water-experiment":""} cg-mode-${mode} cg-progress-shape-${appearance.progressShape} ${appearance.lightMode?"cg-light":"cg-dark"} ${appearance.highContrast?"cg-high-contrast":""}`} style={style}>
     {mode === "wallpaper" && <div className="cg-wallpaper">
       {video ? <video key={src} autoPlay loop muted playsInline src={src} /> :
         <div style={{ backgroundImage: `url("${src}")` }} />}

@@ -187,3 +187,6 @@
 .cg-window .cg-chunk-map{gap:2px;min-width:0;overflow:hidden}
 .cg-window .cg-chunk-map>span,.cg-window .cg-chunk-map.compact>span{height:100%;min-height:0;align-self:stretch}
 .cg-window .cg-chunk-map.dense{gap:0}
+
+/* Developer-only native surface; the regular UI is the fallback. */
+.cg-window.cg-native-water-experiment .cg-content{background:transparent;box-shadow:none;border-color:transparent}

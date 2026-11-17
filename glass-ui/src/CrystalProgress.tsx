@@ -31,7 +31,7 @@ export default function CrystalProgress({id}:{id:number}){
   ['Resume capability',visual?.resumable===true?'Yes':visual?.resumable===false?'No':'Unknown'],
   ['Server',`${server?.place?.name??country(server?.country_code)}${server?.rtt_ms!=null?` · about ${server.rtt_ms} ms${server.place?.reach?` (${server.place.reach})`:""}`:''}`]
  ]:[];
- return <CrystalWindow target="details"><WindowTop title={`${item?pct(item).toFixed(0)+'% ':''}${item?.file??'Download'}`}/>
+ return <CrystalWindow target="details" experimentalWater><WindowTop title={`${item?pct(item).toFixed(0)+'% ':''}${item?.file??'Download'}`}/>
   <nav className="cg-page-tabs">{(['Download status','Speed Limiter','Options on completion'] as Tab[]).map(t=><button className={tab===t?'active':''} key={t} onClick={()=>setTab(t)}>{t}</button>)}</nav>
   <main className="cg-page cg-minimal-progress">
    {!item?<div className="cg-empty">Waiting for download information…</div>:tab==='Download status'?<>
