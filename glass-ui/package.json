@@ -1,11 +1,11 @@
 {
-  "name": "mister-hybrid-glass",
+  "name": "auralis-download-manager",
   "private": true,
-  "version": "0.3.1",
+  "version": "0.3.2",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 1420 --strictPort",
-    "build": "tsc -b && vite build",
+    "build": "node scripts/generate-icon.mjs && tsc -b && vite build",
     "tauri": "tauri",
     "test": "node --experimental-strip-types --test tests/*.test.mjs"
   },
