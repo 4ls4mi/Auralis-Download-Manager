@@ -20,4 +20,4 @@ cl /nologo /EHsc /std:c++20 tools\lab\native-glass\backdrop.cpp /link /subsystem
 host-backdrop-lab.exe
 ```
 
-Visually verify that other windows and the desktop are actually visible through the target, and check resize, interaction, display changes and GPU compatibility. The compilation check alone cannot prove backdrop or Tauri integration works. Windows 10 needs a separately tested fallback.
+Run `host-backdrop-lab.exe --fixture` to place a colored reference window behind the test window. Visually verify that the reference and desktop are actually visible through the target, and check resize, interaction, display changes and GPU compatibility. The compilation check alone cannot prove backdrop or Tauri integration works. Windows 10 needs a separately tested fallback.

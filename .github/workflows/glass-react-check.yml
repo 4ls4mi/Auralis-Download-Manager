@@ -70,7 +70,7 @@ jobs:
         timeout-minutes: 2
         shell: pwsh
         run: |
-          $lab = Start-Process -FilePath "$PWD\host-backdrop-lab.exe" -PassThru
+          $lab = Start-Process -FilePath "$PWD\host-backdrop-lab.exe" -ArgumentList '--fixture' -PassThru
           try {
             Start-Sleep -Seconds 5
             Add-Type -AssemblyName System.Windows.Forms
