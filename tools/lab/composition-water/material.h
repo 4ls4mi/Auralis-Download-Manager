@@ -36,10 +36,10 @@ struct LabMaterial {
    float edge=exp(-abs(d)*64);
    float nearEdge=exp(-abs(d+.028)*40);
    float dir=pow(saturate(dot(n,normalize(float2(-.7,-.7)))),3);
-   float3 dark=float3(.004,.038,.065), teal=float3(.01,.23,.29);
-   float3 color=lerp(dark,teal,.18+.45*(1-uv.y));
+   float3 dark=float3(.015,.075,.105), teal=float3(.025,.31,.35);
+   float3 color=lerp(dark,teal,.25+.48*(1-uv.y));
    color+=float3(.03,.12,.15)*exp(-length((uv-float2(.12,.08))*float2(2.2,3.0))*2.0);
-   color+=float3(.07,.25,.30)*(edge*(.28+dir*.85)+nearEdge*.20);
+   color+=float3(.22,.60,.65)*(edge*(.38+dir*1.35)+nearEdge*.28);
    float streak=exp(-pow((uv.y-(.04+.018*sin(uv.x*8)))*42,2))*(.20+.8*exp(-pow((uv.x-.22)*3.5,2)));
    float low=exp(-pow((uv.y-(.96+.014*sin(uv.x*8)))*48,2))*(.25+.75*exp(-pow((uv.x-.77)*3,2)));
    float glint=spec(uv,float2(.11,.055),float2(7,34),3)+spec(uv,float2(.82,.96),float2(8,35),3);
@@ -61,11 +61,11 @@ struct LabMaterial {
        float rim=exp(-abs(dist)*.40);
        float inner=exp(-abs(dist+5)*.23);
        float vertical=saturate((local.y+halfSize.y)/max(rect.w,1));
-       float3 panel=lerp(float3(.012,.080,.105),float3(.005,.030,.050),vertical);
-       color=lerp(color,panel,inside*.64);
-       color+=float3(.20,.49,.56)*(rim*(.08+.56*angle)+inner*.035);
+       float3 panel=lerp(float3(.035,.21,.25),float3(.009,.075,.10),vertical);
+       color=lerp(color,panel,inside*.60);
+       color+=float3(.45,.75,.78)*(rim*(.18+.85*angle)+inner*.12);
        float highlight=inside*exp(-pow((local.y+halfSize.y-5)/12,2));
-       color+=float3(.12,.30,.34)*highlight*.30;
+       color+=float3(.35,.70,.72)*highlight*.30;
      }
    }
    float a=.78;return float4(saturate(color)*a,a);
