@@ -10,13 +10,13 @@ Mister Hybrid Glass is an independent Windows x64 fork of [Mister Download Manag
 - Customizable indicator shapes and gradients, with a preview in appearance settings. Controls and window buttons have distinct colors and hover states.
 - Browser download capture, File Info, completion and delete dialogs, and access to the original engine's download operations and browser extension. The fork uses its own interface and bundles the original engine as a headless companion.
 - Video and gallery helper management for yt-dlp, ffmpeg and gallery-dl; video quality and subtitle selection use the original helper pipeline. A manual Netscape-format cookie file can be selected for video helpers, alongside the existing browser/profile cookie option.
-- Original MDM release checks remain separate from the fork. They do not automatically replace the fork's interface.
+- Original MDM release checks remain separate from the fork. The fork also has its own in-app update flow: it checks this fork's public releases, presents release notes, downloads the Windows installer, verifies the published SHA-256 digest, and offers to restart and install. The original MDM updater is not used to replace the fork.
 
 ## Known limitations
 
 - Windows x64 only. Appearance and desktop backdrop effects depend on Windows and WebView2 and do not yet reproduce all design concepts. The material renderer has been simplified to reduce overlapping effects; visual comparison on real Windows systems remains necessary.
 - Browser cookie access may be restricted by Windows or the browser. A manually exported cookie file contains a signed-in session and should be kept private. YouTube, account checks, and VPNs can still prevent a lookup; Google account autodetection and a direct account connection are not implemented.
-- An in-app updater for this fork is not yet implemented. Original MDM releases are not automatic updates for Mister Hybrid Glass.
+- The 0.3.0 preview requires one manual upgrade to 0.3.1. From 0.3.1 onward, the fork-specific updater is implemented and its real public release download, verification, installation and restart path passed the Windows end-to-end test in [Actions run 44159354623](https://github.com/4ls4mi/misterdownloadmanager/actions/runs/44159354623). Original MDM releases remain separate and do not replace this fork.
 - The installer is a preview; a successful build alone does not establish complete feature parity or visual correctness. See the associated Windows Actions run for the exact test result.
 
 This fork retains the original project's GPL-3.0 license and attribution. Original MDM documentation and releases are available from its upstream repository.
