@@ -196,6 +196,12 @@ try{
  await bothThemes(progress,'progress',settings);await bothThemes(main,'main',settings);
  if(process.env.MHG_EXPERIMENTAL_WATER==='1'){
   await until(()=>progress.locator('.cg-native-water-experiment').count(),'Native Water Bubble did not initialize in the real download window');
+  const backdropMode=await progress.locator('.cg-window').getAttribute('data-native-water-backdrop');
+  if(process.env.MHG_EXPERIMENTAL_HOSTBACKDROP==='1'){
+   results.push({name:'Experimental host backdrop initialization',status:backdropMode==='host'?'initialized; desktop visibility requires manual review':'opaque fallback; host backdrop unavailable'});
+   console.log('Experimental host backdrop mode: '+backdropMode);
+  }
+
   await invoke(progress,'plugin:window|show',{label:`download-${first.id}`});
   await invoke(progress,'plugin:window|unminimize',{label:`download-${first.id}`});
   await invoke(progress,'plugin:window|set_focus',{label:`download-${first.id}`});
@@ -218,7 +224,7 @@ try{
   const out=path.join(output,'experimental-water-desktop.png').replaceAll("'","''");
   const shot=spawnSync('powershell.exe',['-NoProfile','-Command',"Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $bounds=[System.Windows.Forms.SystemInformation]::VirtualScreen; $bitmap=New-Object System.Drawing.Bitmap $bounds.Width,$bounds.Height; $graphics=[System.Drawing.Graphics]::FromImage($bitmap); $graphics.CopyFromScreen($bounds.Left,$bounds.Top,0,0,$bitmap.Size); $bitmap.Save('"+out+"'); $graphics.Dispose(); $bitmap.Dispose()"],{encoding:'utf8'});
   if(shot.status!==0)await writeFile(path.join(output,'experimental-water-desktop-error.txt'),shot.stderr||shot.stdout||'No interactive desktop available');
-  passed('Experimental Direct2D surface initialized in a real download window; desktop visibility still requires screenshot review');
+  passed('Experimental native surface initialized in a real download window; desktop visibility still requires screenshot review');
  }
 
  await settings.getByRole('button',{name:'Theme',exact:true}).click();await assertFits(settings,'Theme settings');

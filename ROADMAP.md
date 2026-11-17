@@ -3,7 +3,7 @@
 
 ## Mister Hybrid Glass — Windows x64 integration
 
-- **In development:** rebuild material rendering using standalone WebGPU and native Direct2D geometry experiments. The previous layered materials have been removed; development-only Direct2D and Direct3D 11 Water Bubble experiments are connected to download windows, and a separate Windows 11 host-backdrop experiment has started; composition and live desktop backdrop are not verified. Windows visual and compositor testing remain open; see [rendering status](docs/WINDOWS-GLASS-RENDERING.md).
+- **In development:** rebuild material rendering using standalone WebGPU and native Direct2D geometry experiments. The previous layered materials have been removed; development-only Direct2D and Direct3D 11 Water Bubble experiments are connected to download windows, and a standalone Windows 11 host-backdrop test showed the desktop on a physical PC. A development-only composition path is being tested in the actual window; visual behavior and refraction are not verified. Windows visual and compositor testing remain open; see [rendering status](docs/WINDOWS-GLASS-RENDERING.md).
 
 - **In validation:** compact side-by-side progress, speed and connections; expanded fonts, compact icon controls, startup helper prompts and foreground download windows. Video subtitle language selection uses MDM lookup results; real-site subtitle downloads, YouTube account access and scaling across physical displays need Windows review.
 

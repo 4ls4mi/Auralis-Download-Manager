@@ -2,10 +2,15 @@
 // experimental progress window. The outline is tested separately in Tauri.
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <dxgi1_2.h>
 #include <cstdio>
 extern "C" int mhg_d3d11_water_surface(HWND,unsigned,int);
 extern "C" void mhg_d3d11_water_remove(HWND);
 extern "C" int mhg_water_clip(HWND){return 1;}
+// This smoke test exercises opaque Direct3D independently of WinRT composition.
+extern "C" void* mhg_water_composition_create(HWND,IDXGISwapChain1*,unsigned,unsigned){return nullptr;}
+extern "C" int mhg_water_composition_resize(void*,unsigned,unsigned){return 0;}
+extern "C" void mhg_water_composition_destroy(void*){}
 LRESULT CALLBACK proc(HWND h,UINT m,WPARAM w,LPARAM l){return DefWindowProcW(h,m,w,l);}
 int main(){
  HINSTANCE instance=GetModuleHandleW(nullptr);WNDCLASSW cls{};cls.hInstance=instance;cls.lpfnWndProc=proc;cls.lpszClassName=L"MHGD3DSmoke";

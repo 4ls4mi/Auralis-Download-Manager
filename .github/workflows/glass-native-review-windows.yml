@@ -22,6 +22,11 @@ on:
         options:
           - direct2d
           - d3d11
+      host_backdrop:
+        description: 'Attempt Windows host backdrop in the experimental Direct3D renderer'
+        required: false
+        type: boolean
+        default: false
       rebuild_ui:
         description: 'Rebuild the current shell against the candidate backend'
         required: false
@@ -114,6 +119,7 @@ jobs:
         env:
           MHG_EXPERIMENTAL_WATER: ${{ inputs.experimental_water && '1' || '0' }}
           MHG_EXPERIMENTAL_RENDERER: ${{ inputs.renderer || 'direct2d' }}
+          MHG_EXPERIMENTAL_HOSTBACKDROP: ${{ inputs.host_backdrop && '1' || '0' }}
         run: |
           node tools/lab/glass-native-acceptance.mjs
           if ($LASTEXITCODE -ne 0) { throw 'Native acceptance failed; inspect proof artifact' }
