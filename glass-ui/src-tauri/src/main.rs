@@ -16,13 +16,18 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tauri::{
-    menu::{Menu, MenuItem},
+    menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle, Manager, WindowEvent,
 };
 use serde::Deserialize;
+use std::collections::HashSet;
+use std::sync::Mutex;
 
 type ApiResult<T> = Result<T, String>;
+
+#[derive(Default)]
+struct HiddenDownloadWindows(Mutex<HashSet<u64>>);
 
 fn send_ipc(command: &mdm_ipc::Command) -> ApiResult<String> {
     mdm_ipc::request_checked(command).map_err(|e| e.to_string())
@@ -64,7 +69,7 @@ fn current_backend() -> ApiResult<BackendIdentity> {
         ..Default::default()
     })?;
     serde_json::from_str(&response)
-        .map_err(|_| "Another original Mister Download Manager instance is running.             It still owns the old tray icon. Please finish active downloads,             then exit the original MDM from its tray icon before starting             Mister Hybrid Glass. The current downloads and settings will be preserved.".into())
+        .map_err(|_| "Another original Mister Download Manager instance is running. It still owns the original tray icon. Finish active downloads, then exit original MDM before starting Auralis. Your download data and settings will be preserved.".into())
 }
 
 fn boot_existing_engine(app: &AppHandle) -> ApiResult<String> {
@@ -108,6 +113,68 @@ fn boot_existing_engine(app: &AppHandle) -> ApiResult<String> {
         }
     }
     Err("Headless downloader did not initialize. See its crash logs in the original MDM data directory.".into())
+}
+
+fn build_tray_menu(app: &AppHandle) -> ApiResult<Menu> {
+    let menu = Menu::new(app).map_err(|e| e.to_string())?;
+    let show = MenuItem::with_id(app, "show", "Open Auralis Download Manager", true, None::<&str>).map_err(|e| e.to_string())?;
+    let add = MenuItem::with_id(app, "add", "Add new download…", true, None::<&str>).map_err(|e| e.to_string())?;
+    let batch = MenuItem::with_id(app, "batch", "Add batch download…", true, None::<&str>).map_err(|e| e.to_string())?;
+    let batch_clipboard = MenuItem::with_id(app, "batch-clipboard", "Add batch download from clipboard", true, None::<&str>).map_err(|e| e.to_string())?;
+    let downloads = Submenu::with_id(app, "downloads", "Downloads in progress", true).map_err(|e| e.to_string())?;
+    let hidden = app.state::<HiddenDownloadWindows>().0.lock().map(|v| v.clone()).unwrap_or_default();
+    let snapshot = request_snapshot().ok();
+    for id in hidden {
+        if let Some(window) = app.get_webview_window(&format!("download-{id}")) {
+            let _ = window.title();
+            let label = snapshot.as_ref().and_then(|s| s.downloads.iter().find(|d| d.id == id))
+                .map(|d| d.file.clone()).unwrap_or_else(|| format!("Download #{id}"));
+            let item = MenuItem::with_id(app, format!("restore-download-{id}"), label, true, None::<&str>)
+                .map_err(|e| e.to_string())?;
+            downloads.append(&item).map_err(|e| e.to_string())?;
+        }
+    }
+    if downloads.items().is_empty() {
+        let empty = MenuItem::with_id(app, "no-hidden-downloads", "No hidden download windows", false, None::<&str>)
+            .map_err(|e| e.to_string())?;
+        downloads.append(&empty).map_err(|e| e.to_string())?;
+    }
+    let speed = MenuItem::with_id(app, "speed-limit", "Speed Limiter…", true, None::<&str>).map_err(|e| e.to_string())?;
+    let scheduler = MenuItem::with_id(app, "scheduler", "Scheduler", true, None::<&str>).map_err(|e| e.to_string())?;
+    let start = MenuItem::with_id(app, "start-queue", "Start main download queue", true, None::<&str>).map_err(|e| e.to_string())?;
+    let stop = MenuItem::with_id(app, "stop-queue", "Stop main download queue", true, None::<&str>).map_err(|e| e.to_string())?;
+    let options = MenuItem::with_id(app, "options", "Options", true, None::<&str>).map_err(|e| e.to_string())?;
+    let exit = MenuItem::with_id(app, "quit", "Exit Auralis", true, None::<&str>).map_err(|e| e.to_string())?;
+    for item in [&show, &add, &batch, &batch_clipboard] {
+        menu.append(item).map_err(|e| e.to_string())?;
+    }
+    menu.append(&PredefinedMenuItem::separator(app).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+    menu.append(&downloads).map_err(|e| e.to_string())?;
+    menu.append(&PredefinedMenuItem::separator(app).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+    for item in [&speed, &scheduler, &start, &stop, &options] {
+        menu.append(item).map_err(|e| e.to_string())?;
+    }
+    menu.append(&PredefinedMenuItem::separator(app).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+    menu.append(&exit).map_err(|e| e.to_string())?;
+    Ok(menu)
+}
+
+fn refresh_tray_menu(app: &AppHandle) {
+    if let (Some(tray), Ok(menu)) = (app.tray_by_id("auralis-tray"), build_tray_menu(app)) {
+        let _ = tray.set_menu(Some(menu));
+    }
+}
+
+fn restore_download_window(app: &AppHandle, id: u64) {
+    if let Ok(mut hidden) = app.state::<HiddenDownloadWindows>().0.lock() {
+        hidden.remove(&id);
+    }
+    if let Some(window) = app.get_webview_window(&format!("download-{id}")) {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+    refresh_tray_menu(app);
 }
 
 fn show_main(app: &AppHandle) {
@@ -480,22 +547,31 @@ fn main() {
                 let _=main.set_size(tauri::LogicalSize::new(width,height));
                 let _=main.center();
             }
-            let show = MenuItem::with_id(app, "show", "Open Mister Hybrid Glass", true, None::<&str>)?;
-            let exit = MenuItem::with_id(app, "quit", "Exit Glass and stop downloads", true, None::<&str>)?;
-            let downloads = MenuItem::with_id(app, "downloads", "Restore download windows", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show, &downloads, &exit])?;
-            TrayIconBuilder::with_id("glass-tray")
-                .icon(app.default_window_icon().cloned().ok_or("No packaged tray icon")?)
-                .tooltip("Mister Hybrid Glass — Rust download engine")
+            app.manage(HiddenDownloadWindows::default());
+            let menu = build_tray_menu(app.handle()).map_err(std::io::Error::other)?;
+            TrayIconBuilder::with_id("auralis-tray")
+                .icon(app.default_window_icon().cloned().ok_or("No packaged Auralis icon")?)
+                .tooltip("Auralis Download Manager")
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "show" => show_main(app),
-                    "downloads" => {
-                        for (label,w) in app.webview_windows() {
-                            if label != "main" { let _=w.show(); let _=w.unminimize(); }
+                    "add" => { let _ = lifecycle::open(app, "tray-add-url", "add=url", 590.0, 390.0); },
+                    "batch" | "batch-clipboard" => { let _ = lifecycle::open(app, "tray-batch", "tool=batch", 760.0, 680.0); },
+                    "speed-limit" => { let _ = lifecycle::open(app, "tray-settings", "settings=1&tab=Connection", 920.0, 700.0); },
+                    "scheduler" => { let _ = lifecycle::open(app, "tray-scheduler", "schedule=1", 860.0, 660.0); },
+                    "options" => { let _ = lifecycle::open(app, "tray-options", "settings=1", 920.0, 700.0); },
+                    "start-queue" | "stop-queue" => {
+                        if let Ok(snapshot) = request_snapshot() {
+                            if let Some(queue) = snapshot.queues.first() {
+                                let action = if event.id.as_ref() == "start-queue" { "start_queue" } else { "stop_queue" };
+                                let _ = send_ipc(&mdm_ipc::Command { action: Some(action.into()), queue: Some(queue.name.clone()), ..Default::default() });
+                            }
                         }
                     },
+                    id if id.starts_with("restore-download-") => {
+                        if let Ok(download_id) = id.trim_start_matches("restore-download-").parse::<u64>() { restore_download_window(app, download_id); }
+                    }
                     "quit" => {
                         // This is an explicit EXIT, not closing/minimizing.
                         // The headless service persists its state on exit.
@@ -549,11 +625,11 @@ fn main() {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            material_window::set_material_window_shape, pending_file_info, file_info_action, choose_download_path, window_preferences, glass_tool, choose_folder, open_glass_window, close_progress_windows, drag_download, drag_state, choose_move, clipboard_text, video_tool, browser_video,
+            material_window::set_material_window_shape, pending_file_info, file_info_action, choose_download_path, window_preferences, glass_tool, choose_folder, open_glass_window, close_progress_windows, hide_download_to_tray, drag_download, drag_state, choose_move, clipboard_text, video_tool, browser_video,
             boot_engine, dashboard_snapshot, dashboard_visuals, download_action,
             add_download, select_wallpaper, queue_action, glass_settings, update_glass_setting,
             browser_integration, extension_store_link, open_extension_store, bulk_action, file_operation, add_torrent_file, quit_glass, open_upstream_releases, fork_update::glass_update_check, fork_update::glass_update_download, fork_update::glass_update_install
         ])
         .run(context)
-        .expect("error starting Mister Hybrid glass desktop");
+        .expect("error starting Auralis Download Manager desktop");
 }
