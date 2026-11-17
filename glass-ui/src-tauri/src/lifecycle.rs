@@ -40,6 +40,14 @@ pub fn open(app: &AppHandle, label: &str, route: &str, width: f64, height: f64) 
     }
     let (width,height)=fit_size(app,width,height);
     let mut builder=WebviewWindowBuilder::new(app, label, WebviewUrl::App(format!("index.html?{route}").into()));
+    // Match the independently verified host-backdrop experiment only for the
+    // development-only Direct3D composition path. Normal windows are unchanged.
+    #[cfg(target_os="windows")]
+    if label.starts_with("download-") && std::env::var_os("MHG_EXPERIMENTAL_WATER").as_deref()==Some(std::ffi::OsStr::new("1"))
+        && std::env::var_os("MHG_EXPERIMENTAL_RENDERER").as_deref()==Some(std::ffi::OsStr::new("d3d11"))
+        && std::env::var_os("MHG_EXPERIMENTAL_HOSTBACKDROP").as_deref()==Some(std::ffi::OsStr::new("1")) {
+        builder=builder.no_redirection_bitmap(true);
+    }
     if let Some(args)=test_browser_args(){builder=builder.additional_browser_args(&args);}
     let w = builder
         .title("Mister Hybrid Glass").always_on_top(priority).inner_size(width, height)
