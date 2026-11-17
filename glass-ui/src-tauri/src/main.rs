@@ -87,7 +87,7 @@ fn boot_existing_engine(app: &AppHandle) -> ApiResult<String> {
     }
     let backend = possible_legacy_paths(app).into_iter()
         .find(|candidate| candidate.is_file())
-        .ok_or_else(|| "The bundled headless Rust downloader is missing. Reinstall Mister Hybrid Glass.".to_string())?;
+        .ok_or_else(|| "The bundled headless Rust downloader is missing. Reinstall Auralis Download Manager.".to_string())?;
     // The ORIGINAL project already implements --headless. No egui window
     // opens, no original tray icon is created, and its download logic and
     // saved data are preserved. Disable its separate remote HTTP server.
@@ -124,8 +124,10 @@ fn build_tray_menu(app: &AppHandle) -> ApiResult<Menu> {
     let downloads = Submenu::with_id(app, "downloads", "Downloads in progress", true).map_err(|e| e.to_string())?;
     let hidden = app.state::<HiddenDownloadWindows>().0.lock().map(|v| v.clone()).unwrap_or_default();
     let snapshot = request_snapshot().ok();
+    let mut has_hidden = false;
     for id in hidden {
         if let Some(window) = app.get_webview_window(&format!("download-{id}")) {
+            has_hidden = true;
             let _ = window.title();
             let label = snapshot.as_ref().and_then(|s| s.downloads.iter().find(|d| d.id == id))
                 .map(|d| d.file.clone()).unwrap_or_else(|| format!("Download #{id}"));
@@ -134,7 +136,7 @@ fn build_tray_menu(app: &AppHandle) -> ApiResult<Menu> {
             downloads.append(&item).map_err(|e| e.to_string())?;
         }
     }
-    if downloads.items().is_empty() {
+    if !has_hidden {
         let empty = MenuItem::with_id(app, "no-hidden-downloads", "No hidden download windows", false, None::<&str>)
             .map_err(|e| e.to_string())?;
         downloads.append(&empty).map_err(|e| e.to_string())?;
@@ -344,7 +346,7 @@ async fn quit_glass(app: AppHandle) -> ApiResult<()> {
 #[tauri::command]
 async fn add_torrent_file() -> ApiResult<Option<serde_json::Value>> {
     tauri::async_runtime::spawn_blocking(|| {
-        let picked = rfd::FileDialog::new().set_title("Add torrent — Mister Hybrid Glass")
+        let picked = rfd::FileDialog::new().set_title("Add torrent — Auralis Download Manager")
             .add_filter("BitTorrent", &["torrent"]).pick_file();
         let Some(path) = picked else { return Ok(None) };
         let reply = send_ipc(&mdm_ipc::Command {
@@ -504,7 +506,7 @@ async fn select_wallpaper(app: AppHandle, target: String) -> ApiResult<Option<St
     }
     tauri::async_runtime::spawn_blocking(move || {
         let file = rfd::FileDialog::new()
-            .set_title("Choose Mister Hybrid wallpaper")
+            .set_title("Choose Auralis wallpaper")
             .add_filter("Images and videos", &["png", "jpg", "jpeg", "webp", "mp4", "webm", "mov", "m4v"])
             .pick_file();
         let Some(file) = file else { return Ok(None) };
