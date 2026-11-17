@@ -24,10 +24,8 @@ fn candidate_from_release(value: &serde_json::Value, current: &str) -> Result<Op
     let current = semver::Version::parse(current).map_err(|_| "The installed version is invalid")?;
     if version <= current { return Ok(None); }
     let assets=value["assets"].as_array().ok_or("The release has no installer")?;
-    let matches: Vec<_> = assets.iter().filter(|asset| {
-        let name=asset["name"].as_str().unwrap_or("");
-        name.starts_with("Mister.Hybrid.Glass_") && name.ends_with("_x64-setup.exe")
-    }).collect();
+    let expected_name=format!("Mister.Hybrid.Glass_{}_x64-setup.exe",version);
+    let matches: Vec<_> = assets.iter().filter(|asset| asset["name"].as_str()==Some(expected_name.as_str())).collect();
     if matches.len()!=1 { return Err("This release must contain one Windows x64 Glass installer".into()); }
     let asset=matches[0];
     let url=asset["browser_download_url"].as_str().ok_or("The installer address is missing")?;
@@ -98,6 +96,7 @@ mod tests {
     #[test] fn accepts_only_newer_fork_installer_with_digest(){
         let good=release("https://github.com/4ls4mi/misterdownloadmanager/releases/download/v0.3.2/setup.exe",&format!("sha256:{}","a".repeat(64)));
         assert!(candidate_from_release(&good,"0.3.1").unwrap().is_some());assert!(candidate_from_release(&good,"0.3.2").unwrap().is_none());
+        let mut wrong=good.clone();wrong["assets"][0]["name"]=serde_json::json!("Mister.Hybrid.Glass_0.3.1_x64-setup.exe");assert!(candidate_from_release(&wrong,"0.3.1").is_err());
         let bad=release("https://evil.example/setup.exe",&format!("sha256:{}","a".repeat(64)));assert!(candidate_from_release(&bad,"0.3.1").is_err());
         let bad=release("https://github.com/4ls4mi/misterdownloadmanager/releases/download/v0.3.2/setup.exe","sha256:bad");assert!(candidate_from_release(&bad,"0.3.1").is_err());
     }
