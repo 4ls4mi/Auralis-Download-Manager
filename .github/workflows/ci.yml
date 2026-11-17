@@ -45,7 +45,7 @@ env:
 
 jobs:
   rust:
-    if: ${{ !(github.event_name == 'pull_request' && (github.head_ref == 'feature/tauri-unified-windows' || (github.head_ref == 'feature/crystal-parity-windows' || (github.head_ref == 'feature/progress-chunks-windows' || github.head_ref == 'feature/ice-crystal-parity-windows')))) }}
+    if: ${{ !(github.event_name == 'pull_request' && (github.head_ref == 'feature/tauri-unified-windows' || (github.head_ref == 'feature/crystal-parity-windows' || (github.head_ref == 'feature/progress-chunks-windows' || github.head_ref == 'feature/ice-crystal-parity-windows' || github.head_ref == 'feature/brand-tray-identity')))) }}
     name: ${{ matrix.name || matrix.os }}
     strategy:
       fail-fast: false
