@@ -15,7 +15,8 @@ try {
     $old = Start-Process -FilePath $oldSetup -ArgumentList @('/S', "/D=$root") -Wait -PassThru
     if ($old.ExitCode -ne 0 -or !(Test-Path $exe)) { throw "Isolated old-version install failed: $($old.ExitCode)" }
     if (!(Test-Path (Join-Path $root 'uninstall.exe'))) { throw 'Installed updater could not find the NSIS uninstaller' }
-    $new = Start-Process -FilePath $newSetup[0].FullName -ArgumentList @('/S','/UPDATE','/R', "/D=$root") -Wait -PassThru
+    $new = Start-Process -FilePath $newSetup[0].FullName -ArgumentList @('/S','/UPDATE','/R', "/D=$root") -PassThru
+    if (!$new.WaitForExit(180000)) { throw 'The isolated upgrade installer did not exit in time' }
     if ($new.ExitCode -ne 0) { throw "Isolated upgrade failed: $($new.ExitCode)" }
     $version = (Get-Item $exe).VersionInfo.ProductVersion
     if ($version -notlike '0.3.1*') { throw "Expected 0.3.1 after upgrade, got $version" }

@@ -48,4 +48,5 @@ test('loss styling follows only reported retry, failure or recent disconnect',()
  const [lost]=connectionIndicators([{...base,state:'Retrying'}],[{start:0,cursor:20,end:100,worker:null,last_worker:0}]);
  assert.equal(lost.percent,20);
  assert.equal(connectionIndicators([{...base,state:'Failed'}],[]).length,1);
+ assert.equal(connectionIndicators([{...base,downloaded:0,state:'Failed',reconnecting_after_loss:true}],[]).length,1);
 });
