@@ -3,6 +3,40 @@
 Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 `.github/workflows/release.yml`).
 
+## Mister Hybrid Glass — Windows x64 preview
+
+This fork-specific summary describes work in the Glass frontend and its original MDM backend integration. The upstream MDM changelog follows below. See the [public preview release](https://github.com/4ls4mi/misterdownloadmanager/releases/tag/v0.3.0-glass-preview.1) for the installer and validation details.
+
+### Interface and windows
+
+- Introduced a separate Windows x64 Tauri/WebView2 interface, backed by MDM's existing Rust downloader through authenticated local IPC and a single Glass tray owner.
+- Added a glass-style main list and separate movable File Info, progress, completion, properties, Add URL/torrent, settings and confirmation windows, plus original Tasks, File, Downloads, View and Help menus.
+- Added light/dark appearances, accent choices, backgrounds and wallpapers, material controls, font families and sizes, scaling, native resize handling, colorful icons and hover feedback.
+- Added independently scrollable download-list and navigation areas and compact responsive layouts. Removed redundant material layers from this preview to reduce haze.
+
+### Downloads and indicators
+
+- Connected the list and progress windows to actual engine status, overall completion, segment/connection information and sampled transfer rates. Added separate percentage bars, connection indicators and speed graphs.
+- Added customizable indicator gradients and shapes and a Settings preview. The progress window now reserves 32 responsive, text-free connection slots; active data comes from engine telemetry, paused reported connections are red and unused slots are grey. Hover reveals details.
+- Restored or exposed original download actions, file properties, queue and scheduler controls, pause/resume/stop, movable deletion and redownload confirmations, and search across the download list.
+- Added completion-dialog options, file/folder actions and original move tracking. Progress windows close after completion or a Stop from the main window; Pause keeps the window available.
+- Preserved available server country, observed latency and resume-capability details in the progress view.
+
+### Browser, clipboard and tools
+
+- Bundled and registered the original native-messaging host and added Edge's official extension-store link to browser repair.
+- Added clipboard choices for automatic download, offering a copied link, and pasting into Add URL.
+- Exposed original verified yt-dlp, ffmpeg and gallery-dl helper management; connected video lookup, quality and subtitle selection and gallery queue operations to MDM.
+- Added manual Netscape-format cookie-file selection for video helpers alongside browser/profile cookie selection. Google account autodetection/direct connection remains unfinished.
+- Added a read-only upstream MDM release check that does not overwrite the fork. A fork-specific automatic installer and restart updater is not yet included in the preview.
+
+### Validation and limits
+
+- The preview was built and exercised on Windows x64 in [run 44131486405](https://github.com/4ls4mi/misterdownloadmanager/actions/runs/44131486405), including live transfers, connection slots, completion, delete dialogs, settings and dark/light screenshots.
+- Native dragging into Explorer/apps and physical DPI/transparency review still require manual Windows testing. Material styles do not yet reproduce all approved design concepts. A successful build does not establish complete feature parity.
+
+---
+
 ## [Unreleased]
 
 ### Added
