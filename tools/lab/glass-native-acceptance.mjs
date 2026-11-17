@@ -160,6 +160,13 @@ try{
  }
 
  await capture('fixture-eight.zip');let info=await pageFor('request=');await info.waitForSelector('.cg-file-info');await wait(350);
+ assert.equal(await info.locator('.cg-window-top .cg-winbuttons button').count(),3,'File info should have one set of three window controls');
+ const headerColor=await info.locator('.cg-window-top').evaluate(el=>getComputedStyle(el).backgroundColor);
+ assert.match(headerColor,/^rgb\(/,'Title bar must be opaque so controls behind it do not appear duplicated');
+ const requestId=new URL(info.url()).searchParams.get('request');assert(requestId,'File info route missing request identifier');
+ await invoke(info,'plugin:window|set_focus',{label:`info-${requestId}`});await wait(250);
+ const captionCheck=spawnSync('powershell.exe',['-NoProfile','-Command',`Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class FrameCheck { [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow(); [DllImport("user32.dll", EntryPoint="GetWindowLongW")] public static extern int GetWindowLong(IntPtr h,int index); [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h,out uint id); }'; $h=[FrameCheck]::GetForegroundWindow(); [uint32]$pidValue=0; [void][FrameCheck]::GetWindowThreadProcessId($h,[ref]$pidValue); if($pidValue -ne ${shell.pid}){exit 2}; if(([FrameCheck]::GetWindowLong($h,-16) -band 0x00C00000) -ne 0){exit 1}`],{encoding:'utf8'});
+ assert.equal(captionCheck.status,0,'File info must be foreground and have no native caption bar: '+(captionCheck.stderr||''));passed('File info uses one native-window control set with an opaque title area');
  assert.equal((await ipc({query:'list'})).downloads.length,0,'Capture must wait for user confirmation');assert.equal((await ipc({query:'list'})).downloads.some(f=>f.status==='Downloading'),false,'Metadata probing must not create a running download before confirmation');
  await bothThemes(info,'file-info',settings);
  let destination=path.join(folder,'downloads','fixture-eight.zip');

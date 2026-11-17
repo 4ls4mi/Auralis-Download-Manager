@@ -3,7 +3,7 @@
 use tauri::WebviewWindow;
 
 #[cfg(target_os = "windows")]
-unsafe extern "C" { fn mhg_water_surface(hwnd: isize, rgb: u32, light: i32) -> i32; fn mhg_water_remove(hwnd: isize); }
+unsafe extern "C" { fn mhg_water_surface(hwnd: isize, rgb: u32, light: i32) -> i32; fn mhg_water_remove(hwnd: isize); fn mhg_d3d11_water_surface(hwnd: isize, rgb: u32, light: i32) -> i32; fn mhg_d3d11_water_remove(hwnd: isize); }
 
 #[tauri::command]
 pub async fn experimental_water_surface(window: WebviewWindow, rgb: u32, light: bool, enabled: bool) -> Result<bool, String> {
@@ -15,11 +15,12 @@ pub async fn experimental_water_surface(window: WebviewWindow, rgb: u32, light: 
     {
         // SetWindowSubclass and Direct2D resources must be created on the HWND's UI thread.
         let hwnd = window.hwnd().map_err(|e| e.to_string())?.0 as isize;
+        let d3d = std::env::var_os("MHG_EXPERIMENTAL_RENDERER").as_deref() == Some(std::ffi::OsStr::new("d3d11"));
         let (tx, rx) = std::sync::mpsc::sync_channel(1);
         window.run_on_main_thread(move || {
             // SAFETY: the HWND is owned by the requesting Tauri window. The native
             // subclass removes itself and frees its resources at WM_NCDESTROY.
-            let result = unsafe { if enabled { mhg_water_surface(hwnd, rgb & 0x00ff_ffff, i32::from(light)) != 0 } else { mhg_water_remove(hwnd); false } };
+            let result = unsafe { if enabled { if d3d { mhg_d3d11_water_surface(hwnd, rgb & 0x00ff_ffff, i32::from(light)) != 0 } else { mhg_water_surface(hwnd, rgb & 0x00ff_ffff, i32::from(light)) != 0 } } else { if d3d { mhg_d3d11_water_remove(hwnd) } else { mhg_water_remove(hwnd) }; false } };
             let _ = tx.send(result);
         }).map_err(|e| e.to_string())?;
         return tauri::async_runtime::spawn_blocking(move || rx.recv_timeout(std::time::Duration::from_secs(5)).map_err(|e| e.to_string()))

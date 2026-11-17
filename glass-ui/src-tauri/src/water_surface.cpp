@@ -106,3 +106,6 @@ extern "C" void mhg_water_remove(HWND hwnd){
   SetWindowRgn(hwnd,nullptr,TRUE);InvalidateRect(hwnd,nullptr,TRUE);
  }
 }
+
+// Shared outline used by the experimental Direct3D renderer.
+extern "C" int mhg_water_clip(HWND hwnd){Surface state{};return clip_window(hwnd,state)?1:0;}

@@ -14,6 +14,14 @@ on:
         required: false
         type: boolean
         default: false
+      renderer:
+        description: 'Experimental native rendering backend'
+        type: choice
+        required: false
+        default: direct2d
+        options:
+          - direct2d
+          - d3d11
       rebuild_ui:
         description: 'Rebuild the current shell against the candidate backend'
         required: false
@@ -105,6 +113,7 @@ jobs:
         shell: pwsh
         env:
           MHG_EXPERIMENTAL_WATER: ${{ inputs.experimental_water && '1' || '0' }}
+          MHG_EXPERIMENTAL_RENDERER: ${{ inputs.renderer || 'direct2d' }}
         run: |
           node tools/lab/glass-native-acceptance.mjs
           if ($LASTEXITCODE -ne 0) { throw 'Native acceptance failed; inspect proof artifact' }
