@@ -30,7 +30,7 @@ using Microsoft::WRL::Callback;
 winrt::Windows::System::DispatcherQueueController queue{nullptr};
 Compositor compositor{nullptr}; DesktopWindowTarget target{nullptr};
 ContainerVisual root{nullptr},webVisual{nullptr}; SpriteVisual backdrop{nullptr};
-ShapeVisual waterShape{nullptr}; CompositionSpriteShape bubble{nullptr},bubbleGlow{nullptr};
+ShapeVisual waterShape{nullptr}; CompositionSpriteShape bubble{nullptr},bubbleGlow{nullptr},topReflection{nullptr},bottomReflection{nullptr};
 winrt::com_ptr<ID2D1Factory> d2dFactory;
 // CompositionPath consumes Direct2D geometry through this WinRT adapter.
 struct GeometrySource : winrt::implements<GeometrySource, winrt::Windows::Graphics::IGeometrySource2D, ABI::Windows::Graphics::IGeometrySource2DInterop> {
@@ -67,15 +67,48 @@ void resize(HWND h){
  CompositionPath source(winrt::make<GeometrySource>(path.as<ID2D1Geometry>()));
  auto geometry=compositor.CreatePathGeometry(source);bubble.Geometry(geometry);bubbleGlow.Geometry(geometry);
  root.Clip(compositor.CreateGeometricClip(geometry));
+ // Curved reflection meshes are native composition paths, recalculated on
+ // resize. Their translucent fills leave the host backdrop underneath.
+ auto reflectedPath=[&](bool top){
+  winrt::com_ptr<ID2D1PathGeometry> result;check_hresult(d2dFactory->CreatePathGeometry(result.put()));
+  winrt::com_ptr<ID2D1GeometrySink> g;check_hresult(result->Open(g.put()));
+  if(top){
+   g->BeginFigure({w*.045f,v*.075f},D2D1_FIGURE_BEGIN_FILLED);
+   g->AddBezier({{w*.12f,v*.012f},{w*.28f,v*.055f},{w*.44f,v*.04f}});
+   g->AddBezier({{w*.63f,v*.02f},{w*.78f,v*.018f},{w*.93f,v*.07f}});
+   g->AddBezier({{w*.77f,v*.045f},{w*.66f,v*.12f},{w*.48f,v*.09f}});
+   g->AddBezier({{w*.28f,v*.06f},{w*.14f,v*.13f},{w*.045f,v*.075f}});
+  } else {
+   g->BeginFigure({w*.04f,v*.88f},D2D1_FIGURE_BEGIN_FILLED);
+   g->AddBezier({{w*.18f,v*.94f},{w*.28f,v*.88f},{w*.46f,v*.92f}});
+   g->AddBezier({{w*.68f,v*.97f},{w*.82f,v*.86f},{w*.96f,v*.88f}});
+   g->AddBezier({{w*.90f,v*.985f},{w*.75f,v*.955f},{w*.50f,v*.973f}});
+   g->AddBezier({{w*.30f,v*.96f},{w*.16f,v*.99f},{w*.04f,v*.88f}});
+  }
+  g->EndFigure(D2D1_FIGURE_END_CLOSED);check_hresult(g->Close());
+  return compositor.CreatePathGeometry(CompositionPath(winrt::make<GeometrySource>(result.as<ID2D1Geometry>())));
+ };
+ topReflection.Geometry(reflectedPath(true));bottomReflection.Geometry(reflectedPath(false));
 }
 void fail(HWND h,const wchar_t* message){SetWindowTextW(h,message);}
-void attach(HWND h){BOOL enable=TRUE;check_hresult(DwmSetWindowAttribute(h,DWMWA_USE_HOSTBACKDROPBRUSH,&enable,sizeof(enable)));auto interop=compositor.as<ABI::Windows::UI::Composition::Desktop::ICompositorDesktopInterop>();check_hresult(interop->CreateDesktopWindowTarget(h,TRUE,reinterpret_cast<ABI::Windows::UI::Composition::Desktop::IDesktopWindowTarget**>(put_abi(target))));root=compositor.CreateContainerVisual();backdrop=compositor.CreateSpriteVisual();backdrop.Brush(compositor.CreateHostBackdropBrush());waterShape=compositor.CreateShapeVisual();bubbleGlow=compositor.CreateSpriteShape();bubble=compositor.CreateSpriteShape();
+void attach(HWND h){BOOL enable=TRUE;check_hresult(DwmSetWindowAttribute(h,DWMWA_USE_HOSTBACKDROPBRUSH,&enable,sizeof(enable)));auto interop=compositor.as<ABI::Windows::UI::Composition::Desktop::ICompositorDesktopInterop>();check_hresult(interop->CreateDesktopWindowTarget(h,TRUE,reinterpret_cast<ABI::Windows::UI::Composition::Desktop::IDesktopWindowTarget**>(put_abi(target))));root=compositor.CreateContainerVisual();backdrop=compositor.CreateSpriteVisual();backdrop.Brush(compositor.CreateHostBackdropBrush());waterShape=compositor.CreateShapeVisual();bubbleGlow=compositor.CreateSpriteShape();bubble=compositor.CreateSpriteShape();topReflection=compositor.CreateSpriteShape();bottomReflection=compositor.CreateSpriteShape();
  auto fill=compositor.CreateLinearGradientBrush();fill.StartPoint({0,0});fill.EndPoint({1,1});
  fill.ColorStops().Append(compositor.CreateColorGradientStop(0.0f,{160,24,176,191}));
  fill.ColorStops().Append(compositor.CreateColorGradientStop(.45f,{215,0,37,55}));
  fill.ColorStops().Append(compositor.CreateColorGradientStop(1.0f,{170,0,118,144}));
  bubble.FillBrush(fill);bubble.StrokeBrush(compositor.CreateColorBrush({240,162,247,255}));bubble.StrokeThickness(4.0f);
- bubbleGlow.StrokeBrush(compositor.CreateColorBrush({95,46,221,238}));bubbleGlow.StrokeThickness(20.0f);waterShape.Shapes().Append(bubble);waterShape.Shapes().Append(bubbleGlow);webVisual=compositor.CreateContainerVisual();root.Children().InsertAtTop(backdrop);root.Children().InsertAtTop(waterShape);root.Children().InsertAtTop(webVisual);target.Root(root);resize(h);
+ bubbleGlow.StrokeBrush(compositor.CreateColorBrush({72,46,221,238}));bubbleGlow.StrokeThickness(14.0f);
+ auto upper=compositor.CreateLinearGradientBrush();upper.StartPoint({0,0});upper.EndPoint({.2f,1});
+ upper.ColorStops().Append(compositor.CreateColorGradientStop(0.0f,{180,224,255,255}));
+ upper.ColorStops().Append(compositor.CreateColorGradientStop(.30f,{75,126,245,255}));
+ upper.ColorStops().Append(compositor.CreateColorGradientStop(1.0f,{0,24,177,207}));
+ topReflection.FillBrush(upper);
+ auto lower=compositor.CreateLinearGradientBrush();lower.StartPoint({0,0});lower.EndPoint({0,1});
+ lower.ColorStops().Append(compositor.CreateColorGradientStop(0.0f,{0,35,209,245}));
+ lower.ColorStops().Append(compositor.CreateColorGradientStop(.68f,{65,53,205,244}));
+ lower.ColorStops().Append(compositor.CreateColorGradientStop(1.0f,{150,183,255,255}));
+ bottomReflection.FillBrush(lower);
+ waterShape.Shapes().Append(bubble);waterShape.Shapes().Append(bubbleGlow);waterShape.Shapes().Append(topReflection);waterShape.Shapes().Append(bottomReflection);webVisual=compositor.CreateContainerVisual();root.Children().InsertAtTop(backdrop);root.Children().InsertAtTop(waterShape);root.Children().InsertAtTop(webVisual);target.Root(root);resize(h);
  HRESULT hr=CreateCoreWebView2EnvironmentWithOptions(nullptr,nullptr,nullptr,Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>([h](HRESULT result,ICoreWebView2Environment* env)->HRESULT{if(FAILED(result)||!env){fail(h,L"WebView2 environment failed");return result;}ComPtr<ICoreWebView2Environment3> env3;if(FAILED(env->QueryInterface(IID_PPV_ARGS(&env3)))){fail(h,L"WebView2 composition unavailable");return E_FAIL;}return env3->CreateCoreWebView2CompositionController(h,Callback<ICoreWebView2CreateCoreWebView2CompositionControllerCompletedHandler>([h](HRESULT result,ICoreWebView2CompositionController* visual)->HRESULT{if(FAILED(result)||!visual){fail(h,L"WebView2 composition controller failed");return result;}compositionController=visual;compositionController.As(&controller);ComPtr<ICoreWebView2Controller2> c2;if(SUCCEEDED(controller.As(&c2))){COREWEBVIEW2_COLOR transparent{0,0,0,0};c2->put_DefaultBackgroundColor(transparent);}compositionController->put_RootVisualTarget(reinterpret_cast<IUnknown*>(get_abi(webVisual)));resize(h);ComPtr<ICoreWebView2> web;controller->get_CoreWebView2(&web);EventRegistrationToken token{};
  web->add_WebMessageReceived(Callback<ICoreWebView2WebMessageReceivedEventHandler>([h](ICoreWebView2*,ICoreWebView2WebMessageReceivedEventArgs* args)->HRESULT{
   LPWSTR value=nullptr;if(FAILED(args->TryGetWebMessageAsString(&value))||!value)return S_OK;

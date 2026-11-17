@@ -194,6 +194,8 @@ jobs:
             [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
             [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
             [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
+            [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr h);
+            [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);
             [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int command);
           }
           '@
@@ -215,6 +217,22 @@ jobs:
             $clicked = $false
             for ($i=0; $i -lt 10; $i++) { Start-Sleep -Milliseconds 300; $lab.Refresh(); if ($lab.MainWindowTitle -like '*Pause input OK*') { $clicked=$true; break } }
             if (-not $clicked) { throw "Pause input was not delivered: $($lab.MainWindowTitle)" }
+            Click-Lab ($width - 106) 55
+            Start-Sleep -Seconds 1
+            if (-not [WaterLabInput]::IsZoomed($handle)) { throw 'Custom maximize control failed' }
+            [void][WaterLabInput]::GetClientRect($handle, [ref]$rect)
+            Click-Lab ($rect.right - 106) 55
+            Start-Sleep -Seconds 1
+            if ([WaterLabInput]::IsZoomed($handle)) { throw 'Custom restore control failed' }
+            if (-not [WaterLabInput]::SetWindowPos($handle, [IntPtr]::Zero, 0, 0, 720, 520, 0x16)) { throw 'Window resize failed' }
+            Start-Sleep -Seconds 1
+            [void][WaterLabInput]::GetClientRect($handle, [ref]$rect)
+            if ($rect.right -ne 720 -or $rect.bottom -ne 520) { throw 'Window did not adopt test size' }
+            $width = $rect.right; $height = $rect.bottom
+            $bitmap = New-Object System.Drawing.Bitmap $bounds.Width,$bounds.Height
+            $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+            try { $graphics.CopyFromScreen($bounds.Left,$bounds.Top,0,0,$bitmap.Size); $bitmap.Save((Join-Path $env:RUNNER_TEMP 'composition-water-resized.png')) }
+            finally { $graphics.Dispose(); $bitmap.Dispose() }
             Click-Lab ($width - 147) 55
             Start-Sleep -Seconds 1
             if (-not [WaterLabInput]::IsIconic($handle)) { throw 'Custom minimize control did not minimize the window' }
@@ -229,6 +247,7 @@ jobs:
           name: composition-water-lab-windows-x64
           path: |
             ${{ runner.temp }}/composition-water.png
+            ${{ runner.temp }}/composition-water-resized.png
             composition-water-lab.exe
             WebView2Loader.dll
           if-no-files-found: warn
