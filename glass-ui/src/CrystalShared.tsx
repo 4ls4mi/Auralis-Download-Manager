@@ -234,11 +234,11 @@ export function CrystalWindow({ children, target = "main", experimentalWater = f
   useEffect(()=>{
     if(!experimentalWater)return;
     let active=true;
-    void invoke<number>("experimental_water_surface",{rgb:parseInt(theme.accent.slice(1),16),light:appearance.lightMode,enabled:appearance.detailMode === "desktop"})
+    void invoke<number>("experimental_water_surface",{rgb:parseInt(theme.accent.slice(1),16),light:appearance.lightMode,enabled:appearance.detailMode === "desktop",opacity:Math.round(appearance.opacity),tint:Math.round(appearance.tintStrength)})
       .then(enabled=>{if(active)setNativeWater(enabled)})
       .catch(()=>{if(active)setNativeWater(0)});
     return()=>{active=false};
-  },[experimentalWater,theme.accent,appearance.lightMode,appearance.detailMode]);
+  },[experimentalWater,theme.accent,appearance.lightMode,appearance.detailMode,appearance.opacity,appearance.tintStrength]);
   useEffect(()=>{const report=(event:Event)=>setWindowError(String((event as CustomEvent).detail));window.addEventListener("glass-window-error",report);return()=>window.removeEventListener("glass-window-error",report)},[]);
   useLayoutEffect(()=>{
     const el=frame.current;if(!el)return;

@@ -4,7 +4,7 @@
 #include <windows.h>
 #include <dxgi1_2.h>
 #include <cstdio>
-extern "C" int mhg_d3d11_water_surface(HWND,unsigned,int);
+extern "C" int mhg_d3d11_water_surface(HWND,unsigned,int,unsigned,unsigned);
 extern "C" void mhg_d3d11_water_remove(HWND);
 extern "C" int mhg_water_clip(HWND){return 1;}
 // This smoke test exercises opaque Direct3D independently of WinRT composition.
@@ -17,7 +17,7 @@ int main(){
  if(!RegisterClassW(&cls)){std::fprintf(stderr,"Cannot register test window\n");return 1;}
  HWND hwnd=CreateWindowExW(0,cls.lpszClassName,L"D3D smoke",WS_OVERLAPPEDWINDOW,0,0,320,240,nullptr,nullptr,instance,nullptr);
  if(!hwnd){std::fprintf(stderr,"Cannot create test window\n");return 2;}
- int ok=mhg_d3d11_water_surface(hwnd,0x35a9df,0);
+ int ok=mhg_d3d11_water_surface(hwnd,0x35a9df,0,77,22);
  if(ok){SetWindowPos(hwnd,nullptr,0,0,480,320,SWP_NOMOVE|SWP_NOZORDER);UpdateWindow(hwnd);mhg_d3d11_water_remove(hwnd);}
  DestroyWindow(hwnd);
  if(!ok){std::fprintf(stderr,"Direct3D device, swap chain, or shader initialization failed\n");return 3;}

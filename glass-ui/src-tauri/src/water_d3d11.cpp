@@ -17,7 +17,7 @@ extern "C" int mhg_water_composition_resize(void* value,unsigned w,unsigned h);
 extern "C" void mhg_water_composition_destroy(void* value);
 namespace {
 constexpr UINT_PTR kSubclass=0x4d484744;
-struct Uniforms { float width,height,light,pad; float r,g,b,a; };
+struct Uniforms { float width,height,light,host; float r,g,b,opacity; float tint,pad1,pad2,pad3; };
 struct Renderer {
  ComPtr<ID3D11Device> device;
  ComPtr<ID3D11DeviceContext> context;
@@ -28,12 +28,12 @@ struct Renderer {
  ComPtr<ID3D11Buffer> uniforms;
  ComPtr<ID3D11RasterizerState> rasterizer;
  UINT width=0,height=0,clipWidth=0,clipHeight=0;
- float r=0,g=0,b=0;bool light=false,host=false;
+ float r=0,g=0,b=0,opacity=.77f,tint=.22f;bool light=false,host=false;
  void* composition=nullptr;
  ~Renderer(){if(composition)mhg_water_composition_destroy(composition);}
 };
 const char shader[]=R"HLSL(
-cbuffer Parameters : register(b0) { float2 size; float light; float unused; float4 accent; };
+cbuffer Parameters : register(b0) { float2 size; float light; float host; float4 accent; float4 options; };
 struct Vertex { float4 position:SV_Position; };
 Vertex vs(uint id:SV_VertexID) {
  float2 p[3]={float2(-1,-1),float2(-1,3),float2(3,-1)};
@@ -59,13 +59,13 @@ float4 ps(Vertex i):SV_Target {
  float soft=pow(saturate(1-length((uv-float2(.35,.08))*float2(1.1,5))),3);
  float3 dark=float3(.014,.042,.085), bright=float3(.68,.81,.88);
  float3 base=lerp(dark,bright,light);
- base=lerp(base,accent.rgb,light>.5?.16:.25);
+ base=lerp(base,accent.rgb,clamp(options.x,0,.65));
  base*=.83+.17*(1-uv.y);
  base+=lerp(float3(.04,.16,.22),float3(.05,.09,.10),light)*soft;
  base+=lerp(float3(.1,.5,.62),float3(.33,.54,.60),light)*(rim*(.3+.7*reflection)+inner*.16);
  base+=float3(.7,.9,.96)*(top*.13+bottom*.1+hot1*.5+hot2*.28);
 
- float alpha=unused>.5?.72:1.0;
+ float alpha=host>.5?clamp(accent.a,.45,.94):1.0;
  return float4(saturate(base)*alpha,alpha);
 }
 )HLSL";
@@ -113,7 +113,7 @@ HRESULT render(HWND hwnd,Renderer& s){
   hr=s.device->CreateRenderTargetView(back.Get(),nullptr,&s.target);if(FAILED(hr))return hr;s.width=w;s.height=h;
   if(s.host&&!mhg_water_composition_resize(s.composition,w,h))return E_FAIL;
  }
- Uniforms u{static_cast<float>(w),static_cast<float>(h),s.light?1.f:0.f,s.host?1.f:0.f,s.r,s.g,s.b,1};
+ Uniforms u{static_cast<float>(w),static_cast<float>(h),s.light?1.f:0.f,s.host?1.f:0.f,s.r,s.g,s.b,s.opacity,s.tint,0,0,0};
  s.context->UpdateSubresource(s.uniforms.Get(),0,nullptr,&u,0,0);ID3D11Buffer* buffer=s.uniforms.Get();ID3D11RenderTargetView* target=s.target.Get();
  s.context->OMSetRenderTargets(1,&target,nullptr);D3D11_VIEWPORT viewport{0,0,static_cast<float>(w),static_cast<float>(h),0,1};s.context->RSSetViewports(1,&viewport);s.context->RSSetState(s.rasterizer.Get());
  s.context->IASetInputLayout(nullptr);s.context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -131,11 +131,11 @@ LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp,UINT_PTR id,DWORD_P
 }
 }
 extern "C" void mhg_d3d11_water_remove(HWND hwnd){DWORD_PTR data=0;if(GetWindowSubclass(hwnd,proc,kSubclass,&data)){RemoveWindowSubclass(hwnd,proc,kSubclass);delete reinterpret_cast<Renderer*>(data);SetWindowRgn(hwnd,nullptr,TRUE);InvalidateRect(hwnd,nullptr,TRUE);}}
-extern "C" int mhg_d3d11_water_surface(HWND hwnd,unsigned rgb,int light){
+extern "C" int mhg_d3d11_water_surface(HWND hwnd,unsigned rgb,int light,unsigned opacity,unsigned tint){
  if(!IsWindow(hwnd))return 0;DWORD_PTR data=0;Renderer *s=nullptr;
  if(GetWindowSubclass(hwnd,proc,kSubclass,&data))s=reinterpret_cast<Renderer*>(data);
  else{s=new(std::nothrow) Renderer{};if(!s)return 0;if(!SetWindowSubclass(hwnd,proc,kSubclass,reinterpret_cast<DWORD_PTR>(s))){delete s;return 0;}}
- s->r=((rgb>>16)&255)/255.f;s->g=((rgb>>8)&255)/255.f;s->b=(rgb&255)/255.f;s->light=light!=0;
+ s->r=((rgb>>16)&255)/255.f;s->g=((rgb>>8)&255)/255.f;s->b=(rgb&255)/255.f;s->light=light!=0;s->opacity=std::clamp(opacity,45U,94U)/100.f;s->tint=std::min(tint,65U)/100.f;
  if(FAILED(render(hwnd,*s))||!clip(hwnd,*s)){mhg_d3d11_water_remove(hwnd);return 0;}
  InvalidateRect(hwnd,nullptr,FALSE);return s->host?2:1;
 }
