@@ -3,7 +3,7 @@ import { getCurrentWindow, Effect, EffectState } from "@tauri-apps/api/window";
 type ResizeDirection = Parameters<ReturnType<typeof getCurrentWindow>["startResizeDragging"]>[0];
 import { useEffect, useState, useLayoutEffect, useRef, useId, createContext, useContext } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import { AppWindow, Maximize2, Minus, X, PanelBottomClose } from "lucide-react";
+import { Maximize2, Minus, X, PanelBottomClose } from "lucide-react";
 
 import { connectionIndicators, connectionSlots, connectionLost } from "./connections";
 
@@ -213,7 +213,7 @@ export function ResizeGrips() {
 export function WindowButtons({ noMax = false }: { noMax?: boolean }) {
   const w = getCurrentWindow();
   return <div className="cg-winbuttons">
-    <button className="tray" title="Hide to tray" onClick={() => void w.hide()}><PanelBottomClose size={16}/></button>
+    <button className="tray" title="Hide to tray" onClick={() => { const id=Number(new URLSearchParams(location.search).get("detail"))||0; if(id) void invoke("hide_download_to_tray",{id}).catch(()=>undefined); else void w.hide(); }}><PanelBottomClose size={16}/></button>
     <button className="minimize" title="Minimize" onClick={() => void w.minimize()}><Minus size={17} /></button>
     {!noMax && <button className="maximize" title="Maximize or restore" onClick={() => void w.toggleMaximize()}><Maximize2 size={16} /></button>}
     <button className="close" title="Close" onClick={() => void w.close()}><X size={20} /></button>
@@ -225,7 +225,7 @@ export function WindowTop({ title, children, noMax = false }: {
   return <header className="cg-window-top">
     <div className="cg-title" data-tauri-drag-region
       onMouseDown={e => { if (e.button === 0 && e.target === e.currentTarget) void getCurrentWindow().startDragging(); }}>
-      <span className="cg-logo" data-tauri-drag-region><AppWindow size={18} /></span>
+      <span className="cg-logo" data-tauri-drag-region><img src="/auralis.svg" alt="" width="22" height="22" draggable="false" /></span>
       <span data-tauri-drag-region>{title}</span>
     </div>{children}<WindowButtons noMax={noMax} />
   </header>;
