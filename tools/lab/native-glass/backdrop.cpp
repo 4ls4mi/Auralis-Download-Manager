@@ -13,6 +13,7 @@
 #include <string>
 #pragma comment(lib, "windowsapp.lib")
 #pragma comment(lib, "dwmapi.lib")
+#pragma comment(lib, "user32.lib")
 #pragma comment(lib, "CoreMessaging.lib")
 using namespace winrt;
 using namespace Windows::UI::Composition;
