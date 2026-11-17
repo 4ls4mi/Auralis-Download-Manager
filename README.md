@@ -1,6 +1,6 @@
-# Mister Hybrid Glass — Windows x64 preview
+# Auralis Download Manager — Windows x64 fork
 
-Mister Hybrid Glass is an independent Windows x64 fork of [Mister Download Manager](https://github.com/anefzaoui/misterdownloadmanager) by Ahmed Nefzaoui and contributors. It pairs the original MDM download engine and browser extension with a separate Tauri/WebView2 glass-style interface. The fork is experimental and is not an official MDM release.
+Auralis Download Manager is an independent Windows x64 fork of [Mister Download Manager](https://github.com/anefzaoui/misterdownloadmanager) by Ahmed Nefzaoui and contributors. It pairs the original MDM download engine and browser extension with a separate Tauri/WebView2 glass-style interface. The fork is experimental and is not an official MDM release.
 
 ## What is different
 
