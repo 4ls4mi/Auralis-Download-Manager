@@ -49,13 +49,13 @@ jobs:
           do {
             $run = gh run view $env:GLASS_REVIEW_RUN --repo $env:GITHUB_REPOSITORY --json status,conclusion | ConvertFrom-Json
             if ($LASTEXITCODE -ne 0) { throw 'Could not inspect the requested build' }
-            if ($run.status -eq 'completed') {
-              if ($run.conclusion -ne 'success') { throw "Candidate build finished with $($run.conclusion)" }
-              break
-            }
+            $candidate = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:GLASS_REVIEW_RUN/artifacts" --jq '.artifacts[] | select(.name == "mister-hybrid-glass-windows-x64-candidate" and .expired == false) | .id'
+            if ($LASTEXITCODE -ne 0) { throw 'Could not inspect the candidate artifact' }
+            if ($candidate) { break }
+            if ($run.status -eq 'completed') { throw "Candidate build finished without an installer ($($run.conclusion))" }
             Start-Sleep -Seconds 30
           } while ((Get-Date) -lt $deadline)
-          if ($run.status -ne 'completed') { throw 'Candidate build did not finish in time' }
+          if (-not $candidate) { throw 'Candidate artifact did not become available in time' }
       - uses: actions/download-artifact@v4
         with:
           name: mister-hybrid-glass-windows-x64-candidate
