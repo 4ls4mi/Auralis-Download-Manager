@@ -199,13 +199,19 @@ try{
     const q=spawnSync('powershell.exe',['-NoProfile','-Command',`(Get-Process -Id ${lab.pid} -ErrorAction SilentlyContinue).MainWindowTitle`],{encoding:'utf8',timeout:5000});
     const title=(q.stdout||'').trim();if(!title.startsWith('MDM-LAB-VERIFY:'))return false;
     const state=JSON.parse(title.slice('MDM-LAB-VERIFY:'.length));
-    return state.percent===percent&&state.status==='Stopped'&&state.workers===expected&&state.actionsDisabled?state:false;
+    return state.percent===percent&&state.status==='Stopped'&&state.workers===expected&&state.actionLabel==='Resume'&&!state.actionDisabled?state:false;
    },'Composition telemetry did not match original engine',45000);
-   assert(verified.actionsDisabled,'Unconnected actions must be disabled in live lab');
+   assert.equal(verified.actionLabel,'Resume','Stopped item must offer Resume');
+   const clickLab=()=>{const code=`Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class LabClick { [StructLayout(LayoutKind.Sequential)] public struct RECT { public int l,t,r,b; } [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr h,out RECT r); [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr h,uint m,IntPtr w,IntPtr l); }'; $h=(Get-Process -Id ${lab.pid}).MainWindowHandle; $r=New-Object LabClick+RECT; if(-not [LabClick]::GetClientRect($h,[ref]$r)){exit 2}; $x=$r.r-210; $y=$r.b-58; $p=[IntPtr](($y -shl 16) -bor $x); [void][LabClick]::SendMessage($h,0x201,[IntPtr]1,$p); [void][LabClick]::SendMessage($h,0x202,[IntPtr]0,$p)`;const r=spawnSync('powershell.exe',['-NoProfile','-Command',code],{encoding:'utf8',timeout:10000});assert.equal(r.status,0,'Could not click experimental action: '+(r.stderr||''));};
+   const labState=()=>{const q=spawnSync('powershell.exe',['-NoProfile','-Command',`(Get-Process -Id ${lab.pid} -ErrorAction SilentlyContinue).MainWindowTitle`],{encoding:'utf8',timeout:5000});const title=(q.stdout||'').trim();if(!title.startsWith('MDM-LAB-VERIFY:'))return null;try{return JSON.parse(title.slice('MDM-LAB-VERIFY:'.length))}catch{return null}};
+   clickLab();await until(async()=>(await ipc({query:'list'})).downloads.find(f=>f.id===first.id)?.status==='Downloading','Experimental Resume did not start the original engine');
+   await until(()=>{const state=labState();return state?.status==='Downloading'&&state.actionLabel==='Pause'&&!state.actionDisabled},'Experimental window did not show running state');
    const out=path.join(output,'composition-live-desktop.png').replaceAll("'","''");
    const script=`Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class BringLab { [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h); }'; $h=(Get-Process -Id ${lab.pid}).MainWindowHandle; if($h -eq [IntPtr]::Zero){exit 2}; [void][BringLab]::SetForegroundWindow($h); Start-Sleep -Milliseconds 500; Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $bounds=[System.Windows.Forms.SystemInformation]::VirtualScreen; $bitmap=New-Object System.Drawing.Bitmap $bounds.Width,$bounds.Height; $graphics=[System.Drawing.Graphics]::FromImage($bitmap); $graphics.CopyFromScreen($bounds.Left,$bounds.Top,0,0,$bitmap.Size); $bitmap.Save('${out}'); $graphics.Dispose(); $bitmap.Dispose()`;
    const shot=spawnSync('powershell.exe',['-NoProfile','-Command',script],{encoding:'utf8'});assert.equal(shot.status,0,'Could not capture live composition desktop: '+(shot.stderr||shot.stdout||shot.error?.message||'unknown'));
-   passed('Experimental composition host displays original engine byte progress and actual workers through a read-only authenticated bridge');
+   clickLab();await until(async()=>(await ipc({query:'list'})).downloads.find(f=>f.id===first.id)?.status==='Stopped','Experimental Pause did not stop the original engine');
+   await until(()=>{const state=labState();return state?.status==='Stopped'&&state.actionLabel==='Resume'&&!state.actionDisabled},'Experimental window did not show paused state');
+   passed('Experimental composition host displays real engine progress and workers and controls pause/resume through authenticated IPC');
   }finally{lab.kill();}
  }
  await until(async()=>await progress.locator('.cg-chunk-map>span.active').count()===0,'Paused connection blocks must not appear active');

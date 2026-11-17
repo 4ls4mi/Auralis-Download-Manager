@@ -149,11 +149,11 @@ jobs:
         run: |
           Invoke-WebRequest 'https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/1.0.2903.40' -OutFile "$env:RUNNER_TEMP\webview.zip"
           Expand-Archive "$env:RUNNER_TEMP\webview.zip" -DestinationPath "$env:RUNNER_TEMP\webview"
-      - name: Test read-only engine bridge
+      - name: Test restricted engine bridge
         shell: pwsh
         run: |
           node --test tools/lab/composition-water/bridge.test.mjs
-          if ($LASTEXITCODE -ne 0) { throw 'Read-only engine bridge test failed' }
+          if ($LASTEXITCODE -ne 0) { throw 'Restricted engine bridge test failed' }
       - name: Compile x64 composition-hosted test
         shell: pwsh
         run: |
