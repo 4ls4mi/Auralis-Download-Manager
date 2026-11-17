@@ -26,10 +26,10 @@ fn candidate_from_release(value: &serde_json::Value, current: &str) -> Result<Op
     let assets=value["assets"].as_array().ok_or("The release has no installer")?;
     let expected_name=format!("Auralis.Download.Manager_{}_x64-setup.exe",version);
     let matches: Vec<_> = assets.iter().filter(|asset| asset["name"].as_str()==Some(expected_name.as_str())).collect();
-    if matches.len()!=1 { return Err("This release must contain one Windows x64 Glass installer".into()); }
+    if matches.len()!=1 { return Err("This release must contain one Windows x64 Auralis installer".into()); }
     let asset=matches[0];
     let url=asset["browser_download_url"].as_str().ok_or("The installer address is missing")?;
-    if !url.starts_with(ASSET_PREFIX) || url.contains('?') || url.contains('#') { return Err("The installer is not from the Glass GitHub releases".into()); }
+    if !url.starts_with(ASSET_PREFIX) || url.contains('?') || url.contains('#') { return Err("The installer is not from the Auralis GitHub releases".into()); }
     let digest=asset["digest"].as_str().and_then(|v|v.strip_prefix("sha256:")).ok_or("The release does not provide a SHA-256 digest")?;
     if digest.len()!=64 || !digest.bytes().all(|c|c.is_ascii_hexdigit()) { return Err("The installer digest is invalid".into()); }
     let size=asset["size"].as_u64().filter(|n|*n>0 && *n<=MAX_BYTES).ok_or("The installer size is invalid")?;
@@ -92,11 +92,11 @@ pub async fn glass_update_install(app:AppHandle) -> Result<(),String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn release(url:&str,digest:&str)->serde_json::Value {serde_json::json!({"tag_name":"v0.3.2","body":"Changes", "assets":[{"name":"Mister.Hybrid.Glass_0.3.2_x64-setup.exe","browser_download_url":url,"digest":digest,"size":123}]})}
+    fn release(url:&str,digest:&str)->serde_json::Value {serde_json::json!({"tag_name":"v0.3.2","body":"Changes", "assets":[{"name":"Auralis.Download.Manager_0.3.2_x64-setup.exe","browser_download_url":url,"digest":digest,"size":123}]})}
     #[test] fn accepts_only_newer_fork_installer_with_digest(){
         let good=release("https://github.com/4ls4mi/misterdownloadmanager/releases/download/v0.3.2/setup.exe",&format!("sha256:{}","a".repeat(64)));
         assert!(candidate_from_release(&good,"0.3.1").unwrap().is_some());assert!(candidate_from_release(&good,"0.3.2").unwrap().is_none());
-        let mut wrong=good.clone();wrong["assets"][0]["name"]=serde_json::json!("Mister.Hybrid.Glass_0.3.1_x64-setup.exe");assert!(candidate_from_release(&wrong,"0.3.1").is_err());
+        let mut wrong=good.clone();wrong["assets"][0]["name"]=serde_json::json!("Auralis.Download.Manager_0.3.1_x64-setup.exe");assert!(candidate_from_release(&wrong,"0.3.1").is_err());
         let bad=release("https://evil.example/setup.exe",&format!("sha256:{}","a".repeat(64)));assert!(candidate_from_release(&bad,"0.3.1").is_err());
         let bad=release("https://github.com/4ls4mi/misterdownloadmanager/releases/download/v0.3.2/setup.exe","sha256:bad");assert!(candidate_from_release(&bad,"0.3.1").is_err());
     }
