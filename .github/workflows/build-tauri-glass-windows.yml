@@ -3,7 +3,7 @@ name: Mister Hybrid Glass Windows x64
 
 on:
   push:
-    branches: ["feature/progress-chunks-windows", "feature/ice-crystal-parity-windows"]
+    branches: ["feature/progress-chunks-windows", "feature/ice-crystal-parity-windows", "feature/indicator-glass-fixes"]
   workflow_dispatch:
 
 permissions:
