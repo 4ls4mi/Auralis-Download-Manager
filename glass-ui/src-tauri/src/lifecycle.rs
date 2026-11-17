@@ -99,7 +99,9 @@ pub fn start(app: AppHandle) {
             {
                 for (id, status) in transitions {
                     if status == "Complete" {
+                        if let Ok(mut hidden) = owner.state::<HiddenDownloadWindows>().0.lock() { hidden.remove(&id); }
                         if let Some(w) = owner.get_webview_window(&format!("download-{id}")) { let _ = w.close(); }
+                        super::refresh_tray_menu(&owner);
                         if complete { let _ = open(&owner,&format!("complete-{id}"),&format!("complete={id}"),720.0,420.0); }
                     } else {
                         let _ = open(&owner,&format!("download-{id}"),&format!("detail={id}"),880.0,500.0);
