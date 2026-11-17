@@ -3,6 +3,14 @@
 Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 `.github/workflows/release.yml`).
 
+## Mister Hybrid Glass — Windows x64 preview
+
+- Added a Tauri/WebView2 glass-style frontend backed by the original MDM engine and extension.
+- Added separate progress, completion, file-information, settings and confirmation windows, with appearance controls and configurable indicators.
+- Added 32 responsive progress-window connection slots based on engine-reported data and a live indicator preview.
+- Reduced overlapping visual layers and added a manually selected Netscape cookie file for video helpers.
+- Fork updater and Google-account autodetection remain unfinished; Windows visual and integration testing is required.
+
 ## [Unreleased]
 
 ### Added

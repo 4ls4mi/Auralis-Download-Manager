@@ -1,3 +1,32 @@
+# Mister Hybrid Glass — Windows x64 preview
+
+Mister Hybrid Glass is an independent Windows x64 fork of [Mister Download Manager](https://github.com/anefzaoui/misterdownloadmanager) by Ahmed Nefzaoui and contributors. It pairs the original MDM download engine and browser extension with a separate Tauri/WebView2 glass-style interface. The fork is experimental and is not an official MDM release.
+
+## What is different
+
+- A redesigned download list and separate, movable download, file-information, completion, settings and confirmation windows, with dark and light appearance options, selectable accents, typography, wallpapers and scaling controls.
+- A compact progress window with original download information, including status, file size, downloaded amount, transfer rate, remaining time, resume capability and server information when available.
+- Separate overall progress, transfer-speed graph and connection indicators. The progress window reserves 32 responsive slots, leaving unused slots grey and showing details on hover. Displayed connection progress is derived from the engine's reported data; paused reported connections are red.
+- Customizable indicator shapes and gradients, with a preview in appearance settings. Controls and window buttons have distinct colors and hover states.
+- Browser download capture, File Info, completion and delete dialogs, and access to the original engine's download operations and browser extension. The fork uses its own interface and bundles the original engine as a headless companion.
+- Video and gallery helper management for yt-dlp, ffmpeg and gallery-dl; video quality and subtitle selection use the original helper pipeline. A manual Netscape-format cookie file can be selected for video helpers, alongside the existing browser/profile cookie option.
+- Original MDM release checks remain separate from the fork. They do not automatically replace the fork's interface.
+
+## Known limitations
+
+- Windows x64 only. Appearance and desktop backdrop effects depend on Windows and WebView2 and do not yet reproduce all design concepts. The material renderer has been simplified to reduce overlapping effects; visual comparison on real Windows systems remains necessary.
+- Browser cookie access may be restricted by Windows or the browser. A manually exported cookie file contains a signed-in session and should be kept private. YouTube, account checks, and VPNs can still prevent a lookup; Google account autodetection and a direct account connection are not implemented.
+- An in-app updater for this fork is not yet implemented. Original MDM releases are not automatic updates for Mister Hybrid Glass.
+- The installer is a preview; a successful build alone does not establish complete feature parity or visual correctness. See the associated Windows Actions run for the exact test result.
+
+This fork retains the original project's GPL-3.0 license and attribution. Original MDM documentation and releases are available from its upstream repository.
+
+---
+
+## Original Mister Download Manager documentation
+
+The following documentation describes the upstream project; platform availability and download links in that section refer to upstream MDM, not this Windows-only fork.
+
 # Mister Download Manager
 
 <p align="center">
