@@ -12,7 +12,9 @@ export class DesktopCapture {
  private cleanup:Promise<void>|null=null;
  private pendingArm:Promise<void>|null=null;
  private pendingPicker:Promise<MediaStream>|null=null;
- constructor(private guard:CaptureGuard,private onEnded:()=>void=()=>{}){}
+ private guard:CaptureGuard;
+ private onEnded:()=>void;
+ constructor(guard:CaptureGuard,onEnded:()=>void=()=>{}){this.guard=guard;this.onEnded=onEnded}
  get status(){return this.state}
  // Invoke before presenting the Start button. The native guard must reject
  // unless exclusion is installed and maintained for all app windows.
