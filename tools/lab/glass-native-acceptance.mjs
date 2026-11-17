@@ -229,9 +229,10 @@ try{
    const result=spawnSync('powershell.exe',['-NoProfile','-Command',ps],{encoding:'utf8'});
    assert.equal(result.status,0,'Curved window clip cuts a control or is missing: '+(result.stderr||''));
   };
-  await checkClip();
-  await resizeWindow(progress,`download-${first.id}`,600,400);await checkClip();
-  await resizeWindow(progress,`download-${first.id}`,880,500);await checkClip();
+  const checkMetadata=async()=>{const fits=await progress.locator('.cg-mdm-details').evaluate(el=>el.scrollHeight<=el.clientHeight+2);assert(fits,'Download detail fields must not be clipped by expanding panels');};
+  await checkClip();await checkMetadata();
+  await resizeWindow(progress,`download-${first.id}`,600,400);await checkClip();await checkMetadata();await assertFits(progress,'Small experimental progress window');
+  await resizeWindow(progress,`download-${first.id}`,880,500);await checkClip();await checkMetadata();
   await screenshot(progress,'experimental-water-webview');
   const out=path.join(output,'experimental-water-desktop.png').replaceAll("'","''");
   const shot=spawnSync('powershell.exe',['-NoProfile','-Command',"Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $bounds=[System.Windows.Forms.SystemInformation]::VirtualScreen; $bitmap=New-Object System.Drawing.Bitmap $bounds.Width,$bounds.Height; $graphics=[System.Drawing.Graphics]::FromImage($bitmap); $graphics.CopyFromScreen($bounds.Left,$bounds.Top,0,0,$bitmap.Size); $bitmap.Save('"+out+"'); $graphics.Dispose(); $bitmap.Dispose()"],{encoding:'utf8'});
