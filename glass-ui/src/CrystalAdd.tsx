@@ -27,7 +27,7 @@ export default function CrystalAdd({ mode }: { mode:"url"|"torrent" }) {
       if(result)setDone(result.pending?"Torrent metadata lookup started.":"Torrent added successfully.");
     }catch(e){setError(String(e))}finally{setBusy(false)}
   };
-  return <CrystalWindow target="details"><WindowTop noMax title={mode==="torrent"?"Add Torrent — Mister Hybrid Glass":"Add URL — Mister Hybrid Glass"}/>
+  return <CrystalWindow target="details"><WindowTop noMax title={mode==="torrent"?"Add Torrent — Auralis Download Manager":"Add URL — Auralis Download Manager"}/>
     <div className="cg-window-add"><h2>{mode==="torrent"?"Add a BitTorrent download":"Add a new download"}</h2>
       <p>{mode==="torrent"?"Select a .torrent file or enter a magnet link. Uses your download folders and queue settings.":"Enter a web download address. Browser captures open Download File Info automatically."}</p>
       {mode==="torrent"&&<button className="cg-btn" style={{alignSelf:"flex-start",marginBottom:20}}
