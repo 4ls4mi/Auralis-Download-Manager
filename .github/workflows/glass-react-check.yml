@@ -184,6 +184,44 @@ jobs:
             $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
             try { $graphics.CopyFromScreen($bounds.Left,$bounds.Top,0,0,$bitmap.Size); $bitmap.Save((Join-Path $env:RUNNER_TEMP 'composition-water.png')) }
             finally { $graphics.Dispose(); $bitmap.Dispose() }
+            # Exercise real Win32-to-WebView mouse forwarding, not just startup.
+            Add-Type -TypeDefinition @'
+          using System;
+          using System.Runtime.InteropServices;
+          public static class WaterLabInput {
+            [StructLayout(LayoutKind.Sequential)] public struct RECT { public int left, top, right, bottom; }
+            [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr h, out RECT r);
+            [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+            [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
+            [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
+            [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int command);
+          }
+          '@
+            $handle = $lab.MainWindowHandle
+            $rect = New-Object WaterLabInput+RECT
+            [void][WaterLabInput]::GetClientRect($handle, [ref]$rect)
+            $width = $rect.right; $height = $rect.bottom
+            $windowRect = New-Object WaterLabInput+RECT
+            [void][WaterLabInput]::GetWindowRect($handle, [ref]$windowRect)
+            $hitPoint = (($windowRect.top + 45) -shl 16) -bor ($windowRect.left + 100)
+            $hit = [WaterLabInput]::SendMessage($handle, 0x84, [IntPtr]::Zero, [IntPtr]$hitPoint).ToInt32()
+            if ($hit -ne 2) { throw "Custom title drag hit test failed: $hit" }
+            function Click-Lab([int]$x, [int]$y) {
+              $point = [IntPtr](($y -shl 16) -bor $x)
+              [void][WaterLabInput]::SendMessage($handle, 0x201, [IntPtr]1, $point)
+              [void][WaterLabInput]::SendMessage($handle, 0x202, [IntPtr]0, $point)
+            }
+            Click-Lab ($width - 210) ($height - 58)
+            $clicked = $false
+            for ($i=0; $i -lt 10; $i++) { Start-Sleep -Milliseconds 300; $lab.Refresh(); if ($lab.MainWindowTitle -like '*Pause input OK*') { $clicked=$true; break } }
+            if (-not $clicked) { throw "Pause input was not delivered: $($lab.MainWindowTitle)" }
+            Click-Lab ($width - 147) 55
+            Start-Sleep -Seconds 1
+            if (-not [WaterLabInput]::IsIconic($handle)) { throw 'Custom minimize control did not minimize the window' }
+            [void][WaterLabInput]::ShowWindow($handle, 9)
+            Start-Sleep -Seconds 1
+            Click-Lab ($width - 65) 55
+            if (-not $lab.WaitForExit(5000)) { throw 'Custom close control did not close the window' }
           } finally { if (-not $lab.HasExited) { Stop-Process -Id $lab.Id -Force } }
       - uses: actions/upload-artifact@v4
         if: always()
