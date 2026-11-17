@@ -189,7 +189,10 @@ try{
  await bothThemes(progress,'progress',settings);await bothThemes(main,'main',settings);
  if(process.env.MHG_EXPERIMENTAL_WATER==='1'){
   await until(()=>progress.locator('.cg-native-water-experiment').count(),'Native Water Bubble did not initialize in the real download window');
-  await progress.bringToFront().catch(()=>{});
+  await invoke(progress,'plugin:window|show',{label:`download-${first.id}`});
+  await invoke(progress,'plugin:window|unminimize',{label:`download-${first.id}`});
+  await invoke(progress,'plugin:window|set_focus',{label:`download-${first.id}`});
+  await wait(700);
   await screenshot(progress,'experimental-water-webview');
   const out=path.join(output,'experimental-water-desktop.png').replaceAll("'","''");
   const shot=spawnSync('powershell.exe',['-NoProfile','-Command',"Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $bounds=[System.Windows.Forms.SystemInformation]::VirtualScreen; $bitmap=New-Object System.Drawing.Bitmap $bounds.Width,$bounds.Height; $graphics=[System.Drawing.Graphics]::FromImage($bitmap); $graphics.CopyFromScreen($bounds.Left,$bounds.Top,0,0,$bitmap.Size); $bitmap.Save('"+out+"'); $graphics.Dispose(); $bitmap.Dispose()"],{encoding:'utf8'});
