@@ -39,11 +39,26 @@ jobs:
       - name: Rust toolchain
         run: rustup show active-toolchain || rustup toolchain install
 
-      - name: Install NSIS
+      - name: Install Windows native build dependencies
         shell: pwsh
         run: |
+          choco install nasm --version 2.16.3 --no-progress -y
+          if ($LASTEXITCODE) { throw "NASM installation failed" }
+          "C:\\Program Files\\NASM" >> $env:GITHUB_PATH
           choco install nsis --no-progress -y
           if ($LASTEXITCODE) { throw "NSIS installation failed" }
+
+      - name: Build original MDM engine and companion executables
+        shell: pwsh
+        run: |
+          cargo build --release --target x86_64-pc-windows-msvc -p mdm-app -p mdm-nmhost
+          if ($LASTEXITCODE) { throw "Original MDM Rust backend compilation failed" }
+          New-Item -ItemType Directory -Force glass-ui/src-tauri/resources | Out-Null
+          Copy-Item target/x86_64-pc-windows-msvc/release/misterdownloadmanager.exe glass-ui/src-tauri/resources/mdm-legacy.exe
+          Copy-Item target/x86_64-pc-windows-msvc/release/misterdownloadmanager-nmhost.exe glass-ui/src-tauri/resources/misterdownloadmanager-nmhost.exe
+
+      - name: Test original engine workspace
+        run: cargo test --workspace --target x86_64-pc-windows-msvc
 
       - name: Install frontend dependencies
         working-directory: glass-ui
