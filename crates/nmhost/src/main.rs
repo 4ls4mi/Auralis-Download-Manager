@@ -1251,7 +1251,7 @@ fn our_caller(args: &[String]) -> bool {
 /// Windows: the manifest beside this exe that a browser of `family` reads, written when it isn't
 /// already what it should be (an installation for everyone can't write there, and needn't).
 #[cfg(windows)]
-fn own_manifest(family: Family) -> Result<PathBuf, String> {
+fn own_manifest(family: Family, per_user: bool) -> Result<PathBuf, String> {
     let program = this_program()?;
     let (name, value) = match family {
         Family::Chromium => (format!("{HOST_NAME}.json"), chromium_manifest(&program)),
@@ -1260,12 +1260,22 @@ fn own_manifest(family: Family) -> Result<PathBuf, String> {
             firefox_manifest(&program),
         ),
     };
-    let path = exe_dir()?.join(name);
+    let path = exe_dir()?.join(&name);
     let current = std::fs::read(&path)
         .ok()
         .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok());
     if current.as_ref() != Some(&value) {
-        write_json(&path, &value)?;
+        if let Err(error) = write_json(&path, &value) {
+            // A machine-wide install may put the executable in Program Files.
+            // Per-user browser registration must not require write access there.
+            if !per_user { return Err(error); }
+            let local = std::env::var_os("LOCALAPPDATA").ok_or(error)?;
+            let dir = PathBuf::from(local).join("MisterHybridGlass").join("NativeMessaging");
+            std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+            let writable = dir.join(&name);
+            write_json(&writable, &value)?;
+            return Ok(writable);
+        }
     }
     Ok(path)
 }
@@ -1293,7 +1303,7 @@ fn register(all_users: bool) -> Result<(), String> {
     temporary_refused()?;
     let root = if all_users { "HKLM" } else { "HKCU" };
     for (key, family) in WINDOWS_HOST_KEYS {
-        reg_point(root, key, &own_manifest(family)?)?;
+        reg_point(root, key, &own_manifest(family, !all_users)?)?;
     }
     // Chrome offers the store's extension once it is listed (never a placeholder ID).
     if let Some(id) = store_id() {
@@ -1313,8 +1323,8 @@ fn register(all_users: bool) -> Result<(), String> {
     println!(
         "registered {HOST_NAME} for Chrome, Edge, Brave, Helium and the other Chromium browsers \
          ({}), and for Firefox, Zen and its other forks ({})",
-        own_manifest(Family::Chromium)?.display(),
-        own_manifest(Family::Gecko)?.display()
+        own_manifest(Family::Chromium, !all_users)?.display(),
+        own_manifest(Family::Gecko, !all_users)?.display()
     );
     Ok(())
 }
@@ -1338,7 +1348,7 @@ fn repair() -> Result<(), String> {
         match mdm_ipc::browsers::windows_repair(user.as_ref(), holder(true, &entry).as_ref()) {
             Repair::Keep => continue,
             Repair::Take => {
-                let manifest = own_manifest(family)?;
+                let manifest = own_manifest(family, true)?;
                 reg_point("HKCU", key, &manifest)?;
                 println!(r"HKCU\{entry}: {user:?}, now {}", manifest.display());
             }

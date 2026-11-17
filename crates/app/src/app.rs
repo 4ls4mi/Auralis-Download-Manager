@@ -5999,6 +5999,7 @@ impl App {
                     snap.segments.iter().map(|part| {
                         serde_json::json!({
                             "start": part.start,
+                            "worker": part.worker,
                             "cursor": part.cursor,
                             "end": part.end
                         })

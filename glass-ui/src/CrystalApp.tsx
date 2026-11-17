@@ -7,7 +7,7 @@ import {
   ListFilter
 } from "lucide-react";
 import {
-  CrystalWindow, WindowTop, GradientBar, ChunkMap, SpeedGraph, pct, rate, units,
+  CrystalWindow, WindowTop, GradientBar, ConnectionMap, SpeedGraph, pct, rate, units,
   timeLeft, openWindow
 } from "./CrystalShared";
 import type { Dashboard, Download as MdmFile, DownloadVisual, VisualDashboard } from "./CrystalShared";
@@ -341,7 +341,7 @@ export default function CrystalApp(){
             <span>{units(d.size)}</span><StatusBadge item={d}/>
             <span className="cg-row-progress">
               <GradientBar percent={pct(d)} showLabel/>
-              <ChunkMap segments={visuals[d.id]?.segments} size={d.size} count={visuals[d.id]?.chunk_count} active={visuals[d.id]?.active_connections} compact/>
+              <ConnectionMap segments={visuals[d.id]?.segments} connections={visuals[d.id]?.connections} compact/>
               <SpeedGraph values={fileRates[d.id]??[d.speed,d.speed]} small/>
             </span>
             <span>{d.status==="Downloading"?rate(d.speed):"—"}</span>

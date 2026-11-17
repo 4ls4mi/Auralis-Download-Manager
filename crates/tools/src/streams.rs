@@ -531,18 +531,21 @@ fn segments(sizes: &[Option<u64>], at: usize, now: &[SegmentView]) -> Vec<Segmen
         let len = size.unwrap_or(0);
         if i < at {
             out.push(SegmentView {
+                worker: None,
                 start: offset,
                 cursor: offset + len,
                 end: offset + len,
             });
         } else if i == at {
             out.extend(now.iter().map(|s| SegmentView {
+                worker: s.worker,
                 start: offset + s.start,
                 cursor: offset + s.cursor,
                 end: offset + s.end,
             }));
         } else if len > 0 {
             out.push(SegmentView {
+                worker: None,
                 start: offset,
                 cursor: offset,
                 end: offset + len,
@@ -1025,11 +1028,13 @@ mod tests {
         // The video under way, half of its first half in.
         let now = [
             SegmentView {
+                worker: None,
                 start: 0,
                 cursor: 25,
                 end: 50,
             },
             SegmentView {
+                worker: None,
                 start: 50,
                 cursor: 60,
                 end: 100,
@@ -1040,6 +1045,7 @@ mod tests {
         assert_eq!(
             map[2],
             SegmentView {
+                worker: None,
                 start: 100,
                 cursor: 100,
                 end: 150
@@ -1050,6 +1056,7 @@ mod tests {
         assert_eq!(
             map[0],
             SegmentView {
+                worker: None,
                 start: 0,
                 cursor: 100,
                 end: 100
@@ -1058,6 +1065,7 @@ mod tests {
         assert_eq!(
             map[1],
             SegmentView {
+                worker: None,
                 start: 100,
                 cursor: 125,
                 end: 150

@@ -797,6 +797,8 @@ impl ConnView {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SegmentView {
+    /// Current planner owner, if any; ranges can be reassigned dynamically.
+    pub worker: Option<WorkerId>,
     pub start: u64,
     pub cursor: u64,
     pub end: u64,
@@ -1343,6 +1345,7 @@ impl Shared {
                 .segments()
                 .iter()
                 .map(|g| SegmentView {
+                worker: g.worker,
                     start: g.start,
                     cursor: g.cursor,
                     end: g.end,

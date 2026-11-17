@@ -588,6 +588,7 @@ impl RemoteTorrent {
                 .total
                 .map(|t| {
                     vec![SegmentView {
+                worker: None,
                         start: 0,
                         cursor: downloaded.min(t),
                         end: t,

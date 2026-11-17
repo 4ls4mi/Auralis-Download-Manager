@@ -7,7 +7,7 @@ import { useEffect, useState, useLayoutEffect, useRef, useId, createContext, use
 import type { CSSProperties, ReactNode } from "react";
 import { AppWindow, Maximize2, Minus, X, PanelBottomClose } from "lucide-react";
 
-import { selectedChunks } from "./chunks";
+import { connectionIndicators } from "./connections";
 
 export type Status = "Queued" | "Downloading" | "Stopped" | "Complete" | "Error";
 export type Download = {
@@ -16,7 +16,7 @@ export type Download = {
   category: string; error?: string | null
 };
 export type Queue = { name: string; running: boolean; ids: number[] };
-export type Segment = { start: number; cursor: number; end: number };
+export type Segment = { start: number; cursor: number; end: number; worker?:number|null };
 export type Connection = { id: number; downloaded: number; speed: number; state: string };
 export type ServerPlace={name:string|null;flag_cell:[number,number]|null;reach:string|null};
 export function CountryFlag({place}:{place?:ServerPlace|null}){return place?.flag_cell?<span className="cg-country-flag" aria-label="Country flag" style={{backgroundPosition:`-${place.flag_cell[0]/2}px -${place.flag_cell[1]/2}px`}}/>:null;}
@@ -158,29 +158,17 @@ export function GradientBar({percent,showLabel=false}:{percent:number;showLabel?
   </div>;
 }
 
-// Exactly the selected 8 / 32 / N chunks, filled from original engine bytes.
-export function ChunkMap({segments,size,count,active,compact=false}:{
-  segments:Segment[]|undefined;size:number|null;count?:number;active?:number;compact?:boolean
-}){
+// Each block represents an engine worker and only its currently assigned ranges.
+export function ConnectionMap({segments,connections,compact=false}:{segments:Segment[]|undefined;connections:Connection[]|undefined;compact?:boolean}){
   const {appearance}=useCrystal();const colors=indicatorColors(appearance.indicator);
-  const n=Math.max(1,Math.min(128,count??segments?.length??1));
-  const known=Boolean(segments?.length&&size&&size>0);
-  const chunks=selectedChunks(n,size??0,segments??[]);
+  const items=connectionIndicators(connections??[],segments??[]);
   return <div className={"cg-chunks "+(compact?"compact":"")}>
-    <div className="cg-chunk-label"><span>{count??(known?n:"—")} chunks</span>
-      {!compact&&active!==undefined&&<small>{active} active connections</small>}</div>
-    <div className={"cg-chunk-map "+(compact?"compact":"")}
-      style={{gridTemplateColumns:`repeat(${Math.min(32,n)},minmax(0,1fr))`}}
-      aria-label={`${n} selected download chunks; ${known?"received bytes from the MDM engine":"byte-range data unavailable"}`}>
-      {Array.from({length:n},(_,i)=>{
-        const c=chunks[i],fill=known?(c?.percent??0):0;
-        return <span key={i} className={fill>0?"active":""}
-          title={known&&c?`Chunk ${i+1}: bytes ${c.start.toLocaleString()}–${c.end.toLocaleString()}, ${fill.toFixed(1)}% received`: `Chunk ${i+1}: byte-range data unavailable`}>
-          {fill>0&&<i style={{width:`${fill}%`,background:colors[Math.min(colors.length-1,Math.floor(i/Math.max(1,n-1)*(colors.length-1)))]}}/>}
-        </span>;
-      })}
-    </div>
-    {!known&&!compact&&<small className="cg-muted">Waiting for byte-range data</small>}
+    <div className="cg-chunk-label"><span>{connections?`${items.length} connections`:"Connections unavailable"}</span>{!compact&&<small>{items.filter(c=>c.state==="Receiving").length} receiving</small>}</div>
+    {items.length>0&&<div className={"cg-chunk-map "+(compact?"compact":"")} style={{gridTemplateColumns:`repeat(${items.length},minmax(0,1fr))`}} aria-label={`${items.length} engine connections`}>
+     {items.map(c=>{const fill=c.percent;const label=`Connection ${c.id+1}: ${c.state}; downloaded ${units(c.downloaded)}; ${rate(c.speed)}; ${fill===null?"assigned range unavailable":`${units(c.received)} of ${units(c.assigned)} (${fill.toFixed(1)}%)`}`;
+      return <span key={c.id} className={c.state==="Receiving"?"active":""} title={label} aria-label={label} tabIndex={0}>{fill!==null&&fill>0&&<i style={{width:`${fill}%`,backgroundImage:`linear-gradient(90deg,${colors.join(",")})`}}/>}{c.state==="Receiving"&&!compact&&<b className="cg-connection-active"/>}</span>})}
+    </div>}
+    {items.length===0&&!compact&&<small className="cg-muted">No connection data available</small>}
   </div>;
 }
 
