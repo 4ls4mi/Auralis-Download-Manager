@@ -5,7 +5,7 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 
 ## Mister Hybrid Glass — Windows x64 preview
 
-This fork-specific summary describes work in the Glass frontend and its original MDM backend integration. The upstream MDM changelog follows below. See the [public preview release](https://github.com/4ls4mi/misterdownloadmanager/releases/tag/v0.3.0-glass-preview.1) for the installer and validation details.
+This fork-specific summary describes work in the Glass frontend and its original MDM backend integration. The [complete fork development history](https://github.com/4ls4mi/misterdownloadmanager/compare/c3a7843fddfb5a990c58be9ad7f7ef5c1759b2c9...34b36cff2a0d13b2274e1a41a7a621b33ec2b652) contains the individual changes behind this summary. The upstream MDM changelog follows below. See the [public preview release](https://github.com/4ls4mi/misterdownloadmanager/releases/tag/v0.3.0-glass-preview.1) for the installer and validation details.
 
 ### Interface and windows
 
