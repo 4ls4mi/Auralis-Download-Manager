@@ -18,11 +18,11 @@
 #pragma comment(lib,"dwmapi.lib")
 #pragma comment(lib,"user32.lib")
 using namespace winrt;
-using namespace Windows::UI::Composition;
-using namespace Windows::UI::Composition::Desktop;
+using namespace winrt::Windows::UI::Composition;
+using namespace winrt::Windows::UI::Composition::Desktop;
 using Microsoft::WRL::ComPtr;
 using Microsoft::WRL::Callback;
-Windows::System::DispatcherQueueController queue{nullptr};
+winrt::Windows::System::DispatcherQueueController queue{nullptr};
 Compositor compositor{nullptr}; DesktopWindowTarget target{nullptr};
 ContainerVisual root{nullptr},webVisual{nullptr}; SpriteVisual backdrop{nullptr};
 ComPtr<ICoreWebView2CompositionController> compositionController;
