@@ -1,5 +1,3 @@
-import MaterialSurface from "./MaterialSurface";
-import GlassRenderer from "./GlassRenderer";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { getCurrentWindow, Effect, EffectState } from "@tauri-apps/api/window";
 type ResizeDirection = Parameters<ReturnType<typeof getCurrentWindow>["startResizeDragging"]>[0];
@@ -258,13 +256,6 @@ export function CrystalWindow({ children, target = "main" }: {
     window.addEventListener('resize',reset);reset();
     return()=>{disposed=true;cancelAnimationFrame(raf);observer.disconnect();mutations.disconnect();el.removeEventListener('click',sectionClick);el.removeEventListener('change',reset);el.removeEventListener('toggle',reset,true);window.removeEventListener('resize',reset)};
   },[appearance.uiScale,appearance.fontSize,appearance.fontFamily,target]);
-  useEffect(()=>{
-    let disposed=false, timer:ReturnType<typeof setTimeout>|undefined;
-    const apply=()=>{if(!disposed)void invoke("set_material_window_shape",{material:appearance.material}).catch(e=>{if(!disposed)setWindowError(`Material outline unavailable: ${String(e)}`)});};
-    const resize=()=>{clearTimeout(timer);timer=setTimeout(apply,75)};
-    window.addEventListener("resize",resize);apply();
-    return()=>{disposed=true;clearTimeout(timer);window.removeEventListener("resize",resize)};
-  },[appearance.material]);
   const main = target === "main", mode = main ? appearance.mainMode : appearance.detailMode;
   const path = main ? appearance.wallMain : (appearance.wallDetail || appearance.wallMain);
   const src = path ? convertFileSrc(path) : "/alpine.svg";
@@ -280,7 +271,7 @@ export function CrystalWindow({ children, target = "main" }: {
     "--accent": appearance.lightMode ? (({plexo:"#086e84",ocean:"#146c9b",purple:"#7050b5",pink:"#b73962",gold:"#8a5b05",green:"#19765b",silver:"#4c6680",navy:"#394ea2",orange:"#ad4700",rose:"#a42b70"} as Record<string,string>)[theme.id]??"#086e84") : theme.accent,
     "--accent-secondary": theme.secondary,
     "--accent-rgb": appearance.lightMode ? (({plexo:"8,110,132",ocean:"20,108,155",purple:"112,80,181",pink:"183,57,98",gold:"138,91,5",green:"25,118,91",silver:"76,102,128",navy:"57,78,162",orange:"173,71,0",rose:"164,43,112"} as Record<string,string>)[theme.id]??"8,110,132") : theme.rgb,
-    "--glass-tint": `hsl(${Math.max(0,Math.min(360,appearance.tintHue))} 85% 64% / ${Math.max(0,Math.min(65,appearance.tintStrength))/100})`,
+    "--surface-accent": Math.max(0,Math.min(65,appearance.tintStrength))/100,
     "--panel-opacity": Math.min(.94, Math.max(.45, appearance.opacity / 100)),
     "--crystal-blur": appearance.blur + "px",
     "--ui-scale": 1,
@@ -291,14 +282,14 @@ export function CrystalWindow({ children, target = "main" }: {
     "--min-window-button": (30/Math.min(1,Math.max(.4,fit)))+"px",
     "--font-size": Math.max(Math.min(20,Math.max(12,appearance.fontSize)),12/Math.max(.4,fit))+"px"
   } as CSSProperties;
-  return <div className={`cg-window cg-mode-${mode} cg-material-${appearance.material} cg-progress-shape-${appearance.progressShape} ${appearance.lightMode?"cg-light":"cg-dark"} ${appearance.highContrast?"cg-high-contrast":""}`} style={style}>
+  return <div className={`cg-window cg-mode-${mode} cg-progress-shape-${appearance.progressShape} ${appearance.lightMode?"cg-light":"cg-dark"} ${appearance.highContrast?"cg-high-contrast":""}`} style={style}>
     {mode === "wallpaper" && <div className="cg-wallpaper">
       {video ? <video key={src} autoPlay loop muted playsInline src={src} /> :
         <div style={{ backgroundImage: `url("${src}")` }} />}
       <span style={{ background: `rgba(3,9,19,${appearance.dim / 100})` }} />
     </div>}
     {mode === "solid" && <div className="cg-solid" />}
-    <div className="cg-content" ref={frame}><GlassRenderer material={appearance.material} hue={appearance.tintHue} strength={appearance.tintStrength} light={appearance.lightMode}/><MaterialSurface material={appearance.material}/><div className="cg-fit-content">{children}</div></div>
+    <div className="cg-content" ref={frame}><div className="cg-fit-content">{children}</div></div>
     {windowError&&<aside className="cg-window-notice cg-error" role="alert"><span>{windowError}</span><button title="Dismiss" onClick={()=>setWindowError("")}><X size={15}/></button></aside>}
     <ResizeGrips />
   </div>;

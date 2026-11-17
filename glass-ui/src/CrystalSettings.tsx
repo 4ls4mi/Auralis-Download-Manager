@@ -34,7 +34,6 @@ export default function CrystalSettings(){
     return ()=>{active=false;unlisten?.()};
   },[]);
   const [appearanceTab,setAppearanceTab]=useState("Theme");
-  const [materialPage,setMaterialPage]=useState(0);
   const [cfg,setCfg]=useState<EngineSettings|null>(null);
   const [queues,setQueues]=useState<Queue[]>([]);
   const [busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
@@ -162,7 +161,7 @@ export default function CrystalSettings(){
       </>;
       case "Accounts":return <CrystalAccounts/>;
       case "Appearance":return <>
-        <nav className="cg-appearance-tabs" aria-label="Appearance sections">{["Theme","Materials","Indicators","Backgrounds","Glass & scaling","Typography"].map(name=><button key={name} className={appearanceTab===name?"selected":""} onClick={()=>setAppearanceTab(name)}>{name}</button>)}</nav>
+        <nav className="cg-appearance-tabs" aria-label="Appearance sections">{["Theme","Indicators","Backgrounds","Glass & scaling","Typography"].map(name=><button key={name} className={appearanceTab===name?"selected":""} onClick={()=>setAppearanceTab(name)}>{name}</button>)}</nav>
         {appearanceTab==="Theme"&&<>
         <h3>Crystalline ice color themes</h3>
         <div className="cg-color-choices">{themes.map(t=><button key={t.id} className={appearance.theme===t.id?"selected":""}
@@ -177,15 +176,13 @@ export default function CrystalSettings(){
         </div>
         <div className="cg-settings-fallback">The interface theme affects glass reflections and controls. Download progress, actual chunks and transfer-speed graphs use your chosen indicator gradient independently of the interface theme.</div>
         </>}
-        {appearanceTab==="Materials"&&<><h3>Glass material</h3>
-        <div className="cg-wall-choice">{[["ice-edge","Ice Edge"],["smoked-crystal","Smoked Crystal"],["frosted-layers","Frosted Layers"],["aero-gloss","Aero Gloss"],["prismatic-glass","Prismatic Glass"],["liquid-glass","Liquid Glass"],["obsidian-glass","Obsidian Glass"],["diamond-facet","Diamond Facet"],["holographic-film","Holographic Film"],["pearl-mist","Pearl Mist"],["aurora-veil","Aurora Veil"],["brushed-glass","Brushed Glass"],["water-bubble","Water Bubble Glass"]].slice(materialPage*5,materialPage*5+5).map(([id,label])=><button key={id} className={`cg-btn ${appearance.material===id?"cg-btn-primary":""}`} onClick={()=>set("material",id)}>{label}</button>)}</div><div className="cg-pagination"><button disabled={materialPage===0} onClick={()=>setMaterialPage(n=>n-1)}>Previous</button><span>{materialPage+1} / 3</span><button disabled={materialPage===2} onClick={()=>setMaterialPage(n=>n+1)}>Next</button></div><p>Choose a surface style for light and dark windows.</p>{slider("tintHue","Glass tint color",0,360,"°")}{slider("tintStrength","Glass tint strength",0,65,"%")}</>}
         {appearanceTab==="Indicators"&&<><h3>Progress bar and connection shapes</h3><div className="cg-wall-choice">{[["rounded","Rounded"],["faceted","Faceted"],["wave","Water wave"],["square","Square"]].map(([id,label])=><button key={id} className={`cg-btn ${appearance.progressShape===id?"cg-btn-primary":""}`} onClick={()=>set("progressShape",id)}>{label}</button>)}</div><h3>Indicator gradients</h3><div className="cg-color-choices">{Object.entries(indicatorPalettes).map(([id,p])=><button key={id} className={appearance.indicator===id?"selected":""} onClick={()=>set("indicator",id)}><i style={{background:`linear-gradient(90deg,${p.colors.join(",")})`}}/>{p.label}</button>)}</div><p>The progress bar, connection indicators and measured speed graph use this palette independently of your interface theme.</p></>}
         {appearanceTab==="Backgrounds"&&<>
         <h3>Independent translucent backgrounds</h3>
         {mode("main")}{mode("details")}
         </>}
         {appearanceTab==="Glass & scaling"&&<>
-        {slider("opacity","Crystal glass opacity",45,94,"%")}
+        {slider("opacity","Surface opacity",45,94,"%")}{slider("tintStrength","Theme accent strength",0,65,"%") }
         {slider("blur","Wallpaper blur",0,20," px")}
         {slider("dim","Wallpaper darkness",0,80,"%")}
         {slider("uiScale","Interface size",80,150,"%")}
