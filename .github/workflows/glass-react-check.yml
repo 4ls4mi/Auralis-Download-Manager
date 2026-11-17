@@ -245,6 +245,24 @@ jobs:
             Click-Lab ($width - 65) 55
             if (-not $lab.WaitForExit(5000)) { throw 'Custom close control did not close the window' }
           } finally { if (-not $lab.HasExited) { Stop-Process -Id $lab.Id -Force } }
+      - name: Capture Ice Edge geometry
+        shell: pwsh
+        run: |
+          $env:WEBVIEW2_USER_DATA_FOLDER = Join-Path $env:RUNNER_TEMP 'ice-lab-webview'
+          $lab = Start-Process -FilePath "$PWD\composition-water-lab.exe" -ArgumentList '--ice' -PassThru
+          try {
+            $ready=$false
+            for ($i=0; $i -lt 30; $i++) { Start-Sleep -Seconds 1; $lab.Refresh(); if ($lab.HasExited) { throw "Ice lab exited: $($lab.ExitCode)" }; if ($lab.MainWindowTitle -like '*composition lab*') { $ready=$true; break } }
+            if (-not $ready) { throw 'Ice composition did not initialize' }
+            Start-Sleep -Seconds 5
+            Add-Type -AssemblyName System.Windows.Forms
+            Add-Type -AssemblyName System.Drawing
+            $bounds=[System.Windows.Forms.SystemInformation]::VirtualScreen
+            $bitmap=New-Object System.Drawing.Bitmap $bounds.Width,$bounds.Height
+            $graphics=[System.Drawing.Graphics]::FromImage($bitmap)
+            try { $graphics.CopyFromScreen($bounds.Left,$bounds.Top,0,0,$bitmap.Size); $bitmap.Save((Join-Path $env:RUNNER_TEMP 'composition-ice.png')) }
+            finally { $graphics.Dispose(); $bitmap.Dispose() }
+          } finally { if (-not $lab.HasExited) { Stop-Process -Id $lab.Id -Force } }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -252,6 +270,7 @@ jobs:
           path: |
             ${{ runner.temp }}/composition-water.png
             ${{ runner.temp }}/composition-water-resized.png
+            ${{ runner.temp }}/composition-ice.png
             composition-water-lab.exe
             WebView2Loader.dll
           if-no-files-found: warn
