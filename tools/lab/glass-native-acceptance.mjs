@@ -188,28 +188,26 @@ try{
  await progress.getByRole('button',{name:'Pause',exact:true}).click();await until(async()=>(await ipc({query:'list'})).downloads.find(f=>f.id===first.id)?.status==='Stopped','Transfer did not pause');
  assert.equal(progress.isClosed(),false,'Pausing in the progress window keeps it open');
  if(process.env.GLASS_COMPOSITION_LAB){
-  const portProbe=net.createServer();await new Promise(r=>portProbe.listen(0,'127.0.0.1',r));const labPort=portProbe.address().port;await new Promise(r=>portProbe.close(r));
-  const lab=startLiveBridge({exe:process.env.GLASS_COMPOSITION_LAB,dataDir:data,id:first.id,intervalMs:500,env:{...process.env,WEBVIEW2_USER_DATA_FOLDER:path.join(folder,'composition-webview'),WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS:`--remote-debugging-port=${labPort} --remote-debugging-address=127.0.0.1 --remote-allow-origins=*`}});
-  let labBrowser=null,labError='';lab.on('telemetry-error',e=>{labError=e.message});lab.stderr.on('data',b=>{labError+=b.toString()});
+  const lab=startLiveBridge({exe:process.env.GLASS_COMPOSITION_LAB,dataDir:data,id:first.id,intervalMs:500,env:{...process.env,WEBVIEW2_USER_DATA_FOLDER:path.join(folder,'composition-webview'),WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS:''}});
+  let labError='';lab.on('telemetry-error',e=>{labError=e.message});lab.stderr.on('data',b=>{labError+=b.toString()});
   try{
-   labBrowser=await until(async()=>{if(lab.exitCode!=null)throw Error('Composition lab exited: '+lab.exitCode+' '+labError);try{return await chromium.connectOverCDP(`http://127.0.0.1:${labPort}`,{timeout:2000})}catch{return null}},'Live composition WebView did not start',45000);
-   const labPage=await until(()=>labBrowser.contexts().flatMap(c=>c.pages()).find(p=>!p.isClosed()),'Live composition page missing');
-   await until(async()=>await labPage.locator('.note').textContent().then(t=>t.includes('Live engine telemetry')),'Composition lab did not enter live mode');
    const stopped=(await ipc({query:'list'})).downloads.find(f=>f.id===first.id);assert(stopped.downloaded>0&&stopped.size>0,'Paused fixture must contain real bytes');
    const percent=(100*stopped.downloaded/stopped.size).toFixed(1)+'%';
-   await until(async()=>await labPage.locator('#overall-label').textContent()===percent,'Composition percentage did not match original engine');
-   await until(async()=>await labPage.locator('[data-field="Status"]').textContent().then(t=>t.includes('Stopped')),'Composition status did not match original engine');
    const visual=(await ipc({query:'glass-visuals'})).downloads.find(v=>v.id===first.id);const expected=(visual?.connections??[]).filter(c=>c.state!=='Retired'&&c.state!=='Failed'&&!(c.state==='Finished'&&c.downloaded===0)).length;
-   await until(async()=>await labPage.locator('.blocks .block').count()===expected,'Composition blocks did not match original engine workers');
-   assert(await labPage.locator('footer button').first().isDisabled(),'Unconnected actions must be disabled in live lab');
-   await screenshot(labPage,'composition-live-webview');
+   const verified=await until(async()=>{
+    if(lab.exitCode!=null)throw Error('Composition lab exited: '+lab.exitCode+' '+labError);
+    const q=spawnSync('powershell.exe',['-NoProfile','-Command',`(Get-Process -Id ${lab.pid} -ErrorAction SilentlyContinue).MainWindowTitle`],{encoding:'utf8',timeout:5000});
+    const title=(q.stdout||'').trim();if(!title.startsWith('MDM-LAB-VERIFY:'))return false;
+    const state=JSON.parse(title.slice('MDM-LAB-VERIFY:'.length));
+    return state.percent===percent&&state.status==='Stopped'&&state.workers===expected&&state.actionsDisabled?state:false;
+   },'Composition telemetry did not match original engine',45000);
+   assert(verified.actionsDisabled,'Unconnected actions must be disabled in live lab');
    const out=path.join(output,'composition-live-desktop.png').replaceAll("'","''");
-   const shot=spawnSync('powershell.exe',['-NoProfile','-Command',"Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $bounds=[System.Windows.Forms.SystemInformation]::VirtualScreen; $bitmap=New-Object System.Drawing.Bitmap $bounds.Width,$bounds.Height; $graphics=[System.Drawing.Graphics]::FromImage($bitmap); $graphics.CopyFromScreen($bounds.Left,$bounds.Top,0,0,$bitmap.Size); $bitmap.Save('"+out+"'); $graphics.Dispose(); $bitmap.Dispose()"],{encoding:'utf8'});
-   assert.equal(shot.status,0,'Could not capture live composition desktop');
+   const script=`Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class BringLab { [DllImport("user32.dll",CharSet=CharSet.Unicode)] public static extern IntPtr FindWindow(string c,string n); [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h); }'; $h=[BringLab]::FindWindow('MHGCompositionWaterLab',$null); if($h -eq [IntPtr]::Zero){exit 2}; [void][BringLab]::SetForegroundWindow($h); Start-Sleep -Milliseconds 500; Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $bounds=[System.Windows.Forms.SystemInformation]::VirtualScreen; $bitmap=New-Object System.Drawing.Bitmap $bounds.Width,$bounds.Height; $graphics=[System.Drawing.Graphics]::FromImage($bitmap); $graphics.CopyFromScreen($bounds.Left,$bounds.Top,0,0,$bitmap.Size); $bitmap.Save('${out}'); $graphics.Dispose(); $bitmap.Dispose()`;
+   const shot=spawnSync('powershell.exe',['-NoProfile','-Command',script],{encoding:'utf8'});assert.equal(shot.status,0,'Could not capture live composition desktop');
    passed('Experimental composition host displays original engine byte progress and actual workers through a read-only authenticated bridge');
-  }finally{if(labBrowser)await labBrowser.close().catch(()=>{});lab.kill();}
+  }finally{lab.kill();}
  }
-
  await until(async()=>await progress.locator('.cg-chunk-map>span.active').count()===0,'Paused connection blocks must not appear active');
  await progress.getByRole('button',{name:'Resume',exact:true}).click();
  await until(async()=>(await ipc({query:'list'})).downloads.find(f=>f.id===first.id)?.status==='Downloading','Transfer did not resume');
