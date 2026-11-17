@@ -4,7 +4,7 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Manager};
 
-const FEED: &str = "https://api.github.com/repos/4ls4mi/misterdownloadmanager/releases/latest";
+const FEED: &str = "https://api.github.com/repos/4ls4mi/misterdownloadmanager/releases?per_page=30";
 const ASSET_PREFIX: &str = "https://github.com/4ls4mi/misterdownloadmanager/releases/download/";
 const MAX_BYTES: u64 = 256 * 1024 * 1024;
 #[derive(Clone)]
@@ -19,14 +19,17 @@ fn client() -> Result<reqwest::blocking::Client, String> {
         .timeout(Duration::from_secs(180)).build().map_err(|e| e.to_string())
 }
 fn candidate_from_release(value: &serde_json::Value, current: &str) -> Result<Option<Candidate>, String> {
-    let tag = value["tag_name"].as_str().ok_or("The release has no version")?;
-    let version = semver::Version::parse(tag.trim_start_matches(['v','V'])).map_err(|_| "The release version is invalid")?;
+    let Some(tag) = value["tag_name"].as_str() else { return Ok(None) };
+    let Ok(version) = semver::Version::parse(tag.trim_start_matches(['v','V'])) else { return Ok(None) };
     let current = semver::Version::parse(current).map_err(|_| "The installed version is invalid")?;
     if version <= current { return Ok(None); }
-    let assets=value["assets"].as_array().ok_or("The release has no installer")?;
+    // This repository also carries upstream MDM releases. Only releases with the Auralis
+    // installer are update candidates; an unrelated newer MDM tag must never block this fork.
+    let Some(assets) = value["assets"].as_array() else { return Ok(None) };
     let expected_name=format!("Auralis.Download.Manager_{}_x64-setup.exe",version);
     let matches: Vec<_> = assets.iter().filter(|asset| asset["name"].as_str()==Some(expected_name.as_str())).collect();
-    if matches.len()!=1 { return Err("This release must contain one Windows x64 Auralis installer".into()); }
+    if matches.is_empty() { return Ok(None); }
+    if matches.len()!=1 { return Err("This Auralis release must contain exactly one Windows x64 installer".into()); }
     let asset=matches[0];
     let url=asset["browser_download_url"].as_str().ok_or("The installer address is missing")?;
     if !url.starts_with(ASSET_PREFIX) || url.contains('?') || url.contains('#') { return Err("The installer is not from the Auralis GitHub releases".into()); }
@@ -41,7 +44,19 @@ pub async fn glass_update_check() -> Result<UpdateStatus,String> {
         let response=client()?.get(FEED).header("Accept","application/vnd.github+json").send().map_err(|e|e.to_string())?;
         if response.status()==reqwest::StatusCode::NOT_FOUND { *lock()?=None; return Ok(UpdateStatus{state:"latest",version:None,notes:None}); }
         let value:serde_json::Value=response.error_for_status().map_err(|e|e.to_string())?.json().map_err(|e|e.to_string())?;
-        let next=candidate_from_release(&value,env!("CARGO_PKG_VERSION"))?;
+        let releases=value.as_array().ok_or("The GitHub release feed is invalid")?;
+        let mut next:Option<Candidate>=None;
+        for release in releases {
+            if release["draft"]==true || release["prerelease"]==true { continue; }
+            if let Some(candidate)=candidate_from_release(release,env!("CARGO_PKG_VERSION"))? {
+                let replace=match next.as_ref() {
+                    None=>true,
+                    Some(old)=>semver::Version::parse(&candidate.version).map_err(|e|e.to_string())?
+                        > semver::Version::parse(&old.version).map_err(|e|e.to_string())?,
+                };
+                if replace { next=Some(candidate); }
+            }
+        }
         let status=match &next {Some(c)=>UpdateStatus{state:"available",version:Some(c.version.clone()),notes:Some(c.notes.clone())},None=>UpdateStatus{state:"latest",version:None,notes:None}};
         *lock()?=next; Ok(status)
     }).await.map_err(|e|e.to_string())?
@@ -96,7 +111,7 @@ mod tests {
     #[test] fn accepts_only_newer_fork_installer_with_digest(){
         let good=release("https://github.com/4ls4mi/misterdownloadmanager/releases/download/v0.3.2/setup.exe",&format!("sha256:{}","a".repeat(64)));
         assert!(candidate_from_release(&good,"0.3.1").unwrap().is_some());assert!(candidate_from_release(&good,"0.3.2").unwrap().is_none());
-        let mut wrong=good.clone();wrong["assets"][0]["name"]=serde_json::json!("Auralis.Download.Manager_0.3.1_x64-setup.exe");assert!(candidate_from_release(&wrong,"0.3.1").is_err());
+        let mut wrong=good.clone();wrong["assets"][0]["name"]=serde_json::json!("MisterDownloadManager-0.9.0-setup.exe");assert!(candidate_from_release(&wrong,"0.3.1").unwrap().is_none());
         let bad=release("https://evil.example/setup.exe",&format!("sha256:{}","a".repeat(64)));assert!(candidate_from_release(&bad,"0.3.1").is_err());
         let bad=release("https://github.com/4ls4mi/misterdownloadmanager/releases/download/v0.3.2/setup.exe","sha256:bad");assert!(candidate_from_release(&bad,"0.3.1").is_err());
     }
