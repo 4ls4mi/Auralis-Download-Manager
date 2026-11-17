@@ -235,7 +235,7 @@ export default function CrystalApp(){
         {label:"Unified Settings…",action:"settings"}];
       case "Help":return [
         {label:"Browser integration and repair",action:"browser"},
-        {label:"About Mister Hybrid Glass",action:"about"},
+        {label:"About Auralis Download Manager",action:"about"},
         {label:"Keyboard shortcuts",action:"about"}];
     }
   }
@@ -296,11 +296,11 @@ export default function CrystalApp(){
     else if(d.status==="Complete")openWindow(`complete-${d.id}`,`/?complete=${d.id}`,720,420);
     else pop(d.id);
   };
-  return <CrystalWindow><WindowTop title="Mister Hybrid Glass — Download Manager">
+  return <CrystalWindow><WindowTop title="Auralis Download Manager — Download Manager">
     <span className="cg-muted" style={{fontSize:"var(--min-text-size)",whiteSpace:"nowrap",marginRight:9}}>{online?"● Connected":"○ Offline"}</span>
   </WindowTop>
   <div className="cg-main-body" onContextMenu={e=>e.preventDefault()}>
-    {updateVersion&&<div className="cg-update-notice" role="status"><span>Mister Hybrid Glass {updateVersion} is available.</span><button className="cg-btn" onClick={()=>{setUpdateVersion(null);openWindow("settings","/?settings=1&tab=Advanced&panel=Updates",920,700)}}>View update</button><button className="cg-btn" aria-label="Dismiss update notice" onClick={()=>setUpdateVersion(null)}>Close</button></div>}
+    {updateVersion&&<div className="cg-update-notice" role="status"><span>Auralis Download Manager {updateVersion} is available.</span><button className="cg-btn" onClick={()=>{setUpdateVersion(null);openWindow("settings","/?settings=1&tab=Advanced&panel=Updates",920,700)}}>View update</button><button className="cg-btn" aria-label="Dismiss update notice" onClick={()=>setUpdateVersion(null)}>Close</button></div>}
     <div className="cg-menubar">
       {menus.map(menu=><div className="cg-menu-parent" key={menu}>
         <button className={"cg-menu-trigger "+(openMenu===menu?"active":"")} onClick={()=>{setContext(null);setOpenMenu(openMenu===menu?null:menu)}}>{menu}</button>
@@ -316,7 +316,7 @@ export default function CrystalApp(){
     </div>
     <div className="cg-workspace">
       {showCategories&&<aside className="cg-sidebar cg-glass">
-        <div className="cg-side-heading">MISTER HYBRID • LIBRARY</div>
+        <div className="cg-side-heading">AURALIS • LIBRARY</div>
         {nav.map(([label,Icon,count])=><button key={label} className={filter===label?"selected":""} onClick={()=>setFilter(label)}>
           <Icon size={17}/><span>{label}</span><b>{count}</b></button>)}
         <div className="cg-side-separator">CATEGORIES</div>
