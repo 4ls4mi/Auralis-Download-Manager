@@ -60,7 +60,7 @@ export function CrystalComplete({id}:{id:number}){
   if(state?.moved_away&&!previousAway.current)setNotice('The file was moved, but Windows could not report its new location.');
   previousAway.current=Boolean(state?.moved_away);setMovedAway(previousAway.current);previousPath.current=next?.path??null;setItem(next);
  }catch(e){if(active)setError(String(e))}finally{running=false}};void load();const timer=setInterval(()=>void load(),1200);return()=>{active=false;clearInterval(timer)}},[id]);
- const open=async(operation:string)=>{setBusy(true);setError('');try{await invoke('file_operation',{id,operation,value:null})}catch(e){setError(String(e))}finally{setBusy(false)}};
+ const open=async(operation:string)=>{setBusy(true);setError('');try{await invoke('file_operation',{id,operation,value:null});await close()}catch(e){setError(String(e))}finally{setBusy(false)}};
  return <CrystalWindow target="details"><WindowTop noMax title="Download complete"/>
   <main className="cg-page cg-complete-page">{notice&&<p className="cg-success" role="status">{notice}</p>}<div className="cg-complete-heading"><CheckCheck size={34}/><div><h2>Download complete</h2><p>Downloaded {units(item?.downloaded)} ({item?.downloaded.toLocaleString()??'—'} bytes)</p></div></div>
    <label className="cg-field">Address<input value={item?.url??''} readOnly title={item?.url}/></label>
