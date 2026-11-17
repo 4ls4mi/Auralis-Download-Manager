@@ -232,9 +232,9 @@ export function CrystalWindow({ children, target = "main", experimentalWater = f
   const [fit,setFit]=useState(1),[windowError,setWindowError]=useState("");
   const [nativeWater,setNativeWater]=useState(false);
   useEffect(()=>{
-    if(!experimentalWater || appearance.detailMode !== "desktop"){setNativeWater(false);return;}
+    if(!experimentalWater)return;
     let active=true;
-    void invoke<boolean>("experimental_water_surface",{rgb:parseInt(theme.accent.slice(1),16),light:appearance.lightMode})
+    void invoke<boolean>("experimental_water_surface",{rgb:parseInt(theme.accent.slice(1),16),light:appearance.lightMode,enabled:appearance.detailMode === "desktop"})
       .then(enabled=>{if(active)setNativeWater(enabled)})
       .catch(()=>{if(active)setNativeWater(false)});
     return()=>{active=false};
