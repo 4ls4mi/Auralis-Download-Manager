@@ -21,7 +21,7 @@ jobs:
   native:
     if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[native review]') }}
     runs-on: windows-latest
-    timeout-minutes: 40
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,6 +39,23 @@ jobs:
           if (-not $run) { $run = [regex]::Match($env:GLASS_COMMIT_MESSAGE, 'source-run:(\d+)').Groups[1].Value }
           if ($run -notmatch '^\d+$') { throw 'Specify a valid installer source run' }
           "GLASS_REVIEW_RUN=$run" >> $env:GITHUB_ENV
+      - name: Wait for the requested candidate build
+        if: ${{ inputs.experimental_water }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $deadline = (Get-Date).AddMinutes(80)
+          do {
+            $run = gh run view $env:GLASS_REVIEW_RUN --repo $env:GITHUB_REPOSITORY --json status,conclusion | ConvertFrom-Json
+            if ($LASTEXITCODE -ne 0) { throw 'Could not inspect the requested build' }
+            if ($run.status -eq 'completed') {
+              if ($run.conclusion -ne 'success') { throw "Candidate build finished with $($run.conclusion)" }
+              break
+            }
+            Start-Sleep -Seconds 30
+          } while ((Get-Date) -lt $deadline)
+          if ($run.status -ne 'completed') { throw 'Candidate build did not finish in time' }
       - uses: actions/download-artifact@v4
         with:
           name: mister-hybrid-glass-windows-x64-candidate
