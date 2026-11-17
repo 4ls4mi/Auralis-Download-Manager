@@ -70,6 +70,9 @@ jobs:
         timeout-minutes: 2
         shell: pwsh
         run: |
+          $transparency = Get-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' -Name EnableTransparency -ErrorAction SilentlyContinue
+          Write-Host "Transparency setting: $($transparency.EnableTransparency)"
+          Get-CimInstance Win32_VideoController | Select-Object Name,Status,DriverVersion | Format-List
           $lab = Start-Process -FilePath "$PWD\host-backdrop-lab.exe" -ArgumentList '--fixture' -PassThru
           try {
             Start-Sleep -Seconds 5
