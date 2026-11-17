@@ -16,6 +16,10 @@ pub fn fit_size(app:&AppHandle,width:f64,height:f64)->(f64,f64) {
 pub fn open(app: &AppHandle, label: &str, route: &str, width: f64, height: f64) -> ApiResult<()> {
     let priority = label.starts_with("info-") || label.starts_with("tool-video-");
     if let Some(w) = app.get_webview_window(label) {
+        if let Some(id) = label.strip_prefix("download-").and_then(|v| v.parse::<u64>().ok()) {
+            if let Ok(mut hidden) = app.state::<HiddenDownloadWindows>().0.lock() { hidden.remove(&id); }
+            super::refresh_tray_menu(app);
+        }
         if priority { let _ = w.set_always_on_top(true); }
         let _ = w.emit("glass-navigate", route);
         w.show().map_err(|e| e.to_string())?;
@@ -28,7 +32,7 @@ pub fn open(app: &AppHandle, label: &str, route: &str, width: f64, height: f64) 
     let mut builder=WebviewWindowBuilder::new(app, label, WebviewUrl::App(format!("index.html?{route}").into()));
     if let Some(args)=test_browser_args(){builder=builder.additional_browser_args(&args);}
     let w = builder
-        .title("Mister Hybrid Glass").always_on_top(priority).inner_size(width, height)
+        .title("Auralis Download Manager").always_on_top(priority).inner_size(width, height)
         .min_inner_size(width.min(440.0), height.min(320.0)).center().decorations(false)
         .transparent(true).shadow(false).resizable(true).build()
         .map_err(|e| e.to_string())?;
@@ -180,4 +184,19 @@ pub async fn open_glass_window(app:AppHandle,label:String,url:String,width:f64,h
 }
 
 #[tauri::command]
-pub fn close_progress_windows(app:AppHandle,ids:Vec<u64>){for id in ids{if let Some(w)=app.get_webview_window(&format!("download-{id}")){let _=w.close();}}}
+pub fn close_progress_windows(app:AppHandle,ids:Vec<u64>){
+    if let Ok(mut hidden) = app.state::<HiddenDownloadWindows>().0.lock() {
+        for id in &ids { hidden.remove(id); }
+    }
+    for id in ids { if let Some(w)=app.get_webview_window(&format!("download-{id}")) { let _=w.close(); } }
+    super::refresh_tray_menu(&app);
+}
+
+#[tauri::command]
+pub fn hide_download_to_tray(app:AppHandle,id:u64)->ApiResult<()> {
+    let window=app.get_webview_window(&format!("download-{id}")).ok_or("Download window is no longer open")?;
+    window.hide().map_err(|e|e.to_string())?;
+    app.state::<HiddenDownloadWindows>().0.lock().map_err(|e|e.to_string())?.insert(id);
+    super::refresh_tray_menu(&app);
+    Ok(())
+}
