@@ -39,6 +39,13 @@ jobs:
       - name: Rust toolchain
         run: rustup show active-toolchain || rustup toolchain install
 
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            glass-ui/src-tauri -> target
+
       - name: Install Windows native build dependencies
         shell: pwsh
         run: |
@@ -59,6 +66,14 @@ jobs:
 
       - name: Test original engine workspace
         run: cargo test --workspace --target x86_64-pc-windows-msvc
+
+      - name: Cache npm downloads
+        uses: actions/cache@v4
+        with:
+          path: ~\\AppData\\Local\\npm-cache
+          key: npm-windows-${{ hashFiles('glass-ui/package.json') }}
+          restore-keys: |
+            npm-windows-
 
       - name: Install frontend dependencies
         working-directory: glass-ui
