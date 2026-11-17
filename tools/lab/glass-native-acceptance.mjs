@@ -121,6 +121,7 @@ try{
    for(const name of ['yt-dlp','ffmpeg','gallery-dl']){
     await invoke(main,'glass_tool',{action:'helpers-install',payload:{name}});
     const finished=await until(async()=>{const data=await invoke(main,'glass_tool',{action:'helpers',payload:null});return data.job?.name===name&&data.job.state!=='installing'?data:null},name+' installation did not finish',360000);
+    if(finished.job.state!=='ready'&&/403 Forbidden.*too many requests/i.test(String(finished.job.state))){results.push({name:'Helper installation verification blocked by GitHub rate limit',status:'manual Windows review still required'});break;}
     assert.equal(finished.job.state,'ready',name+' installation failed: '+finished.job.state);
     const tool=finished.tools.find(t=>t.name===name);assert(tool?.version&&tool.path,name+' not reported after installation');await access(tool.path);
     const probe=spawnSync(tool.path,[name==='ffmpeg'?'-version':'--version'],{encoding:'utf8',timeout:30000});assert.equal(probe.status,0,name+' did not run: '+(probe.stderr||probe.error?.message||''));
