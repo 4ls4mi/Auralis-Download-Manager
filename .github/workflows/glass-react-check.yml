@@ -66,6 +66,30 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Direct2D lab compilation failed" }
           $test = Start-Process -FilePath "$PWD\native-glass-lab.exe" -ArgumentList '--self-test' -Wait -PassThru
           if ($test.ExitCode -ne 0) { throw "Direct2D geometry self-test failed: $($test.ExitCode)" }
+      - name: Capture host backdrop experiment
+        timeout-minutes: 2
+        shell: pwsh
+        run: |
+          $lab = Start-Process -FilePath "$PWD\host-backdrop-lab.exe" -PassThru
+          try {
+            Start-Sleep -Seconds 5
+            Add-Type -AssemblyName System.Windows.Forms
+            Add-Type -AssemblyName System.Drawing
+            $bounds = [System.Windows.Forms.SystemInformation]::VirtualScreen
+            $bitmap = New-Object System.Drawing.Bitmap $bounds.Width,$bounds.Height
+            $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+            try {
+              $graphics.CopyFromScreen($bounds.Left,$bounds.Top,0,0,$bitmap.Size)
+              $bitmap.Save((Join-Path $env:RUNNER_TEMP 'host-backdrop-review.png'))
+            } finally { $graphics.Dispose(); $bitmap.Dispose() }
+          } finally { if (-not $lab.HasExited) { Stop-Process -Id $lab.Id -Force } }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-host-backdrop-review
+          path: ${{ runner.temp }}/host-backdrop-review.png
+          if-no-files-found: warn
+          retention-days: 7
   native-tauri-check:
     name: Windows x64 native surface integration
     runs-on: windows-latest
