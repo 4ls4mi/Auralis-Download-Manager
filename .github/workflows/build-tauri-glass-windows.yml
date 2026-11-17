@@ -82,6 +82,19 @@ jobs:
           npm install --no-audit --no-fund
           if ($LASTEXITCODE -ne 0) { throw "npm install failed" }
 
+      - name: Test connection indicator behavior
+        shell: pwsh
+        working-directory: glass-ui
+        run: |
+          npm test
+          if ($LASTEXITCODE -ne 0) { throw "Frontend tests failed" }
+
+      - name: Test helper cookie selection
+        shell: pwsh
+        run: |
+          cargo test --target x86_64-pc-windows-msvc -p mdm-tools manual_cookies_override_extension_and_can_be_disabled_for_retry
+          if ($LASTEXITCODE -ne 0) { throw "Cookie selection test failed" }
+
       - name: Compile React frontend and TypeScript checks
         shell: pwsh
         working-directory: glass-ui

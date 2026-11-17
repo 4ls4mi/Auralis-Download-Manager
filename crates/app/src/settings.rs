@@ -352,6 +352,7 @@ pub struct Settings {
     /// browser's last used). A settings file from before has neither: off.
     pub video_cookies: String,
     pub video_cookies_profile: String,
+    pub video_cookies_file: String,
     /// Options → Archives (#37): extract an archive when its download completes (a Link grabber
     /// package says so itself). Off, as a browser leaves archives alone.
     pub extract_auto: bool,
@@ -531,6 +532,7 @@ impl Default for Settings {
             video_chapters: true,
             video_cookies: String::new(),
             video_cookies_profile: String::new(),
+            video_cookies_file: String::new(),
             extract_auto: false,
             extract_delete: false,
             extract_in_place: false,
@@ -1105,6 +1107,7 @@ impl Settings {
 /// and every video started on Embed chapters (#827).
 pub fn share_video_settings(s: &Settings) {
     mdm_tools::proc::set_browser_cookies(s.video_cookies());
+    mdm_tools::proc::set_manual_cookie_file(&s.video_cookies_file);
     mdm_tools::video::set_chapters(s.video_chapters);
 }
 

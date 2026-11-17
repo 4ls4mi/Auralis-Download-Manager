@@ -75,6 +75,7 @@ impl App {
         fields.push(json!({"key":"regional","label":"Date and time format","section":"Advanced","kind":"regional","value":self.settings.regional}));
         fields.push(json!({"key":"video_chapters","label":"Embed video chapters","section":"Advanced","kind":"boolean","value":self.settings.video_chapters}));
         fields.push(json!({"key":"video_cookies","label":"Browser for video-helper cookies","section":"Advanced","kind":"text","value":self.settings.video_cookies}));
+        fields.push(json!({"key":"video_cookies_file","label":"Manual video cookies file (Netscape)","section":"Advanced","kind":"text","value":self.settings.video_cookies_file}));
         fields.push(json!({"key":"video_cookies_profile","label":"Video-helper browser profile","section":"Advanced","kind":"text","value":self.settings.video_cookies_profile}));
         fields.push(json!({"key":"cnl_on","label":"Enable Click’n’Load","section":"Advanced","kind":"boolean","value":self.settings.cnl_on}));
         fields.push(json!({"key":"cnl_sites","label":"Remembered Click’n’Load sites","section":"Advanced","kind":"table","columns":[{"label":"Site","kind":"text"},{"label":"Allowed","kind":"boolean"}],"value":self.settings.cnl_sites}));
@@ -161,6 +162,11 @@ impl App {
                 "regional" => next.regional=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?,
                 "video_chapters" => next.video_chapters=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?,
                 "video_cookies" => next.video_cookies=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?,
+                "video_cookies_file" => {
+                    let path=value.as_str().ok_or("Enter a cookie file path")?.trim();
+                    if !path.is_empty() && (!std::path::Path::new(path).is_absolute() || !std::path::Path::new(path).is_file()) { return Err("Choose an existing absolute path to a Netscape cookies.txt file".into()); }
+                    next.video_cookies_file=path.to_owned();
+                },
                 "video_cookies_profile" => next.video_cookies_profile=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?,
                 "cnl_on" => next.cnl_on=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?,
                 "cnl_sites" => next.cnl_sites=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?,

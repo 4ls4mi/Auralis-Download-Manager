@@ -130,6 +130,14 @@ pub fn browser_cookies() -> Option<BrowserCookies> {
     BROWSER_COOKIES.read().unwrap().clone()
 }
 
+/// A manually exported Netscape cookie file, selected by the user. Never log its contents.
+static MANUAL_COOKIE_FILE: std::sync::RwLock<Option<String>> = std::sync::RwLock::new(None);
+pub fn set_manual_cookie_file(path: &str) {
+    let path = path.trim();
+    *MANUAL_COOKIE_FILE.write().unwrap() = (!path.is_empty()).then(|| path.to_owned());
+}
+fn manual_cookie_file() -> Option<String> { MANUAL_COOKIE_FILE.read().unwrap().clone() }
+
 /// The cookies a yt-dlp run with arguments `args` gets from the chosen browser: none when the
 /// run has cookies already, else `--cookies-from-browser BROWSER[:PROFILE]`.
 ///
@@ -182,7 +190,7 @@ fn with_cookies(ours: &[String], chosen: Option<&BrowserCookies>) -> bool {
 /// Does a run of yt-dlp with arguments `ours` send cookies: the browser's extension's (a cookie
 /// file), or those of the browser Options → Sites Logins names?
 pub fn has_cookies(ours: &[String]) -> bool {
-    with_cookies(ours, browser_cookies().as_ref())
+    with_cookies(ours, browser_cookies().as_ref()) || (manual_cookie_file().is_some() && !ours.iter().any(|a| a == NO_COOKIES))
 }
 
 /// Is a look-up of `url` that failed with cookies (`message`) to be made once more without
@@ -234,7 +242,7 @@ pub fn look_up(
             warnings,
         }),
         Err(first)
-            if with_cookies(ours, browser_cookies().as_ref())
+            if has_cookies(ours)
                 && refused_with_cookies(url, &first.to_string()) =>
         {
             match run(&without_cookies(ours)) {
@@ -835,7 +843,28 @@ fn ytdlp_command(exe: &Path) -> Command {
 /// `--no-warnings` is dropped): the one saying the browser's cookies couldn't be decrypted is
 /// what explains the site's "sign in" that follows (`Spawned::failure`).
 fn layers(cmd: &mut Command, user: &[String], ours: &[String]) -> Result<(), ProcError> {
-    layers_with(cmd, user, ours, browser_cookies().as_ref())
+    layers_with_manual(cmd, user, ours, browser_cookies().as_ref(), manual_cookie_file().as_deref())
+}
+
+fn layers_with_manual(cmd: &mut Command, user: &[String], ours: &[String], chosen: Option<&BrowserCookies>, file: Option<&str>) -> Result<(), ProcError> {
+    if let Some(path) = file.filter(|_| !user.iter().chain(ours).any(|a| a == NO_COOKIES)) {
+        // Explicit manual selection takes precedence over a browser or extension session.
+        let strip = |args: &[String]| {
+            let mut out = Vec::new();
+            let mut it = args.iter();
+            while let Some(arg) = it.next() {
+                if arg == "--cookies" || arg == "--cookies-from-browser" { it.next(); }
+                else { out.push(arg.clone()); }
+            }
+            out
+        };
+        let user = strip(user);
+        let mut ours = strip(ours);
+        ours.extend(["--cookies".to_owned(), path.to_owned()]);
+        layers_with(cmd, &user, &ours, None)
+    } else {
+        layers_with(cmd, user, ours, chosen)
+    }
 }
 
 fn layers_with(
@@ -1791,6 +1820,20 @@ mod tests {
             cookie_browsers().contains(&"safari"),
             cfg!(target_os = "macos")
         );
+    }
+
+    #[test]
+    fn manual_cookies_override_extension_and_can_be_disabled_for_retry() {
+        let user = vec!["--cookies-from-browser".into(), "edge".into()];
+        let ours = vec!["--cookies".into(), "extension.txt".into()];
+        let mut cmd = Command::new("yt-dlp");
+        layers_with_manual(&mut cmd, &user, &ours, None, Some("manual.txt")).unwrap();
+        let args: Vec<_> = cmd.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
+        assert_eq!(args, ["--cookies", "manual.txt"]);
+        let mut cmd = Command::new("yt-dlp");
+        layers_with_manual(&mut cmd, &[], &[NO_COOKIES.into()], None, Some("manual.txt")).unwrap();
+        let args: Vec<_> = cmd.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
+        assert!(!args.iter().any(|a| a == "--cookies"));
     }
 
     /// #360: yt-dlp is told of Node.js or Bun, from the PATH or nvm, and left alone with Deno.
