@@ -39,6 +39,7 @@ export default function CrystalSettings(){
   const [queues,setQueues]=useState<Queue[]>([]);
   const [busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
   const [browser,setBrowser]=useState("");
+  const [extensionBrowser,setExtensionBrowser]=useState("edge");
   const {appearance,set}=useCrystal();
   const load=useCallback(async()=>{
     try{
@@ -125,17 +126,21 @@ export default function CrystalSettings(){
       </>;
       case "Browser Integration":return <>
         <h3>Original MDM browser extension</h3>
-        <p>Use your existing MDM extension for Chrome, Edge or Firefox.</p>
+        <p>Repair the Windows connection and open the official extension page for your browser.</p>
+        <label className="cg-field">Browser<select value={extensionBrowser} onChange={e=>setExtensionBrowser(e.target.value)}><option value="edge">Microsoft Edge</option><option value="chromium">Chrome / Chromium (default browser)</option><option value="firefox">Firefox (default browser)</option></select></label>
+        {extensionBrowser==="edge"&&<p>In Edge, allow extensions from other stores if prompted, then select <strong>Get</strong> or <strong>Add to Chrome</strong> and confirm the installation.</p>}
+        {extensionBrowser==="chromium"&&<p>In the browser, select <strong>Add to Chrome</strong> and confirm the installation.</p>}
+        {extensionBrowser==="firefox"&&<p>Open the page in Firefox, select <strong>Add to Firefox</strong>, and confirm the installation.</p>}
         <div className="cg-settings-fallback">{browser||"Checking for bundled native-messaging helper…"}</div>
         <button className="cg-btn cg-btn-primary" style={{marginTop:12}} disabled={busy}
-          onClick={async()=>{setBusy(true);setError("");try{const result=await invoke<string>("browser_integration",{repair:true});setBrowser(result);setNotice("Registered with Windows. Restart your browser to reconnect the extension.")}catch(e){setError(String(e))}finally{setBusy(false)}}}>
-          <RotateCcw size={17}/> Reconnect / Repair browser extension
+          onClick={async()=>{setBusy(true);setError("");setNotice("");let registered=false;let repairError="";try{const result=await invoke<string>("browser_integration",{repair:true});setBrowser(result);registered=true}catch(e){repairError=String(e)}try{await invoke("open_extension_store",{browser:extensionBrowser});setNotice(registered?"Windows connection registered. Confirm extension installation in your browser.":"The extension page opened. The Windows connection still needs repair.")}catch(e){setError(`${repairError?repairError+". ":""}Could not open the extension page: ${String(e)}`)}if(repairError)setError(old=>old||`Windows connection could not be repaired: ${repairError}`);setBusy(false)}}>
+          <RotateCcw size={17}/> Repair connection and get extension
         </button>
         <div style={{height:14}}/>
         {check("advanced_integration","Enable advanced browser integration","Apply your browser capture rules")}
         {check("capture_opened","Capture opened URLs","Capture eligible downloads and opened links")}
         {check("proxy_from_browser","Use browser proxy","Preserve the browser's proxy, cookies and referrer context")}
-        <div className="cg-settings-fallback">Restart the browser after registration. Browser extension capture must be tested with a real download link; registration alone does not prove interception works.</div>
+        <div className="cg-settings-fallback">After installing, restart the browser if the extension does not connect. Try a real download link to confirm interception.</div>
       </>;
       case "Torrents":return <>
         {check("torrent_keep_sharing","Continue sharing after download","Keep uploading to other peers after the file finishes")}

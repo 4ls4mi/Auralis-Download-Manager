@@ -140,6 +140,28 @@ async fn open_upstream_releases() -> ApiResult<()> {
     }).await.map_err(|e| e.to_string())?
 }
 
+/// Resolve only official extension pages. Edge uses its protocol so it opens
+/// even when another browser is configured as the Windows default.
+fn extension_store_target(browser: &str) -> ApiResult<String> {
+    let chromium = || mdm_ipc::extension::store_page()
+        .ok_or_else(|| "The original Chrome Web Store listing is unavailable".to_string());
+    match browser {
+        "edge" => Ok(format!("microsoft-edge:{}", chromium()?)),
+        "chromium" => chromium(),
+        "firefox" => Ok(mdm_ipc::extension::FIREFOX_PAGE.to_owned()),
+        _ => Err("Unsupported browser".into()),
+    }
+}
+#[tauri::command]
+fn extension_store_link(browser: String) -> ApiResult<String> { extension_store_target(&browser) }
+#[tauri::command]
+async fn open_extension_store(browser: String) -> ApiResult<()> {
+    let url = extension_store_target(&browser)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        open::that(&url).map_err(|e| format!("Could not open the extension page: {e}"))
+    }).await.map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 async fn dashboard_visuals() -> ApiResult<serde_json::Value> {
     tauri::async_runtime::spawn_blocking(|| {
@@ -529,7 +551,7 @@ fn main() {
             material_window::set_material_window_shape, pending_file_info, file_info_action, choose_download_path, window_preferences, glass_tool, choose_folder, open_glass_window, close_progress_windows, drag_download, drag_state, choose_move, clipboard_text, video_tool, browser_video,
             boot_engine, dashboard_snapshot, dashboard_visuals, download_action,
             add_download, select_wallpaper, queue_action, glass_settings, update_glass_setting,
-            browser_integration, bulk_action, file_operation, add_torrent_file, quit_glass, open_upstream_releases
+            browser_integration, extension_store_link, open_extension_store, bulk_action, file_operation, add_torrent_file, quit_glass, open_upstream_releases
         ])
         .run(context)
         .expect("error starting Mister Hybrid glass desktop");
