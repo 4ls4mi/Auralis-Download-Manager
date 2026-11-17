@@ -1,3 +1,4 @@
+import MaterialSurface from "./MaterialSurface";
 import GlassRenderer from "./GlassRenderer";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { getCurrentWindow, Effect, EffectState } from "@tauri-apps/api/window";
@@ -302,7 +303,7 @@ export function CrystalWindow({ children, target = "main" }: {
       <span style={{ background: `rgba(3,9,19,${appearance.dim / 100})` }} />
     </div>}
     {mode === "solid" && <div className="cg-solid" />}
-    <div className="cg-content" ref={frame}><GlassRenderer material={appearance.material} hue={appearance.tintHue} strength={appearance.tintStrength} light={appearance.lightMode}/><div className="cg-fit-content">{children}</div></div>
+    <div className="cg-content" ref={frame}><GlassRenderer material={appearance.material} hue={appearance.tintHue} strength={appearance.tintStrength} light={appearance.lightMode}/><MaterialSurface material={appearance.material}/><div className="cg-fit-content">{children}</div></div>
     {windowError&&<aside className="cg-window-notice cg-error" role="alert"><span>{windowError}</span><button title="Dismiss" onClick={()=>setWindowError("")}><X size={15}/></button></aside>}
     <ResizeGrips />
   </div>;

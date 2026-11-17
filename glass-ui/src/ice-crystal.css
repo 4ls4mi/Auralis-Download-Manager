@@ -221,3 +221,6 @@
 .cg-window.cg-progress-shape-faceted .cg-percent-track {border-radius:0;clip-path:polygon(3% 0,97% 0,100% 50%,97% 100%,3% 100%,0 50%)}
 .cg-window.cg-progress-shape-square .cg-percent-track,.cg-window.cg-progress-shape-square .cg-percent-fill {border-radius:3px}
 .cg-window.cg-progress-shape-wave .cg-percent-track {border-radius:40% 50% 45% 35% / 70% 45% 65% 45%;clip-path:polygon(0 23%,3% 4%,10% 0,18% 12%,26% 20%,34% 8%,42% 1%,50% 13%,58% 21%,66% 9%,74% 1%,82% 12%,90% 19%,97% 5%,100% 23%,100% 77%,97% 95%,90% 100%,82% 88%,74% 80%,66% 92%,58% 99%,50% 87%,42% 79%,34% 91%,26% 99%,18% 88%,10% 81%,3% 95%,0 77%)}
+
+/* Geometry is decorative, scalable and never overlaps pointer targets. */
+.cg-content .cg-material-surface{position:absolute;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;overflow:hidden;border-radius:inherit}
