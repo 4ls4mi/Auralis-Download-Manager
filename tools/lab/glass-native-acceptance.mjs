@@ -63,6 +63,8 @@ async function assertFits(page,name){
 async function resizeWindow(page,label,width,height){await invoke(page,'plugin:window|set_size',{label,value:{Logical:{width,height}}});await wait(450);}
 async function setTheme(settings,light){await settings.getByRole('button',{name:'Appearance',exact:true}).click();await settings.getByRole('button',{name:'Theme',exact:true}).click();await settings.getByRole('button',{name:light?'Light crystal':'Dark crystal',exact:true}).click();await wait(350);}
 async function bothThemes(page,name,settings){for(const light of [false,true]){await setTheme(settings,light);await until(()=>page.locator(light?'.cg-light':'.cg-dark').count(),'Appearance did not reach '+name);await screenshot(page,name+(light?'-light':'-dark'));}}
+const hostRegistration=()=>['Google\\Chrome','Chromium','Microsoft\\Edge','BraveSoftware\\Brave-Browser','Mozilla'].map(name=>{const r=spawnSync('reg.exe',['query',`HKCU\\Software\\${name}\\NativeMessagingHosts\\com.misterdownloadmanager.host`],{encoding:'utf8'});return {status:r.status,output:r.stdout}});
+const isolatedHostBefore=process.env.MHG_ISOLATED_RENDER_TEST==='1'?hostRegistration():null;
 try{
  shell=spawn(process.env.GLASS_E2E_EXE,[],{env:{...process.env,MDM_DATA_DIR:data,MDM_REMOTE:'off',GLASS_TEST_CDP_PORT:String(port),WEBVIEW2_USER_DATA_FOLDER:path.join(folder,'webview'),WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS:`--remote-debugging-port=${port} --remote-debugging-address=127.0.0.1 --remote-allow-origins=*`},stdio:['ignore','pipe','pipe']});
  shell.stdout.on('data',b=>{shellError+=b.toString()});shell.stderr.on('data',b=>{shellError+=b.toString()});
@@ -75,7 +77,13 @@ try{
  const clean=await main.evaluate(()=>({overlays:document.querySelectorAll('.cg-material-renderer,.cg-material-surface,[class*="cg-material-"]').length,blur:getComputedStyle(document.querySelector('.cg-content')).backdropFilter}));assert(clean.overlays===0&&clean.blur==='none','Retired material overlays and repeated CSS backdrop blur must be absent');passed('Material overlays and repeated CSS backdrop blur are absent');
  await main.locator('.cg-toolbar').getByRole('button',{name:'Settings',exact:true}).click();const settings=await pageFor('settings=');
  await settings.getByRole('button',{name:'Browser Integration',exact:true}).click();assert.equal(await settings.getByRole('combobox').first().inputValue(),'edge');await settings.getByText(/allow extensions from other stores/i).waitFor();await settings.getByRole('button',{name:'Repair connection and get extension',exact:true}).waitFor();await assertFits(settings,'Browser extension repair');await screenshot(settings,'browser-integration');passed('Browser repair exposes the Edge installation flow');
- await settings.getByRole('button',{name:'Repair connection and get extension',exact:true}).click();await settings.getByText(/extension page opened|confirm extension installation in your browser/i).waitFor();passed('Repair button requests the Edge extension page through the native command');await invoke(settings,'plugin:window|set_focus',{label:'settings'}).catch(()=>{});
+ if(isolatedHostBefore){
+  await assert.rejects(()=>invoke(settings,'browser_integration',{repair:true}),e=>String(e).includes('unavailable in the isolated renderer test'));
+  assert.deepEqual(hostRegistration(),isolatedHostBefore,'Isolated test must not modify browser native-host registration');
+  passed('Isolated renderer test leaves the installed browser host registration unchanged');
+ }else{
+  await settings.getByRole('button',{name:'Repair connection and get extension',exact:true}).click();await settings.getByText(/extension page opened|confirm extension installation in your browser/i).waitFor();passed('Repair button requests the Edge extension page through the native command');await invoke(settings,'plugin:window|set_focus',{label:'settings'}).catch(()=>{});
+ }
  await settings.getByRole('button',{name:'General',exact:true}).click();
  await settings.getByLabel('Show download complete dialog').uncheck();
  await until(async()=>!(await invoke(main,'glass_settings')).show_complete,'Turning completion off failed through the actual Tauri bridge');

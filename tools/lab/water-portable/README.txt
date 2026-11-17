@@ -1,6 +1,6 @@
 Mister Hybrid Glass - experimental Water Bubble window
 
-Windows 11 x64 only. This is a standalone development test, not the finished theme or an installer. It has its own temporary download-manager and WebView data. It does not capture or transmit your desktop.
+Windows 11 x64 only. This is a standalone development test, not the finished theme or an installer. It has its own temporary download-manager and WebView data, and browser host registration is disabled. It does not capture or transmit your desktop.
 
 1. Close the normal Mister Hybrid Glass application first, including its tray icon. The app uses a single-instance mechanism.
 2. Extract every file in the ZIP to one folder.

@@ -125,6 +125,7 @@ jobs:
           MHG_EXPERIMENTAL_WATER: ${{ inputs.experimental_water && '1' || '0' }}
           MHG_EXPERIMENTAL_RENDERER: ${{ inputs.renderer || 'direct2d' }}
           MHG_EXPERIMENTAL_HOSTBACKDROP: ${{ inputs.host_backdrop && '1' || '0' }}
+          MHG_ISOLATED_RENDER_TEST: ${{ inputs.package_experimental && '1' || '0' }}
         run: |
           node tools/lab/glass-native-acceptance.mjs
           if ($LASTEXITCODE -ne 0) { throw 'Native acceptance failed; inspect proof artifact' }

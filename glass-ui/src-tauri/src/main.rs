@@ -121,6 +121,8 @@ fn show_main(app: &AppHandle) {
 async fn boot_engine(app: AppHandle) -> ApiResult<String> {
     tauri::async_runtime::spawn_blocking(move || {
         let boot = boot_existing_engine(&app)?;
+        // A portable renderer review must not change the installed browser host.
+        if std::env::var_os("MHG_ISOLATED_RENDER_TEST").as_deref() == Some(std::ffi::OsStr::new("1")) { return Ok(boot); }
         let browser = register_browser_host(&app);
         match browser {
             Ok(_) => Ok(format!("{boot} • browser extension host registered")),
@@ -243,6 +245,9 @@ fn native_host_candidates(app: &AppHandle) -> Vec<PathBuf> {
 }
 
 fn register_browser_host(app: &AppHandle) -> ApiResult<String> {
+    if std::env::var_os("MHG_ISOLATED_RENDER_TEST").as_deref() == Some(std::ffi::OsStr::new("1")) {
+        return Err("Browser integration is unavailable in the isolated renderer test".into());
+    }
     let host = native_host_candidates(app).into_iter().find(|p| p.is_file())
         .ok_or_else(|| "MDM browser native-messaging helper was not included in this installation".to_string())?;
     // Reuse the original signed extension's host identifier, allowed origins,
