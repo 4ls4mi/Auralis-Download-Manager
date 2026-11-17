@@ -18,7 +18,7 @@ struct LabMaterial {
  Microsoft::WRL::ComPtr<ID3D11PixelShader> pixel;
  Microsoft::WRL::ComPtr<ID3D11Buffer> constants;
  Microsoft::WRL::ComPtr<ID3D11RasterizerState> raster;
- unsigned width=0,height=0; bool ice=false; float panelRects[12]{};
+ unsigned width=0,height=0; int materialStyle=0; float panelRects[12]{};
  static constexpr const char* source=R"HLSL(
  cbuffer Params:register(b0){float2 size;float style;float pad;float4 panels[3];};
  struct V{float4 position:SV_Position;};
@@ -47,7 +47,7 @@ struct LabMaterial {
    // Gentle interior caustic waves stay behind text; no extra DOM overlay.
    float caustic=exp(-pow((uv.y-(.90+.018*sin(uv.x*7)))*28,2));
    color+=float3(.01,.07,.09)*caustic;
-   if(style>.5){
+   if(style>.5 && style<1.5){
      // Ice uses a pale crystalline surface with angular facet lighting.
      // It is an authored effect; desktop pixels are not sampled here.
      float facet=abs(frac(uv.x*3.7+uv.y*2.6)-.5);
@@ -55,6 +55,13 @@ struct LabMaterial {
      color=float3(.56,.76,.87)+float3(.12,.17,.19)*(1-uv.y)+float3(.10,.12,.15)*shard;
      color-=float3(.045,.035,.025)*step(.31,facet);
      color+=float3(.20,.22,.24)*edge;
+   }
+   if(style>1.5){
+     // Smoked Crystal: dark glass and narrow diagonal crystalline planes.
+     float plane=step(.5,frac(uv.x*2.9+uv.y*2.15));
+     float bevel=pow(saturate(1-abs(frac(uv.x*3.3-uv.y*2.1)-.5)*2),12);
+     color=float3(.025,.035,.075)+float3(.04,.06,.11)*(1-uv.y)+plane*float3(.012,.015,.03);
+     color+=float3(.16,.24,.43)*bevel*.35+float3(.22,.32,.52)*edge;
    }
    // Panels use the WebView's measured rectangles, but their material is
    // drawn here in the same pass as the outer glass.
@@ -72,14 +79,15 @@ struct LabMaterial {
        float inner=exp(-abs(dist+5)*.23);
        float vertical=saturate((local.y+halfSize.y)/max(rect.w,1));
        float3 panel=lerp(float3(.035,.21,.25),float3(.009,.075,.10),vertical);
-       if(style>.5)panel=lerp(float3(.81,.91,.96),float3(.62,.79,.88),vertical);
+       if(style>.5 && style<1.5)panel=lerp(float3(.81,.91,.96),float3(.62,.79,.88),vertical);
+       if(style>1.5)panel=lerp(float3(.11,.15,.25),float3(.025,.035,.075),vertical);
        color=lerp(color,panel,inside*.60);
        color+=float3(.45,.75,.78)*(rim*(.18+.85*angle)+inner*.12);
        float highlight=inside*exp(-pow((local.y+halfSize.y-5)/12,2));
        color+=float3(.35,.70,.72)*highlight*.30;
      }
    }
-   float a=style>.5?.94:.78;return float4(saturate(color)*a,a);
+   float a=style>.5 && style<1.5?.94:.78;return float4(saturate(color)*a,a);
  }
  )HLSL";
  HRESULT init(){
@@ -99,6 +107,6 @@ struct LabMaterial {
  HRESULT draw(unsigned w,unsigned h){
   if(!w||!h)return S_OK;HRESULT hr=S_OK;if(w!=width||h!=height||!target){context->OMSetRenderTargets(0,nullptr,nullptr);target.Reset();if(FAILED(hr=swap->ResizeBuffers(0,w,h,DXGI_FORMAT_UNKNOWN,0)))return hr;
    Microsoft::WRL::ComPtr<ID3D11Texture2D> back;if(FAILED(hr=swap->GetBuffer(0,IID_PPV_ARGS(&back))))return hr;if(FAILED(hr=device->CreateRenderTargetView(back.Get(),nullptr,&target)))return hr;width=w;height=h;}
-  float data[16]={float(w),float(h),ice?1.f:0.f,0};for(int i=0;i<12;i++)data[i+4]=panelRects[i];context->UpdateSubresource(constants.Get(),0,nullptr,data,0,0);auto rt=target.Get();auto cb=constants.Get();context->OMSetRenderTargets(1,&rt,nullptr);D3D11_VIEWPORT vp{0,0,float(w),float(h),0,1};context->RSSetViewports(1,&vp);context->RSSetState(raster.Get());context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);context->VSSetShader(vertex.Get(),nullptr,0);context->PSSetShader(pixel.Get(),nullptr,0);context->PSSetConstantBuffers(0,1,&cb);context->Draw(3,0);return swap->Present(1,0);
+  float data[16]={float(w),float(h),float(materialStyle),0};for(int i=0;i<12;i++)data[i+4]=panelRects[i];context->UpdateSubresource(constants.Get(),0,nullptr,data,0,0);auto rt=target.Get();auto cb=constants.Get();context->OMSetRenderTargets(1,&rt,nullptr);D3D11_VIEWPORT vp{0,0,float(w),float(h),0,1};context->RSSetViewports(1,&vp);context->RSSetState(raster.Get());context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);context->VSSetShader(vertex.Get(),nullptr,0);context->PSSetShader(pixel.Get(),nullptr,0);context->PSSetConstantBuffers(0,1,&cb);context->Draw(3,0);return swap->Present(1,0);
  }
 };
