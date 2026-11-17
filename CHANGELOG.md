@@ -21,7 +21,7 @@
 Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 `.github/workflows/release.yml`).
 
-## Mister Hybrid Glass — Windows x64
+## Auralis Download Manager — Windows x64
 
 - Added a Tauri/WebView2 glass-style frontend backed by the original MDM engine and browser extension.
 - Added separate progress, completion, file-information, settings and confirmation windows, appearance controls and configurable indicators.
