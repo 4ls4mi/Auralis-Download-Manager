@@ -230,9 +230,12 @@ try{
    assert.equal(result.status,0,'Curved window clip cuts a control or is missing: '+(result.stderr||''));
   };
   const checkMetadata=async()=>{const fits=await progress.locator('.cg-mdm-details').evaluate(el=>el.scrollHeight<=el.clientHeight+2);assert(fits,'Download detail fields must not be clipped by expanding panels');};
+  const waitForPanelResize=async(previous)=>{if(backdropMode==='host')await until(async()=>{const win=progress.locator('.cg-window');return (await win.getAttribute('data-native-water-panels'))==='ready'&&(await win.getAttribute('data-native-water-revision'))!==previous},'GPU panel bounds did not update after window resize');};
   await checkClip();await checkMetadata();
-  await resizeWindow(progress,`download-${first.id}`,600,400);await checkClip();await checkMetadata();await assertFits(progress,'Small experimental progress window');
-  await resizeWindow(progress,`download-${first.id}`,880,500);await checkClip();await checkMetadata();
+  let revision=await progress.locator('.cg-window').getAttribute('data-native-water-revision');
+  await resizeWindow(progress,`download-${first.id}`,600,400);await waitForPanelResize(revision);await checkClip();await checkMetadata();await assertFits(progress,'Small experimental progress window');
+  revision=await progress.locator('.cg-window').getAttribute('data-native-water-revision');
+  await resizeWindow(progress,`download-${first.id}`,880,500);await waitForPanelResize(revision);await checkClip();await checkMetadata();
   const graphHeight=await progress.locator('.cg-compact-speed .cg-graph').evaluate(el=>el.getBoundingClientRect().height);
   assert(graphHeight<=65,'The transfer-speed graph must remain compact when the window grows');
   await screenshot(progress,'experimental-water-webview');
