@@ -23,3 +23,8 @@ test('does not impose a display limit on the number of reported connections',()=
  const workers=Array.from({length:160},(_,id)=>({id,downloaded:0,speed:0,state:'Connecting'}));
  assert.equal(connectionIndicators(workers,[]).length,160);
 });
+
+test('orders workers by their real identifiers, even when they report out of order',()=>{
+ const workers=[{id:5,downloaded:0,speed:0,state:'Connecting'},{id:1,downloaded:0,speed:0,state:'Connecting'}];
+ assert.deepEqual(connectionIndicators(workers,[]).map(c=>c.id),[1,5]);
+});
