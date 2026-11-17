@@ -45,6 +45,25 @@ jobs:
           path: glass-ui/dist/
           if-no-files-found: error
           retention-days: 7
+  native-renderer-lab:
+    name: Native Direct2D geometry lab
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Compile and test Windows x64 geometry
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $vs) { throw "Visual C++ x64 tools not found" }
+          $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
+          cmd /c "`"`"$vcvars`" >nul && cl /nologo /EHsc /std:c++17 tools\lab\native-glass\main.cpp /link /subsystem:windows /out:native-glass-lab.exe`""
+          if ($LASTEXITCODE -ne 0) { throw "Direct2D lab compilation failed" }
+          $test = Start-Process -FilePath "$PWD\native-glass-lab.exe" -ArgumentList '--self-test' -Wait -PassThru
+          if ($test.ExitCode -ne 0) { throw "Direct2D geometry self-test failed: $($test.ExitCode)" }
   protocol:
     name: Original browser protocol
     runs-on: windows-latest

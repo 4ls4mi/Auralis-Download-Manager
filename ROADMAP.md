@@ -3,9 +3,11 @@
 
 ## Mister Hybrid Glass — Windows x64 integration
 
-- **In validation:** thirteen tinted glass materials, including Water Bubble, with distinct surface layers; compact side-by-side progress, speed and chunks; expanded fonts, compact icon controls, startup helper prompts and foreground download windows. Video subtitle language selection uses MDM lookup results; real-site subtitle downloads, YouTube account access, scaling across physical displays and visual resemblance to the material concepts need Windows review.
+- **In development:** rebuild material rendering using standalone WebGPU and native Direct2D geometry experiments. The previous layered materials have been removed; neither prototype is integrated with the app or the live desktop. Windows visual and compositor testing remain open; see [rendering status](docs/WINDOWS-GLASS-RENDERING.md).
 
-- **In development:** expanded glass materials and independent indicator gradients; colorful action highlights, compact progress presentation, clipboard modes and movable confirmations. Windows x64 validation is required.
+- **In validation:** compact side-by-side progress, speed and connections; expanded fonts, compact icon controls, startup helper prompts and foreground download windows. Video subtitle language selection uses MDM lookup results; real-site subtitle downloads, YouTube account access and scaling across physical displays need Windows review.
+
+- **In development:** independent indicator gradients; colorful action highlights, compact progress presentation, clipboard modes and movable confirmations. Windows x64 validation is required.
 - **In development:** completed-file Move/Rename and live list refresh; Glass reuses MDM's Windows shell tracking for moved files; physical desktop drag/drop verification is still required. A Glass helper manager delegates yt-dlp, FFmpeg and gallery-dl installs to the original verified installers; existing managed helpers are checked once per Glass session using MDM’s verified update routines. Basic Glass video quality and gallery download windows delegate to MDM; playlist and full original dialog parity remain open. Windows testing remains pending.
 
 - **In validation:** compact MDM status fields; independently measured selected-count chunks (8/32/N), percentage and speed history; persistent dark/light crystal material and neon controls.

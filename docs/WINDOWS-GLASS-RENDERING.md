@@ -4,6 +4,8 @@ The former material presets and their overlapping WebGL highlight, SVG surface, 
 
 `tools/lab/webgpu-materials/` is a standalone WebGPU geometry and shader experiment for six reference styles. Serve the directory over localhost and open it in a WebGPU-capable browser to try it. It draws a synthetic background, not the desktop. It has not been integrated into the application and is not a finished material implementation. Device, shader and browser compatibility, appearance, performance, scaling, and screenshots must be checked on Windows x64.
 
+A second, native experiment in `tools/lab/native-glass/` uses Direct2D paths, gradients and a resizable Win32 window; it requires only Windows graphics APIs at runtime. Its six shape variants are early geometry experiments, not the approved finished designs. It draws an opaque background and is not connected to the application or the Windows host backdrop. Windows CI compiles it and checks path construction; real-device visual and compositor testing remain necessary. Direct2D may select a software fallback; actual hardware usage needs verification on the target Windows machine. Direct3D plus DirectComposition remains a possible next step for custom shaders and compositor integration, and Skia is another candidate.
+
 ## Architecture to investigate and build
 
 * A single GPU composition pipeline should own each window's background, silhouette, bevels and material-specific surface geometry. The same geometry must govern clipping and interaction, so an extra rectangular layer does not extend over rounded or faceted edges. Keep controls and text readable above it. Derive tint from the selected accent once.
