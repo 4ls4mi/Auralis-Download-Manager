@@ -190,3 +190,4 @@
 
 /* Developer-only native surface; the regular UI is the fallback. */
 .cg-window.cg-native-water-experiment .cg-content{background:transparent;box-shadow:none;border-color:transparent}
+.cg-window.cg-native-water-experiment .cg-fit-content{padding:12px 28px 16px}

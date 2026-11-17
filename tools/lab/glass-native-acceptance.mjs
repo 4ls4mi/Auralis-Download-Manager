@@ -193,6 +193,20 @@ try{
   await invoke(progress,'plugin:window|unminimize',{label:`download-${first.id}`});
   await invoke(progress,'plugin:window|set_focus',{label:`download-${first.id}`});
   await wait(700);
+  const checkClip=async()=>{
+   const points=await progress.evaluate(()=>{
+    const controls=[document.querySelector('.cg-winbuttons button.close'),document.querySelector('.cg-bottom-actions .cg-btn-danger')];
+    if(controls.some(e=>!e))throw Error('Expected window controls are missing');
+    return controls.flatMap(e=>{const r=e.getBoundingClientRect(),d=window.devicePixelRatio;return [[r.left+2,r.top+2],[r.right-2,r.top+2],[r.left+2,r.bottom-2],[r.right-2,r.bottom-2]].map(([x,y])=>[Math.round(x*d),Math.round(y*d)])});
+   });
+   const tests=points.map(([x,y])=>`if (-not [NativeRegion]::PtInRegion($region,${x},${y})) { $valid = $false }`).join('; ');
+   const ps=`Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class NativeRegion { [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow(); [DllImport("user32.dll")] public static extern int GetWindowRgn(IntPtr h, IntPtr r); [DllImport("gdi32.dll")] public static extern IntPtr CreateRectRgn(int a,int b,int c,int d); [DllImport("gdi32.dll")] public static extern bool PtInRegion(IntPtr r,int x,int y); [DllImport("gdi32.dll")] public static extern bool DeleteObject(IntPtr o); }'; $region=[NativeRegion]::CreateRectRgn(0,0,0,0); $valid=([NativeRegion]::GetWindowRgn([NativeRegion]::GetForegroundWindow(),$region) -gt 1); ${tests}; [void][NativeRegion]::DeleteObject($region); if (-not $valid) { exit 1 }`;
+   const result=spawnSync('powershell.exe',['-NoProfile','-Command',ps],{encoding:'utf8'});
+   assert.equal(result.status,0,'Curved window clip cuts a control or is missing: '+(result.stderr||''));
+  };
+  await checkClip();
+  await resizeWindow(progress,`download-${first.id}`,600,400);await checkClip();
+  await resizeWindow(progress,`download-${first.id}`,880,500);await checkClip();
   await screenshot(progress,'experimental-water-webview');
   const out=path.join(output,'experimental-water-desktop.png').replaceAll("'","''");
   const shot=spawnSync('powershell.exe',['-NoProfile','-Command',"Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $bounds=[System.Windows.Forms.SystemInformation]::VirtualScreen; $bitmap=New-Object System.Drawing.Bitmap $bounds.Width,$bounds.Height; $graphics=[System.Drawing.Graphics]::FromImage($bitmap); $graphics.CopyFromScreen($bounds.Left,$bounds.Top,0,0,$bitmap.Size); $bitmap.Save('"+out+"'); $graphics.Dispose(); $bitmap.Dispose()"],{encoding:'utf8'});
