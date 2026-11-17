@@ -247,6 +247,7 @@
 .cg-window.cg-light .cg-window-top{background:#d7e7f2!important;backdrop-filter:none!important}
 .cg-window .cg-selected-chunks .cg-fixed-connections{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));grid-auto-rows:clamp(16px,5vh,30px);gap:4px;max-width:340px;margin-top:10px}
 .cg-window .cg-fixed-connections>span{height:100%;width:100%;border-radius:5px;background:#344155;box-shadow:none}
+.cg-window .cg-fixed-connections>span.lost{background:#e13d50!important;border-color:#ff7888;box-shadow:inset 0 1px #ffffff50}
 .cg-window .cg-fixed-connections>span.paused{background:#e13d50!important;border-color:#ff7888;box-shadow:inset 0 1px #ffffff50}
 .cg-window .cg-fixed-connections>span.cg-connection-empty{background:#344155;opacity:.62}
 .cg-window .cg-fixed-connections>span:focus-visible{outline:2px solid #fff;outline-offset:2px}
@@ -261,3 +262,5 @@
 .cg-window button:not(:disabled,.cg-row,.cg-toolbar>button,.cg-winbuttons button):nth-of-type(5n+3){--button-hue:36}
 .cg-window button:not(:disabled,.cg-row,.cg-toolbar>button,.cg-winbuttons button):nth-of-type(5n+4){--button-hue:342}
 .cg-window button:not(:disabled,.cg-row,.cg-toolbar>button,.cg-winbuttons button):hover{background:hsl(var(--button-hue) 85% 49% / .42)!important;color:var(--ink)!important}
+
+.cg-update-notice{display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:5px 10px;background:var(--surface);border-bottom:1px solid var(--edge);flex-wrap:wrap}.cg-update-notice span{margin-right:auto}.cg-update-notice button{padding:4px 9px}

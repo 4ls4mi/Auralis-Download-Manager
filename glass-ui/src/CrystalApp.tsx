@@ -44,6 +44,7 @@ export default function CrystalApp(){
   const [fileRates,setFileRates]=useState<Record<number,number[]>>({});
   const [doubleClickOpen,setDoubleClickOpen]=useState(false);
   const [showCategories,setShowCategories]=useState(true);
+  const [updateVersion,setUpdateVersion]=useState<string|null>(null);
 
   const contextRef=useRef<HTMLDivElement>(null);
   useLayoutEffect(()=>{
@@ -88,6 +89,7 @@ export default function CrystalApp(){
     void invoke<string>("boot_engine").then(text=>{
       if(!mounted)return;
       setMessage(text);void refresh();
+      void invoke<{state:string;version?:string}>("glass_update_check").then(update=>{if(mounted&&update.state==="available"&&update.version)setUpdateVersion(update.version)}).catch(()=>undefined);
       void invoke<{double_click_open:boolean;confirm_delete:boolean;delete_files_too:boolean}>("glass_settings").then(s=>{
         if(mounted){setDoubleClickOpen(Boolean(s.double_click_open));}
       }).catch(()=>undefined);
@@ -298,6 +300,7 @@ export default function CrystalApp(){
     <span className="cg-muted" style={{fontSize:"var(--min-text-size)",whiteSpace:"nowrap",marginRight:9}}>{online?"● Connected":"○ Offline"}</span>
   </WindowTop>
   <div className="cg-main-body" onContextMenu={e=>e.preventDefault()}>
+    {updateVersion&&<div className="cg-update-notice" role="status"><span>Mister Hybrid Glass {updateVersion} is available.</span><button className="cg-btn" onClick={()=>{setUpdateVersion(null);openWindow("settings","/?settings=1&tab=Advanced&panel=Updates",920,700)}}>View update</button><button className="cg-btn" aria-label="Dismiss update notice" onClick={()=>setUpdateVersion(null)}>Close</button></div>}
     <div className="cg-menubar">
       {menus.map(menu=><div className="cg-menu-parent" key={menu}>
         <button className={"cg-menu-trigger "+(openMenu===menu?"active":"")} onClick={()=>{setContext(null);setOpenMenu(openMenu===menu?null:menu)}}>{menu}</button>

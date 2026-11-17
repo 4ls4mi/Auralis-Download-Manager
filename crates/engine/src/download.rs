@@ -776,6 +776,8 @@ pub struct ConnView {
     pub id: WorkerId,
     pub downloaded: u64,
     pub status: ConnStatus,
+    /// Last actual network retry/failure, retained briefly for sampled Glass displays.
+    pub last_disconnect: Option<std::time::Instant>,
     /// Bytes/s over the current response (0 while not receiving).
     pub speed: u64,
 }
@@ -1399,12 +1401,17 @@ impl Shared {
                     id,
                     downloaded: 0,
                     status: ConnStatus::Connecting,
+                    last_disconnect: None,
                     speed: 0,
                 });
                 v.connections.len() - 1
             }
         };
+        let was_disconnected = matches!(v.connections[i].status, ConnStatus::Retrying(_) | ConnStatus::Failed(_));
         f(&mut v.connections[i]);
+        if !was_disconnected && matches!(v.connections[i].status, ConnStatus::Retrying(_) | ConnStatus::Failed(_)) {
+            v.connections[i].last_disconnect = Some(std::time::Instant::now());
+        }
     }
 
     fn with_planner<T>(&self, f: impl FnOnce(&mut Planner) -> T) -> T {

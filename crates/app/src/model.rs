@@ -706,6 +706,7 @@ fn tool_snapshot(p: mdm_tools::video::Progress, url: &Url) -> mdm_engine::Snapsh
         } else {
             ConnStatus::Connecting
         },
+        last_disconnect: None,
         speed: p.speed as u64,
     });
     let engine = p.engine.unwrap_or_default();
@@ -2051,6 +2052,7 @@ mod helper_connection_tests {
             id,
             downloaded: 100,
             status: ConnStatus::Receiving,
+            last_disconnect: None,
             speed: 10,
         };
         p.helper = None;

@@ -515,6 +515,7 @@ pub async fn download(
             id: i as u32,
             downloaded: 0,
             status: ConnStatus::Connecting,
+            last_disconnect: None,
             speed: 0,
         })
         .collect();

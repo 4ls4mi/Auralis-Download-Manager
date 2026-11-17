@@ -110,6 +110,12 @@ jobs:
           npm run tauri -- build --bundles nsis
           if ($LASTEXITCODE -ne 0) { throw "Tauri Windows packaging failed" }
 
+      - name: Test Windows fork update release validation
+        shell: pwsh
+        run: |
+          cargo test --release --manifest-path glass-ui/src-tauri/Cargo.toml accepts_only_newer_fork_installer_with_digest
+          if ($LASTEXITCODE -ne 0) { throw "Fork update validation test failed" }
+
       - name: Exercise real Windows native dialogs and original transfers
         timeout-minutes: 25
         shell: pwsh

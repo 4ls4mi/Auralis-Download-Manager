@@ -3,6 +3,7 @@
 // bundled, hidden legacy process until app-only logic has been extracted.
 // Frontend never accesses MDM's token or loopback socket directly.
 mod lifecycle;
+#[cfg(windows)] mod fork_update;
 mod material_window;
 mod native_actions;
 use lifecycle::{pending_file_info, file_info_action, choose_download_path, window_preferences, glass_tool, choose_folder, open_glass_window, close_progress_windows};
@@ -551,7 +552,7 @@ fn main() {
             material_window::set_material_window_shape, pending_file_info, file_info_action, choose_download_path, window_preferences, glass_tool, choose_folder, open_glass_window, close_progress_windows, drag_download, drag_state, choose_move, clipboard_text, video_tool, browser_video,
             boot_engine, dashboard_snapshot, dashboard_visuals, download_action,
             add_download, select_wallpaper, queue_action, glass_settings, update_glass_setting,
-            browser_integration, extension_store_link, open_extension_store, bulk_action, file_operation, add_torrent_file, quit_glass, open_upstream_releases
+            browser_integration, extension_store_link, open_extension_store, bulk_action, file_operation, add_torrent_file, quit_glass, open_upstream_releases, fork_update::glass_update_check, fork_update::glass_update_download, fork_update::glass_update_install
         ])
         .run(context)
         .expect("error starting Mister Hybrid glass desktop");

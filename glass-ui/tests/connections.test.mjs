@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {connectionIndicators,connectionSlots} from '../src/connections.ts';
+import {connectionIndicators,connectionSlots,connectionLost} from '../src/connections.ts';
 test('uses only engine-reported workers and their actual assigned ranges',()=>{
  const a=connectionIndicators([{id:5,downloaded:24,speed:2,state:'Receiving'},{id:3,downloaded:0,speed:0,state:'Retired'}],[{start:100,cursor:124,end:140,worker:5},{start:0,cursor:90,end:100,worker:null}]);
  assert.equal(a.length,1);assert.equal(a[0].id,5);assert.equal(a[0].percent,60);assert.equal(a[0].received,24);assert.equal(a[0].assigned,40);
@@ -33,4 +33,16 @@ test('detail slots stay fixed without inventing workers and cap the display at 3
  const workers=Array.from({length:8},(_,id)=>({id}));
  const slots=connectionSlots(workers);assert.equal(slots.length,32);assert.equal(slots.filter(Boolean).length,8);assert(slots.slice(8).every(x=>x===null));
  const many=Array.from({length:40},(_,id)=>({id}));assert.equal(connectionSlots(many).length,32);assert.equal(connectionSlots(many)[31].id,31);assert.equal(connectionSlots(many,true).length,40);
+});
+
+test('loss styling follows only reported retry, failure or recent disconnect',()=>{
+ const base={id:0,downloaded:20,speed:0,state:'Receiving'};
+ assert.equal(connectionLost(base,true),false);
+ assert.equal(connectionLost({...base,state:'Retrying'},true),true);
+ assert.equal(connectionLost({...base,state:'Failed'},true),true);
+ assert.equal(connectionLost({...base,recent_disconnect:true},true),true);
+ assert.equal(connectionLost({...base,state:'Retrying'},false),false);
+ const [lost]=connectionIndicators([{...base,state:'Retrying'}],[{start:0,cursor:20,end:100,worker:null,last_worker:0}]);
+ assert.equal(lost.percent,20);
+ assert.equal(connectionIndicators([{...base,state:'Failed'}],[]).length,1);
 });

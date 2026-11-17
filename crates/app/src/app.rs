@@ -6023,7 +6023,8 @@ impl App {
                             "id": conn.id,
                             "downloaded": conn.downloaded,
                             "speed": conn.speed,
-                            "state": state
+                            "state": state,
+                            "recent_disconnect": conn.last_disconnect.is_some_and(|at| at.elapsed().as_millis() < 2500)
                         })
                     }).collect::<Vec<_>>()
                 }).unwrap_or_default();

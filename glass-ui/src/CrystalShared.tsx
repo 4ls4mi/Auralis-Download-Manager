@@ -5,7 +5,7 @@ import { useEffect, useState, useLayoutEffect, useRef, useId, createContext, use
 import type { CSSProperties, ReactNode } from "react";
 import { AppWindow, Maximize2, Minus, X, PanelBottomClose } from "lucide-react";
 
-import { connectionIndicators, connectionSlots } from "./connections";
+import { connectionIndicators, connectionSlots, connectionLost } from "./connections";
 
 export type Status = "Queued" | "Downloading" | "Stopped" | "Complete" | "Error";
 export type Download = {
@@ -15,7 +15,7 @@ export type Download = {
 };
 export type Queue = { name: string; running: boolean; ids: number[] };
 export type Segment = { start: number; cursor: number; end: number; worker?:number|null; last_worker?:number|null };
-export type Connection = { id: number; downloaded: number; speed: number; state: string };
+export type Connection = { id: number; downloaded: number; speed: number; state: string; recent_disconnect?:boolean };
 export type ServerPlace={name:string|null;flag_cell:[number,number]|null;reach:string|null};
 export function CountryFlag({place}:{place?:ServerPlace|null}){return place?.flag_cell?<span className="cg-country-flag" aria-label="Country flag" style={{backgroundPosition:`-${place.flag_cell[0]/2}px -${place.flag_cell[1]/2}px`}}/>:null;}
 export type DownloadVisual = {
@@ -159,8 +159,9 @@ export function GradientBar({percent,showLabel=false}:{percent:number;showLabel?
 // Each block represents an engine worker and only its currently assigned ranges.
 export function ConnectionMap({segments,connections,downloading,paused=false,compact=false}:{segments:Segment[]|undefined;connections:Connection[]|undefined;downloading:boolean;paused?:boolean;compact?:boolean}){
   const {appearance}=useCrystal();const colors=indicatorColors(appearance.indicator);
-  const items=connectionIndicators(connections??[],segments??[]);
-  const last=useRef<typeof items>([]);
+  const raw=connectionIndicators(connections??[],segments??[]);
+  const last=useRef<typeof raw>([]);
+  const items=raw.map(c=>{const old=last.current.find(x=>x.id===c.id);return connectionLost(c,downloading)&&c.percent===null&&old?.percent!=null?{...c,assigned:old.assigned,received:old.received,percent:old.percent}:c});
   if(downloading&&items.length>0)last.current=items;
   const visible=paused&&items.length===0?last.current:items;
   const shown=compact?visible:visible.slice(0,32);
@@ -169,8 +170,8 @@ export function ConnectionMap({segments,connections,downloading,paused=false,com
     {compact&&<div className="cg-chunk-label"><span>{connections?`${visible.length} connections`:"Connections unavailable"}</span></div>}
     <div className={"cg-chunk-map "+(compact?"compact":"cg-fixed-connections")} style={compact?{gridTemplateColumns:`repeat(${Math.max(1,slots.length)},minmax(0,1fr))`}:undefined} role="group" aria-label={connections?`${visible.length} engine connections${visible.length>32?', first 32 shown':''}`:"Connections unavailable"}>
      {slots.map((c,index)=>{if(!c)return <span key={`empty-${index}`} className="cg-connection-empty" aria-hidden="true"/>;
-      const fill=c.percent;const active=downloading&&c.state==="Receiving";const label=`Connection ${c.id+1}: ${paused?"Paused":downloading?c.state:"Not active"}; downloaded ${units(c.downloaded)}; ${rate(c.speed)}; ${fill===null?"assigned range unavailable":`${units(c.received)} of ${units(c.assigned)} (${fill.toFixed(1)}%)`}`;
-      return <span key={c.id} data-worker={c.id} className={paused?"paused":active?"active":""} title={label} aria-label={label} tabIndex={0}>{active&&fill!==null&&fill>0&&<i style={{width:`${fill}%`,backgroundImage:`linear-gradient(90deg,${colors.join(",")})`}}/>}</span>})}
+      const fill=c.percent;const active=downloading&&c.state==="Receiving";const lost=connectionLost(c,downloading);const label=`Connection ${c.id+1}: ${paused?"Paused":lost?"Connection lost or retrying":downloading?c.state:"Not active"}; downloaded ${units(c.downloaded)}; ${rate(c.speed)}; ${fill===null?"assigned range unavailable":`${units(c.received)} of ${units(c.assigned)} (${fill.toFixed(1)}%)`}`;
+      return <span key={c.id} data-worker={c.id} className={paused?"paused":lost?"lost":active?"active":""} title={label} aria-label={label} tabIndex={0}>{!paused&&fill!==null&&fill>0&&<i style={{width:`${fill}%`,backgroundImage:`linear-gradient(90deg,${colors.join(",")})`}}/>}</span>})}
     </div>
   </div>;
 }
