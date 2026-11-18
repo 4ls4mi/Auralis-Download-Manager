@@ -1,9 +1,4 @@
-# Build, lint and test main and every pull request: Windows and Linux, which must pass, and the
-# experimental macOS build (its failures are reported but don't fail the run). The other processors
-# MDM is published for (Windows on ARM and Linux on ARM on GitHub's ARM runners; 32-bit Windows on
-# the x64 runner, whose 64-bit Windows runs its tests too) on main and when run by hand only: on
-# every pull request they would add about an hour of runners, and their caches would push x64's
-# out of the repository's 10 GB. A pull request never saves their caches, as it never runs them.
+# Auralis builds and tests the desktop application for Windows x64 only.
 name: CI
 
 # Pushes to main only: a pull request's branch is tested once as the pull request (a bare push:
@@ -26,7 +21,7 @@ on:
       - "i18n/site/**"
       - "docs/**"
       - "**/*.md"
-  # Actions -> CI -> Run workflow: every processor, on any branch.
+  # Actions -> CI -> Run workflow: Windows x64 on any branch.
   workflow_dispatch:
 
 # A newer commit on a pull request makes its older run moot: cancel it (main runs to the end).
@@ -42,13 +37,18 @@ env:
 
 jobs:
   rust:
+    # The Auralis Windows workflow builds and tests the forked engine.
+    # Do not separately build the upstream desktop application.
+    if: ${{ false }}
     name: ${{ matrix.name || matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        # x64 on pull requests; with Windows on ARM, Linux on ARM and 32-bit Windows on main and
-        # by hand.
-        include: ${{ fromJSON(github.event_name == 'pull_request' && '[{"os":"windows-latest"},{"os":"ubuntu-latest"},{"os":"macos-latest","experimental":true}]' || '[{"os":"windows-latest"},{"os":"ubuntu-latest"},{"os":"macos-latest","experimental":true},{"os":"windows-11-arm","name":"windows-arm64"},{"os":"ubuntu-24.04-arm","name":"linux-arm64"},{"os":"windows-latest","name":"windows-x86","target":"i686-pc-windows-msvc"}]') }}
+        include:
+          - os: windows-latest
+            name: windows-x64
+            target: ''
+            experimental: false
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.experimental == true }}
     # A cold build takes about 10 minutes; a hung runner (apt-get once hung for hours) is cut off
