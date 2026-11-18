@@ -15,6 +15,8 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 
 ### Auralis Download Manager 0.3.8 — Windows x64
 
+- Addresses the YouTube sign-in freeze by moving WebView creation and cookie access off the UI thread; the Windows smoke test checks responsiveness.
+
 - Displays subtitle languages directly in both player and thumbnail menus and widens the menus.
 - Adds YouTube browser-session sign-in from the thumbnail menu, player menu and extension popup.
 - Distinguishes Auralis, engine and extension versions and prepares the extension in an Auralis-named folder. See [full notes](docs/glass-releases/v0.3.8.md).

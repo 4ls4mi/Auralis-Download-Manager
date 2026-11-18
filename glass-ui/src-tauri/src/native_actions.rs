@@ -94,8 +94,10 @@ pub async fn open_youtube_sign_in(app: AppHandle) -> ApiResult<()> {
             let _=window.unminimize();let _=window.set_focus();return Ok(());
         }
         let url=tauri::Url::parse("https://www.youtube.com/").map_err(|e|e.to_string())?;
-        tauri::WebviewWindowBuilder::new(&app,"youtube-login",tauri::WebviewUrl::External(url))
-            .title("YouTube sign-in — Auralis").inner_size(1000.0,720.0).center().build()
+        let mut builder=tauri::WebviewWindowBuilder::new(&app,"youtube-login",tauri::WebviewUrl::External(url));
+        // WebView2 instances sharing a profile must use the same environment options.
+        if let Some(args)=test_browser_args(){builder=builder.additional_browser_args(&args);}
+        builder.title("YouTube sign-in — Auralis").inner_size(1000.0,720.0).center().build()
             .map_err(|e|format!("Could not open YouTube sign-in: {e}"))?;
         Ok(())
     }).await.map_err(|e|format!("Could not start the YouTube sign-in window: {e}"))?
