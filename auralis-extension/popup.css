@@ -111,3 +111,5 @@ button{border-radius:9px;padding:7px 11px;transition:transform .15s,background .
 button:hover:not(:disabled){filter:none;background:#ad8afa50;box-shadow:0 0 12px #ad8afa45;transform:translateY(-1px)}button:active:not(:disabled){transform:scale(.98)}button:disabled{opacity:.52;cursor:not-allowed}
 button.accent{background:linear-gradient(135deg,#57d6c0,#8bb9ff);color:#112438;border-color:#b2fff0}.switch input,.choice input{accent-color:#ae8dff}.link{font-weight:600}.media ul{max-height:220px}.media li{padding:8px 0}.tag{border-radius:7px}.actions{gap:7px}
 @media(prefers-reduced-motion:reduce){button{transition:none}button:hover:not(:disabled),button:active:not(:disabled){transform:none}}
+
+footer{flex-wrap:wrap;gap:4px 10px}

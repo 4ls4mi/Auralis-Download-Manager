@@ -256,6 +256,9 @@ struct Reply {
     /// Mister Download Manager's version (this host comes with it).
     #[serde(skip_serializing_if = "Option::is_none")]
     version: Option<&'static str>,
+    /// The separate Auralis interface version, if this host is serving it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    auralis_version: Option<String>,
     /// For `rules`: Options → File types.
     #[serde(skip_serializing_if = "Option::is_none")]
     types: Option<String>,
@@ -383,6 +386,7 @@ fn answer(m: Message, rules: &mdm_ipc::capture::CaptureRules) -> Reply {
         return Reply {
             ok: true,
             version: Some(env!("CARGO_PKG_VERSION")),
+            auralis_version: mdm_ipc::data_dir().and_then(|d|std::fs::read_to_string(d.join("auralis-interface-version")).ok()).map(|v|v.trim().to_owned()).filter(|v|!v.is_empty()&&v.len()<=32&&v.bytes().all(|b|b.is_ascii_digit()||b==b'.'||b==b'-')),
             types: Some(rules.auto_types.clone()),
             capture: Some(rules.captures(browser)),
             excluded_sites: Some(rules.excluded_sites.clone()),

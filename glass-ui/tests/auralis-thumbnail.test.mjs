@@ -19,12 +19,15 @@ test('thumbnail control targets its own video and sends selected subtitle', {ski
     const host=page.locator('#thumbnail > span'); await host.waitFor();
     const box=await host.boundingBox(); await page.mouse.click(box.x+10,box.y+10);
     await page.waitForFunction(()=>document.querySelector('#thumbnail > span')?.shadowRoot?.querySelector('select[aria-label="Subtitles"]'));
+    assert.ok(await host.evaluate(e=>[...e.shadowRoot.querySelectorAll('.subtitle-list button')].some(b=>b.textContent.includes('English'))));
     const sections=await host.evaluate(e=>[...e.shadowRoot.querySelectorAll('.menu section')].map(section=>section.textContent));
     assert.ok(sections.some(text=>text.includes('Video')&&text.includes('1080p')));
     assert.ok(sections.some(text=>text.includes('Audio')&&text.includes('128 kbps')));
     assert.ok(sections.some(text=>text.includes('Subtitles')&&text.includes('English')));
     await host.evaluate(e=>{const root=e.shadowRoot;root.querySelector('select[aria-label="Subtitles"]').value='manual:en';[...root.querySelectorAll('.menu button')].find(b=>b.textContent.includes('1080p')).click()});
+    await host.evaluate(e=>e.shadowRoot.querySelector('.sign-in').click());
     const sent=await page.evaluate(()=>globalThis.sentMessages);
+    assert.ok(sent.some(m=>m.type==='youtube-sign-in'));
     assert.equal(sent[0].url,'https://www.youtube.com/watch?v=abcdef12345');
     assert.deepEqual(sent[1].subs.langs,['en']);
     await page.locator('#thumbnail').evaluate(e=>e.setAttribute('href','/watch?v=zyxwvu98765'));

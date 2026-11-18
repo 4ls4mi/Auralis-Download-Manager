@@ -389,7 +389,7 @@ async fn prepare_auralis_extension(app: AppHandle, browser: String) -> ApiResult
         if !matches!(browser.as_str(), "edge" | "chromium" | "firefox") {return Err("Choose a supported browser".into());}
         let source=app.path().resource_dir().map_err(|e|e.to_string())?.join("auralis-extension");
         if !source.join("manifest.json").is_file() {return Err("The Auralis extension was not included in this installation".into());}
-        let target=app.path().app_data_dir().map_err(|e|e.to_string())?.join("browser-extension").join(if browser=="firefox" {"firefox"} else {"chromium"});
+        let target=app.path().local_data_dir().map_err(|e|e.to_string())?.join("Auralis Download Manager").join("Browser Extension").join(if browser=="firefox" {"Firefox"} else {"Chromium"});
         copy_extension_dir(&source,&target)?;
         if browser=="firefox" {fs::copy(target.join("manifest.firefox.json"),target.join("manifest.json")).map_err(|e|e.to_string())?;}
         let registration=register_browser_host(&app);
@@ -585,6 +585,7 @@ fn main() {
             show_main(app);
         }))
         .setup(|app| {
+            if let Some(dir)=mdm_ipc::data_dir() {let _=mdm_ipc::private_dir(&dir);let _=fs::write(dir.join("auralis-interface-version"),env!("CARGO_PKG_VERSION"));}
             if let Some(main)=app.get_webview_window("main") {
                 let (width,height)=lifecycle::fit_size(app.handle(),814.0,468.0);
                 let _=main.set_min_size(Some(tauri::LogicalSize::new(width.min(600.0),height.min(420.0))));

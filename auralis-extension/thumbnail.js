@@ -26,11 +26,12 @@
         if(tracks.length)addOption(`${kind}:all`,kind==='auto'?'All automatic captions':'All subtitles');
         for(const track of tracks)addOption(`${kind}:${track.code}`,`${track.name || track.code} (${track.code})${kind==='auto'?' · automatic':''}`);
       }
-      subsSection.append(subs);
+      subs.hidden=true;subsSection.append(subs);
       const captionInfo=document.createElement('small');captionInfo.textContent=`${(answer.subtitles||[]).length} subtitle languages · ${(answer.automatic_subtitles||[]).length} automatic`;subsSection.append(captionInfo);
       const list=document.createElement('div');list.className='subtitle-list';
+      const none=document.createElement('button');none.type='button';none.textContent='No subtitles';none.setAttribute('aria-pressed','true');none.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();subs.value='none';list.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b===none)))});list.append(none);
       for(const [kind,tracks] of [['manual',answer.subtitles||[]],['auto',answer.automatic_subtitles||[]]]) for(const track of tracks){
-        const option=document.createElement('button');option.type='button';option.textContent=`${track.name||track.code} (${track.code})${kind==='auto'?' · automatic':''}`;option.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();subs.value=`${kind}:${track.code}`;list.querySelectorAll('button').forEach(b=>b.removeAttribute('aria-pressed'));option.setAttribute('aria-pressed','true')});list.append(option);
+        const option=document.createElement('button');option.type='button';option.textContent=`${track.name||track.code} (${track.code})${kind==='auto'?' · automatic':''}`;option.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();subs.value=`${kind}:${track.code}`;list.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b===option)))});list.append(option);
       }
       if(list.childElementCount)subsSection.append(list);
       const videoSection=document.createElement('section'), audioSection=document.createElement('section');
@@ -51,7 +52,7 @@
       videoTitle.textContent=`Video · ${videoCount}`;audioTitle.textContent=`Audio · ${audioCount}`;
       if(!videoCount){const empty=document.createElement('small');empty.textContent='No video qualities available';videoSection.append(empty)}
       if(!audioCount){const empty=document.createElement('small');empty.textContent='No audio qualities available';audioSection.append(empty)}
-      menu.append(videoSection,audioSection,subsSection);
+      menu.append(subsSection,videoSection,audioSection);
     } catch { status.textContent='Could not reach Auralis.'; }
   }
   function scan() {
@@ -65,7 +66,7 @@
 :host{font:13px/1.35 system-ui,sans-serif;color:#f4f6ff;letter-spacing:.01em}
 .control{border:1px solid #ffffff66;border-radius:10px;background:rgba(18,25,43,.92);color:#fff;cursor:pointer;padding:4px 6px;display:flex;gap:4px;align-items:center;box-shadow:0 4px 16px #0008;transition:background .16s,transform .16s}
 .control:hover{background:#4b4277;transform:translateY(-1px)}.control img{width:20px;height:20px}
-.menu{position:absolute;right:0;top:38px;width:310px;max-height:min(480px,70vh);overflow:auto;border:1px solid #ffffff55;border-radius:16px;background:rgba(19,24,42,.97);box-shadow:0 12px 32px #000b;backdrop-filter:blur(20px);padding:10px;scrollbar-width:thin;scrollbar-color:#987fe3 transparent}
+.menu{position:absolute;right:0;top:38px;width:min(375px,calc(100vw - 24px));max-height:min(480px,70vh);overflow:auto;border:1px solid #ffffff55;border-radius:16px;background:rgba(19,24,42,.97);box-shadow:0 12px 32px #000b;backdrop-filter:blur(20px);padding:10px;scrollbar-width:thin;scrollbar-color:#987fe3 transparent}
 .menu[hidden]{display:none}.menu>div>div:first-child{padding:4px}.menu label{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#c1c9e3}.menu input,.menu select{box-sizing:border-box;max-width:100%;color:#fff;background:#252d46;border:1px solid #7787ab;border-radius:8px;padding:7px}.menu input{width:100%;margin-top:7px}
 .menu button{width:100%;border:1px solid transparent;border-radius:8px;color:inherit;text-align:left;background:transparent;padding:7px 9px;cursor:pointer}.menu button:hover{background:#7d65b845;border-color:#b9a5ef77}.menu button:focus-visible,.menu select:focus-visible{outline:2px solid #ba9cff}
 .menu section{margin:9px 0;padding:9px;border:1px solid #ffffff1f;border-radius:11px;background:#ffffff09}.menu section strong{display:block;color:#d9ccff;font-size:12px;letter-spacing:.04em;margin-bottom:5px}.menu section small{display:block;color:#aebbd1;margin:5px 0}.lookup-status{color:#f4f6ff;padding:6px 3px;font-weight:600;overflow-wrap:anywhere}.menu .quality{background:#ffffff0b;margin:2px 0}.menu .subtitle-list{max-height:150px;overflow:auto;padding:0}.menu .subtitle-list button{padding:5px 7px}.menu .subtitle-list button[aria-pressed=true]{background:#8467d96b;border-color:#c9b8ff}
@@ -78,11 +79,12 @@
         if(menu.hidden)return;
         menu.replaceChildren();
         const controls=document.createElement('div');
-        controls.innerHTML='<label>Cookies <select aria-label="Cookies"><option value="browser">Browser session</option><option value="manual">Paste cookies</option></select></label><input type="password" placeholder="name=value; …" aria-label="Cookie header" hidden><button type="button">Fetch qualities</button>';
+        controls.innerHTML='<label>Cookies <select aria-label="Cookies"><option value="browser">Browser session</option><option value="manual">Paste cookies</option></select></label><input type="password" placeholder="name=value; …" aria-label="Cookie header" hidden><button type="button" class="fetch">Fetch qualities</button><button type="button" class="sign-in">Sign in to YouTube</button>';
         const mode=controls.querySelector('select'),input=controls.querySelector('input');
         mode.addEventListener('change',()=>{input.hidden=mode.value!=='manual';});
         const result=document.createElement('div');
-        controls.querySelector('button').addEventListener('click',()=>void lookup(`https://www.youtube.com/watch?v=${id}`,result,mode.value,input.value));
+        controls.querySelector('.sign-in').addEventListener('click',async e=>{e.preventDefault();e.stopPropagation();const r=await ext.runtime.sendMessage({type:'youtube-sign-in'}).catch(()=>null);result.textContent=r?.ok?'Sign in in this browser, then return and fetch qualities again.':'Could not open YouTube sign-in.'});
+        controls.querySelector('.fetch').addEventListener('click',()=>void lookup(`https://www.youtube.com/watch?v=${id}`,result,mode.value,input.value));
         menu.append(controls,result); void lookup(`https://www.youtube.com/watch?v=${id}`,result,'browser','');
       });
       if (getComputedStyle(anchor).position === 'static') anchor.style.position='relative';

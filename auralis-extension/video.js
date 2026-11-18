@@ -990,7 +990,7 @@ button:focus-visible { outline: none; }
   border: 2px solid #fff; background: var(--go); }
 /* The list: paper white (MDM's navy board in dark mode), one line per quality. */
 .menu {
-  position: absolute; width: 318px; max-width: calc(100vw - 16px); padding: 4px; border-radius: 6px;
+  position: absolute; width: 390px; max-width: calc(100vw - 16px); padding: 4px; border-radius: 6px;
   background: var(--bg); color: var(--tx); border: 1px solid var(--bd); box-shadow: var(--sh);
   font: 400 12px/1.2 var(--font); display: none; white-space: nowrap;
 }
@@ -1040,7 +1040,7 @@ button:focus-visible { outline: none; }
 .pill:not(.bare) .go:hover,.pill .more:hover {background:#b48dff55}
 .menu {padding:8px;border-radius:16px;background:linear-gradient(145deg,rgba(52,43,79,.97),rgba(15,25,43,.98));border-color:#d6c8ff77;backdrop-filter:blur(20px);box-shadow:inset 0 1px #ffffff44,0 14px 35px #000a}
 .menu button {height:32px;border-radius:8px;cursor:pointer}.menu button:hover {background:#b99aff3d}.menu .cap{color:#d9c6ff}.menu .rows{scrollbar-width:thin;scrollbar-color:#a98ee2 transparent}
-.menu [data-act="window"] {display:none!important}
+.menu .subtitle-section{margin:5px 2px;padding:5px;border:1px solid #ffffff30;border-radius:9px;background:#ffffff0b}.menu .subtitle-list{max-height:140px;overflow:auto}.menu .subtitle-list button[aria-pressed="true"]{background:#a886fa66;box-shadow:inset 3px 0 #dbcbff}.menu [data-act="window"] {display:none!important}
 .cookie-controls {padding:6px;display:flex;gap:5px;align-items:center;flex-wrap:wrap}.cookie-controls button {width:auto;height:auto;background:#355983;padding:5px 7px}.cookie-controls input {max-width:150px}.cookie-controls select,.cookie-controls input,.rows select {background:#20334f;color:#fff;border:1px solid #8ab3d788;border-radius:5px;padding:4px}
 @media (prefers-reduced-motion: reduce) {
   .pill { transition: none; transform: none; }
@@ -1092,7 +1092,7 @@ button:focus-visible { outline: none; }
   <div class="mh"><img alt="" draggable="false"><div><span class="t"></span><span class="s"></span></div></div>
   <div class="hr"></div>
   <div class="note" role="status" hidden></div>
-  <div class="cookie-controls"><label>Cookies <select class="cookie-mode"><option value="browser">Browser session</option><option value="manual">Paste cookies</option></select></label><input class="cookie-header" type="password" placeholder="name=value; …" aria-label="Cookies" hidden><button type="button" class="cookie-fetch">Fetch qualities</button></div>
+  <div class="cookie-controls"><label>Cookies <select class="cookie-mode"><option value="browser">Browser session</option><option value="manual">Paste cookies</option></select></label><input class="cookie-header" type="password" placeholder="name=value; …" aria-label="Cookies" hidden><button type="button" class="cookie-fetch">Fetch qualities</button><button type="button" class="youtube-sign-in">Sign in to YouTube</button></div>
   <div class="rows" role="group"></div>
   <div class="hr"></div>
   <button role="menuitem" data-act="window"><span class="mi"><svg viewBox="0 0 16 16" ${ICON} stroke-width="1.4"><path d="M2.5 4h11M2.5 8h11M2.5 12h7"/></svg></span><span></span></button>
@@ -1121,6 +1121,7 @@ button:focus-visible { outline: none; }
     if (cookieMode.value === "manual" && !cookieHeader.value.trim()) { say("Paste cookies first."); return; }
     if (video) { const c = describeNow(video); if (c.key) looks.delete(c.key); startLook(c, true); }
   });
+  $(".youtube-sign-in").addEventListener("click",async e=>{e.preventDefault();e.stopPropagation();const result=await send({type:"youtube-sign-in"});say(result?.ok?"Sign in in this browser, then return and fetch qualities again.":"Could not open YouTube sign-in.");});
   const rows = $(".rows");
   const item = (act) => menu.querySelector(`[data-act="${act}"]`);
   const dir = ext.i18n.getMessage("@@bidi_dir") || "ltr";
@@ -2028,17 +2029,17 @@ button:focus-visible { outline: none; }
         rows.append(cap);
         for (const i of groups[kind]) rows.append(row(look.choices[i], i, (n += 1), look.choices[i] === best));
       }
-      const subtitle = document.createElement("select");
-      subtitle.setAttribute("aria-label", "Subtitles");
-      const add = (value, text) => { const option = document.createElement("option"); option.value = value; option.textContent = text; subtitle.append(option); };
-      add("none", "No subtitles");
-      for (const [kind, tracks] of [["manual", look.subtitles || []], ["auto", look.automatic_subtitles || []]]) {
-        if (tracks.length) add(`${kind}:all`, kind === "auto" ? "All automatic captions" : "All subtitles");
-        for (const track of tracks) add(`${kind}:${track.code}`, `${track.name || track.code} (${track.code})${kind === "auto" ? " · automatic" : ""}`);
+      const subtitleSection=document.createElement("section");subtitleSection.className="subtitle-section";
+      const subtitleTitle=document.createElement("div");subtitleTitle.className="cap";subtitleTitle.textContent="Subtitles";subtitleSection.append(subtitleTitle);
+      const list=document.createElement("div");list.className="subtitle-list";list.setAttribute("aria-label","Available subtitles");
+      const add=(value,text)=>{const button=document.createElement("button");button.type="button";button.textContent=text;button.setAttribute("aria-pressed",String(value===subtitleChoice));button.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();subtitleChoice=value;for(const b of list.querySelectorAll("button"))b.setAttribute("aria-pressed",String(b===button));});list.append(button)};
+      add("none","No subtitles");let count=0;
+      for(const [kind,tracks] of [["manual",look.subtitles||[]],["auto",look.automatic_subtitles||[]]]){
+        if(tracks.length)add(`${kind}:all`,kind==="auto"?"All automatic captions":"All subtitles");
+        for(const track of tracks){add(`${kind}:${track.code}`,`${track.name||track.code} (${track.code})${kind==="auto"?" · automatic":""}`);count++;}
       }
-      subtitle.value = subtitleChoice;
-      subtitle.addEventListener("change", () => { subtitleChoice = subtitle.value; });
-      rows.append(subtitle);
+      if(!count){const text=document.createElement("div");text.className="note";text.textContent="No subtitle languages available";subtitleSection.append(text)}
+      subtitleSection.append(list);rows.prepend(subtitleSection);
       tell(noticeOf(look));
     } else if (look) {
       // What the look-up came to, in its words; the window does the rest.

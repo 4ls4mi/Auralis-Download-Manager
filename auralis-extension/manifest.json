@@ -2,9 +2,9 @@
   "manifest_version": 3,
   "default_locale": "en",
   "name": "__MSG_name__",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "__MSG_description__",
-  "homepage_url": "https://github.com/4ls4mi/misterdownloadmanager",
+  "homepage_url": "https://github.com/4ls4mi/Auralis-Download-Manager",
   "minimum_chrome_version": "116",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnUotK1HQthYibGKoaPiYlteEjQBT/daDR6TVPgY4nrkAIrv9mFjMlHYe4g4vmDsBQr0cT+879dQrHsnc1a6SwmQz9hdt/t3/ybQzFK1BnRUZQkL1Gp13T4iMH9DcqcxDy+Mf77tQTOy1cK4rgQz8hNH3iZkkj++g8n5ZMIKPPpPkUS0lb0SK7FFkGY7gPihqORWaZ4rUj+AAz2crwVqSa5pE/evoTVuyrFlrXno1m9Pachi1kbWXiWTyyvhTjrh9Cr5BFQzO24cPrcWqYDk3BOUANQLF3yIyBKOVzJDKbUmW/E+Z1NSMPspaKf8TonDMqzeVNrfm0lz22514P+sgNwIDAQAB",
   "permissions": [

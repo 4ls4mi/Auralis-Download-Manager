@@ -75,7 +75,7 @@ async function native(message, ms = HOST_WAIT) {
   try {
     const reply = (await withTimeout(ext.runtime.sendNativeMessage(HOST, sent), ms)) || {};
     if (reply.version) {
-      await noteStatus(older(reply.version, VERSION) ? "update-app" : null, reply.version);
+      await noteStatus(null, reply.auralisVersion || null, reply.version);
       // The answer to `rules` also says whether the app looks videos up for the button.
       await noteLookup(reply.videoLookup === true);
     } else if (reply.ok || reply.why === "options") await noteStatus(null);
@@ -170,17 +170,7 @@ async function remoteOff() {
   return { ok: true };
 }
 
-// a < b, both "x.y.z".
-// Is version `a` an older release than `b`? Only the first two numbers count: the store can publish
-// a bug-fix add-on before its app is out, and nothing it offers needs that app.
-function older(a, b) {
-  const pa = String(a).split(/[.-]/).map(Number);
-  const pb = String(b).split(/[.-]/).map(Number);
-  for (let i = 0; i < 2; i++) {
-    if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) < (pb[i] || 0);
-  }
-  return false;
-}
+// Auralis, its extension and its upstream engine use independent version numbers.
 
 // ---- status: the toolbar button's badge and title, the popup's first line ------------------
 
@@ -192,11 +182,11 @@ async function readStatus() {
 
 // `why`: null when connected, else the reason (the help page's section). Written only when it
 // changes.
-async function noteStatus(why, app) {
+async function noteStatus(why, app, engine) {
   const now = await readStatus();
-  if (now.why === why && (!app || now.app === app)) return;
+  if (now.why === why && (!app || now.app === app) && (!engine || now.engine === engine)) return;
   const was = !now.why || now.why === "update-app";
-  status = { ...now, why, app: app || now.app || null, at: Date.now() };
+  status = { ...now, why, app: app || null, engine: engine || now.engine || null, at: Date.now() };
   await ext.storage.local.set({ status });
   await showStatus();
   // Unreachable, PDFs and music open in the browser again (and back once connected).
@@ -2977,6 +2967,7 @@ const beside = (tab) => ({
 });
 
 async function pageMessage(m, sender) {
+  if(m.type === "youtube-sign-in") {await ext.tabs.create({url:"https://www.youtube.com/"});return {ok:true};}
   const page = senderPage(sender);
   const tab = sender.tab || {};
   if (m.type === "panel") {
@@ -3062,6 +3053,7 @@ async function pageMessage(m, sender) {
 }
 
 async function popupMessage(m) {
+  if(m.type === "youtube-sign-in") {await ext.tabs.create({url:"https://www.youtube.com/"});return {ok:true};}
   if (m.type === "state") {
     const r = await refreshRules();
     const { paused } = await ext.storage.local.get({ paused: false });
@@ -3069,7 +3061,7 @@ async function popupMessage(m) {
     const { declined } = await ext.storage.local.get({ declined: null });
     const remote = await remoteTarget();
     if (remote) return { connected: true, why: null, remote: remote.url, version: VERSION, paused, declined };
-    return { connected: Boolean(r) && (!s.why || s.why === "update-app"), why: s.why, app: s.app, version: VERSION, paused, declined };
+    return { connected: Boolean(r) && (!s.why || s.why === "update-app"), why: s.why, app: s.app, engine: s.engine, version: VERSION, paused, declined };
   }
   if (m.type === "remote-pair" && typeof m.url === "string" && typeof m.code === "string") return remotePair(m.url, m.code);
   if (m.type === "remote-off") return remoteOff();

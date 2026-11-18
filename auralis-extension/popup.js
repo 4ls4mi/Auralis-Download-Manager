@@ -52,7 +52,8 @@ async function show() {
   showDeclined(s.connected && s.declined);
   $("take").disabled = !s.connected;
   $("open").disabled = $("options").disabled = false;
-  $("version").textContent = s.version ? `v${s.version}` : "";
+  $("version").textContent = s.version ? `Extension v${s.version}` : "";
+  $("engine-version").textContent = s.engine ? `Engine v${s.engine}` : "";
   // Send downloads to: this computer, or another MDM (#157).
   $("to-here").checked = !s.remote && $("remote-form").hidden;
   $("to-remote").checked = Boolean(s.remote) || !$("remote-form").hidden;
@@ -313,6 +314,7 @@ if ((manifest.optional_permissions || []).includes("proxy")) {
   });
 }
 
+$("youtube-sign-in").addEventListener("click",async()=>{const result=await ask({type:"youtube-sign-in"});const said=$("action-said");said.hidden=false;said.textContent=result.ok?"Sign in in this browser, then return to the video and fetch qualities again.":"Could not open YouTube sign-in.";});
 $("take").addEventListener("change", async (e) => {
   await ask({ type: "pause", paused: !e.target.checked });
   show();
