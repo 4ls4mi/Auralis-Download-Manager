@@ -1454,6 +1454,9 @@ button:focus-visible { outline: none; }
 
   function eligible(v) {
     if (!v.isConnected || isDismissed(v)) return false;
+    // YouTube cards have their own fixed Auralis control, including while a
+    // hover preview video is playing inside the card.
+    if (/(^|\.)youtube\.com$/i.test(location.hostname) && v.closest?.("ytd-rich-item-renderer, ytd-video-renderer, ytd-compact-video-renderer, ytd-grid-video-renderer")) return false;
     const r = v.getBoundingClientRect();
     const audio = v instanceof HTMLAudioElement;
     if (audio ? !v.controls || r.width < MIN_W || r.height < MIN_AUDIO_H : r.width < MIN_W || r.height < MIN_H) {
