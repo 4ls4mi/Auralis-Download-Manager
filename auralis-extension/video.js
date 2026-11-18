@@ -1036,6 +1036,7 @@ button:focus-visible { outline: none; }
 .pill .more {width:18px;border:0;background:transparent;color:#c8eeff}
 .menu {border-radius:12px;background:#101e36;color:#edf8ff;border-color:#88b9df88;box-shadow:0 12px 35px #0009}
 .menu [data-act="window"] {display:none!important}
+.cookie-controls {padding:6px;display:flex;gap:5px;align-items:center;flex-wrap:wrap}.cookie-controls button {width:auto;height:auto;background:#355983;padding:5px 7px}.cookie-controls input {max-width:150px}.cookie-controls select,.cookie-controls input,.rows select {background:#20334f;color:#fff;border:1px solid #8ab3d788;border-radius:5px;padding:4px}
 @media (prefers-reduced-motion: reduce) {
   .pill { transition: none; transform: none; }
   .spin, .chip.skel, .menu .skrow { animation: none; }
@@ -1086,6 +1087,7 @@ button:focus-visible { outline: none; }
   <div class="mh"><img alt="" draggable="false"><div><span class="t"></span><span class="s"></span></div></div>
   <div class="hr"></div>
   <div class="note" role="status" hidden></div>
+  <div class="cookie-controls"><label>Cookies <select class="cookie-mode"><option value="browser">Browser session</option><option value="manual">Paste cookies</option></select></label><input class="cookie-header" type="password" placeholder="name=value; …" aria-label="Cookies" hidden><button type="button" class="cookie-fetch">Fetch qualities</button></div>
   <div class="rows" role="group"></div>
   <div class="hr"></div>
   <button role="menuitem" data-act="window"><span class="mi"><svg viewBox="0 0 16 16" ${ICON} stroke-width="1.4"><path d="M2.5 4h11M2.5 8h11M2.5 12h7"/></svg></span><span></span></button>
@@ -1107,6 +1109,13 @@ button:focus-visible { outline: none; }
   const guide = $(".guide");
   const menu = $(".menu");
   const note = $(".note");
+  const cookieMode = $(".cookie-mode"), cookieHeader = $(".cookie-header"), cookieFetch = $(".cookie-fetch");
+  cookieMode.addEventListener("change", () => { cookieHeader.hidden = cookieMode.value !== "manual"; });
+  cookieFetch.addEventListener("click", e => {
+    e.stopPropagation();
+    if (cookieMode.value === "manual" && !cookieHeader.value.trim()) { say("Paste cookies first."); return; }
+    if (video) { const c = describeNow(video); if (c.key) looks.delete(c.key); startLook(c, true); }
+  });
   const rows = $(".rows");
   const item = (act) => menu.querySelector(`[data-act="${act}"]`);
   const dir = ext.i18n.getMessage("@@bidi_dir") || "ltr";
@@ -1199,7 +1208,7 @@ button:focus-visible { outline: none; }
     const kept = looks.get(c.key);
     if (usable(kept) && !(byUser && kept.state === "busy")) return kept;
     const og = location.href === landedAt ? document.querySelector('meta[property="og:title"]')?.content : "";
-    const asked = { src: c.d.src, title: (og || document.title || "").trim(), url: c.d.url, at: c.d.at };
+    const asked = { src: c.d.src, title: (og || document.title || "").trim(), url: c.d.url, at: c.d.at, cookieMode: cookieMode.value, ...(cookieMode.value === "manual" ? {cookieHeader:cookieHeader.value} : {}) };
     const l = { state: "pending", at: Date.now(), href: location.href, asked };
     looks.set(c.key, l);
     const alive = () => looks.get(c.key) === l && location.href === l.href;
@@ -1646,6 +1655,7 @@ button:focus-visible { outline: none; }
     // a copy going in its own world beside the new one): it goes instead of showing (#336).
     if (!ext.runtime?.id) return teardown();
     if (video !== v) {
+      cookieHeader.value = ""; cookieHeader.hidden = true; cookieMode.value = "browser"; subtitleChoice = "none";
       video = v;
       held = null;
       closeMenu();

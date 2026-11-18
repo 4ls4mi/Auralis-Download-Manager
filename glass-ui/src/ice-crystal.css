@@ -272,3 +272,6 @@
 .cg-window .cg-selected-chunks .cg-fixed-connections{grid-template-columns:repeat(8,minmax(0,24px));grid-auto-rows:clamp(12px,3vh,20px);max-width:220px}
 .cg-progress-combined .cg-compact-speed{flex:1;min-height:0}
 .cg-progress-combined .cg-compact-speed .cg-graph{flex:1;min-height:32px;height:auto}
+/* Give the remaining width to the transfer graph instead of stretching each connection. */
+.cg-window .cg-indicator-row{grid-template-columns:minmax(0,1fr) minmax(0,245px)}
+@media(max-width:650px){.cg-window .cg-indicator-row{grid-template-columns:minmax(0,1fr) minmax(0,190px)}}
