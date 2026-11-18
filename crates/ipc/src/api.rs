@@ -152,6 +152,13 @@ pub struct VideoLookupAnswer {
     /// place in this list.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub choices: Vec<VideoChoice>,
+    /// Subtitle tracks available for this specific lookup.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[schemars(skip)]
+    pub subtitles: Vec<VideoSubtitle>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[schemars(skip)]
+    pub automatic_subtitles: Vec<VideoSubtitle>,
     /// `failed`: [`lookup::NO_YTDLP`], [`lookup::NO_CHOICES`] or [`lookup::ERROR`].
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
@@ -164,6 +171,10 @@ pub struct VideoLookupAnswer {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub notice: Option<VideoNotice>,
 }
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(default)]
+pub struct VideoSubtitle { pub code: String, pub name: String }
 
 /// A word in the browser's quality menu on what the look-up lacked (#852), in MDM's language.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]

@@ -18,12 +18,20 @@
         status.textContent = answer?.message || 'Could not fetch qualities. Check Auralis and yt-dlp.'; return;
       }
       status.textContent = answer.title || 'Choose a quality';
+      const subs = document.createElement('select'); subs.setAttribute('aria-label','Subtitles');
+      const addOption=(value,label)=>{const option=document.createElement('option');option.value=value;option.textContent=label;subs.append(option)};
+      addOption('none','No subtitles');
+      for (const [kind,tracks] of [['manual',answer.subtitles||[]],['auto',answer.automatic_subtitles||[]]]) {
+        if(tracks.length)addOption(`${kind}:all`,kind==='auto'?'All automatic captions':'All subtitles');
+        for(const track of tracks)addOption(`${kind}:${track.code}`,`${track.name || track.code} (${track.code})${kind==='auto'?' · automatic':''}`);
+      }
+      menu.append(subs);
       for (const [index,choice] of answer.choices.entries()) {
         const button=document.createElement('button'); button.type='button';
         button.textContent = `${choice.audio ? 'Audio' : 'Video'} · ${choice.label || choice.ext || 'Download'}`;
         button.addEventListener('click', async event => {
           event.preventDefault(); event.stopPropagation(); button.disabled=true;
-          try { const result=await ext.runtime.sendMessage({type:'video-pick',token:answer.token,choice:index});
+          try { const [kind,code]=subs.value.split(':'); const subtitles={langs:code?[code]:[],automatic:kind==='auto',embed:false}; const result=await ext.runtime.sendMessage({type:'video-pick',token:answer.token,choice:index,subs:subtitles});
             status.textContent=['started','queued','sent'].includes(result?.lookup?.state)?'Added to Auralis':'Could not start this download.';
           } catch { status.textContent='Could not reach Auralis.'; }
           button.disabled=false;
@@ -48,7 +56,7 @@
         if(menu.hidden)return;
         menu.replaceChildren();
         const controls=document.createElement('div');
-        controls.innerHTML='<label>Cookies <select aria-label="Cookies"><option value="browser">Browser session</option><option value="manual">Paste cookies</option></select></label><input type="password" placeholder="name=value; …" aria-label="Cookie header" hidden><button type="button">Fetch qualities</button><small>App-wide manual cookie file may take priority.</small>';
+        controls.innerHTML='<label>Cookies <select aria-label="Cookies"><option value="browser">Browser session</option><option value="manual">Paste cookies</option></select></label><input type="password" placeholder="name=value; …" aria-label="Cookie header" hidden><button type="button">Fetch qualities</button>';
         const mode=controls.querySelector('select'),input=controls.querySelector('input');
         mode.addEventListener('change',()=>{input.hidden=mode.value!=='manual';});
         const result=document.createElement('div');

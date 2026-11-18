@@ -84,9 +84,14 @@ pub async fn clipboard_text() -> ApiResult<String> {
 
 /// Original MDM video quality lookup; the engine owns the token and choices.
 #[tauri::command]
-pub async fn video_tool(action:String,value:String,choice:Option<usize>,subs:Option<serde_json::Value>) -> ApiResult<serde_json::Value> {
+pub async fn video_tool(action:String,value:String,choice:Option<usize>,subs:Option<serde_json::Value>,cookies:Option<String>) -> ApiResult<serde_json::Value> {
     if value.len()>8192 {return Err("Video request is too long".into());}
     let mut command=mdm_ipc::Command::default();
+    if let Some(cookies) = cookies.filter(|c| !c.trim().is_empty()) {
+        if action != "lookup" || cookies.len() > 8192 || cookies.contains(['\r','\n','\0']) { return Err("Enter cookies as name=value pairs separated by semicolons".into()); }
+        command.cookies=Some(cookies);
+        command.video_explicit_cookies=true;
+    }
     match action.as_str() {
         "lookup" if value.starts_with("https://")||value.starts_with("http://") => command.video_lookup=Some(mdm_ipc::VideoLookup{address:value,..Default::default()}),
         "tracks" if !value.is_empty()&&value.len()<=256 => {command.query=Some("glass-video-tracks".into());command.queue=Some(value)},

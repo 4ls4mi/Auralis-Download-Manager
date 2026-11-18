@@ -657,6 +657,8 @@ pub struct FromBrowser {
     pub origin: Option<String>,
     pub user_agent: Option<String>,
     pub cookies: Option<String>,
+    /// This request explicitly chose its own cookie source.
+    pub explicit_cookies: bool,
     pub jar: Vec<mdm_ipc::BrowserCookie>,
 }
 
@@ -678,6 +680,7 @@ impl FromBrowser {
             s.as_deref().map(str::trim).filter(|s| !s.is_empty())
         }
         let mut args = Vec::new();
+        if self.explicit_cookies { args.push("--auralis-explicit-cookies".to_owned()); }
         if let Some(r) = given(&self.referer) {
             args.extend(["--referer".to_owned(), safe(r)?.to_owned()]);
         }
@@ -847,6 +850,16 @@ fn layers(cmd: &mut Command, user: &[String], ours: &[String]) -> Result<(), Pro
 }
 
 fn layers_with_manual(cmd: &mut Command, user: &[String], ours: &[String], chosen: Option<&BrowserCookies>, file: Option<&str>) -> Result<(), ProcError> {
+    if ours.iter().any(|a| a == "--auralis-explicit-cookies") {
+        let ours: Vec<String> = ours.iter().filter(|a| a.as_str() != "--auralis-explicit-cookies").cloned().collect();
+        let mut clean_user = Vec::new();
+        let mut args = user.iter();
+        while let Some(arg) = args.next() {
+            if arg == "--cookies" || arg == "--cookies-from-browser" { args.next(); }
+            else { clean_user.push(arg.clone()); }
+        }
+        return layers_with(cmd, &clean_user, &ours, None);
+    }
     if let Some(path) = file.filter(|_| !user.iter().chain(ours).any(|a| a == NO_COOKIES)) {
         // Explicit manual selection takes precedence over a browser or extension session.
         let strip = |args: &[String]| {
@@ -1834,6 +1847,15 @@ mod tests {
         layers_with_manual(&mut cmd, &[], &[NO_COOKIES.into()], None, Some("manual.txt")).unwrap();
         let args: Vec<_> = cmd.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
         assert!(!args.iter().any(|a| a == "--cookies"));
+    }
+
+    #[test]
+    fn explicit_video_cookies_override_the_global_manual_file() {
+        let ours = vec!["--auralis-explicit-cookies".into(), "--cookies".into(), "video.txt".into()];
+        let mut cmd = Command::new("yt-dlp");
+        layers_with_manual(&mut cmd, &[], &ours, None, Some("global.txt")).unwrap();
+        let args: Vec<_> = cmd.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
+        assert_eq!(args, ["--cookies", "video.txt"]);
     }
 
     /// #360: yt-dlp is told of Node.js or Bun, from the PATH or nvm, and left alone with Deno.

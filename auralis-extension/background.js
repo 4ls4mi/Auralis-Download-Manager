@@ -2918,6 +2918,7 @@ async function videoLookup(m, page, sender) {
     },
     cookies: v.cookies,
     cookieJar: v.cookieJar,
+    explicitVideoCookies: m.cookieMode === "browser" || m.cookieMode === "manual",
     ...(v.fetchedWith ? { fetchedWith: v.fetchedWith } : {}),
     private: Boolean(tab.incognito),
   });
@@ -2949,7 +2950,7 @@ async function videoPick(m, sender) {
   // The token and the row's number from the page, nothing else: private or not and the
   // container are the tab's, as the browser says; the app checks them against the lookup's.
   const reply = await native({
-    videoPick: { token: m.token, choice: m.choice, ...(tab.cookieStoreId ? { storeId: tab.cookieStoreId } : {}) },
+    videoPick: { token: m.token, choice: m.choice, ...(m.subs && typeof m.subs === "object" ? {subs:m.subs} : {}), ...(tab.cookieStoreId ? { storeId: tab.cookieStoreId } : {}) },
     private: Boolean(tab.incognito),
   });
   return reply.lookup && typeof reply.lookup === "object" ? { lookup: reply.lookup } : { fallback: true };

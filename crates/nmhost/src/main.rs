@@ -158,6 +158,7 @@ struct Message {
     video_lookup: Option<LookupAsk>,
     video_poll: Option<PollAsk>,
     video_pick: Option<PickAsk>,
+    explicit_video_cookies: bool,
     /// With `video` and `videoLookup`: what the browser sent with `src` as its page's player
     /// asked for it (#900), sent again with it and each of its pieces. An older extension sends
     /// none: the page is the stream's Referer then, as before.
@@ -229,6 +230,7 @@ struct PickAsk {
     token: String,
     choice: usize,
     store_id: Option<String>,
+    subs: Option<serde_json::Value>,
 }
 
 /// A download the extension left to the browser: why (a `Declined` code, or `site-access`:
@@ -701,6 +703,7 @@ fn menu_command(
                 referer,
                 origin,
                 cookies: m.cookies.clone().filter(|c| !c.is_empty()),
+                video_explicit_cookies: m.explicit_video_cookies,
                 cookie_jar: m.cookie_jar.clone(),
                 user_agent: m.user_agent.clone(),
                 private: m.private,
@@ -723,6 +726,8 @@ fn menu_command(
                     store_id: store(&p.store_id),
                 }),
                 private: m.private,
+                category: p.subs.as_ref().map(|_| "glass-subtitles".into()),
+                queue: p.subs.as_ref().filter(|s| s.to_string().len() <= 8192).map(|s| s.to_string()),
                 ..Default::default()
             }
         }
@@ -2066,6 +2071,10 @@ mod tests {
         .unwrap();
         assert_eq!(menu_ask(&pick), Some(MenuAsk::Pick));
         let cmd = menu_command(MenuAsk::Pick, &pick, &rules, "").unwrap();
+        let with_subs: Message = serde_json::from_str(r#"{"videoPick":{"token":"abc","choice":2,"subs":{"langs":["en"],"automatic":false,"embed":false}}}"#).unwrap();
+        let selected = menu_command(MenuAsk::Pick, &with_subs, &rules, "").unwrap();
+        assert_eq!(selected.category.as_deref(), Some("glass-subtitles"));
+        assert_eq!(serde_json::from_str::<serde_json::Value>(selected.queue.as_deref().unwrap()).unwrap()["langs"][0], "en");
         assert_eq!(
             cmd.video_pick,
             Some(mdm_ipc::VideoPick {

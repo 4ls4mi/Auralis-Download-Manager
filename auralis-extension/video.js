@@ -1895,7 +1895,8 @@ button:focus-visible { outline: none; }
   async function pick(j, l, i) {
     if (!l.token || l.picked || !(i >= 0 && i < Math.min(l.choices.length, 100))) return useWindow(playedJob(j, l));
     l.picked = true;
-    const s = replyState(await send({ type: "video-pick", token: l.token, choice: i }));
+    const [subKind, subCode] = subtitleChoice.split(":");
+    const s = replyState(await send({ type: "video-pick", token: l.token, choice: i, subs: {langs: subCode ? [subCode] : [], automatic: subKind === "auto", embed: false} }));
     if (!s) return endStatus(true);
     // Downloading, queued, or handed to the app ("sent"): green, with "Show". Anything else (the
     // look-up forgotten, another window's, an older app): the window.
@@ -1971,6 +1972,7 @@ button:focus-visible { outline: none; }
   // The video's qualities as its look-up found them: "Download best" first, then one numbered
   // line per quality (video, then sound); MDM's whole window; hiding and settings. Filled as it
   // opens and again when the look-up ends.
+  let subtitleChoice = "none";
   function fillMenu() {
     const c = video ? describeNow(video) : null;
     const look = lookOf(c);
@@ -2007,6 +2009,17 @@ button:focus-visible { outline: none; }
         rows.append(cap);
         for (const i of groups[kind]) rows.append(row(look.choices[i], i, (n += 1), look.choices[i] === best));
       }
+      const subtitle = document.createElement("select");
+      subtitle.setAttribute("aria-label", "Subtitles");
+      const add = (value, text) => { const option = document.createElement("option"); option.value = value; option.textContent = text; subtitle.append(option); };
+      add("none", "No subtitles");
+      for (const [kind, tracks] of [["manual", look.subtitles || []], ["auto", look.automatic_subtitles || []]]) {
+        if (tracks.length) add(`${kind}:all`, kind === "auto" ? "All automatic captions" : "All subtitles");
+        for (const track of tracks) add(`${kind}:${track.code}`, `${track.name || track.code} (${track.code})${kind === "auto" ? " · automatic" : ""}`);
+      }
+      subtitle.value = subtitleChoice;
+      subtitle.addEventListener("change", () => { subtitleChoice = subtitle.value; });
+      rows.append(subtitle);
       tell(noticeOf(look));
     } else if (look) {
       // What the look-up came to, in its words; the window does the rest.
