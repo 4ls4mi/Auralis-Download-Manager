@@ -14,7 +14,7 @@ name: Release
 
 on:
   push:
-    tags: ["v*"]
+    tags: ["v*", "!v0.3.*"]
   workflow_dispatch:
 
 # Read-only for every job; a job that needs more says so in its own block (publish).
