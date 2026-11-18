@@ -7,7 +7,7 @@ mod lifecycle;
 mod material_window;
 mod native_actions;
 use lifecycle::{pending_file_info, file_info_action, choose_download_path, window_preferences, glass_tool, choose_folder, open_glass_window, close_progress_windows, hide_download_to_tray};
-use native_actions::{drag_download, drag_state, choose_move, clipboard_text, video_tool, browser_video};
+use native_actions::{drag_download, drag_state, choose_move, clipboard_text, video_tool, open_youtube_sign_in, browser_video};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -692,7 +692,7 @@ fn main() {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            material_window::set_material_window_shape, pending_file_info, file_info_action, choose_download_path, window_preferences, glass_tool, choose_folder, open_glass_window, close_progress_windows, hide_download_to_tray, drag_download, drag_state, choose_move, clipboard_text, video_tool, browser_video,
+            material_window::set_material_window_shape, pending_file_info, file_info_action, choose_download_path, window_preferences, glass_tool, choose_folder, open_glass_window, close_progress_windows, hide_download_to_tray, drag_download, drag_state, choose_move, clipboard_text, video_tool, open_youtube_sign_in, browser_video,
             boot_engine, dashboard_snapshot, dashboard_visuals, download_action,
             add_download, select_wallpaper, queue_action, glass_settings, update_glass_setting,
             browser_integration, browser_connection_status, prepare_auralis_extension, extension_store_link, open_extension_store, bulk_action, file_operation, add_torrent_file, quit_glass, open_upstream_releases, fork_update::glass_update_check, fork_update::glass_update_download, fork_update::glass_update_install

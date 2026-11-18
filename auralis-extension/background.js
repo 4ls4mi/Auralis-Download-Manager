@@ -3099,6 +3099,16 @@ async function popupMessage(m) {
     const undo = sites.some((p) => p.toLowerCase() === host);
     return { excluded: undo || Boolean(r && siteListed(r, host)), undo };
   }
+  // Restore the video overlay from the popup even when it is hidden on the page.
+  if (m.type === "video-panel-site" && typeof m.url === "string" && isWeb(m.url)) {
+    return {ok:true,on:await panelOn(m.url,m.url)};
+  }
+  if (m.type === "video-panel-set" && typeof m.url === "string" && isWeb(m.url)) {
+    const host = new URL(m.url).hostname;
+    const reply=await native(m.on ? {showSite:host} : {hideSite:host});
+    if(reply.ok) for(const key of [...panelCache.keys()]) if(key.split(" ").includes(host)) panelCache.delete(key);
+    return {ok:Boolean(reply.ok)};
+  }
   if (m.type === "open-app") return { ok: Boolean((await native({ open: true })).ok) };
   if (m.type === "open-options") return { ok: Boolean((await native({ openOptions: true, page: "general" })).ok) };
   // The media the popup's tab loaded (#38), and one of them handed to the app.

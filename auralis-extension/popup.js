@@ -51,13 +51,12 @@ async function show() {
   $("take").checked = !s.paused;
   showDeclined(s.connected && s.declined);
   $("take").disabled = !s.connected;
-  $("open").disabled = $("options").disabled = !s.connected;
+  $("open").disabled = $("options").disabled = false;
   $("version").textContent = s.version ? `v${s.version}` : "";
   // Send downloads to: this computer, or another MDM (#157).
   $("to-here").checked = !s.remote && $("remote-form").hidden;
   $("to-remote").checked = Boolean(s.remote) || !$("remote-form").hidden;
-  $("open").disabled = $("open").disabled || Boolean(s.remote);
-  $("options").disabled = $("options").disabled || Boolean(s.remote);
+
   const tab = await currentTab();
   let site = "";
   try {
@@ -65,6 +64,21 @@ async function show() {
     if (/^https?:$/.test(u.protocol)) site = u.hostname;
   } catch {
     // Not a web page (the browser's own): nothing to leave.
+  }
+  const videoBox=$("video-controls"),panel=$("video-panel-site"),panelSaid=$("video-panel-said");
+  videoBox.hidden=!site;
+  if(site){
+    const page=tab.url; panel.disabled=!s.connected;
+    const state=s.connected?await ask({type:"video-panel-site",url:page}):{ok:false};
+    panel.checked=Boolean(state.ok&&state.on);
+    panelSaid.textContent=!s.connected?"Connect Auralis to change this setting.":state.on?"The video button can appear on this site.":"The video button is hidden or disabled here.";
+    panel.onchange=async()=>{
+      const want=panel.checked;panel.disabled=true;
+      const result=await ask({type:"video-panel-set",url:page,on:want});
+      if(!result.ok){panel.checked=!want;panelSaid.textContent="Could not change the video button. Check the Auralis connection.";}
+      else {panelSaid.textContent=want?"Enabled for this site. Reload the page to show the button; check Auralis settings if it stays hidden.":"Hidden for this site. Reload the page to apply.";}
+      panel.disabled=false;
+    };
   }
   await showExcluded(site, s.connected);
   if (site) await showMedia(tab, s.connected);
@@ -303,14 +317,14 @@ $("take").addEventListener("change", async (e) => {
   await ask({ type: "pause", paused: !e.target.checked });
   show();
 });
-$("open").addEventListener("click", async () => {
-  await ask({ type: "open-app" });
-  window.close();
-});
-$("options").addEventListener("click", async () => {
-  await ask({ type: "open-options" });
-  window.close();
-});
+async function openAuralis(type) {
+  const said=$("action-said");said.hidden=true;
+  const result=await ask({type});
+  if(result.ok)window.close();
+  else {said.textContent="Could not reach Auralis. Open the app and repair the browser connection, then try again.";said.hidden=false;}
+}
+$("open").addEventListener("click", () => void openAuralis("open-app"));
+$("options").addEventListener("click", () => void openAuralis("open-options"));
 
 // Send downloads to (#157): another MDM is paired here with its address and a code it shows.
 $("to-remote").addEventListener("change", () => {

@@ -451,8 +451,8 @@ fn answer(m: Message, rules: &mdm_ipc::capture::CaptureRules) -> Reply {
             ..Default::default()
         })
     } else if m.open {
-        // An empty command: the running app comes to the front (a second launch's).
-        Some(mdm_ipc::Command::default())
+        // Named request lets the headless Auralis shell bring its window forward.
+        Some(mdm_ipc::Command { show: Some("main".into()), ..Default::default() })
     } else if let Some(host) = m
         .exclude_site
         .as_deref()

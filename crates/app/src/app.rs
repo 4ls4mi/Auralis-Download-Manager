@@ -2920,6 +2920,11 @@ impl App {
         // Without a window (#157): an address, magnet or .torrent is added as a paired device's
         // is (no Download File Info, no Add torrent); nothing else opens anything.
         if self.headless {
+            if self.glass_owned() && !cmd.remote && let Some(target)=cmd.show.as_deref()
+                && (target=="main" || target.starts_with("options:")) {
+                if let Some(dir)=mdm_ipc::data_dir() { let _=mdm_ipc::private_dir(&dir); let _=std::fs::write(dir.join("glass-browser-window-request"),target); }
+                return;
+            }
             if self.glass_owned() && !cmd.remote && let Some(page) = cmd.video_page.as_deref() {
                 if let Some(file) = drive_file_behind_player(&cmd).or_else(|| cmd.video_direct.then(|| page.to_owned())) {
                     let mut direct = cmd.clone();

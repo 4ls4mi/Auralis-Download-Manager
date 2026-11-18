@@ -86,6 +86,13 @@ pub fn start(app: AppHandle) {
                     if let Some((_,item))=tray_items.iter().find(|(old,_)|old==id){let _=item.set_text(title);}
                 }
             }
+            if let Some(path)=mdm_ipc::data_dir().map(|d|d.join("glass-browser-window-request")) {
+                if let Ok(target)=std::fs::read_to_string(&path) {
+                    let _=std::fs::remove_file(&path);
+                    if target=="main" { super::show_main(&app); }
+                    else if target.starts_with("options:") { let _=open(&app,"settings","settings=1&tab=Browser%20Integration",968.0,765.0); }
+                }
+            }
             if !helpers_checked {
                 let helpers=send_ipc(&mdm_ipc::Command{query:Some("glass-helpers".into()),..Default::default()}).ok().and_then(|s|serde_json::from_str::<serde_json::Value>(&s).ok());
                 if let Some(tools)=helpers.as_ref().and_then(|v|v["tools"].as_array()) {

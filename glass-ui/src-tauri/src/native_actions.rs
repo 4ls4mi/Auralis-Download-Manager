@@ -83,10 +83,47 @@ pub async fn clipboard_text() -> ApiResult<String> {
 }
 
 /// Original MDM video quality lookup; the engine owns the token and choices.
+/// Sign in inside a separate unprivileged webview. Remote pages do not receive app IPC permissions.
 #[tauri::command]
-pub async fn video_tool(action:String,value:String,choice:Option<usize>,subs:Option<serde_json::Value>,cookies:Option<String>,cookie_browser:Option<String>) -> ApiResult<serde_json::Value> {
+pub fn open_youtube_sign_in(app: AppHandle) -> ApiResult<()> {
+    if let Some(window)=app.get_webview_window("youtube-login") {
+        window.show().map_err(|e|e.to_string())?;let _=window.set_focus();return Ok(());
+    }
+    let url=tauri::Url::parse("https://www.youtube.com/").map_err(|e|e.to_string())?;
+    tauri::WebviewWindowBuilder::new(&app,"youtube-login",tauri::WebviewUrl::External(url))
+        .title("YouTube sign-in — Auralis").inner_size(1000.0,720.0).center().build()
+        .map_err(|e|format!("Could not open YouTube sign-in: {e}"))?;
+    Ok(())
+}
+fn youtube_session_cookies(app:&AppHandle) -> ApiResult<Vec<mdm_ipc::BrowserCookie>> {
+    let window=app.get_webview_window("youtube-login").ok_or("Open YouTube sign-in and sign in first. Keep that window open while looking up the video.")?;
+    let mut result=Vec::new();let mut seen=std::collections::HashSet::new();
+    for address in ["https://www.youtube.com/","https://www.google.com/","https://accounts.google.com/"] {
+        let url=tauri::Url::parse(address).map_err(|e|e.to_string())?;
+        let host=url.host_str().unwrap_or("").to_owned();
+        for cookie in window.cookies_for_url(url).map_err(|e|format!("Could not read the in-app sign-in session: {e}"))? {
+            let domain=cookie.domain().unwrap_or(&host).to_owned();let path=cookie.path().unwrap_or("/").to_owned();
+            if !seen.insert((domain.clone(),path.clone(),cookie.name().to_owned())) {continue;}
+            result.push(mdm_ipc::BrowserCookie{name:cookie.name().to_owned(),value:cookie.value().to_owned(),host_only:cookie.domain().is_none(),domain,path,secure:cookie.secure().unwrap_or(false),expires:None});
+        }
+    }
+    if !result.iter().any(|c|matches!(c.name.as_str(),"SID"|"SAPISID"|"__Secure-3PSID"|"LOGIN_INFO")) {
+        return Err("No YouTube sign-in cookies were found. Sign in in the Auralis YouTube window, then try again. If Google blocks embedded sign-in, use the extension in your regular browser or manually supplied cookies.".into());
+    }
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn video_tool(app:AppHandle,action:String,value:String,choice:Option<usize>,subs:Option<serde_json::Value>,cookies:Option<String>,cookie_browser:Option<String>,app_session:Option<bool>) -> ApiResult<serde_json::Value> {
     if value.len()>8192 {return Err("Video request is too long".into());}
     let mut command=mdm_ipc::Command::default();
+    if app_session.unwrap_or(false) {
+        let page=tauri::Url::parse(&value).map_err(|_|"Enter a YouTube video URL")?;
+        let host=page.host_str().unwrap_or("").to_ascii_lowercase();
+        if action!="lookup"||page.scheme()!="https"||!(host=="youtube.com"||host.ends_with(".youtube.com")||host=="youtu.be") {return Err("The in-app YouTube session can only be used for a YouTube video lookup".into());}
+        command.cookie_jar=youtube_session_cookies(&app)?;
+        command.video_explicit_cookies=true;
+    }
     if let Some(browser) = cookie_browser.filter(|b| !b.is_empty()) {
         if action != "lookup" || !matches!(browser.as_str(), "edge"|"chrome"|"firefox"|"brave"|"chromium"|"opera"|"vivaldi") { return Err("Choose a supported browser".into()); }
         command.video_cookie_browser=Some(browser);

@@ -7,7 +7,7 @@
 <body>
   <header>
     <img src="icons/icon-32.png" width="20" height="20" alt="">
-    <span>Mister Download Manager</span>
+    <span>Auralis <small>Browser companion</small></span>
   </header>
   <section id="status" class="status" role="status">
     <span class="dot" aria-hidden="true"></span>
@@ -27,6 +27,11 @@
     <input id="video-hide-fullscreen" type="checkbox">
     <span data-i18n="popup_video_hide_fullscreen"></span>
   </label>
+  <section id="video-controls" class="panel-card" hidden>
+    <h2>Video button</h2>
+    <label class="switch"><input id="video-panel-site" type="checkbox"><span>Show on this site</span></label>
+    <p id="video-panel-said" class="note" role="status"></p>
+  </section>
   <section id="send" class="send">
     <h2 data-i18n="popup_send_to"></h2>
     <label class="choice"><input type="radio" name="to" id="to-here"> <span data-i18n="popup_send_here"></span></label>
@@ -48,6 +53,7 @@
     <button id="open" class="accent" data-i18n="popup_open"></button>
     <button id="options" data-i18n="popup_options"></button>
   </div>
+  <p id="action-said" class="note bad" role="status" hidden></p>
   <section id="media" class="media" hidden>
     <h2 data-i18n="popup_media"></h2>
     <label class="switch">

@@ -100,3 +100,14 @@ footer { display: flex; justify-content: space-between; align-items: baseline; m
 #remote-form input[type="url"], #remote-form input[inputmode] { width: 100%; box-sizing: border-box; margin-top: 6px; padding: 4px 6px; border: 1px solid var(--edge); border-radius: 4px; background: var(--field); color: inherit; font: inherit; }
 #remote-form .actions { margin-top: 8px; }
 .note.bad { color: var(--bad); }
+/* Auralis layered glass popup, with color contrast in both browser themes. */
+:root{--bg:#101b30;--text:#f3f7ff;--muted:#bdcbe0;--edge:#a4cfff45;--field:#ffffff12;--accent:#92e3ef;--accent-text:#12283b;--ok:#4be0a8;--bad:#ff8796;--warn:#ffd379;color-scheme:dark}
+@media(prefers-color-scheme:light){:root{--bg:#e8f2ff;--text:#152841;--muted:#49627c;--edge:#5185ad55;--field:#ffffff9c;--accent:#146c89;--accent-text:#fff;--ok:#087c59;--bad:#b92f45;--warn:#875200;color-scheme:light}}
+body{width:340px;padding:14px;background:radial-gradient(ellipse at top left,#8b69da44,transparent 54%),radial-gradient(ellipse at bottom right,#1db9b426,transparent 50%),var(--bg);font:13px/1.45 system-ui,sans-serif}
+header{gap:10px;font-size:15px;letter-spacing:.01em}header img{width:29px;height:29px}header small{display:block;font-size:11px;color:var(--muted);font-weight:400}
+.status,.panel-card,.send,.media,.excluded{background:var(--field);border:1px solid var(--edge);border-radius:13px;padding:10px 12px;box-shadow:inset 0 1px #ffffff28,0 5px 18px #0002;backdrop-filter:blur(14px)}
+.panel-card,.send,.media{margin-top:10px}.panel-card h2,.send h2,.media h2{margin:0 0 6px;color:var(--text);font-size:12px;letter-spacing:.03em}.panel-card .switch{margin:4px 0}.panel-card .note{margin:5px 0 0}
+button{border-radius:9px;padding:7px 11px;transition:transform .15s,background .15s,box-shadow .15s;background:var(--field);border-color:var(--edge)}
+button:hover:not(:disabled){filter:none;background:#ad8afa50;box-shadow:0 0 12px #ad8afa45;transform:translateY(-1px)}button:active:not(:disabled){transform:scale(.98)}button:disabled{opacity:.52;cursor:not-allowed}
+button.accent{background:linear-gradient(135deg,#57d6c0,#8bb9ff);color:#112438;border-color:#b2fff0}.switch input,.choice input{accent-color:#ae8dff}.link{font-weight:600}.media ul{max-height:220px}.media li{padding:8px 0}.tag{border-radius:7px}.actions{gap:7px}
+@media(prefers-reduced-motion:reduce){button{transition:none}button:hover:not(:disabled),button:active:not(:disabled){transform:none}}
