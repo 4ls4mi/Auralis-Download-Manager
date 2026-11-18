@@ -33,7 +33,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: auralis-windows-${{ github.ref }}
+  group: auralis-windows-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
