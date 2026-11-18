@@ -1,3 +1,7 @@
+import {sculptedConnectionState} from "./sculptedState";
+import SculptedTrack, {isSculptedShape} from "./SculptedTrack";
+import FrostedRibbon from "./FrostedRibbon";
+import FrostedLayers from "./FrostedLayers";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { getCurrentWindow, Effect, EffectState } from "@tauri-apps/api/window";
 type ResizeDirection = Parameters<ReturnType<typeof getCurrentWindow>["startResizeDragging"]>[0];
@@ -48,7 +52,7 @@ export type Appearance = {
   theme: string; wallMain: string; wallDetail: string; mainMode: BackgroundMode;
   detailMode: BackgroundMode; dim: number; opacity: number; blur: number;
   acrylic: boolean; autoPopups: boolean; uiScale: number; highContrast: boolean;
-  lightMode: boolean; fontFamily: string; fontSize: number; material: string; indicator: string; progressShape: string; graphIndicator: string; graphShape: string; connectionIndicator: string; connectionShape: string; clipboardMode: string; tintHue: number; tintStrength: number
+  lightMode: boolean; fontFamily: string; fontSize: number; material: string; indicator: string; progressMaterial: string; trackFinish: string; trackColor: string; progressShape: string; graphIndicator: string; graphShape: string; graphBackdropShape: string; connectionIndicator: string; connectionShape: string; clipboardMode: string; tintHue: number; tintStrength: number
 };
 const key = "mh-glass-";
 const stored = (name: string, fallback: string) => {
@@ -57,7 +61,7 @@ const stored = (name: string, fallback: string) => {
 };
 export function loadAppearance(): Appearance {
   return {
-    theme: stored("theme", "navy"), material: ["ice-edge","smoked-crystal","frosted-layers","aero-gloss","prismatic-glass","liquid-glass","obsidian-glass","diamond-facet","holographic-film","pearl-mist","aurora-veil","brushed-glass","water-bubble","rose-pine","window-glass","oversimplified","tinted-glass","frosty-glass","raycast"].includes(stored("material", "brushed-glass")) ? stored("material", "brushed-glass") : "brushed-glass", tintHue: Number(stored("tint-hue", "255")), tintStrength: Number(stored("tint-strength", "50")), indicator: stored("indicator", "aurora"), progressShape: stored("progress-shape", "rounded") === "wave" ? "droplet" : stored("progress-shape", "rounded"), graphIndicator: stored("graph-indicator", stored("indicator", "aurora")), graphShape: stored("graph-shape", "area"), connectionIndicator: stored("connection-indicator", stored("indicator", "aurora")), connectionShape: stored("connection-shape", stored("progress-shape", "rounded")), clipboardMode: stored("clipboard-mode", "paste"),
+    theme: stored("theme", "navy"), material: ["ice-edge","smoked-crystal","frosted-layers","aero-gloss","prismatic-glass","liquid-glass","obsidian-glass","diamond-facet","holographic-film","pearl-mist","aurora-veil","brushed-glass","water-bubble","frosted-water-351","rose-pine","window-glass","oversimplified","tinted-glass","frosty-glass","raycast"].includes(stored("material", "brushed-glass")) ? stored("material", "brushed-glass") : "brushed-glass", tintHue: Number(stored("tint-hue", "255")), tintStrength: Number(stored("tint-strength", "50")), indicator: stored("indicator", "aurora"), progressMaterial: stored("progress-material", "gradient"), trackFinish: stored("track-finish", "default"), trackColor: stored("track-color", "ice"), progressShape: stored("progress-shape", "rounded") === "wave" ? "droplet" : stored("progress-shape", "rounded"), graphIndicator: stored("graph-indicator", stored("indicator", "aurora")), graphShape: stored("graph-shape", "area"), graphBackdropShape: stored("graph-backdrop-shape", "none"), connectionIndicator: stored("connection-indicator", stored("indicator", "aurora")), connectionShape: stored("connection-shape", stored("progress-shape", "rounded")), clipboardMode: stored("clipboard-mode", "paste"),
     wallMain: stored("wall-main", ""), wallDetail: stored("wall-detail", ""),
     mainMode: stored("back-main", "desktop") as BackgroundMode,
     detailMode: stored("back-details", "desktop") as BackgroundMode,
@@ -70,7 +74,7 @@ export function loadAppearance(): Appearance {
   };
 }
 const keys: Record<keyof Appearance, string> = {
-  theme: "theme", material: "material", tintHue: "tint-hue", tintStrength: "tint-strength", indicator: "indicator", progressShape: "progress-shape", graphIndicator: "graph-indicator", graphShape: "graph-shape", connectionIndicator: "connection-indicator", connectionShape: "connection-shape", clipboardMode: "clipboard-mode", wallMain: "wall-main", wallDetail: "wall-detail",
+  theme: "theme", material: "material", tintHue: "tint-hue", tintStrength: "tint-strength", indicator: "indicator", progressMaterial: "progress-material", trackFinish: "track-finish", trackColor: "track-color", progressShape: "progress-shape", graphIndicator: "graph-indicator", graphShape: "graph-shape", graphBackdropShape: "graph-backdrop-shape", connectionIndicator: "connection-indicator", connectionShape: "connection-shape", clipboardMode: "clipboard-mode", wallMain: "wall-main", wallDetail: "wall-detail",
   mainMode: "back-main", detailMode: "back-details", dim: "dim",
   opacity: "opacity", blur: "blur", acrylic: "acrylic",
   autoPopups: "auto-popups", uiScale: "ui-scale", highContrast: "high-contrast",
@@ -157,8 +161,8 @@ export function GradientBar({percent,showLabel=false}:{percent:number;showLabel?
   const {appearance}=useCrystal();const colors=indicatorColors(appearance.indicator);
   const fill=Math.max(0,Math.min(100,percent));
   return <div className="cg-percent-wrap" aria-label={`Download ${fill.toFixed(1)} percent completed`}>
-    <div className="cg-percent-track">
-      {fill>0&&<span className="cg-percent-fill" style={{
+    <div className={`cg-percent-track cg-track-${appearance.trackFinish} cg-track-color-${appearance.trackColor}`}>
+      {isSculptedShape(appearance.progressShape) ? <SculptedTrack shape={appearance.progressShape} percent={fill} colors={colors} finish={appearance.trackFinish} tint={appearance.trackColor}/> : appearance.progressMaterial === "frosted-ribbon" && appearance.progressShape === "rounded" ? <FrostedRibbon percent={fill} colors={colors} finish={appearance.trackFinish} tint={appearance.trackColor} fallback={`linear-gradient(90deg,${colors.join(",")})`}/> : fill>0&&<span className="cg-percent-fill" style={{
         width:`${fill}%`,
         backgroundImage:`linear-gradient(90deg,${colors.join(",")})`,
         backgroundSize:`${10000/fill}% 100%`
@@ -180,9 +184,9 @@ export function ConnectionMap({segments,connections,downloading,paused=false,com
   return <div className={"cg-chunks "+(compact?"compact":"")}>
     {compact&&<div className="cg-chunk-label"><span>{connections?`${visible.length} connections`:"Connections unavailable"}</span></div>}
     <div className={"cg-chunk-map "+(compact?"compact":"cg-fixed-connections")} style={compact?{gridTemplateColumns:`repeat(${Math.max(1,slots.length)},minmax(0,1fr))`}:undefined} role="group" aria-label={connections?`${visible.length} engine connections${visible.length>32?', first 32 shown':''}`:"Connections unavailable"}>
-     {slots.map((c,index)=>{if(!c)return <span key={`empty-${index}`} className="cg-connection-empty" aria-hidden="true"/>;
-      const fill=c.percent;const active=downloading&&c.state==="Receiving";const lost=connectionLost(c,downloading);const label=`Connection ${c.id+1}: ${paused?"Paused":lost?"Connection lost or retrying":downloading?c.state:"Not active"}; downloaded ${units(c.downloaded)}; ${rate(c.speed)}; ${fill===null?"assigned range unavailable":`${units(c.received)} of ${units(c.assigned)} (${fill.toFixed(1)}%)`}`;
-      return <span key={c.id} data-worker={c.id} className={paused?"paused":lost?"lost":active?"active":""} title={label} aria-label={label} tabIndex={0}>{!paused&&fill!==null&&fill>0&&<i style={{width:`${fill}%`,backgroundImage:`linear-gradient(90deg,${colors.join(",")})`}}/>}</span>})}
+     {slots.map((c,index)=>{if(!c)return isSculptedShape(appearance.connectionShape)?<span key={`empty-${index}`} className="cg-connection-empty cg-sculpted-cell" aria-hidden="true"><SculptedTrack shape={appearance.connectionShape} percent={0} colors={colors} animate={false} compact/></span>:<span key={`empty-${index}`} className="cg-connection-empty" aria-hidden="true"/>;
+      const fill=c.percent;const active=downloading&&c.state==="Receiving";const lost=connectionLost(c,downloading);const sculptedState=sculptedConnectionState(fill,paused,lost);const label=`Connection ${c.id+1}: ${paused?"Paused":lost?"Connection lost or retrying":downloading?c.state:"Not active"}; downloaded ${units(c.downloaded)}; ${rate(c.speed)}; ${fill===null?"assigned range unavailable":`${units(c.received)} of ${units(c.assigned)} (${fill.toFixed(1)}%)`}`;
+      return <span key={c.id} data-worker={c.id} className={(isSculptedShape(appearance.connectionShape)?"cg-sculpted-cell ":"")+(paused?"paused":lost?"lost":active?"active":"")} title={label} aria-label={label} tabIndex={0}>{isSculptedShape(appearance.connectionShape)?<SculptedTrack shape={appearance.connectionShape} percent={sculptedState.percent} colors={colors} lost={sculptedState.red} animate={active} compact/>:!paused&&fill!==null&&fill>0&&<i style={{width:`${fill}%`,backgroundImage:`linear-gradient(90deg,${colors.join(",")})`}}/>}</span>})}
     </div>
   </div>;
 }
@@ -207,6 +211,7 @@ export function SpeedGraph({values,small=false}:{values:number[];small?:boolean}
         <stop offset="100%" stopColor={colors[2]} stopOpacity=".36"/>
       </linearGradient>
     </defs>
+    {isSculptedShape(appearance.graphBackdropShape)&&<SculptedTrack shape={appearance.graphBackdropShape} percent={0} colors={colors} compact/>}
     {[15,37,57].map(y=><line key={y} x1="0" x2="100" y1={y} y2={y}
       stroke="rgba(180,227,242,.11)" strokeWidth=".4"/>)}
     {appearance.graphShape==="area"&&<polygon points={trail} fill={`url(#${id}-fill)`}/>}
@@ -258,7 +263,7 @@ export function CrystalWindow({ children, target = "main" }: {
         if(disposed)return;
         const fit=el.querySelector<HTMLElement>('.cg-fit-content');if(!fit)return;
         let ratio=1;
-        for(const box of [fit,...el.querySelectorAll<HTMLElement>('.cg-page,.cg-window-add,.cg-settings-body,.cg-settings-nav,.cg-main-body,.cg-workspace,.cg-toolbar,.cg-window-top,.cg-original-editor')]){
+        for(const box of [fit,...el.querySelectorAll<HTMLElement>('.cg-page,.cg-window-add,.cg-main-body,.cg-workspace,.cg-toolbar,.cg-window-top,.cg-original-editor')]){
           if(box.clientHeight>0&&box.scrollHeight>box.clientHeight+2)ratio=Math.min(ratio,box.clientHeight/box.scrollHeight);
           if(box.clientWidth>0&&box.scrollWidth>box.clientWidth+2)ratio=Math.min(ratio,box.clientWidth/box.scrollWidth);
         }
@@ -287,15 +292,17 @@ export function CrystalWindow({ children, target = "main" }: {
   const video = /\.(mp4|webm|mov|m4v)$/i.test(path);
   useEffect(() => {
     const w = getCurrentWindow();let active=true;
-    if (mode === "desktop" && appearance.acrylic)
+    if (mode === "desktop" && appearance.acrylic && appearance.material !== "frosted-water-351")
       void w.setEffects({ effects: [Effect.Acrylic], state: EffectState.Active }).catch(()=>{if(active)setWindowError("Windows backdrop blur is unavailable; transparent glass is being used.");return w.clearEffects().catch(()=>undefined)});
     else void w.clearEffects().catch(() => undefined);
     return()=>{active=false};
-  }, [mode, appearance.acrylic]);
+  }, [mode, appearance.acrylic, appearance.material]);
+  // Glass designs have one appearance; the light setting applies to solid backgrounds.
+  const effectiveLight = mode === "solid" && appearance.material !== "frosted-water-351" && appearance.lightMode;
   const style = {
-    "--accent": appearance.lightMode ? (({plexo:"#086e84",ocean:"#146c9b",purple:"#7050b5",pink:"#b73962",gold:"#8a5b05",green:"#19765b",silver:"#4c6680",navy:"#394ea2",orange:"#ad4700",rose:"#a42b70"} as Record<string,string>)[theme.id]??"#086e84") : theme.accent,
+    "--accent": effectiveLight ? (({plexo:"#086e84",ocean:"#146c9b",purple:"#7050b5",pink:"#b73962",gold:"#8a5b05",green:"#19765b",silver:"#4c6680",navy:"#394ea2",orange:"#ad4700",rose:"#a42b70"} as Record<string,string>)[theme.id]??"#086e84") : theme.accent,
     "--accent-secondary": theme.secondary,
-    "--accent-rgb": appearance.lightMode ? (({plexo:"8,110,132",ocean:"20,108,155",purple:"112,80,181",pink:"183,57,98",gold:"138,91,5",green:"25,118,91",silver:"76,102,128",navy:"57,78,162",orange:"173,71,0",rose:"164,43,112"} as Record<string,string>)[theme.id]??"8,110,132") : theme.rgb,
+    "--accent-rgb": effectiveLight ? (({plexo:"8,110,132",ocean:"20,108,155",purple:"112,80,181",pink:"183,57,98",gold:"138,91,5",green:"25,118,91",silver:"76,102,128",navy:"57,78,162",orange:"173,71,0",rose:"164,43,112"} as Record<string,string>)[theme.id]??"8,110,132") : theme.rgb,
     "--glass-tint": `hsl(${Math.max(0,Math.min(360,appearance.tintHue))} 85% 64% / ${Math.max(0,Math.min(65,appearance.tintStrength))/100})`,
     "--panel-opacity": Math.min(1, Math.max(.45, appearance.opacity / 100)),
     "--crystal-blur": appearance.blur + "px",
@@ -307,14 +314,14 @@ export function CrystalWindow({ children, target = "main" }: {
     "--min-window-button": (30/Math.min(1,Math.max(.4,fit)))+"px",
     "--font-size": Math.max(Math.min(20,Math.max(12,appearance.fontSize)),12/Math.max(.4,fit))+"px"
   } as CSSProperties;
-  return <div className={`cg-window cg-mode-${mode} cg-material-${appearance.material} cg-progress-shape-${appearance.progressShape} cg-connection-shape-${appearance.connectionShape} ${appearance.lightMode?"cg-light":"cg-dark"} ${appearance.highContrast?"cg-high-contrast":""}`} style={style}>
+  return <div className={`cg-window cg-mode-${mode} cg-material-${appearance.material} cg-progress-shape-${appearance.progressShape} cg-connection-shape-${appearance.connectionShape} ${effectiveLight?"cg-light":"cg-dark"} ${appearance.highContrast?"cg-high-contrast":""}`} style={style}>
     {mode === "wallpaper" && <div className="cg-wallpaper">
       {video ? <video key={src} autoPlay loop muted playsInline src={src} /> :
         <div style={{ backgroundImage: `url("${src}")` }} />}
       <span style={{ background: `rgba(3,9,19,${appearance.dim / 100})` }} />
     </div>}
     {mode === "solid" && <div className="cg-solid" />}
-    <div className="cg-content" ref={frame}><div className="cg-fit-content">{children}</div></div>
+    <div className="cg-content" ref={frame}>{appearance.material === "frosted-water-351" && <FrostedLayers/>}<div className="cg-fit-content">{children}</div></div>
     {windowError&&<aside className="cg-window-notice cg-error" role="alert"><span>{windowError}</span><button title="Dismiss" onClick={()=>setWindowError("")}><X size={15}/></button></aside>}
     <ResizeGrips />
   </div>;

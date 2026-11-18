@@ -320,3 +320,200 @@
 .cg-window .cg-btn:active:not(:disabled){transform:translateY(1px) scale(.98)}
 .cg-window .cg-btn-danger{--action-hue:350!important}.cg-window .cg-btn-primary{--action-hue:155!important}
 @media(prefers-reduced-motion:reduce){.cg-window .cg-btn:active:not(:disabled){transform:none}}
+/* Approved Water Bubble 3.5.1 pane stack: one WebGL layer behind existing content. */
+.cg-window.cg-material-frosted-water-351 .cg-content{inset:0!important;background:transparent!important;border:0!important;border-radius:0!important;box-shadow:none!important;backdrop-filter:none!important}
+.cg-window.cg-material-frosted-water-351 .cg-content::before,.cg-window.cg-material-frosted-water-351 .cg-content::after{display:none!important}
+.cg-window.cg-material-frosted-water-351 .cg-frost-canvas,.cg-window.cg-material-frosted-water-351 .cg-frost-fallback{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
+.cg-window.cg-material-frosted-water-351 .cg-frost-fallback:not([hidden]){display:block;background:linear-gradient(155deg,#b1e2f7bb,#315b79e0 65%,#93c4d7aa);border:1px solid #dcf7ff8a;border-radius:8%}
+.cg-window.cg-material-frosted-water-351 .cg-fit-content{position:absolute;inset:10% 5% 10% 12%;width:83%;height:80%;z-index:1}
+.cg-window.cg-material-frosted-water-351 .cg-content .cg-glass{background:rgba(69,116,142,.23)!important;border:1px solid #d6f4ff4a!important;border-radius:12px!important;box-shadow:inset 0 1px #effaff55!important}
+.cg-window.cg-material-frosted-water-351 .cg-window-top{background:transparent!important;border-color:#e1f7ff3d!important}
+/* The reference ribbon draws its own clear capsule. */
+.cg-percent-track:has(.cg-frost-ribbon){position:relative;background:transparent;filter:none;overflow:hidden;box-shadow:none}
+.cg-frost-ribbon{display:block;width:100%;height:100%;pointer-events:none}
+.cg-ribbon-fallback{position:absolute;inset:0 auto 0 0;border-radius:inherit}
+/* Keep the list readable inside the inset of the Frosted Layers shell. */
+.cg-material-frosted-water-351 .cg-cols,.cg-material-frosted-water-351 .cg-row{grid-template-columns:minmax(105px,2fr) minmax(48px,.7fr) minmax(70px,.9fr) minmax(110px,1.8fr) minmax(54px,.7fr) minmax(48px,.65fr);gap:6px}
+.cg-material-frosted-water-351 .cg-empty{min-height:0;gap:8px;padding:12px}
+@media(max-width:690px){
+ .cg-material-frosted-water-351 .cg-workspace{grid-template-columns:88px minmax(0,1fr);gap:6px}
+ .cg-material-frosted-water-351 .cg-list-title{display:flex;flex-wrap:wrap;gap:4px;padding:2px 3px 5px}
+ .cg-material-frosted-water-351 .cg-list-title>div{min-width:0;flex:1 1 100%}
+ .cg-material-frosted-water-351 .cg-list-title h2{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ .cg-material-frosted-water-351 .cg-list-title small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ .cg-material-frosted-water-351 .cg-sort,.cg-material-frosted-water-351 .cg-search{min-width:0;max-width:48%}
+ .cg-material-frosted-water-351 .cg-table-viewport{min-height:50px;overflow:auto}
+}
+/* Track finish and tint are independent of the filled portion. */
+.cg-percent-track.cg-track-frosted:not(:has(.cg-frost-ribbon)){background:linear-gradient(180deg,#e5f6ffe0,#a9c7d7bb 48%,#edfaffd0);box-shadow:inset 0 1px 3px #fff9,inset 0 -2px 5px #7199b277}
+.cg-percent-track.cg-track-clear:not(:has(.cg-frost-ribbon)){background:linear-gradient(180deg,#c2eaff7a,#466f8850 45%,#b0e5ff7a);box-shadow:inset 0 1px 2px #fff9,inset 0 -1px 2px #b9f4ff8a}
+.cg-percent-track.cg-track-recessed:not(:has(.cg-frost-ribbon)){background:linear-gradient(180deg,#091a2dcc,#30465abf);box-shadow:inset 0 2px 5px #000b,0 1px #ffffff70}
+.cg-percent-track.cg-track-color-violet:not(:has(.cg-frost-ribbon)){background-color:#9b78d7}
+.cg-percent-track.cg-track-color-teal:not(:has(.cg-frost-ribbon)){background-color:#41b8b3}
+.cg-percent-track.cg-track-color-amber:not(:has(.cg-frost-ribbon)){background-color:#da9b4c}
+.cg-percent-track:is(.cg-track-color-violet,.cg-track-color-teal,.cg-track-color-amber):not(:has(.cg-frost-ribbon)){background-blend-mode:screen}
+
+/* Keep a continuous glass face; adjust the glass itself and foreground rather
+   than placing opaque rectangles on each pane. */
+.cg-window.cg-material-frosted-water-351.cg-dark{--ink:#fff;--muted:#f0f8ff;--subtle:#e0f3ff;--field:rgba(5,24,43,.8);--popover:rgba(7,27,42,.98);--cyan:#77ebff;--violet:#e1adff;--mint:#80ffd3;--amber:#ffe092;--rose:#ffb0cc}
+.cg-window.cg-material-frosted-water-351.cg-light{--ink:#071c2d;--muted:#102f44;--subtle:#1b4058;--field:rgba(245,252,255,.7);--popover:rgba(248,253,255,.99);--cyan:#005273;--violet:#50248c;--mint:#005a42;--amber:#6d4100;--rose:#8d1b44}
+.cg-window.cg-material-frosted-water-351 .cg-content .cg-glass{background:rgba(120,180,210,.08)!important;border-color:rgba(230,250,255,.24)!important;box-shadow:inset 0 1px #fff3!important}
+.cg-window.cg-material-frosted-water-351 :is(.cg-window-top,.cg-menubar,.cg-page-tabs,.cg-page,.cg-settings-body,.cg-window-add){background:transparent!important}
+.cg-window.cg-material-frosted-water-351.cg-dark :is(h1,h2,h3,h4,strong,small,p,label,dt,dd,.cg-title,.cg-row,.cg-menu-trigger,.cg-sidebar button,.cg-page-tabs button,.cg-footer-message){text-shadow:0 1px 2px #00101f,0 0 4px #00101f}
+.cg-window.cg-material-frosted-water-351.cg-light :is(h1,h2,h3,h4,strong,small,p,label,dt,dd,.cg-title,.cg-row,.cg-menu-trigger,.cg-sidebar button,.cg-page-tabs button,.cg-footer-message){text-shadow:0 1px 2px #ecfaff,0 0 3px #ecfaff}
+.cg-window.cg-material-frosted-water-351 :is(.cg-sidebar button,.cg-menu-trigger,.cg-page-tabs button,.cg-empty p,.cg-empty strong){color:var(--ink)}
+.cg-window.cg-material-frosted-water-351.cg-dark :is(.cg-btn:not(:disabled),.cg-toolbar>button:not(:disabled)){color:#fff!important;text-shadow:0 1px 3px #00121e}
+.cg-window.cg-material-frosted-water-351.cg-light :is(.cg-btn:not(:disabled),.cg-toolbar>button:not(:disabled)){color:#071c2d!important;text-shadow:0 1px 2px #fff}
+.cg-window.cg-material-frosted-water-351.cg-dark :is(.cg-toolbar>button:not(:disabled),.cg-sidebar button,.cg-winbuttons button) svg{filter:drop-shadow(0 1px 2px #00101f) drop-shadow(0 0 2px #00101f)}
+.cg-window.cg-material-frosted-water-351.cg-light :is(.cg-toolbar>button:not(:disabled),.cg-sidebar button,.cg-winbuttons button) svg{filter:drop-shadow(0 1px 1px #fff)}
+.cg-window.cg-material-frosted-water-351.cg-light :is(.cg-btn,.cg-toolbar>button):hover:not(:disabled){color:#fff!important;text-shadow:0 1px 3px #00121e}
+.cg-window.cg-material-frosted-water-351 :is(.cg-toolbar>button:not(:disabled),.cg-btn:not(:disabled)) svg{color:var(--tone)!important}
+.cg-window.cg-material-frosted-water-351 :is(.cg-footer small,.cg-footer-stats small){color:var(--muted)!important;font-weight:600}
+.cg-window.cg-material-frosted-water-351.cg-light .cg-cols{background:rgba(242,252,255,.20)!important}
+.cg-window.cg-material-frosted-water-351.cg-dark .cg-cols{background:rgba(2,17,33,.28)!important}
+/* Keep the Frosted Layers layout usable at the minimum window size. */
+@media(max-width:750px){
+ .cg-window.cg-material-frosted-water-351 .cg-sidebar{overflow-y:auto;overflow-x:hidden}
+ .cg-window.cg-material-frosted-water-351 .cg-row{height:auto;min-height:98px;grid-template-columns:minmax(0,1fr) auto auto;gap:5px 8px}
+}
+@media(max-height:500px){
+ .cg-window.cg-material-frosted-water-351 .cg-main-body{gap:4px;padding-bottom:4px}
+ .cg-window.cg-material-frosted-water-351 .cg-menubar{height:26px;min-height:26px}
+ .cg-window.cg-material-frosted-water-351 .cg-toolbar{min-height:40px;padding:3px}
+ .cg-window.cg-material-frosted-water-351 .cg-toolbar>button{min-height:32px}
+ .cg-window.cg-material-frosted-water-351 .cg-footer{min-height:34px;padding:3px 7px}
+ .cg-window.cg-material-frosted-water-351 .cg-list-panel{padding:5px 7px 3px}
+ .cg-window.cg-material-frosted-water-351 .cg-list-title{flex-wrap:nowrap;align-items:center;padding:2px 0 4px}
+ .cg-window.cg-material-frosted-water-351 .cg-list-title>div{flex:1 1 30%;min-width:0}
+ .cg-window.cg-material-frosted-water-351 .cg-list-title small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ .cg-window.cg-material-frosted-water-351 .cg-sort{font-size:0;max-width:29%}
+ .cg-window.cg-material-frosted-water-351 .cg-sort select{font-size:12px!important;padding:4px!important;width:100%}
+ .cg-window.cg-material-frosted-water-351 .cg-search{max-width:31%;padding:4px}
+ .cg-window.cg-material-frosted-water-351 .cg-empty{gap:3px;padding:4px}
+ .cg-window.cg-material-frosted-water-351 .cg-empty svg{width:23px;height:23px}
+}
+@media(max-width:690px){
+ .cg-window.cg-material-frosted-water-351 .cg-workspace{grid-template-rows:minmax(0,1fr)}
+ .cg-window.cg-material-frosted-water-351 .cg-sidebar{flex-direction:column;align-items:stretch;max-height:none;white-space:normal}
+ .cg-window.cg-material-frosted-water-351 .cg-sidebar button{flex:0 0 auto;min-width:0}
+ .cg-window.cg-material-frosted-water-351 .cg-sidebar button span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+}
+@media(max-width:690px){
+ .cg-window.cg-material-frosted-water-351 .cg-workspace{grid-template-columns:118px minmax(0,1fr)}
+}
+@media(max-height:500px){
+ .cg-window.cg-material-frosted-water-351 .cg-empty svg:not(button svg){display:none}
+ .cg-window.cg-material-frosted-water-351 .cg-empty .cg-btn{padding:3px 8px;min-height:27px}
+}
+/* Experimental sculpted tracks: the SVG scales with its allocated indicator. */
+.cg-sculpted-track{display:block;width:100%;height:100%;overflow:visible;pointer-events:none}
+.cg-percent-track:has(.cg-sculpted-track){background:transparent!important;box-shadow:none!important;filter:none!important;overflow:visible}
+.cg-progress-combined .cg-percent-track:has(.cg-sculpted-track),.cg-card-preview .cg-percent-track:has(.cg-sculpted-track){height:44px}
+.cg-window .cg-chunk-map>span.cg-sculpted-cell{background:transparent!important;box-shadow:none!important;overflow:hidden}
+.cg-window .cg-chunk-map>span.cg-sculpted-cell.lost,.cg-window .cg-chunk-map>span.cg-sculpted-cell.paused{background:transparent!important}
+
+.cg-window .cg-chunk-map>span.cg-sculpted-cell .cg-sculpted-track{position:absolute;inset:0;opacity:1}
+
+/* Reflections animate inside the filled shape, never the progress boundary. */
+.cg-sculpted-sweep{animation:cg-glass-sweep 3.2s linear infinite;filter:drop-shadow(0 0 2px #bafaff);opacity:.82}
+.cg-sculpted-lighting{filter:drop-shadow(0 0 2px #6de9ff88)}
+@keyframes cg-glass-sweep{from{stroke-dashoffset:100}to{stroke-dashoffset:0}}
+@media(prefers-reduced-motion:reduce){.cg-sculpted-sweep{animation:none}}
+/* One live indicator preview at a time avoids shrinking all settings text. */
+.cg-indicator-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+.cg-indicator-tabs button{border:1px solid var(--edge-strong);border-radius:8px;padding:5px 10px;color:var(--ink);background:var(--surface)}
+.cg-indicator-tabs button.selected{border-color:var(--accent);background:rgba(var(--accent-rgb),.25)}
+.cg-indicator-card[hidden]{display:none}
+.cg-indicator-cards{grid-template-columns:minmax(0,1fr)}
+.cg-indicator-card{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px 12px;padding:10px}
+.cg-indicator-card>strong,.cg-indicator-card>.cg-card-preview{grid-column:1/-1}
+.cg-indicator-card .cg-field{margin:0}
+.cg-card-preview{min-height:42px}
+/* Settings can scroll rather than reducing the font to fit long option pages. */
+.cg-settings-body,.cg-settings-nav{overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:var(--accent) transparent}
+.cg-settings-body:has(.cg-indicator-tabs){padding-top:9px}
+.cg-settings-body:has(.cg-indicator-tabs) h3{margin:5px 0 3px}
+.cg-settings-body:has(.cg-indicator-tabs) p{margin:3px 0 5px;line-height:1.25}
+.cg-settings-body:has(.cg-indicator-tabs) .cg-appearance-tabs{margin:3px 0}
+.cg-settings-body:has(.cg-indicator-tabs) .cg-indicator-tabs{margin:4px 0}
+.cg-settings-body:has(.cg-indicator-tabs) .cg-indicator-card{padding:6px 9px;gap:4px 10px}
+.cg-settings-body:has(.cg-indicator-tabs) .cg-card-preview{min-height:28px}
+.cg-card-preview .cg-percent-track{height:24px;min-height:24px}
+.cg-card-preview .cg-percent-track:has(.cg-sculpted-track){height:50px;min-height:50px}
+/* Frosted Layers foregrounds: crisp light text and outlined, vivid icons on
+   the original translucent blue glass, consistently across every window. */
+.cg-window.cg-material-frosted-water-351 .cg-fit-content :is(h1,h2,h3,h4,h5,p,small,strong,label,dt,dd,th,td,span,button,summary){color:#fff!important;text-shadow:0 1px 2px #00101f,0 0 3px #00101f}
+.cg-window.cg-material-frosted-water-351 .cg-fit-content :is(input:not([type=range]):not([type=checkbox]),select,textarea){color:#fff!important;background:rgba(4,27,45,.90)!important;text-shadow:none}
+.cg-window.cg-material-frosted-water-351 .cg-fit-content input::placeholder,.cg-window.cg-material-frosted-water-351 .cg-fit-content textarea::placeholder{color:#e1f3ff!important;opacity:1}
+.cg-window.cg-material-frosted-water-351 .cg-fit-content svg:not(.cg-graph):not(.cg-sculpted-track){filter:drop-shadow(0 1px 1px #00101f) drop-shadow(0 0 2px #00101f);stroke-width:2.2}
+.cg-window.cg-material-frosted-water-351 .cg-fit-content :is(.cg-toolbar>button:not(:disabled),.cg-btn:not(:disabled)) svg{color:var(--tone,#85edff)!important}
+.cg-window.cg-material-frosted-water-351 .cg-winbuttons .close svg{color:#ff6985!important}
+.cg-window.cg-material-frosted-water-351 .cg-winbuttons .minimize svg{color:#ffcf71!important}
+.cg-window.cg-material-frosted-water-351 .cg-winbuttons .maximize svg{color:#d1aaff!important}
+.cg-window.cg-material-frosted-water-351 .cg-winbuttons .tray svg{color:#62edff!important}
+.cg-window.cg-material-frosted-water-351 .cg-fit-content :is(.cg-settings-nav,.cg-appearance-tabs,.cg-menubar,.cg-page-tabs) button{color:#fff!important}
+.cg-window.cg-material-frosted-water-351 .cg-settings-nav button:nth-of-type(5n+1) svg{color:#79ffd2!important}
+.cg-window.cg-material-frosted-water-351 .cg-settings-nav button:nth-of-type(5n+2) svg{color:#f0b0ff!important}
+.cg-window.cg-material-frosted-water-351 .cg-settings-nav button:nth-of-type(5n+3) svg{color:#ffdc84!important}
+.cg-window.cg-material-frosted-water-351 .cg-settings-nav button:nth-of-type(5n+4) svg{color:#ffa6c3!important}
+.cg-window.cg-material-frosted-water-351 .cg-settings-nav button:nth-of-type(5n) svg{color:#8ef1ff!important}
+.cg-window.cg-material-frosted-water-351 .cg-fit-content button:disabled{opacity:.78}
+/* Restore full-button color highlights without sacrificing label contrast. */
+.cg-window.cg-material-frosted-water-351 .cg-fit-content :is(.cg-btn,.cg-indicator-tabs button,.cg-appearance-tabs button,.cg-settings-nav button,.cg-menu-trigger,.cg-page-tabs button,.cg-pagination button):hover:not(:disabled){background:hsl(var(--action-hue,var(--button-hue,195)) 80% 40% / .88)!important;border-color:hsl(var(--action-hue,var(--button-hue,195)) 95% 74%)!important;box-shadow:inset 0 1px #ffffff9c,0 0 14px hsl(var(--action-hue,var(--button-hue,195)) 90% 55% / .65)!important;color:#fff!important}
+.cg-window.cg-material-frosted-water-351 .cg-fit-content :is(.cg-indicator-tabs button.selected,.cg-appearance-tabs button.selected,.cg-settings-nav button.selected,.cg-page-tabs button.active){background:hsl(var(--action-hue,var(--button-hue,195)) 70% 34% / .72)!important;border:1px solid hsl(var(--action-hue,var(--button-hue,195)) 88% 72% / .9)!important;box-shadow:inset 0 1px #ffffff6b,0 0 8px hsl(var(--action-hue,var(--button-hue,195)) 90% 60% / .35)!important}
+.cg-window.cg-material-frosted-water-351 .cg-toolbar>button:hover:not(:disabled){background:rgba(var(--tone-rgb),.55)!important;border-color:var(--tone)!important;box-shadow:inset 0 1px #ffffff9c,0 0 16px rgba(var(--tone-rgb),.65)!important}
+.cg-window.cg-material-frosted-water-351 .cg-winbuttons .tray:hover{background:#008da5!important}
+.cg-window.cg-material-frosted-water-351 .cg-winbuttons .minimize:hover{background:#aa6c06!important}
+.cg-window.cg-material-frosted-water-351 .cg-winbuttons .maximize:hover{background:#7952c7!important}
+.cg-window.cg-material-frosted-water-351 .cg-winbuttons .close:hover{background:#dc354d!important}
+.cg-window.cg-material-frosted-water-351 .cg-fit-content button:active:not(:disabled){transform:scale(.97)}
+.cg-window.cg-material-frosted-water-351 .cg-toolbar>button svg{color:var(--tone,#85edff)!important}
+.cg-window.cg-material-frosted-water-351 .cg-sidebar button:nth-of-type(5n+1) svg{color:#79ffd2!important}
+.cg-window.cg-material-frosted-water-351 .cg-sidebar button:nth-of-type(5n+2) svg{color:#f0b0ff!important}
+.cg-window.cg-material-frosted-water-351 .cg-sidebar button:nth-of-type(5n+3) svg{color:#ffdc84!important}
+.cg-window.cg-material-frosted-water-351 .cg-sidebar button:nth-of-type(5n+4) svg{color:#ffa6c3!important}
+.cg-window.cg-material-frosted-water-351 .cg-sidebar button:nth-of-type(5n) svg{color:#8ef1ff!important}
+/* At short heights, constrain the connection grid and graph inside their row. */
+@media(max-height:500px){
+ .cg-window.cg-material-frosted-water-351 .cg-selected-chunks .cg-fixed-connections{grid-auto-rows:minmax(0,1fr);height:calc(100% - 24px);margin-top:3px;gap:2px}
+ .cg-window.cg-material-frosted-water-351 .cg-indicator-row .cg-progress-section{padding:5px 7px;overflow:hidden}
+ .cg-window.cg-material-frosted-water-351 .cg-progress-combined{gap:2px}
+ .cg-window.cg-material-frosted-water-351 .cg-progress-combined .cg-percent-track:has(.cg-sculpted-track){height:24px}
+ .cg-window.cg-material-frosted-water-351 .cg-compact-speed .cg-section-title{gap:2px;margin:0}
+ .cg-window.cg-material-frosted-water-351 .cg-progress-combined .cg-compact-speed .cg-graph{min-height:0}
+}
+@media(max-height:500px){
+ .cg-window.cg-material-frosted-water-351 .cg-page-tabs{min-height:30px}
+ .cg-window.cg-material-frosted-water-351 .cg-page-tabs button{padding:5px 8px;font-size:14px}
+ .cg-window.cg-material-frosted-water-351 .cg-mdm-details{padding:5px 8px}
+ .cg-window.cg-material-frosted-water-351 .cg-mdm-details dl{gap:2px;font-size:14px;line-height:1.18}
+ .cg-window.cg-material-frosted-water-351 .cg-download-url{font-size:14px;line-height:1.2;margin-bottom:3px}
+ .cg-window.cg-material-frosted-water-351 .cg-selected-chunks{display:flex;flex-direction:column}
+ .cg-window.cg-material-frosted-water-351 .cg-selected-chunks .cg-fixed-connections{height:auto;flex:1;min-height:0;grid-template-rows:repeat(4,minmax(0,1fr));grid-auto-rows:minmax(0,1fr)}
+}
+@media(max-height:500px){
+ .cg-window.cg-material-frosted-water-351 .cg-selected-chunks>.cg-chunks{display:flex;flex:1;min-height:0;flex-direction:column}
+}
+/* Frosted glass fields: avoid solid dark rectangles on the pane surface. */
+.cg-window.cg-material-frosted-water-351 .cg-fit-content :is(input:not([type=range]):not([type=checkbox]),select,textarea){
+ color:#fff!important;
+ background:linear-gradient(180deg,rgba(223,248,255,.24),rgba(56,117,149,.22) 52%,rgba(30,80,109,.32))!important;
+ border:1px solid rgba(226,250,255,.54)!important;
+ border-radius:8px!important;
+ box-shadow:inset 0 1px rgba(255,255,255,.30),inset 0 -1px rgba(24,74,100,.18)!important;
+ text-shadow:0 1px 2px #062337,0 0 3px #062337!important;
+}
+.cg-window.cg-material-frosted-water-351 .cg-fit-content :is(input:not([type=range]):not([type=checkbox]),select,textarea):focus-visible{
+ outline:2px solid #b7f4ff;outline-offset:2px;border-color:#e8ffff!important;box-shadow:inset 0 1px #fff9,0 0 10px #6bdfffaa!important;
+}
+.cg-window.cg-material-frosted-water-351 .cg-fit-content select option{color:#fff;background:#173d54;text-shadow:none}
+/* Alternative field backdrop: a softly recessed translucent glass well. */
+.cg-window.cg-material-frosted-water-351 .cg-fit-content :is(input:not([type=range]):not([type=checkbox]),select,textarea){
+ background:linear-gradient(180deg,rgba(15,65,92,.36),rgba(72,145,175,.20) 55%,rgba(183,229,245,.18))!important;
+ border:1px solid rgba(220,249,255,.34)!important;
+ border-radius:12px!important;
+ box-shadow:inset 0 2px 5px rgba(8,55,80,.35),inset 0 -1px rgba(237,254,255,.40),0 1px 2px rgba(16,62,85,.16)!important;
+}
+/* Larger bars get soft reflected glow; compact worker indicators avoid a
+   separate GPU blur for each of the 32 live connections. */
+.cg-sculpted-detailed{filter:drop-shadow(0 2px 3px rgba(3,34,57,.55)) drop-shadow(0 0 4px rgba(110,226,255,.45))}

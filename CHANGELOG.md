@@ -13,6 +13,13 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 - Reduced overlapping visual layers and added manual Netscape-format cookie-file selection for video helpers. Google-account autodetection/direct connection remains unfinished.
 - Remaining manual Windows checks include physical DPI/transparency review and native drag-to-Explorer/application behavior. Automated success does not establish complete original-MDM feature parity.
 
+### Auralis Download Manager 0.3.9 — Windows x64
+
+- Adds the experimental Frosted Layers material and independently selectable sculpted progress, connection and graph-backdrop designs.
+- Adds live indicator previews, matching shaped connection backdrops and distinct paused and lost-connection states.
+- Refines glass input fields, colored button highlights and compact download-window layout.
+- Windows appearance, desktop transparency, DPI scaling, small indicator readability and performance still need manual validation. See [full notes](docs/glass-releases/v0.3.9.md).
+
 ### Auralis Download Manager 0.3.8 — Windows x64
 
 - Addresses the YouTube sign-in freeze by moving WebView creation and cookie access off the UI thread; the Windows smoke test checks responsiveness.

@@ -7,7 +7,7 @@ pub fn set_material_window_shape(window: tauri::WebviewWindow, material: String)
         use windows_sys::Win32::Foundation::POINT;
         use windows_sys::Win32::Graphics::Gdi::{CreatePolygonRgn, CreateRoundRectRgn, DeleteObject, SetWindowRgn, WINDING};
         let hwnd = window.hwnd().map_err(|e| e.to_string())?.0 as windows_sys::Win32::Foundation::HWND;
-        if window.is_maximized().map_err(|e| e.to_string())? {
+        if material == "frosted-water-351" || window.is_maximized().map_err(|e| e.to_string())? {
             // A maximized window must occupy the entire monitor work area.
             unsafe { SetWindowRgn(hwnd, std::ptr::null_mut(), 1); }
             return Ok(());

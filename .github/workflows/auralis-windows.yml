@@ -15,7 +15,7 @@ on:
       - "CHANGELOG.md"
       - "docs/glass-releases/**"
   push:
-    branches: [feature/brand-tray-identity]
+    branches: [feature/brand-tray-identity, feature/auralis-frosted-candidate]
     tags: ["v*"]
     paths:
       - "glass-ui/**"
