@@ -43,6 +43,7 @@ pub fn open(app: &AppHandle, label: &str, route: &str, width: f64, height: f64) 
 pub fn start(app: AppHandle) {
     thread::spawn(move || {
         let mut previous: Option<HashMap<u64, String>> = None;
+        let mut tray_items: Vec<(u64, String, String)> = Vec::new();
         let mut helpers_checked = false;
         let mut last_info = 0;
         let mut last_power = 0;
@@ -54,6 +55,24 @@ pub fn start(app: AppHandle) {
             thread::sleep(Duration::from_millis(650));
             if !current_backend().is_ok_and(|b|b.headless&&b.glass) {continue;}
             let Ok(snapshot) = request_snapshot() else { continue; };
+            let hidden=app.state::<HiddenDownloadWindows>().0.lock().map(|v|v.clone()).unwrap_or_default();
+            let entries: Vec<_> = snapshot.downloads.iter().filter(|d| d.status == "Downloading" || hidden.contains(&d.id))
+                .map(|d| (d.id, d.file.clone(), d.status.clone())).collect();
+            if entries != tray_items {
+                if let Some(tray) = app.tray_by_id("progress-tray") {
+                    if let Ok(menu) = Menu::new(&app) {
+                        if entries.is_empty() {
+                            if let Ok(item) = MenuItem::with_id(&app, "progress-empty", "No active downloads", false, None::<&str>) { let _ = menu.append(&item); }
+                        } else {
+                            for (id, name, status) in &entries {
+                                let title = if status == "Stopped" { format!("{name} (paused)") } else { name.clone() };
+                                if let Ok(item) = MenuItem::with_id(&app, format!("progress-{id}"), title, true, None::<&str>) { let _ = menu.append(&item); }
+                            }
+                        }
+                        if tray.set_menu(Some(menu)).is_ok() { tray_items = entries; }
+                    }
+                }
+            }
             if !helpers_checked {
                 let helpers=send_ipc(&mdm_ipc::Command{query:Some("glass-helpers".into()),..Default::default()}).ok().and_then(|s|serde_json::from_str::<serde_json::Value>(&s).ok());
                 if let Some(tools)=helpers.as_ref().and_then(|v|v["tools"].as_array()) {

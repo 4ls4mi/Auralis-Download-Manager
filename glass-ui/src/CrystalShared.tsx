@@ -57,7 +57,7 @@ const stored = (name: string, fallback: string) => {
 };
 export function loadAppearance(): Appearance {
   return {
-    theme: stored("theme", "plexo"), material: ["ice-edge","smoked-crystal","frosted-layers","aero-gloss","prismatic-glass","liquid-glass","obsidian-glass","diamond-facet","holographic-film","pearl-mist","aurora-veil","brushed-glass","water-bubble"].includes(stored("material", "ice-edge")) ? stored("material", "ice-edge") : "ice-edge", tintHue: Number(stored("tint-hue", "265")), tintStrength: Number(stored("tint-strength", "22")), indicator: stored("indicator", "blue-purple"), progressShape: stored("progress-shape", "rounded"), clipboardMode: stored("clipboard-mode", "offer"),
+    theme: stored("theme", "plexo"), material: ["ice-edge","smoked-crystal","frosted-layers","aero-gloss","prismatic-glass","liquid-glass","obsidian-glass","diamond-facet","holographic-film","pearl-mist","aurora-veil","brushed-glass","water-bubble"].includes(stored("material", "ice-edge")) ? stored("material", "ice-edge") : "ice-edge", tintHue: Number(stored("tint-hue", "265")), tintStrength: Number(stored("tint-strength", "22")), indicator: stored("indicator", "blue-purple"), progressShape: stored("progress-shape", "rounded") === "wave" ? "droplet" : stored("progress-shape", "rounded"), clipboardMode: stored("clipboard-mode", "offer"),
     wallMain: stored("wall-main", ""), wallDetail: stored("wall-detail", ""),
     mainMode: stored("back-main", "desktop") as BackgroundMode,
     detailMode: stored("back-details", "desktop") as BackgroundMode,

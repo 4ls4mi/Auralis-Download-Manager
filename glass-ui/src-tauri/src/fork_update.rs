@@ -4,8 +4,8 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Manager};
 
-const FEED: &str = "https://api.github.com/repos/4ls4mi/misterdownloadmanager/releases?per_page=30";
-const ASSET_PREFIX: &str = "https://github.com/4ls4mi/misterdownloadmanager/releases/download/";
+const FEED: &str = "https://api.github.com/repos/4ls4mi/Auralis-Download-Manager/releases?per_page=30";
+const ASSET_PREFIX: &str = "https://github.com/4ls4mi/Auralis-Download-Manager/releases/download/";
 const MAX_BYTES: u64 = 256 * 1024 * 1024;
 #[derive(Clone)]
 struct Candidate { version: String, notes: String, url: String, sha256: String, size: u64, staged: Option<PathBuf> }
@@ -26,8 +26,8 @@ fn candidate_from_release(value: &serde_json::Value, current: &str) -> Result<Op
     // This repository also carries upstream MDM releases. Only releases with the Auralis
     // installer are update candidates; an unrelated newer MDM tag must never block this fork.
     let Some(assets) = value["assets"].as_array() else { return Ok(None) };
-    let expected_name=format!("Auralis Download Manager_{}_x64-setup.exe",version);
-    let matches: Vec<_> = assets.iter().filter(|asset| asset["name"].as_str()==Some(expected_name.as_str())).collect();
+    let expected_names=[format!("Auralis.Download.Manager_{}_x64-setup.exe",version),format!("Auralis Download Manager_{}_x64-setup.exe",version)];
+    let matches: Vec<_> = assets.iter().filter(|asset| asset["name"].as_str().is_some_and(|name|expected_names.iter().any(|expected|expected==name))).collect();
     if matches.is_empty() { return Ok(None); }
     if matches.len()!=1 { return Err("This Auralis release must contain exactly one Windows x64 installer".into()); }
     let asset=matches[0];
@@ -109,10 +109,11 @@ mod tests {
     use super::*;
     fn release(url:&str,digest:&str)->serde_json::Value {serde_json::json!({"tag_name":"v0.3.2","body":"Changes", "assets":[{"name":"Auralis Download Manager_0.3.2_x64-setup.exe","browser_download_url":url,"digest":digest,"size":123}]})}
     #[test] fn accepts_only_newer_fork_installer_with_digest(){
-        let good=release("https://github.com/4ls4mi/misterdownloadmanager/releases/download/v0.3.2/setup.exe",&format!("sha256:{}","a".repeat(64)));
+        let good=release("https://github.com/4ls4mi/Auralis-Download-Manager/releases/download/v0.3.2/setup.exe",&format!("sha256:{}","a".repeat(64)));
         assert!(candidate_from_release(&good,"0.3.1").unwrap().is_some());assert!(candidate_from_release(&good,"0.3.2").unwrap().is_none());
+        let mut published=good.clone();published["assets"][0]["name"]=serde_json::json!("Auralis.Download.Manager_0.3.2_x64-setup.exe");assert!(candidate_from_release(&published,"0.3.1").unwrap().is_some());
         let mut wrong=good.clone();wrong["assets"][0]["name"]=serde_json::json!("MisterDownloadManager-0.9.0-setup.exe");assert!(candidate_from_release(&wrong,"0.3.1").unwrap().is_none());
         let bad=release("https://evil.example/setup.exe",&format!("sha256:{}","a".repeat(64)));assert!(candidate_from_release(&bad,"0.3.1").is_err());
-        let bad=release("https://github.com/4ls4mi/misterdownloadmanager/releases/download/v0.3.2/setup.exe","sha256:bad");assert!(candidate_from_release(&bad,"0.3.1").is_err());
+        let bad=release("https://github.com/4ls4mi/Auralis-Download-Manager/releases/download/v0.3.2/setup.exe","sha256:bad");assert!(candidate_from_release(&bad,"0.3.1").is_err());
     }
 }

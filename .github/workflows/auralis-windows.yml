@@ -149,7 +149,10 @@ jobs:
           $viewStatus = $LASTEXITCODE
           if ($viewStatus -eq 0) {
             $existingRelease = $existingJson | ConvertFrom-Json
-            if (-not $existingRelease.isDraft) { throw "A release for this tag is already published; refusing to overwrite it." }
+            if (-not $existingRelease.isDraft) {
+              Write-Host "Release $env:GITHUB_REF_NAME is already published; leaving its assets unchanged."
+              exit 0
+            }
             gh release upload "$env:GITHUB_REF_NAME" $installer $legacy --clobber
             if ($LASTEXITCODE) { throw "Uploading Auralis release assets failed" }
             gh release edit "$env:GITHUB_REF_NAME" --verify-tag --title $title --notes-file $notes --draft=false --prerelease=false --latest

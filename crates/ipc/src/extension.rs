@@ -4,6 +4,8 @@
 
 /// The extension's ID loaded unpacked (the public key in extension/manifest.json).
 pub const UNPACKED_ID: &str = "oogbclbbninliongijffeeggalppliok";
+/// The separate Auralis development extension, with its own public key.
+pub const AURALIS_UNPACKED_ID: &str = "ghelllciojchjjlnghidngnfedogaggk";
 /// Its ID in the Chrome Web Store, which signs it with the store's own key
 /// (tools/extension/pack.ps1 leaves the manifest's key out of the store's copy). [`store_id`] is
 /// `None` while this is not a valid ID (a placeholder), and then nothing names it.
@@ -16,6 +18,7 @@ pub const OTHER_STORE_IDS: [&str; 2] = ["EDGE_ADDONS_ID_PENDING", "OPERA_ADDONS_
 pub const FIREFOX_PAGE: &str = "https://addons.mozilla.org/firefox/addon/mister-download-manager/";
 /// The Firefox add-on's ID (extension/manifest.firefox.json).
 pub const FIREFOX_ID: &str = "integration@misterdownloadmanager.com";
+pub const AURALIS_FIREFOX_ID: &str = "integration@auralis.download";
 /// Chrome's update service: an external-install entry naming it makes Chrome offer the store's
 /// extension at its next start (developer.chrome.com, "Alternative extension distribution
 /// options").
@@ -38,6 +41,7 @@ pub fn store_id() -> Option<&'static str> {
 /// The Chromium extensions the native host serves: unpacked, and each store's once listed.
 pub fn chromium_ids() -> Vec<&'static str> {
     std::iter::once(UNPACKED_ID)
+        .chain(std::iter::once(AURALIS_UNPACKED_ID))
         .chain(store_id())
         .chain(OTHER_STORE_IDS.into_iter().filter(|id| valid_id(id)))
         .collect()

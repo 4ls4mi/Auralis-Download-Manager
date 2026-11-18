@@ -428,7 +428,7 @@ async fn file_operation(id: u64, operation: String, value: Option<String>) -> Ap
                 }
                 path
             };
-            open::that(&target).map_err(|e| format!("Windows could not open {}: {e}",target.display()))?;
+            open::that_detached(&target).map_err(|e| format!("Windows could not open {}: {e}",target.display()))?;
             return Ok(serde_json::json!({"ok":true}));
         }
         let reply = send_ipc(&mdm_ipc::Command {
@@ -611,6 +611,20 @@ fn main() {
                         ..
                     } = event {
                         show_main(tray.app_handle());
+                    }
+                })
+                .build(app)?;
+            let empty = MenuItem::with_id(app, "progress-empty", "No active downloads", false, None::<&str>)?;
+            let progress_menu = Menu::with_items(app, &[&empty])?;
+            TrayIconBuilder::with_id("progress-tray")
+                .icon(app.default_window_icon().cloned().ok_or("No packaged Auralis icon")?)
+                .tooltip("Auralis — download progress windows")
+                .menu(&progress_menu)
+                .show_menu_on_left_click(true)
+                .on_menu_event(|app, event| {
+                    if let Some(id) = event.id.as_ref().strip_prefix("progress-").and_then(|id| id.parse::<u64>().ok()) {
+                        restore_download_window(app, id);
+                        let _ = lifecycle::open(app, &format!("download-{id}"), &format!("detail={id}"), 880.0, 500.0);
                     }
                 })
                 .build(app)?;

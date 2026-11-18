@@ -56,7 +56,7 @@ mod win32;
 use mdm_ipc::browsers::HOST_NAME;
 #[cfg(windows)]
 use mdm_ipc::browsers::{Family, Holder, Repair, WINDOWS_HOST_KEYS};
-use mdm_ipc::extension::{FIREFOX_ID, STORE_ID, chromium_ids, store_id};
+use mdm_ipc::extension::{AURALIS_FIREFOX_ID, FIREFOX_ID, STORE_ID, chromium_ids, store_id};
 
 /// Chrome's external extensions: an entry naming the store's extension makes Chrome offer it at
 /// its next start ("New extension added"), the user turning it on there. HKLM's is read from the
@@ -1195,7 +1195,7 @@ fn firefox_manifest(program: &std::path::Path) -> serde_json::Value {
         "description": "Mister Download Manager",
         "path": program,
         "type": "stdio",
-        "allowed_extensions": [FIREFOX_ID],
+        "allowed_extensions": [FIREFOX_ID, AURALIS_FIREFOX_ID],
     })
 }
 
@@ -1245,7 +1245,7 @@ fn origin(id: &str) -> String {
 fn our_caller(args: &[String]) -> bool {
     args.first()
         .is_some_and(|a| chromium_ids().iter().any(|id| *a == origin(id)))
-        || args.get(1).is_some_and(|a| a == FIREFOX_ID)
+        || args.get(1).is_some_and(|a| a == FIREFOX_ID || a == AURALIS_FIREFOX_ID)
 }
 
 /// Windows: the manifest beside this exe that a browser of `family` reads, written when it isn't
