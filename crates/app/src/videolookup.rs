@@ -735,6 +735,8 @@ mod tests {
         let ready = l.poll(&a.token, now);
         assert_eq!(ready.state, lookup::READY);
         assert_eq!(ready.token.as_deref(), Some(a.token.as_str()));
+        assert_eq!(ready.subtitles.len(), 1);
+        assert_eq!(ready.subtitles[0].code, "de");
         assert_eq!(
             ready.title.as_deref(),
             Some("A talk: in Lisbon"),
