@@ -3,6 +3,18 @@
 Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 `.github/workflows/release.yml`).
 
+## Auralis Download Manager 0.3.5 — Windows x64
+
+- Added guided extension setup, a recent browser-connection indicator, clearer selected rows, and a bulk-delete disk checkbox.
+- Adjusted default window sizes, tray menu handling, button styling, solid indicator colors, experimental surfaces and the thumbnail quality menu.
+- [Full 0.3.5 release notes](docs/glass-releases/v0.3.5.md). Windows desktop behavior and material appearance still need visual and functional verification.
+
+## Auralis Download Manager 0.3.4 — Windows x64
+
+- Added independent indicator styling, download sorting and multi-selection, update reminders, and a bundled Auralis extension with guided setup.
+- Improved browser-session lookup and grouped thumbnail video, audio and subtitle choices.
+- [Full 0.3.4 release notes](docs/glass-releases/v0.3.4.md).
+
 ## Auralis Download Manager 0.3.3 — Windows x64
 
 - Added a dedicated **Auralis browser extension** with Chromium and Firefox development ZIPs attached to the [0.3.3 release](https://github.com/4ls4mi/Auralis-Download-Manager/releases/tag/v0.3.3). It offers in-browser video and audio qualities, available subtitle choices, and per-video browser-session or pasted-cookie controls.
