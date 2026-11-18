@@ -13,13 +13,13 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 - Reduced overlapping visual layers and added manual Netscape-format cookie-file selection for video helpers. Google-account autodetection/direct connection remains unfinished.
 - Remaining manual Windows checks include physical DPI/transparency review and native drag-to-Explorer/application behavior. Automated success does not establish complete original-MDM feature parity.
 
-### 0.3.2 candidate — Auralis Download Manager (not published)
+### Auralis Download Manager 0.3.2 — Windows x64
 
-- Rebrand the Windows glass desktop as **Auralis Download Manager**, with an original crystalline A/download mark and generated Windows app icon.
-- Match the original MDM tray commands, including Speed Limiter on/off, scheduler, queue controls, batch-from-clipboard and options.
-- Add a per-download restore entry to the shared tray menu when a floating progress window is hidden.
-- Update the fork updater's expected Auralis installer asset name, while retaining a legacy-named installer alias for existing 0.3.1 updaters. The Tauri application identifier remains unchanged for upgrade compatibility.
-- Windows build and manual tray acceptance are pending; do not publish until they pass. Full candidate notes: [docs/glass-releases/v0.3.2.md](docs/glass-releases/v0.3.2.md).
+- Rebranded the Windows glass desktop as **Auralis Download Manager**, with an original crystalline A/download mark and generated Windows app icon.
+- Expanded the original MDM tray commands, including Speed Limiter on/off, Scheduler, queue controls, batch-from-clipboard and Options.
+- Added a per-download restore entry to the shared tray menu when a floating progress window is hidden.
+- Updated the fork updater's expected Auralis installer asset name, while retaining a legacy-named installer alias for existing 0.3.1 updaters. The Tauri application identifier remains unchanged for upgrade compatibility.
+- Windows x64 build, automated tests and the manual Windows acceptance checks are complete. Full release notes: [docs/glass-releases/v0.3.2.md](docs/glass-releases/v0.3.2.md).
 
 ## [Unreleased]
 
