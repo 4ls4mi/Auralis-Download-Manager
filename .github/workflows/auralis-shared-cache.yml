@@ -1,0 +1,22 @@
+name: Warm Auralis Windows shared cache
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: 'Auralis branch or commit to use as the shared cache baseline'
+        required: true
+        default: 'feature/auralis-browser-progress'
+        type: string
+
+# The called workflow never publishes on this main-branch run. It builds and
+# tests the chosen Auralis revision and saves its cache in the default-branch
+# scope, which later feature branches and release tags may restore.
+permissions:
+  contents: write
+
+jobs:
+  warm:
+    uses: 4ls4mi/Auralis-Download-Manager/.github/workflows/auralis-windows.yml@feature/auralis-browser-progress
+    with:
+      source_ref: ${{ inputs.source_ref }}
