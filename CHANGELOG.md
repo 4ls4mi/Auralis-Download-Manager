@@ -3,6 +3,13 @@
 Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 `.github/workflows/release.yml`).
 
+## Auralis Download Manager 0.3.3 — Windows x64
+
+- Added a dedicated **Auralis browser extension** with Chromium and Firefox development ZIPs attached to the [0.3.3 release](https://github.com/4ls4mi/Auralis-Download-Manager/releases/tag/v0.3.3). It offers in-browser video and audio qualities, available subtitle choices, and per-video browser-session or pasted-cookie controls.
+- Added browser and pasted-cookie choices to the manual video helper, plus explicit per-video cookie precedence.
+- Added a separate download-progress tray list, a more compact progress window and an experimental water-droplet indicator; fixed updater handling for the renamed repository and installer.
+- Real-site browser testing, permanent Firefox signing, Safari packaging and physical Windows visual checks remain outstanding. The droplet is still an approximation of the design concept.
+
 ## Mister Hybrid Glass 0.3.1 — Windows x64
 
 - Added an independent red background for a connection that is interrupted or retrying, while keeping its reported gradient progress visible. A short interruption remains observable between refreshes; the red indication stays while reconnecting. The existing paused appearance remains.
