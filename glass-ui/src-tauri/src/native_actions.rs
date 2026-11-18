@@ -88,7 +88,7 @@ pub async fn video_tool(action:String,value:String,choice:Option<usize>,subs:Opt
     if value.len()>8192 {return Err("Video request is too long".into());}
     let mut command=mdm_ipc::Command::default();
     if let Some(cookies) = cookies.filter(|c| !c.trim().is_empty()) {
-        if action != "lookup" || cookies.len() > 8192 || cookies.contains(['\r','\n','\0']) { return Err("Enter cookies as name=value pairs separated by semicolons".into()); }
+        if action != "lookup" || cookies.len() > 8192 || !cookies.contains('=') || cookies.contains(['\r','\n','\0']) { return Err("Enter cookies as name=value pairs separated by semicolons".into()); }
         command.cookies=Some(cookies);
         command.video_explicit_cookies=true;
     }
