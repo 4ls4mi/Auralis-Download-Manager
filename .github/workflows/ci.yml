@@ -37,9 +37,6 @@ env:
 
 jobs:
   rust:
-    # Auralis Windows CI already builds and tests its forked engine.
-    # Avoid a second build of the upstream desktop application.
-    if: ${{ false }}
     name: ${{ matrix.name || matrix.os }}
     strategy:
       fail-fast: false
