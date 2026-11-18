@@ -13,6 +13,14 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 - Reduced overlapping visual layers and added manual Netscape-format cookie-file selection for video helpers. Google-account autodetection/direct connection remains unfinished.
 - Remaining manual Windows checks include physical DPI/transparency review and native drag-to-Explorer/application behavior. Automated success does not establish complete original-MDM feature parity.
 
+### Auralis Download Manager 0.3.4 — Windows x64
+
+- Shows a dedicated tray icon only while download progress windows are hidden, with transfer details for those windows.
+- Adds multi-selection, sorting and bulk actions; independent indicator settings; and a movable update notice with changelog and reminders.
+- Bundles the Auralis browser extension with guided setup and improves browser-session handling and subtitle visibility.
+- Sets new-install appearance and clipboard defaults and renames the executable.
+- Windows automated build and tests passed for the preceding test build. Live Edge/YouTube sessions, tray behavior, and updater installation still require manual verification; the Windhawk-inspired material styles are unfinished. See [full release notes](docs/glass-releases/v0.3.4.md).
+
 ### Auralis Download Manager 0.3.3 — Windows x64
 
 - Added Auralis development extensions for Chromium and Firefox with browser quality menus, subtitle choices, and per-video cookie controls.
