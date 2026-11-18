@@ -37,7 +37,9 @@ env:
 
 jobs:
   rust:
-    if: ${{ !(github.event_name == 'pull_request' && (github.head_ref == 'feature/tauri-unified-windows' || (github.head_ref == 'feature/crystal-parity-windows' || (github.head_ref == 'feature/progress-chunks-windows' || github.head_ref == 'feature/ice-crystal-parity-windows' || github.head_ref == 'feature/brand-tray-identity')))) }}
+    # Auralis Windows CI already builds and tests its forked engine.
+    # Avoid a second build of the upstream desktop application.
+    if: ${{ false }}
     name: ${{ matrix.name || matrix.os }}
     strategy:
       fail-fast: false
