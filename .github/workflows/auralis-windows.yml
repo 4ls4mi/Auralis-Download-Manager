@@ -16,7 +16,7 @@ on:
       - "docs/glass-releases/**"
   push:
     branches: [feature/brand-tray-identity]
-    tags: ["v0.3.*"]
+    tags: ["v*"]
     paths:
       - "glass-ui/**"
       - ".github/workflows/auralis-windows.yml"
@@ -38,7 +38,7 @@ concurrency:
 
 jobs:
   windows-x64:
-    if: github.event_name != 'create' || (github.event.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v0.3.'))
+    if: github.event_name != 'create' || (github.event.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v'))
     name: Windows x64 build and tests
     runs-on: windows-latest
     timeout-minutes: 90
@@ -177,7 +177,7 @@ jobs:
           retention-days: 14
 
       - name: Publish Auralis Windows x64 release
-        if: startsWith(github.ref, 'refs/tags/v0.3.')
+        if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
