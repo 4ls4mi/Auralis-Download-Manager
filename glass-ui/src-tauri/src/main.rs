@@ -624,7 +624,7 @@ fn main() {
                 .on_menu_event(|app, event| {
                     if let Some(id) = event.id.as_ref().strip_prefix("progress-").and_then(|id| id.parse::<u64>().ok()) {
                         restore_download_window(app, id);
-                        let _ = lifecycle::open(app, &format!("download-{id}"), &format!("detail={id}"), 880.0, 500.0);
+                        let _ = lifecycle::open(app, &format!("download-{id}"), &format!("detail={id}"), 880.0, 420.0);
                     }
                 })
                 .build(app)?;
