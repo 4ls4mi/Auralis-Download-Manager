@@ -1655,6 +1655,7 @@ button:focus-visible { outline: none; }
     // a copy going in its own world beside the new one): it goes instead of showing (#336).
     if (!ext.runtime?.id) return teardown();
     if (video !== v) {
+      looks.clear();
       cookieHeader.value = ""; cookieHeader.hidden = true; cookieMode.value = "browser"; subtitleChoice = "none";
       video = v;
       held = null;
@@ -2224,6 +2225,12 @@ button:focus-visible { outline: none; }
     if (!e.isTrusted) return;
     const focused = shadow.activeElement;
     const inMenu = menuOpen && focused && menu.contains(focused);
+    // Inputs and selects keep their normal editing/navigation keys; do not send
+    // those keys through the quality-menu shortcuts or to the video player.
+    if (inMenu && focused !== menu && (focused.matches("input, select") || focused === cookieFetch) && e.key !== "Escape") {
+      e.stopPropagation();
+      return;
+    }
     if (e.key === "Escape" && menuOpen) {
       closeMenu();
       more.focus();
