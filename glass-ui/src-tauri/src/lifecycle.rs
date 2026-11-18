@@ -43,7 +43,7 @@ pub fn open(app: &AppHandle, label: &str, route: &str, width: f64, height: f64) 
 pub fn start(app: AppHandle) {
     thread::spawn(move || {
         let mut previous: Option<HashMap<u64, String>> = None;
-        let mut tray_items: Vec<(u64, String)> = Vec::new();
+        let mut tray_items: Vec<(u64, MenuItem<tauri::Wry>)> = Vec::new();
         let mut helpers_checked = false;
         let mut last_info = 0;
         let mut last_power = 0;
@@ -65,18 +65,25 @@ pub fn start(app: AppHandle) {
                 let resume=match detail.and_then(|v|v["resumable"].as_bool()) {Some(true)=>"resumable",Some(false)=>"not resumable",None=>"resume unknown"};
                 (d.id,format!("{} — {} · {} · {:.1} MB/s · {} · {} · {}",d.file,d.status,percent,d.speed as f64/1048576.0,eta,active,resume))
             }).collect();
-            if entries != tray_items {
+            let membership_changed = entries.len()!=tray_items.len() || entries.iter().any(|(id,_)|!tray_items.iter().any(|(old,_)|old==id));
+            if membership_changed {
                 if let Some(tray) = app.tray_by_id("progress-tray") {
                     if let Ok(menu) = Menu::new(&app) {
-                        if entries.is_empty() {
-                            if let Ok(item) = MenuItem::with_id(&app, "progress-empty", "No active downloads", false, None::<&str>) { let _ = menu.append(&item); }
-                        } else {
-                            for (id, title) in &entries {
-                                if let Ok(item) = MenuItem::with_id(&app, format!("progress-{id}"), title, true, None::<&str>) { let _ = menu.append(&item); }
+                        let mut items=Vec::new();
+                        for (id,title) in &entries {
+                            if let Ok(item)=MenuItem::with_id(&app,format!("progress-{id}"),title,true,None::<&str>) {
+                                if menu.append(&item).is_ok(){items.push((*id,item));}
                             }
                         }
-                        if tray.set_menu(Some(menu)).is_ok() { tray_items = entries; }
+                        if entries.is_empty() {
+                            if let Ok(item)=MenuItem::with_id(&app,"progress-empty","No hidden windows",false,None::<&str>){let _=menu.append(&item);}
+                        }
+                        if tray.set_menu(Some(menu)).is_ok(){tray_items=items;}
                     }
+                }
+            } else {
+                for (id,title) in &entries {
+                    if let Some((_,item))=tray_items.iter().find(|(old,_)|old==id){let _=item.set_text(title);}
                 }
             }
             if !helpers_checked {
@@ -129,7 +136,7 @@ pub fn start(app: AppHandle) {
                         super::refresh_tray_menu(&owner);
                         if complete { let _ = open(&owner,&format!("complete-{id}"),&format!("complete={id}"),720.0,420.0); }
                     } else if !hidden.contains(&id) {
-                        let _ = open(&owner,&format!("download-{id}"),&format!("detail={id}"),800.0,400.0);
+                        let _ = open(&owner,&format!("download-{id}"),&format!("detail={id}"),880.0,440.0);
                     }
                 }
                 for id in new_videos {let _=open(&owner,&format!("tool-video-{id}"),&format!("tool=video&browser={id}"),720.0,560.0);}

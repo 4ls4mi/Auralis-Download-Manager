@@ -399,6 +399,11 @@ async fn prepare_auralis_extension(app: AppHandle, browser: String) -> ApiResult
 }
 
 #[tauri::command]
+fn browser_connection_status() -> serde_json::Value {
+    serde_json::json!({"recently_connected":mdm_ipc::extension::recently_connected(),"previously_connected":mdm_ipc::extension::seen(),"browsers":mdm_ipc::extension::seen_browsers()})
+}
+
+#[tauri::command]
 async fn browser_integration(app: AppHandle, repair: bool) -> ApiResult<String> {
     tauri::async_runtime::spawn_blocking(move || {
         if repair { register_browser_host(&app) }
@@ -581,7 +586,7 @@ fn main() {
         }))
         .setup(|app| {
             if let Some(main)=app.get_webview_window("main") {
-                let (width,height)=lifecycle::fit_size(app.handle(),740.0,425.0);
+                let (width,height)=lifecycle::fit_size(app.handle(),814.0,468.0);
                 let _=main.set_min_size(Some(tauri::LogicalSize::new(width.min(600.0),height.min(420.0))));
                 let _=main.set_size(tauri::LogicalSize::new(width,height));
                 let _=main.center();
@@ -608,7 +613,7 @@ fn main() {
                         refresh_tray_menu(app);
                     },
                     "scheduler" => { let _ = lifecycle::open(app, "tray-scheduler", "schedule=1", 860.0, 660.0); },
-                    "options" => { let _ = lifecycle::open(app, "tray-options", "settings=1", 920.0, 700.0); },
+                    "options" => { let _ = lifecycle::open(app, "tray-options", "settings=1", 1012.0, 770.0); },
                     "start-queue" | "stop-queue" => {
                         if let Ok(snapshot) = request_snapshot() {
                             if let Some(queue) = snapshot.queues.first() {
@@ -652,8 +657,7 @@ fn main() {
                 .show_menu_on_left_click(true)
                 .on_menu_event(|app, event| {
                     if let Some(id) = event.id.as_ref().strip_prefix("progress-").and_then(|id| id.parse::<u64>().ok()) {
-                        restore_download_window(app, id);
-                        let _ = lifecycle::open(app, &format!("download-{id}"), &format!("detail={id}"), 800.0, 400.0);
+                        let _ = lifecycle::open(app, &format!("download-{id}"), &format!("detail={id}"), 880.0, 440.0);
                     }
                 })
                 .build(app)?;
@@ -691,7 +695,7 @@ fn main() {
             material_window::set_material_window_shape, pending_file_info, file_info_action, choose_download_path, window_preferences, glass_tool, choose_folder, open_glass_window, close_progress_windows, hide_download_to_tray, drag_download, drag_state, choose_move, clipboard_text, video_tool, browser_video,
             boot_engine, dashboard_snapshot, dashboard_visuals, download_action,
             add_download, select_wallpaper, queue_action, glass_settings, update_glass_setting,
-            browser_integration, prepare_auralis_extension, extension_store_link, open_extension_store, bulk_action, file_operation, add_torrent_file, quit_glass, open_upstream_releases, fork_update::glass_update_check, fork_update::glass_update_download, fork_update::glass_update_install
+            browser_integration, browser_connection_status, prepare_auralis_extension, extension_store_link, open_extension_store, bulk_action, file_operation, add_torrent_file, quit_glass, open_upstream_releases, fork_update::glass_update_check, fork_update::glass_update_download, fork_update::glass_update_install
         ])
         .run(context)
         .expect("error starting Auralis Download Manager desktop");

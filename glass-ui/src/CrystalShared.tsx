@@ -57,7 +57,7 @@ const stored = (name: string, fallback: string) => {
 };
 export function loadAppearance(): Appearance {
   return {
-    theme: stored("theme", "navy"), material: ["ice-edge","smoked-crystal","frosted-layers","aero-gloss","prismatic-glass","liquid-glass","obsidian-glass","diamond-facet","holographic-film","pearl-mist","aurora-veil","brushed-glass","water-bubble"].includes(stored("material", "brushed-glass")) ? stored("material", "brushed-glass") : "brushed-glass", tintHue: Number(stored("tint-hue", "255")), tintStrength: Number(stored("tint-strength", "50")), indicator: stored("indicator", "aurora"), progressShape: stored("progress-shape", "rounded") === "wave" ? "droplet" : stored("progress-shape", "rounded"), graphIndicator: stored("graph-indicator", stored("indicator", "aurora")), graphShape: stored("graph-shape", "area"), connectionIndicator: stored("connection-indicator", stored("indicator", "aurora")), connectionShape: stored("connection-shape", stored("progress-shape", "rounded")), clipboardMode: stored("clipboard-mode", "paste"),
+    theme: stored("theme", "navy"), material: ["ice-edge","smoked-crystal","frosted-layers","aero-gloss","prismatic-glass","liquid-glass","obsidian-glass","diamond-facet","holographic-film","pearl-mist","aurora-veil","brushed-glass","water-bubble","rose-pine","window-glass","oversimplified","tinted-glass","frosty-glass","raycast"].includes(stored("material", "brushed-glass")) ? stored("material", "brushed-glass") : "brushed-glass", tintHue: Number(stored("tint-hue", "255")), tintStrength: Number(stored("tint-strength", "50")), indicator: stored("indicator", "aurora"), progressShape: stored("progress-shape", "rounded") === "wave" ? "droplet" : stored("progress-shape", "rounded"), graphIndicator: stored("graph-indicator", stored("indicator", "aurora")), graphShape: stored("graph-shape", "area"), connectionIndicator: stored("connection-indicator", stored("indicator", "aurora")), connectionShape: stored("connection-shape", stored("progress-shape", "rounded")), clipboardMode: stored("clipboard-mode", "paste"),
     wallMain: stored("wall-main", ""), wallDetail: stored("wall-detail", ""),
     mainMode: stored("back-main", "desktop") as BackgroundMode,
     detailMode: stored("back-details", "desktop") as BackgroundMode,
@@ -121,7 +121,18 @@ export const indicatorPalettes: Record<string,{label:string; colors:[string,stri
   ocean:{label:"Ocean",colors:["#00aaff","#00d6d1","#4cf0a8"]},
   sunset:{label:"Sunset",colors:["#ffb52e","#ff6450","#f54eca"]},
   aurora:{label:"Aurora",colors:["#38efb5","#26baff","#c967ff"]},
-  silver:{label:"Silver",colors:["#a0b3cc","#e4f2ff","#ffffff"]}
+  silver:{label:"Silver",colors:["#a0b3cc","#e4f2ff","#ffffff"]},
+  cobalt:{label:"Solid cobalt",colors:["#347dff","#347dff","#347dff"]},
+  emerald:{label:"Solid emerald",colors:["#14cf8c","#14cf8c","#14cf8c"]},
+  tangerine:{label:"Solid orange",colors:["#ff8c21","#ff8c21","#ff8c21"]},
+  coral:{label:"Solid coral",colors:["#ff566c","#ff566c","#ff566c"]},
+  violet:{label:"Solid violet",colors:["#ad6bff","#ad6bff","#ad6bff"]},
+  lime:{label:"Solid lime",colors:["#b9ed34","#b9ed34","#b9ed34"]},
+  candy:{label:"Candy",colors:["#ff63a8","#ffa35b","#ffe36c"]},
+  arctic:{label:"Arctic",colors:["#a4ffff","#84bdff","#e8ddff"]},
+  fire:{label:"Fire",colors:["#ffdd32","#ff7b20","#fa3652"]},
+  forest:{label:"Forest",colors:["#b7ef45","#28d897","#007f85"]},
+  neon:{label:"Neon",colors:["#ff3ca5","#c351ff","#57e9ff"]}
 };
 export function indicatorColors(id:string){return (indicatorPalettes[id]??indicatorPalettes["blue-purple"]).colors}
 export function pct(d: Download) {

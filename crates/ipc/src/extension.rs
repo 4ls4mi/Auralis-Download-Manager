@@ -75,6 +75,9 @@ pub fn mark_seen(browser: &str, version: &str) {
     let Some(dir) = crate::data_dir() else {
         return;
     };
+    // Timestamp a real browser-to-host handshake independently of historical installs.
+    let _ = crate::private_dir(&dir);
+    let _ = std::fs::write(dir.join("extension-recent-handshake"), b"connected");
     let file = dir.join(SEEN);
     let known = std::fs::read_to_string(&file).ok();
     let mut lines: Vec<(String, String)> = known.as_deref().map(parse_seen).unwrap_or_default();
@@ -104,6 +107,13 @@ fn parse_seen(text: &str) -> Vec<(String, String)> {
 /// Has any browser's extension reached the app?
 pub fn seen() -> bool {
     crate::data_dir().is_some_and(|d| d.join(SEEN).exists())
+}
+
+/// True only shortly after a browser actually started the native host.
+pub fn recently_connected() -> bool {
+    crate::data_dir().and_then(|d|std::fs::metadata(d.join("extension-recent-handshake")).ok())
+        .and_then(|m|m.modified().ok()).and_then(|t|t.elapsed().ok())
+        .is_some_and(|age|age.as_secs()<120)
 }
 
 /// The browsers whose extension has reached the app, with its version (empty when unknown).

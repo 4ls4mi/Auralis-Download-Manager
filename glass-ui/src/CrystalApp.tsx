@@ -20,8 +20,8 @@ type Menu = "Tasks" | "File" | "Downloads" | "View" | "Help";
 type MenuEntry = { label: string; action: string; disabled?: boolean; shortcut?: string; children?:MenuEntry[] };
 const menus: Menu[]=["Tasks","File","Downloads","View","Help"];
 const blank:Dashboard={downloads:[],speed:0,queues:[],categories:[]};
-const pop = (id:number)=>openWindow("download-"+id,"/?detail="+id,800,400);
-const settings = (tab="General", panel="")=>openWindow("settings","/?settings=1&tab="+encodeURIComponent(tab)+"&panel="+encodeURIComponent(panel),880,695);
+const pop = (id:number)=>openWindow("download-"+id,"/?detail="+id,880,440);
+const settings = (tab="General", panel="")=>openWindow("settings","/?settings=1&tab="+encodeURIComponent(tab)+"&panel="+encodeURIComponent(panel),968,765);
 const add=(torrent=false)=>openWindow(torrent?"add-torrent":"add-url",`/?add=${torrent?"torrent":"url"}`,590,390);
 const props=(id:number)=>openWindow("properties-"+id,"/?properties="+id,760,600);
 const tool=(kind:string,id:number)=>openWindow(`tool-${kind}-${id}`,`/?tool=${kind}&id=${id}`,700,500);
@@ -39,7 +39,7 @@ function StatusBadge({item}:{item:MdmFile}){
 export default function CrystalApp(){
   const [data,setData]=useState<Dashboard>(blank),[online,setOnline]=useState(false),[message,setMessage]=useState("Connecting to downloads…");
   const [chosen,setChosen]=useState<number|null>(null),[filter,setFilter]=useState("All Downloads"),[term,setTerm]=useState("");
-  const [selected,setSelected]=useState<number[]>([]),[sort,setSort]=useState("newest");
+  const [selected,setSelected]=useState<number[]>([]),[sort,setSort]=useState("newest"),[deleteDisk,setDeleteDisk]=useState(false);
   const anchor=useRef<number|null>(null);
   const [openMenu,setOpenMenu]=useState<Menu|null>(null),[context,setContext]=useState<{id:number;x:number;y:number}|null>(null);
   const [busy,setBusy]=useState(false),[error,setError]=useState(""),[history,setHistory]=useState<number[]>([]);
@@ -92,6 +92,12 @@ export default function CrystalApp(){
     void invoke<string>("boot_engine").then(text=>{
       if(!mounted)return;
       setMessage(text);void refresh();
+      if(!localStorage.getItem("auralis-browser-guide-seen")){
+        void invoke<{recently_connected:boolean}>("browser_connection_status").then(status=>{
+          if(mounted&&!status.recently_connected){localStorage.setItem("auralis-browser-guide-seen","1");openWindow("tool-browser-guide","/?tool=browser-guide",680,530)}
+          else if(mounted)localStorage.setItem("auralis-browser-guide-seen","1");
+        }).catch(()=>undefined);
+      }
       const checkUpdates=()=>void invoke<{state:string;version?:string;notes?:string}>("glass_update_check").then(update=>{
         if(!mounted||update.state!=="available"||!update.version)return;
         setUpdateVersion(update.version);
@@ -159,12 +165,12 @@ export default function CrystalApp(){
   };
   const execute=async(action:string,item:MdmFile|null=picked)=>{
     setOpenMenu(null);setContext(null);setError("");
-    if(["remove","delete","delete-completed"].includes(action)){
+    if(["remove","delete","delete-completed","selected-delete"].includes(action)){
       const items=action==="delete-completed"?data.downloads.filter(x=>x.status==="Complete"):item&&selected.includes(item.id)&&selectedItems.length>1?selectedItems:item?[item]:[];
       if(!items.length)return;
       const request:DeleteRequest={ids:items.map(x=>x.id),name:items.length===1?items[0].file:`${items.length} downloads`,disk:action==="delete",dontAsk:false};
       const latest=await invoke<{confirm_delete:boolean;delete_files_too:boolean}>("glass_settings");
-      request.disk=action==="delete"||latest.delete_files_too;
+      request.disk=action==="selected-delete"?deleteDisk:action==="delete"||latest.delete_files_too;
       if(latest.confirm_delete){localStorage.setItem("glass-delete-request",JSON.stringify(request));openWindow("tool-delete","/?tool=delete",620,410)}else await remove(request);
       return;
     }
@@ -337,7 +343,7 @@ export default function CrystalApp(){
     <span className="cg-muted" style={{fontSize:"var(--min-text-size)",whiteSpace:"nowrap",marginRight:9}}>{online?"● Connected":"○ Offline"}</span>
   </WindowTop>
   <div className="cg-main-body" onContextMenu={e=>e.preventDefault()}>
-    {updateVersion&&<div className="cg-update-notice" role="status"><span>Auralis Download Manager {updateVersion} is available.</span><button className="cg-btn" onClick={()=>{setUpdateVersion(null);openWindow("settings","/?settings=1&tab=Advanced&panel=Updates",920,700)}}>View update</button><button className="cg-btn" aria-label="Dismiss update notice" onClick={()=>setUpdateVersion(null)}>Close</button></div>}
+    {updateVersion&&<div className="cg-update-notice" role="status"><span>Auralis Download Manager {updateVersion} is available.</span><button className="cg-btn" onClick={()=>{setUpdateVersion(null);openWindow("settings","/?settings=1&tab=Advanced&panel=Updates",1012,770)}}>View update</button><button className="cg-btn" aria-label="Dismiss update notice" onClick={()=>setUpdateVersion(null)}>Close</button></div>}
     <div className="cg-menubar">
       {menus.map(menu=><div className="cg-menu-parent" key={menu}>
         <button className={"cg-menu-trigger "+(openMenu===menu?"active":"")} onClick={()=>{setContext(null);setOpenMenu(openMenu===menu?null:menu)}}>{menu}</button>
@@ -368,7 +374,7 @@ export default function CrystalApp(){
           <small>{shown.length} of {data.downloads.length} downloads • Double-click for the floating progress window</small></div>
           <label className="cg-sort">Sort <select aria-label="Sort downloads" value={sort} onChange={e=>setSort(e.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="name">Name</option><option value="size">Size</option><option value="status">Status</option></select></label><label className="cg-search"><Search size={17}/><input ref={searchRef} placeholder="Search downloads..." value={term} onChange={e=>setTerm(e.target.value)}/></label>
         </header>
-        {selectedItems.length>1&&<div className="cg-selection-actions" role="toolbar" aria-label="Selected downloads"><strong>{selectedItems.length} selected</strong><button className="cg-btn" onClick={()=>void execute("selected-open")}>Open files</button><button className="cg-btn" onClick={()=>void execute("selected-folder")}>Open folders</button><button className="cg-btn" onClick={()=>void execute("selected-extract")}>Extract archives</button><button className="cg-btn cg-btn-danger" onClick={()=>void execute("remove")}>Delete…</button><button className="cg-btn" onClick={()=>{setSelected([]);setChosen(null)}}>Clear</button></div>}
+        {selectedItems.length>1&&<div className="cg-selection-actions" role="toolbar" aria-label="Selected downloads"><strong>{selectedItems.length} selected</strong><button className="cg-btn" onClick={()=>void execute("selected-open")}>Open files</button><button className="cg-btn" onClick={()=>void execute("selected-folder")}>Open folders</button><button className="cg-btn" onClick={()=>void execute("selected-extract")}>Extract archives</button><label className="cg-delete-disk"><input type="checkbox" checked={deleteDisk} onChange={e=>setDeleteDisk(e.target.checked)}/> Also delete from disk</label><button className="cg-btn cg-btn-danger" onClick={()=>void execute("selected-delete")}>Delete…</button><button className="cg-btn" onClick={()=>{setSelected([]);setChosen(null)}}>Clear</button></div>}
         <div className="cg-table-viewport" tabIndex={0} aria-label="Downloads list"><div className="cg-table">
           <header className="cg-cols"><span>FILE NAME</span><span>SIZE</span><span>STATUS</span><span>PROGRESS</span><span>SPEED</span><span>TIME LEFT</span></header>
           {shown.map(d=><button className={"cg-row "+(selected.includes(d.id)?"selected":"")} key={d.id}

@@ -1,3 +1,4 @@
+import CrystalBrowserGuide from "./CrystalBrowserGuide";
 import CrystalUpdateNotice from "./CrystalUpdateNotice";
 import CrystalPrompt from "./CrystalPrompts";
 import CrystalHelpers from "./CrystalHelpers";
@@ -29,6 +30,7 @@ function Main() {
   const properties = Number(query.get("properties")) || 0;
   const torrent = query.get("add") === "torrent";
   const url = query.get("add") === "url";
+  if(query.get("tool")==="browser-guide") return <CrystalBrowserGuide/>;
   if(query.get("tool")==="update-notice") return <CrystalUpdateNotice/>;
   if(query.has("schedule")) return <CrystalScheduler/>;
   if(query.has("power")) return <CrystalPower id={Number(query.get("power"))}/>;

@@ -12,13 +12,17 @@ test('thumbnail control targets its own video and sends selected subtitle', {ski
       const attach=Element.prototype.attachShadow;
       Element.prototype.attachShadow=function(init){return attach.call(this,{...init,mode:'open'})};
       globalThis.sentMessages=[];
-      globalThis.chrome={runtime:{sendMessage:async message=>{globalThis.sentMessages.push(message);return {lookup:{state:'ready',token:'sample',title:'Sample',subtitles:[{code:'en',name:'English'}],choices:[{label:'1080p'}]}}}}};
+      globalThis.chrome={runtime:{sendMessage:async message=>{globalThis.sentMessages.push(message);return {lookup:{state:'ready',token:'sample',title:'Sample',subtitles:[{code:'en',name:'English'}],choices:[{label:'1080p'},{label:'128 kbps',audio:true}]}}}}};
     });
     await page.goto('https://www.youtube.com/');
     await page.addScriptTag({content:readFileSync(new URL('../../auralis-extension/thumbnail.js',import.meta.url),'utf8')});
     const host=page.locator('#thumbnail > span'); await host.waitFor();
     const box=await host.boundingBox(); await page.mouse.click(box.x+10,box.y+10);
     await page.waitForFunction(()=>document.querySelector('#thumbnail > span')?.shadowRoot?.querySelector('select[aria-label="Subtitles"]'));
+    const sections=await host.evaluate(e=>[...e.shadowRoot.querySelectorAll('.menu section')].map(section=>section.textContent));
+    assert.ok(sections.some(text=>text.includes('Video')&&text.includes('1080p')));
+    assert.ok(sections.some(text=>text.includes('Audio')&&text.includes('128 kbps')));
+    assert.ok(sections.some(text=>text.includes('Subtitles')&&text.includes('English')));
     await host.evaluate(e=>{const root=e.shadowRoot;root.querySelector('select[aria-label="Subtitles"]').value='manual:en';[...root.querySelectorAll('.menu button')].find(b=>b.textContent.includes('1080p')).click()});
     const sent=await page.evaluate(()=>globalThis.sentMessages);
     assert.equal(sent[0].url,'https://www.youtube.com/watch?v=abcdef12345');
