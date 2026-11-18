@@ -42,7 +42,7 @@ fn candidate_from_release(value: &serde_json::Value, current: &str) -> Result<Op
 pub async fn glass_update_check() -> Result<UpdateStatus,String> {
     tauri::async_runtime::spawn_blocking(|| {
         let response=client()?.get(FEED).header("Accept","application/vnd.github+json").send().map_err(|e|e.to_string())?;
-        if response.status()==reqwest::StatusCode::NOT_FOUND { *lock()?=None; return Ok(UpdateStatus{state:"latest",version:None,notes:None}); }
+        if response.status()==reqwest::StatusCode::NOT_FOUND { return Err("Auralis release feed not found on GitHub".into()); }
         let value:serde_json::Value=response.error_for_status().map_err(|e|e.to_string())?.json().map_err(|e|e.to_string())?;
         let releases=value.as_array().ok_or("The GitHub release feed is invalid")?;
         let mut next:Option<Candidate>=None;
@@ -58,7 +58,11 @@ pub async fn glass_update_check() -> Result<UpdateStatus,String> {
             }
         }
         let status=match &next {Some(c)=>UpdateStatus{state:"available",version:Some(c.version.clone()),notes:Some(c.notes.clone())},None=>UpdateStatus{state:"latest",version:None,notes:None}};
-        *lock()?=next; Ok(status)
+        let mut state=lock()?;
+        if let (Some(new),Some(old))=(&mut next,state.as_ref()) {
+            if new.url==old.url && new.sha256==old.sha256 {new.staged=old.staged.clone();}
+        }
+        *state=next; Ok(status)
     }).await.map_err(|e|e.to_string())?
 }
 fn hash_file(path:&std::path::Path) -> Result<(String,u64),String> {

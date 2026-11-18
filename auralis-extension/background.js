@@ -2901,6 +2901,17 @@ async function videoLookup(m, page, sender) {
   const tab = sender.tab || {};
   const v = await videoTarget(m, page, sender);
   if (!v) return { ok: false, why: isYouTube(page) ? "unnamed" : "feed" };
+  // Only a deliberate per-video request may include Google sign-in cookies;
+  // preserve the originating browser store, including private containers.
+  if (m.cookieMode === "browser" && m.includeGoogleCookies === true && isYouTube(v.own)) {
+    const ctx = {incognito: Boolean(tab.incognito), storeId: tab.cookieStoreId};
+    const extra = await Promise.all([v.own, "https://www.google.com/", "https://accounts.google.com/"].map(url => videoCookies(url, ctx)));
+    const seen = new Set(v.cookieJar.map(c => `${c.domain}\n${c.path}\n${c.name}`));
+    for (const group of extra) for (const c of group.cookieJar) {
+      const key = `${c.domain}\n${c.path}\n${c.name}`;
+      if (!seen.has(key)) { seen.add(key); v.cookieJar.push(c); }
+    }
+  }
   // Per-video override: never persist pasted session cookies or include them in logs.
   if (m.cookieMode === "manual") {
     if (typeof m.cookieHeader !== "string" || !m.cookieHeader.trim() || m.cookieHeader.length > 8192 || /[\r\n\0]/.test(m.cookieHeader)) return {ok:false, why:"invalid-cookies"};

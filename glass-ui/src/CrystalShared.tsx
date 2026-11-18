@@ -48,7 +48,7 @@ export type Appearance = {
   theme: string; wallMain: string; wallDetail: string; mainMode: BackgroundMode;
   detailMode: BackgroundMode; dim: number; opacity: number; blur: number;
   acrylic: boolean; autoPopups: boolean; uiScale: number; highContrast: boolean;
-  lightMode: boolean; fontFamily: string; fontSize: number; material: string; indicator: string; progressShape: string; clipboardMode: string; tintHue: number; tintStrength: number
+  lightMode: boolean; fontFamily: string; fontSize: number; material: string; indicator: string; progressShape: string; graphIndicator: string; graphShape: string; connectionIndicator: string; connectionShape: string; clipboardMode: string; tintHue: number; tintStrength: number
 };
 const key = "mh-glass-";
 const stored = (name: string, fallback: string) => {
@@ -57,20 +57,20 @@ const stored = (name: string, fallback: string) => {
 };
 export function loadAppearance(): Appearance {
   return {
-    theme: stored("theme", "plexo"), material: ["ice-edge","smoked-crystal","frosted-layers","aero-gloss","prismatic-glass","liquid-glass","obsidian-glass","diamond-facet","holographic-film","pearl-mist","aurora-veil","brushed-glass","water-bubble"].includes(stored("material", "ice-edge")) ? stored("material", "ice-edge") : "ice-edge", tintHue: Number(stored("tint-hue", "265")), tintStrength: Number(stored("tint-strength", "22")), indicator: stored("indicator", "blue-purple"), progressShape: stored("progress-shape", "rounded") === "wave" ? "droplet" : stored("progress-shape", "rounded"), clipboardMode: stored("clipboard-mode", "offer"),
+    theme: stored("theme", "navy"), material: ["ice-edge","smoked-crystal","frosted-layers","aero-gloss","prismatic-glass","liquid-glass","obsidian-glass","diamond-facet","holographic-film","pearl-mist","aurora-veil","brushed-glass","water-bubble"].includes(stored("material", "brushed-glass")) ? stored("material", "brushed-glass") : "brushed-glass", tintHue: Number(stored("tint-hue", "255")), tintStrength: Number(stored("tint-strength", "50")), indicator: stored("indicator", "aurora"), progressShape: stored("progress-shape", "rounded") === "wave" ? "droplet" : stored("progress-shape", "rounded"), graphIndicator: stored("graph-indicator", stored("indicator", "aurora")), graphShape: stored("graph-shape", "area"), connectionIndicator: stored("connection-indicator", stored("indicator", "aurora")), connectionShape: stored("connection-shape", stored("progress-shape", "rounded")), clipboardMode: stored("clipboard-mode", "paste"),
     wallMain: stored("wall-main", ""), wallDetail: stored("wall-detail", ""),
     mainMode: stored("back-main", "desktop") as BackgroundMode,
     detailMode: stored("back-details", "desktop") as BackgroundMode,
-    dim: Number(stored("dim", "26")), opacity: Number(stored("opacity", "77")),
+    dim: Number(stored("dim", "26")), opacity: Number(stored("opacity", "100")),
     blur: Number(stored("blur", "3")), acrylic: stored("acrylic", "false") === "true",
     autoPopups: stored("auto-popups", "true") === "true", highContrast: stored("high-contrast", "true") === "true",
     uiScale: Number(stored("ui-scale", "100")),
     lightMode: stored("light-mode", "false") === "true",
-    fontFamily: stored("font-family","Segoe UI"),fontSize:Number(stored("font-size","14"))
+    fontFamily: stored("font-family","Tahoma"),fontSize:Number(stored("font-size","18"))
   };
 }
 const keys: Record<keyof Appearance, string> = {
-  theme: "theme", material: "material", tintHue: "tint-hue", tintStrength: "tint-strength", indicator: "indicator", progressShape: "progress-shape", clipboardMode: "clipboard-mode", wallMain: "wall-main", wallDetail: "wall-detail",
+  theme: "theme", material: "material", tintHue: "tint-hue", tintStrength: "tint-strength", indicator: "indicator", progressShape: "progress-shape", graphIndicator: "graph-indicator", graphShape: "graph-shape", connectionIndicator: "connection-indicator", connectionShape: "connection-shape", clipboardMode: "clipboard-mode", wallMain: "wall-main", wallDetail: "wall-detail",
   mainMode: "back-main", detailMode: "back-details", dim: "dim",
   opacity: "opacity", blur: "blur", acrylic: "acrylic",
   autoPopups: "auto-popups", uiScale: "ui-scale", highContrast: "high-contrast",
@@ -158,7 +158,7 @@ export function GradientBar({percent,showLabel=false}:{percent:number;showLabel?
 
 // Each block represents an engine worker and only its currently assigned ranges.
 export function ConnectionMap({segments,connections,downloading,paused=false,compact=false}:{segments:Segment[]|undefined;connections:Connection[]|undefined;downloading:boolean;paused?:boolean;compact?:boolean}){
-  const {appearance}=useCrystal();const colors=indicatorColors(appearance.indicator);
+  const {appearance}=useCrystal();const colors=indicatorColors(appearance.connectionIndicator);
   const raw=connectionIndicators(connections??[],segments??[]);
   const last=useRef<typeof raw>([]);
   const items=raw.map(c=>{const old=last.current.find(x=>x.id===c.id);return connectionLost(c,downloading)&&c.percent===null&&old?.percent!=null?{...c,assigned:old.assigned,received:old.received,percent:old.percent}:c});
@@ -179,7 +179,7 @@ export function ConnectionMap({segments,connections,downloading,paused=false,com
 // Live connection/speed data only—one unique SVG gradient ID per graph, so
 // many small row graphs never collide with each other or the footer graph.
 export function SpeedGraph({values,small=false}:{values:number[];small?:boolean}){
-  const {appearance}=useCrystal();const colors=indicatorColors(appearance.indicator);
+  const {appearance}=useCrystal();const colors=indicatorColors(appearance.graphIndicator);
   const id=useId().replace(/:/g,"-");
   const seq=values.length>1?values:[0,0],peak=Math.max(1,...seq)*1.12;
   const points=seq.map((v,i)=>(i/(seq.length-1)*100).toFixed(2)+","+(58-v/peak*48).toFixed(2)).join(" ");
@@ -198,9 +198,10 @@ export function SpeedGraph({values,small=false}:{values:number[];small?:boolean}
     </defs>
     {[15,37,57].map(y=><line key={y} x1="0" x2="100" y1={y} y2={y}
       stroke="rgba(180,227,242,.11)" strokeWidth=".4"/>)}
-    <polygon points={trail} fill={`url(#${id}-fill)`}/>
-    <polyline points={points} fill="none" stroke={`url(#${id}-line)`} strokeWidth={small?"1.9":"1.7"}
-      strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke"/>
+    {appearance.graphShape==="area"&&<polygon points={trail} fill={`url(#${id}-fill)`}/>}
+    {appearance.graphShape==="bars"&&seq.map((v,i)=><rect key={i} x={i*100/seq.length} y={58-v/peak*48} width={Math.max(.1,80/seq.length)} height={v/peak*48} fill={`url(#${id}-line)`}/>)}
+    {appearance.graphShape!=="bars"&&<polyline points={points} fill="none" stroke={`url(#${id}-line)`} strokeWidth={small?"1.9":"1.7"}
+      strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke"/>}
   </svg>;
 }
 const directions = ["North", "South", "East", "West", "NorthEast", "NorthWest", "SouthEast", "SouthWest"] as const;
@@ -285,7 +286,7 @@ export function CrystalWindow({ children, target = "main" }: {
     "--accent-secondary": theme.secondary,
     "--accent-rgb": appearance.lightMode ? (({plexo:"8,110,132",ocean:"20,108,155",purple:"112,80,181",pink:"183,57,98",gold:"138,91,5",green:"25,118,91",silver:"76,102,128",navy:"57,78,162",orange:"173,71,0",rose:"164,43,112"} as Record<string,string>)[theme.id]??"8,110,132") : theme.rgb,
     "--glass-tint": `hsl(${Math.max(0,Math.min(360,appearance.tintHue))} 85% 64% / ${Math.max(0,Math.min(65,appearance.tintStrength))/100})`,
-    "--panel-opacity": Math.min(.94, Math.max(.45, appearance.opacity / 100)),
+    "--panel-opacity": Math.min(1, Math.max(.45, appearance.opacity / 100)),
     "--crystal-blur": appearance.blur + "px",
     "--ui-scale": 1,
     "--fit-scale": Math.max(.7,fit),
@@ -295,7 +296,7 @@ export function CrystalWindow({ children, target = "main" }: {
     "--min-window-button": (30/Math.min(1,Math.max(.4,fit)))+"px",
     "--font-size": Math.max(Math.min(20,Math.max(12,appearance.fontSize)),12/Math.max(.4,fit))+"px"
   } as CSSProperties;
-  return <div className={`cg-window cg-mode-${mode} cg-material-${appearance.material} cg-progress-shape-${appearance.progressShape} ${appearance.lightMode?"cg-light":"cg-dark"} ${appearance.highContrast?"cg-high-contrast":""}`} style={style}>
+  return <div className={`cg-window cg-mode-${mode} cg-material-${appearance.material} cg-progress-shape-${appearance.progressShape} cg-connection-shape-${appearance.connectionShape} ${appearance.lightMode?"cg-light":"cg-dark"} ${appearance.highContrast?"cg-high-contrast":""}`} style={style}>
     {mode === "wallpaper" && <div className="cg-wallpaper">
       {video ? <video key={src} autoPlay loop muted playsInline src={src} /> :
         <div style={{ backgroundImage: `url("${src}")` }} />}

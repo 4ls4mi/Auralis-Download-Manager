@@ -4,6 +4,11 @@ version = "0.3.3"
 edition = "2024"
 license = "GPL-3.0-or-later"
 build = "build.rs"
+default-run = "auralis-download-manager"
+
+[[bin]]
+name = "auralis-download-manager"
+path = "src/main.rs"
 
 [build-dependencies]
 tauri-build = { version = "2" }

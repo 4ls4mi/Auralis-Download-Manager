@@ -16,13 +16,13 @@ pub fn fit_size(app:&AppHandle,width:f64,height:f64)->(f64,f64) {
 pub fn open(app: &AppHandle, label: &str, route: &str, width: f64, height: f64) -> ApiResult<()> {
     let priority = label.starts_with("info-") || label.starts_with("tool-video-");
     if let Some(w) = app.get_webview_window(label) {
+        if priority { let _ = w.set_always_on_top(true); }
+        let _ = w.emit("glass-navigate", route);
+        w.show().map_err(|e| e.to_string())?;
         if let Some(id) = label.strip_prefix("download-").and_then(|v| v.parse::<u64>().ok()) {
             if let Ok(mut hidden) = app.state::<HiddenDownloadWindows>().0.lock() { hidden.remove(&id); }
             super::refresh_tray_menu(app);
         }
-        if priority { let _ = w.set_always_on_top(true); }
-        let _ = w.emit("glass-navigate", route);
-        w.show().map_err(|e| e.to_string())?;
         let _ = w.unminimize();
         let _ = w.set_focus();
         if priority { let _ = w.set_always_on_top(false); }
@@ -43,7 +43,7 @@ pub fn open(app: &AppHandle, label: &str, route: &str, width: f64, height: f64) 
 pub fn start(app: AppHandle) {
     thread::spawn(move || {
         let mut previous: Option<HashMap<u64, String>> = None;
-        let mut tray_items: Vec<(u64, String, String)> = Vec::new();
+        let mut tray_items: Vec<(u64, String)> = Vec::new();
         let mut helpers_checked = false;
         let mut last_info = 0;
         let mut last_power = 0;
@@ -56,16 +56,22 @@ pub fn start(app: AppHandle) {
             if !current_backend().is_ok_and(|b|b.headless&&b.glass) {continue;}
             let Ok(snapshot) = request_snapshot() else { continue; };
             let hidden=app.state::<HiddenDownloadWindows>().0.lock().map(|v|v.clone()).unwrap_or_default();
-            let entries: Vec<_> = snapshot.downloads.iter().filter(|d| d.status == "Downloading" || hidden.contains(&d.id))
-                .map(|d| (d.id, d.file.clone(), d.status.clone())).collect();
+            let visuals = if hidden.is_empty() { None } else { send_ipc(&mdm_ipc::Command{query:Some("glass-visuals".into()),..Default::default()}).ok().and_then(|s|serde_json::from_str::<serde_json::Value>(&s).ok()) };
+            let entries: Vec<_> = snapshot.downloads.iter().filter(|d| hidden.contains(&d.id)).map(|d| {
+                let detail=visuals.as_ref().and_then(|v|v["downloads"].as_array()).and_then(|items|items.iter().find(|item|item["id"].as_u64()==Some(d.id)));
+                let percent=d.size.filter(|size|*size>0).map(|size|format!("{:.1}%",100.0*d.downloaded as f64/size as f64)).unwrap_or_else(||"size unknown".into());
+                let eta=if d.speed>0 { d.size.map(|size| format!("{}s left",size.saturating_sub(d.downloaded)/d.speed)).unwrap_or_else(||"time unknown".into()) } else { "time unknown".into() };
+                let active=detail.and_then(|v|v["active_connections"].as_u64()).map(|n|format!("{n} connections")).unwrap_or_else(||"connections unknown".into());
+                let resume=match detail.and_then(|v|v["resumable"].as_bool()) {Some(true)=>"resumable",Some(false)=>"not resumable",None=>"resume unknown"};
+                (d.id,format!("{} — {} · {} · {:.1} MB/s · {} · {} · {}",d.file,d.status,percent,d.speed as f64/1048576.0,eta,active,resume))
+            }).collect();
             if entries != tray_items {
                 if let Some(tray) = app.tray_by_id("progress-tray") {
                     if let Ok(menu) = Menu::new(&app) {
                         if entries.is_empty() {
                             if let Ok(item) = MenuItem::with_id(&app, "progress-empty", "No active downloads", false, None::<&str>) { let _ = menu.append(&item); }
                         } else {
-                            for (id, name, status) in &entries {
-                                let title = if status == "Stopped" { format!("{name} (paused)") } else { name.clone() };
+                            for (id, title) in &entries {
                                 if let Ok(item) = MenuItem::with_id(&app, format!("progress-{id}"), title, true, None::<&str>) { let _ = menu.append(&item); }
                             }
                         }
@@ -122,8 +128,8 @@ pub fn start(app: AppHandle) {
                         if let Some(w) = owner.get_webview_window(&format!("download-{id}")) { let _ = w.close(); }
                         super::refresh_tray_menu(&owner);
                         if complete { let _ = open(&owner,&format!("complete-{id}"),&format!("complete={id}"),720.0,420.0); }
-                    } else {
-                        let _ = open(&owner,&format!("download-{id}"),&format!("detail={id}"),880.0,420.0);
+                    } else if !hidden.contains(&id) {
+                        let _ = open(&owner,&format!("download-{id}"),&format!("detail={id}"),800.0,400.0);
                     }
                 }
                 for id in new_videos {let _=open(&owner,&format!("tool-video-{id}"),&format!("tool=video&browser={id}"),720.0,560.0);}

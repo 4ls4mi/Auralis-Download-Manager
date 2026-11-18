@@ -1206,9 +1206,9 @@ button:focus-visible { outline: none; }
   function startLook(c, byUser = false) {
     if (!c || !c.key || c.d.drm || (c.d.src && !STREAM.test(c.d.src))) return null;
     const kept = looks.get(c.key);
-    if (usable(kept) && !(byUser && kept.state === "busy")) return kept;
+    if (usable(kept) && !(byUser && (kept.state === "busy" || (cookieMode.value === "browser" && !kept.asked?.includeGoogleCookies)))) return kept;
     const og = location.href === landedAt ? document.querySelector('meta[property="og:title"]')?.content : "";
-    const asked = { src: c.d.src, title: (og || document.title || "").trim(), url: c.d.url, at: c.d.at, cookieMode: cookieMode.value, ...(cookieMode.value === "manual" ? {cookieHeader:cookieHeader.value} : {}) };
+    const asked = { src: c.d.src, title: (og || document.title || "").trim(), url: c.d.url, at: c.d.at, cookieMode: cookieMode.value, includeGoogleCookies:byUser, ...(cookieMode.value === "manual" ? {cookieHeader:cookieHeader.value} : {}) };
     const l = { state: "pending", at: Date.now(), href: location.href, asked };
     looks.set(c.key, l);
     const alive = () => looks.get(c.key) === l && location.href === l.href;
@@ -1878,7 +1878,7 @@ button:focus-visible { outline: none; }
       // What the tab played for it (#1092) goes to the window too: the page has nothing.
       if (toWindow) return await useWindow(l && l.played ? playedJob(j, l) : j);
       if (l && l.file) return await useWindow(playedJob(j, l), { direct: true, words: qualityName(l, t) });
-      if (!usable(l) || l.state === "busy") l = startLook(c, true);
+      if (!usable(l) || l.state === "busy" || (cookieMode.value === "browser" && !l.asked?.includeGoogleCookies)) l = startLook(c, true);
       if (!l) return await useWindow(j);
       if (l.state === "pending") await within(l.done, LOOKUP_MS);
       // A file the tab played, found as the look-up ended (#1092).

@@ -445,7 +445,7 @@ impl Default for Settings {
             language_asked: false,
             helpers_asked: false,
             extension_never_ask: false,
-            clipboard_autostart: true,
+            clipboard_autostart: false,
             glass_clipboard_auto_download: false,
             minimize_to_tray: true,
             close_to_tray: true,

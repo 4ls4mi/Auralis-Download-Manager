@@ -14,12 +14,13 @@ import type { Dashboard, Download as MdmFile, DownloadVisual, VisualDashboard } 
 
 
 import type { DeleteRequest } from "./CrystalDialog";
+import { selectDownload } from "./selection";
 
 type Menu = "Tasks" | "File" | "Downloads" | "View" | "Help";
 type MenuEntry = { label: string; action: string; disabled?: boolean; shortcut?: string; children?:MenuEntry[] };
 const menus: Menu[]=["Tasks","File","Downloads","View","Help"];
 const blank:Dashboard={downloads:[],speed:0,queues:[],categories:[]};
-const pop = (id:number)=>openWindow("download-"+id,"/?detail="+id,880,420);
+const pop = (id:number)=>openWindow("download-"+id,"/?detail="+id,800,400);
 const settings = (tab="General", panel="")=>openWindow("settings","/?settings=1&tab="+encodeURIComponent(tab)+"&panel="+encodeURIComponent(panel),880,695);
 const add=(torrent=false)=>openWindow(torrent?"add-torrent":"add-url",`/?add=${torrent?"torrent":"url"}`,590,390);
 const props=(id:number)=>openWindow("properties-"+id,"/?properties="+id,760,600);
@@ -38,6 +39,8 @@ function StatusBadge({item}:{item:MdmFile}){
 export default function CrystalApp(){
   const [data,setData]=useState<Dashboard>(blank),[online,setOnline]=useState(false),[message,setMessage]=useState("Connecting to downloads…");
   const [chosen,setChosen]=useState<number|null>(null),[filter,setFilter]=useState("All Downloads"),[term,setTerm]=useState("");
+  const [selected,setSelected]=useState<number[]>([]),[sort,setSort]=useState("newest");
+  const anchor=useRef<number|null>(null);
   const [openMenu,setOpenMenu]=useState<Menu|null>(null),[context,setContext]=useState<{id:number;x:number;y:number}|null>(null);
   const [busy,setBusy]=useState(false),[error,setError]=useState(""),[history,setHistory]=useState<number[]>([]);
   const [visuals,setVisuals]=useState<Record<number,DownloadVisual>>({});
@@ -85,17 +88,34 @@ export default function CrystalApp(){
     finally{pending.current=false}
   },[]);
   useEffect(()=>{
-    let mounted=true;
+    let mounted=true;let updateTimer:number|undefined;
     void invoke<string>("boot_engine").then(text=>{
       if(!mounted)return;
       setMessage(text);void refresh();
-      void invoke<{state:string;version?:string}>("glass_update_check").then(update=>{if(mounted&&update.state==="available"&&update.version)setUpdateVersion(update.version)}).catch(()=>undefined);
+      const checkUpdates=()=>void invoke<{state:string;version?:string;notes?:string}>("glass_update_check").then(update=>{
+        if(!mounted||update.state!=="available"||!update.version)return;
+        setUpdateVersion(update.version);
+        if(localStorage.getItem("auralis-update-dismissed")===update.version||Number(localStorage.getItem("auralis-update-snooze")||0)>Date.now())return;
+        localStorage.setItem("auralis-update-notice",JSON.stringify(update));
+        openWindow("tool-update-notice","/?tool=update-notice",680,520);
+      }).catch(()=>undefined);
+      checkUpdates();
+      // Check infrequently; the reminder itself is scheduled below.
+      updateTimer=window.setInterval(checkUpdates,6*60*60*1000);
       void invoke<{double_click_open:boolean;confirm_delete:boolean;delete_files_too:boolean}>("glass_settings").then(s=>{
         if(mounted){setDoubleClickOpen(Boolean(s.double_click_open));}
       }).catch(()=>undefined);
     }).catch(e=>{if(mounted){setOnline(false);setMessage(String(e))}});
     const timer=window.setInterval(()=>{if(mounted)void refresh()},1200);
-    return()=>{mounted=false;window.clearInterval(timer)}
+    const reminder=window.setInterval(()=>{
+      const due=Number(localStorage.getItem("auralis-update-snooze")||0);
+      if(due>0&&due<=Date.now()){
+        localStorage.removeItem("auralis-update-snooze");
+        const pending=localStorage.getItem("auralis-update-notice");
+        if(pending)openWindow("tool-update-notice","/?tool=update-notice",680,520);
+      }
+    },60000);
+    return()=>{mounted=false;window.clearInterval(timer);window.clearInterval(reminder);if(updateTimer)window.clearInterval(updateTimer)}
   },[refresh]);
   useEffect(()=>{
     const changed=(event:StorageEvent)=>{if(event.key==="glass-downloads-changed")void refresh()};
@@ -120,8 +140,9 @@ export default function CrystalApp(){
     const words=normalize(term).trim().split(/\s+/).filter(Boolean);
     const searchable=normalize(`${d.file} ${d.url} ${d.path} ${d.category}`);
     return match&&words.every(word=>searchable.includes(word))
-  }),[data.downloads,data.queues,filter,term]);
+  }).sort((a,b)=>{if(sort==="name")return a.file.localeCompare(b.file,undefined,{numeric:true});if(sort==="size")return (b.size??0)-(a.size??0)||b.id-a.id;if(sort==="status")return a.status.localeCompare(b.status)||b.id-a.id;const at=a.added?Date.parse(a.added):NaN,bt=b.added?Date.parse(b.added):NaN;const date=(Number.isFinite(bt)?bt:0)-(Number.isFinite(at)?at:0)||b.id-a.id;return sort==="oldest"?-date:date}),[data.downloads,data.queues,filter,term,sort]);
   const picked=data.downloads.find(i=>i.id===chosen)??null;
+  const selectedItems=data.downloads.filter(d=>selected.includes(d.id));
   const anyRunning=counts.downloading>0,anyComplete=counts.finished>0;
   const mainQueue=data.queues[0];
   const remove=async(request:DeleteRequest)=>{
@@ -139,12 +160,27 @@ export default function CrystalApp(){
   const execute=async(action:string,item:MdmFile|null=picked)=>{
     setOpenMenu(null);setContext(null);setError("");
     if(["remove","delete","delete-completed"].includes(action)){
-      const items=action==="delete-completed"?data.downloads.filter(x=>x.status==="Complete"):item?[item]:[];
+      const items=action==="delete-completed"?data.downloads.filter(x=>x.status==="Complete"):item&&selected.includes(item.id)&&selectedItems.length>1?selectedItems:item?[item]:[];
       if(!items.length)return;
-      const request:DeleteRequest={ids:items.map(x=>x.id),name:items.length===1?items[0].file:`${items.length} completed downloads`,disk:action==="delete",dontAsk:false};
+      const request:DeleteRequest={ids:items.map(x=>x.id),name:items.length===1?items[0].file:`${items.length} downloads`,disk:action==="delete",dontAsk:false};
       const latest=await invoke<{confirm_delete:boolean;delete_files_too:boolean}>("glass_settings");
       request.disk=action==="delete"||latest.delete_files_too;
       if(latest.confirm_delete){localStorage.setItem("glass-delete-request",JSON.stringify(request));openWindow("tool-delete","/?tool=delete",620,410)}else await remove(request);
+      return;
+    }
+    if(action.startsWith("selected-")) {
+      const operation=action.slice(9);setBusy(true);const errors:string[]=[];
+      try {
+        for(const entry of selectedItems){
+          if(operation==="open"&&entry.status!=="Complete"){errors.push(`${entry.file}: download is not complete`);continue;}
+          if(operation==="extract"){
+            // The engine recognizes multipart archive sets and queues each set once.
+            if(entry.status!=="Complete"||!/(?:\.(?:zip|7z|rar|tar|tgz|txz|gz|xz)|\.r\d{2}|\.(?:7z|zip)\.\d{3})$/i.test(entry.file))continue;
+          }
+          try{await invoke("file_operation",{id:entry.id,operation,value:null})}catch(e){errors.push(`${entry.file}: ${String(e)}`)}
+        }
+        if(errors.length)setError(errors.join("; "));
+      }finally{setBusy(false)}
       return;
     }
     if(action==="open-with"&&item){try{await invoke("file_operation",{id:item.id,operation:"open-with",value:null})}catch(e){setError(String(e))}return}
@@ -246,6 +282,7 @@ export default function CrystalApp(){
       else if(e.ctrlKey&&e.key.toLowerCase()==="o"){e.preventDefault();void execute("torrent")}
       else if(e.ctrlKey&&e.key.toLowerCase()==="f"){e.preventDefault();searchRef.current?.focus()}
       else if(e.ctrlKey&&e.key===","){e.preventDefault();void execute("settings")}
+      else if(e.ctrlKey&&e.key.toLowerCase()==="a"&&(e.target as HTMLElement).closest(".cg-table-viewport")){e.preventDefault();setSelected(shown.map(d=>d.id));if(shown.length){setChosen(shown[0].id);anchor.current=shown[0].id}}
       else if(e.key==="F5"){e.preventDefault();void refresh()}
       else if(e.ctrlKey&&e.key.toLowerCase()==="m"&&picked){e.preventDefault();void execute("move")}
       else if(e.key==="Delete"&&picked&&document.activeElement?.tagName!=="INPUT"){e.preventDefault();void execute(e.shiftKey?"delete":"remove")}
@@ -329,14 +366,15 @@ export default function CrystalApp(){
       <section className="cg-list-panel cg-glass">
         <header className="cg-list-title"><div><h2>{filter.startsWith("cat:")?filter.slice(4):filter.startsWith("queue:")?filter.slice(6):filter}</h2>
           <small>{shown.length} of {data.downloads.length} downloads • Double-click for the floating progress window</small></div>
-          <label className="cg-search"><Search size={17}/><input ref={searchRef} placeholder="Search downloads..." value={term} onChange={e=>setTerm(e.target.value)}/></label>
+          <label className="cg-sort">Sort <select aria-label="Sort downloads" value={sort} onChange={e=>setSort(e.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="name">Name</option><option value="size">Size</option><option value="status">Status</option></select></label><label className="cg-search"><Search size={17}/><input ref={searchRef} placeholder="Search downloads..." value={term} onChange={e=>setTerm(e.target.value)}/></label>
         </header>
+        {selectedItems.length>1&&<div className="cg-selection-actions" role="toolbar" aria-label="Selected downloads"><strong>{selectedItems.length} selected</strong><button className="cg-btn" onClick={()=>void execute("selected-open")}>Open files</button><button className="cg-btn" onClick={()=>void execute("selected-folder")}>Open folders</button><button className="cg-btn" onClick={()=>void execute("selected-extract")}>Extract archives</button><button className="cg-btn cg-btn-danger" onClick={()=>void execute("remove")}>Delete…</button><button className="cg-btn" onClick={()=>{setSelected([]);setChosen(null)}}>Clear</button></div>}
         <div className="cg-table-viewport" tabIndex={0} aria-label="Downloads list"><div className="cg-table">
           <header className="cg-cols"><span>FILE NAME</span><span>SIZE</span><span>STATUS</span><span>PROGRESS</span><span>SPEED</span><span>TIME LEFT</span></header>
-          {shown.map(d=><button className={"cg-row "+(chosen===d.id?"selected":"")} key={d.id}
-            onClick={()=>{setChosen(d.id);setContext(null)}} onDoubleClick={()=>rowDouble(d)}
+          {shown.map(d=><button className={"cg-row "+(selected.includes(d.id)?"selected":"")} key={d.id}
+            aria-pressed={selected.includes(d.id)} onClick={e=>{const next=selectDownload(shown.map(x=>x.id),selected,anchor.current,d.id,e.shiftKey,e.ctrlKey||e.metaKey);setSelected(next);if(!e.shiftKey)anchor.current=d.id;setChosen(next.includes(d.id)?d.id:next.at(-1)??null);setContext(null)}} onDoubleClick={()=>rowDouble(d)}
             onContextMenu={e=>{
-              e.preventDefault();setChosen(d.id);setOpenMenu(null);
+              e.preventDefault();if(!selected.includes(d.id)){setSelected([d.id]);anchor.current=d.id}setChosen(d.id);setOpenMenu(null);
               const fit=e.currentTarget.closest<HTMLElement>(".cg-fit-content");if(fit){const box=fit.getBoundingClientRect(),scale=box.width/fit.offsetWidth;setContext({id:d.id,x:(e.clientX-box.left)/scale,y:(e.clientY-box.top)/scale});}
             }}>
             <span className="cg-file"><FileSymbol name={d.file}/><span className="cg-file-info">

@@ -14,8 +14,8 @@
       {
         "label": "main",
         "title": "Auralis Download Manager",
-        "width": 1180,
-        "height": 720,
+        "width": 740,
+        "height": 425,
         "minWidth": 600,
         "minHeight": 420,
         "center": true,
@@ -48,7 +48,8 @@
     ],
     "resources": {
       "resources/mdm-legacy.exe": "mdm-legacy.exe",
-      "resources/misterdownloadmanager-nmhost.exe": "misterdownloadmanager-nmhost.exe"
+      "resources/misterdownloadmanager-nmhost.exe": "misterdownloadmanager-nmhost.exe",
+      "../../auralis-extension/": "auralis-extension/"
     }
   }
 }

@@ -173,16 +173,19 @@ fn refresh_tray_menu(app: &AppHandle) {
     if let (Some(tray), Ok(menu)) = (app.tray_by_id("auralis-tray"), build_tray_menu(app)) {
         let _ = tray.set_menu(Some(menu));
     }
+    if let Some(tray) = app.tray_by_id("progress-tray") {
+        let visible = app.state::<HiddenDownloadWindows>().0.lock().map(|v| !v.is_empty()).unwrap_or(false);
+        let _ = tray.set_visible(visible);
+    }
 }
 
 fn restore_download_window(app: &AppHandle, id: u64) {
-    if let Ok(mut hidden) = app.state::<HiddenDownloadWindows>().0.lock() {
-        hidden.remove(&id);
-    }
     if let Some(window) = app.get_webview_window(&format!("download-{id}")) {
-        let _ = window.show();
-        let _ = window.unminimize();
-        let _ = window.set_focus();
+        if window.show().is_ok() {
+            let _ = window.unminimize();
+            let _ = window.set_focus();
+            if let Ok(mut hidden) = app.state::<HiddenDownloadWindows>().0.lock() { hidden.remove(&id); }
+        }
     }
     refresh_tray_menu(app);
 }
@@ -369,6 +372,32 @@ async fn add_torrent_file() -> ApiResult<Option<serde_json::Value>> {
     }).await.map_err(|e| e.to_string())?
 }
 
+// Stage an editable copy because the installation directory can be read-only.
+fn copy_extension_dir(from: &Path, to: &Path) -> ApiResult<()> {
+    fs::create_dir_all(to).map_err(|e| e.to_string())?;
+    for entry in fs::read_dir(from).map_err(|e| e.to_string())? {
+        let entry=entry.map_err(|e| e.to_string())?;
+        let kind=entry.file_type().map_err(|e| e.to_string())?;
+        if kind.is_dir() { copy_extension_dir(&entry.path(), &to.join(entry.file_name()))?; }
+        else if kind.is_file() { fs::copy(entry.path(),to.join(entry.file_name())).map_err(|e| e.to_string())?; }
+    }
+    Ok(())
+}
+#[tauri::command]
+async fn prepare_auralis_extension(app: AppHandle, browser: String) -> ApiResult<String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        if !matches!(browser.as_str(), "edge" | "chromium" | "firefox") {return Err("Choose a supported browser".into());}
+        let source=app.path().resource_dir().map_err(|e|e.to_string())?.join("auralis-extension");
+        if !source.join("manifest.json").is_file() {return Err("The Auralis extension was not included in this installation".into());}
+        let target=app.path().app_data_dir().map_err(|e|e.to_string())?.join("browser-extension").join(if browser=="firefox" {"firefox"} else {"chromium"});
+        copy_extension_dir(&source,&target)?;
+        if browser=="firefox" {fs::copy(target.join("manifest.firefox.json"),target.join("manifest.json")).map_err(|e|e.to_string())?;}
+        let registration=register_browser_host(&app);
+        open::that(&target).map_err(|e|format!("Could not open the extension folder: {e}"))?;
+        match registration {Ok(_)=>Ok(target.to_string_lossy().into_owned()),Err(e)=>Err(format!("The extension folder was opened at {}, but browser connection repair failed: {e}",target.display()))}
+    }).await.map_err(|e|e.to_string())?
+}
+
 #[tauri::command]
 async fn browser_integration(app: AppHandle, repair: bool) -> ApiResult<String> {
     tauri::async_runtime::spawn_blocking(move || {
@@ -552,7 +581,7 @@ fn main() {
         }))
         .setup(|app| {
             if let Some(main)=app.get_webview_window("main") {
-                let (width,height)=lifecycle::fit_size(app.handle(),1480.0,850.0);
+                let (width,height)=lifecycle::fit_size(app.handle(),740.0,425.0);
                 let _=main.set_min_size(Some(tauri::LogicalSize::new(width.min(600.0),height.min(420.0))));
                 let _=main.set_size(tauri::LogicalSize::new(width,height));
                 let _=main.center();
@@ -616,7 +645,7 @@ fn main() {
                 .build(app)?;
             let empty = MenuItem::with_id(app, "progress-empty", "No active downloads", false, None::<&str>)?;
             let progress_menu = Menu::with_items(app, &[&empty])?;
-            TrayIconBuilder::with_id("progress-tray")
+            let progress_tray = TrayIconBuilder::with_id("progress-tray")
                 .icon(app.default_window_icon().cloned().ok_or("No packaged Auralis icon")?)
                 .tooltip("Auralis — download progress windows")
                 .menu(&progress_menu)
@@ -624,10 +653,11 @@ fn main() {
                 .on_menu_event(|app, event| {
                     if let Some(id) = event.id.as_ref().strip_prefix("progress-").and_then(|id| id.parse::<u64>().ok()) {
                         restore_download_window(app, id);
-                        let _ = lifecycle::open(app, &format!("download-{id}"), &format!("detail={id}"), 880.0, 420.0);
+                        let _ = lifecycle::open(app, &format!("download-{id}"), &format!("detail={id}"), 800.0, 400.0);
                     }
                 })
                 .build(app)?;
+            progress_tray.set_visible(false)?;
             lifecycle::start(app.handle().clone());
             Ok(())
         })
@@ -661,7 +691,7 @@ fn main() {
             material_window::set_material_window_shape, pending_file_info, file_info_action, choose_download_path, window_preferences, glass_tool, choose_folder, open_glass_window, close_progress_windows, hide_download_to_tray, drag_download, drag_state, choose_move, clipboard_text, video_tool, browser_video,
             boot_engine, dashboard_snapshot, dashboard_visuals, download_action,
             add_download, select_wallpaper, queue_action, glass_settings, update_glass_setting,
-            browser_integration, extension_store_link, open_extension_store, bulk_action, file_operation, add_torrent_file, quit_glass, open_upstream_releases, fork_update::glass_update_check, fork_update::glass_update_download, fork_update::glass_update_install
+            browser_integration, prepare_auralis_extension, extension_store_link, open_extension_store, bulk_action, file_operation, add_torrent_file, quit_glass, open_upstream_releases, fork_update::glass_update_check, fork_update::glass_update_download, fork_update::glass_update_install
         ])
         .run(context)
         .expect("error starting Auralis Download Manager desktop");

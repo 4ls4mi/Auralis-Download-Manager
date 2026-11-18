@@ -1,0 +1,14 @@
+import {useState} from 'react';
+import {invoke} from '@tauri-apps/api/core';
+import {getCurrentWindow} from '@tauri-apps/api/window';
+import {CrystalWindow, WindowTop} from './CrystalShared';
+type Update={version:string;notes?:string};
+export default function CrystalUpdateNotice(){
+ const [update]=useState<Update|null>(()=>{try{return JSON.parse(localStorage.getItem('auralis-update-notice')??'null')}catch{return null}});
+ const [delay,setDelay]=useState('1h'),[date,setDate]=useState(''),[busy,setBusy]=useState(false),[ready,setReady]=useState(false),[error,setError]=useState('');
+ const close=()=>getCurrentWindow().close();
+ const later=async()=>{let until=Date.now()+({'1h':3600000,'1d':86400000,'1w':604800000}[delay]??0);if(delay==='date'){until=Date.parse(date);if(!Number.isFinite(until)||until<=Date.now()){setError('Choose a future date and time.');return}}localStorage.setItem('auralis-update-snooze',String(until));await close()};
+ const download=async()=>{setBusy(true);setError('');try{await invoke('glass_update_download');setReady(true)}catch(e){setError(String(e))}finally{setBusy(false)}};
+ const install=async()=>{setBusy(true);setError('');try{await invoke('glass_update_install')}catch(e){setError(String(e));setBusy(false)}};
+ return <CrystalWindow target="details"><WindowTop noMax title="Auralis update available"/><main className="cg-page cg-tool-body"><h2>Auralis {update?.version??''} is available</h2><p>{ready?'The verified update is ready. Restart Auralis to install it.':'Review the changes and choose when to update.'}</p><pre className="cg-update-changelog">{update?.notes||'No changelog was provided for this release.'}</pre><div className="cg-update-reminder"><label>Remind me <select value={delay} onChange={e=>setDelay(e.target.value)}><option value="1h">in one hour</option><option value="1d">tomorrow</option><option value="1w">in one week</option><option value="date">on a date…</option></select></label>{delay==='date'&&<input aria-label="Reminder date and time" type="datetime-local" value={date} onChange={e=>setDate(e.target.value)}/>}</div>{error&&<p className="cg-error" role="alert">{error}</p>}<div className="cg-bottom-actions"><button className="cg-btn" disabled={busy} onClick={()=>void later()}>Remind me later</button><button className="cg-btn" disabled={busy} onClick={()=>{if(update)localStorage.setItem('auralis-update-dismissed',update.version);void close()}}>Cancel</button><span className="cg-action-space"/>{ready?<button className="cg-btn cg-btn-primary" disabled={busy} onClick={()=>void install()}>Restart and install</button>:<button className="cg-btn cg-btn-primary" disabled={busy||!update} onClick={()=>void download()}>{busy?'Downloading…':'Download update'}</button>}</div></main></CrystalWindow>
+}
