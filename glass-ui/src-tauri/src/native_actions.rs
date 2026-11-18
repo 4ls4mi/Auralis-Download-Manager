@@ -85,15 +85,20 @@ pub async fn clipboard_text() -> ApiResult<String> {
 /// Original MDM video quality lookup; the engine owns the token and choices.
 /// Sign in inside a separate unprivileged webview. Remote pages do not receive app IPC permissions.
 #[tauri::command]
-pub fn open_youtube_sign_in(app: AppHandle) -> ApiResult<()> {
-    if let Some(window)=app.get_webview_window("youtube-login") {
-        window.show().map_err(|e|e.to_string())?;let _=window.set_focus();return Ok(());
-    }
-    let url=tauri::Url::parse("https://www.youtube.com/").map_err(|e|e.to_string())?;
-    tauri::WebviewWindowBuilder::new(&app,"youtube-login",tauri::WebviewUrl::External(url))
-        .title("YouTube sign-in — Auralis").inner_size(1000.0,720.0).center().build()
-        .map_err(|e|format!("Could not open YouTube sign-in: {e}"))?;
-    Ok(())
+pub async fn open_youtube_sign_in(app: AppHandle) -> ApiResult<()> {
+    // WebView2 window construction blocks waiting for the Windows UI thread.
+    // A synchronous command runs on that thread and deadlocks the whole app.
+    tauri::async_runtime::spawn_blocking(move || {
+        if let Some(window)=app.get_webview_window("youtube-login") {
+            window.show().map_err(|e|e.to_string())?;
+            let _=window.unminimize();let _=window.set_focus();return Ok(());
+        }
+        let url=tauri::Url::parse("https://www.youtube.com/").map_err(|e|e.to_string())?;
+        tauri::WebviewWindowBuilder::new(&app,"youtube-login",tauri::WebviewUrl::External(url))
+            .title("YouTube sign-in — Auralis").inner_size(1000.0,720.0).center().build()
+            .map_err(|e|format!("Could not open YouTube sign-in: {e}"))?;
+        Ok(())
+    }).await.map_err(|e|format!("Could not start the YouTube sign-in window: {e}"))?
 }
 fn youtube_session_cookies(app:&AppHandle) -> ApiResult<Vec<mdm_ipc::BrowserCookie>> {
     let window=app.get_webview_window("youtube-login").ok_or("Open YouTube sign-in and sign in first. Keep that window open while looking up the video.")?;
@@ -121,7 +126,9 @@ pub async fn video_tool(app:AppHandle,action:String,value:String,choice:Option<u
         let page=tauri::Url::parse(&value).map_err(|_|"Enter a YouTube video URL")?;
         let host=page.host_str().unwrap_or("").to_ascii_lowercase();
         if action!="lookup"||page.scheme()!="https"||!(host=="youtube.com"||host.ends_with(".youtube.com")||host=="youtu.be") {return Err("The in-app YouTube session can only be used for a YouTube video lookup".into());}
-        command.cookie_jar=youtube_session_cookies(&app)?;
+        let session_app=app.clone();
+        command.cookie_jar=tauri::async_runtime::spawn_blocking(move || youtube_session_cookies(&session_app))
+            .await.map_err(|e|format!("Could not read the YouTube session: {e}"))??;
         command.video_explicit_cookies=true;
     }
     if let Some(browser) = cookie_browser.filter(|b| !b.is_empty()) {

@@ -13,6 +13,12 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 - Reduced overlapping visual layers and added manual Netscape-format cookie-file selection for video helpers. Google-account autodetection/direct connection remains unfinished.
 - Remaining manual Windows checks include physical DPI/transparency review and native drag-to-Explorer/application behavior. Automated success does not establish complete original-MDM feature parity.
 
+### Auralis Download Manager 0.3.7 — Windows x64
+
+- Moves YouTube sign-in window creation and cookie access off the Windows UI thread to address the reported WebView2 deadlock.
+- Adds a Windows smoke test that opens the window and checks that the app remains responsive; Google sign-in and age-restricted playback still need real-account testing.
+- Only the Auralis installer is published. See [full release notes](docs/glass-releases/v0.3.7.md).
+
 ### Auralis Download Manager 0.3.6 — Windows x64
 
 - Refreshes the extension popup and player overlay with a glass appearance and adds a way to restore the video control for the current site.
