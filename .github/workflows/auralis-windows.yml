@@ -4,6 +4,12 @@ on:
   pull_request:
     paths:
       - "glass-ui/**"
+      - "auralis-extension/**"
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - ".cargo/**"
       - ".github/workflows/auralis-windows.yml"
       - "README.md"
       - "CHANGELOG.md"
@@ -70,16 +76,16 @@ jobs:
           choco install nsis --no-progress -y
           if ($LASTEXITCODE) { throw "NSIS installation failed" }
 
-      - name: Build original MDM engine and companion executables
+      - name: Build Auralis headless engine and browser host
         shell: pwsh
         run: |
           cargo build --release --target x86_64-pc-windows-msvc -p mdm-app -p mdm-nmhost
-          if ($LASTEXITCODE) { throw "Original MDM Rust backend compilation failed" }
+          if ($LASTEXITCODE) { throw "Auralis headless engine compilation failed" }
           New-Item -ItemType Directory -Force glass-ui/src-tauri/resources | Out-Null
           Copy-Item target/x86_64-pc-windows-msvc/release/misterdownloadmanager.exe glass-ui/src-tauri/resources/mdm-legacy.exe
           Copy-Item target/x86_64-pc-windows-msvc/release/misterdownloadmanager-nmhost.exe glass-ui/src-tauri/resources/misterdownloadmanager-nmhost.exe
 
-      - name: Test original engine workspace
+      - name: Test Auralis engine workspace
         run: cargo test --workspace --target x86_64-pc-windows-msvc
 
       - name: Locate npm cache

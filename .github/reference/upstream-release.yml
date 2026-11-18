@@ -4,17 +4,13 @@
 # experimental and not yet tested by us, macOS (build-macos.sh: a .dmg for Apple Silicon, one for
 # Intel; named "-experimental"). Each build's programs are tried on the machine that built them
 # first (tools/installer/smoke.py): the processor they are for, and a download.
-# - A pushed tag vX.Y.Z (matching Cargo.toml's version) publishes a GitHub release with them and
-#   SHA256SUMS.txt, its notes from CHANGELOG.md (Help -> Check for updates sees it at once). The
-#   release waits for x64 Windows and the extensions: a failed build of another processor or
-#   system leaves its files out.
-# - Run by hand (Actions -> Release -> Run workflow) it only builds and keeps them as artifacts:
-#   nothing is published, and nothing is sent to addons.mozilla.org or the Chrome Web Store.
+# This upstream workflow is retained for explicit manual use only. Auralis
+# releases are built and published by auralis-windows.yml instead.
 name: Release
 
+# The fork publishes through auralis-windows.yml. Do not automatically build
+# or publish upstream MDM distributions when a tag is pushed in this repo.
 on:
-  push:
-    tags: ["v*", "!v0.3.*"]
   workflow_dispatch:
 
 # Read-only for every job; a job that needs more says so in its own block (publish).
