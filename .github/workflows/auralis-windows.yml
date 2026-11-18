@@ -1,4 +1,4 @@
-name: Auralis Windows candidate
+name: Auralis Windows build
 
 on:
   pull_request:
@@ -118,10 +118,10 @@ jobs:
           if (-not (Test-Path $installer)) { throw "Missing Auralis installer: $installer" }
           Copy-Item $installer (Join-Path $folder "Mister.Hybrid.Glass_${version}_x64-setup.exe")
 
-      - name: Upload Auralis Windows candidate
+      - name: Upload Auralis Windows release installers
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: auralis-download-manager-windows-x64-candidate
+          name: auralis-download-manager-windows-x64
           path: glass-ui/src-tauri/target/release/bundle/nsis/*.exe
           if-no-files-found: error
           retention-days: 14
