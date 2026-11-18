@@ -133,7 +133,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $version = (Get-Content glass-ui/src-tauri/Cargo.toml -Raw | Select-String -Pattern '(?m)^version\\s*=\\s*"([^"]+)"').Matches[0].Groups[1].Value
+          $version = (Get-Content glass-ui/src-tauri/Cargo.toml -Raw | Select-String -Pattern '(?m)^version\s*=\s*"([^"]+)"').Matches[0].Groups[1].Value
           if ("v$version" -ne $env:GITHUB_REF_NAME) { throw "Tag $env:GITHUB_REF_NAME does not match Auralis version $version" }
           $folder = "glass-ui/src-tauri/target/release/bundle/nsis"
           $installer = Join-Path $folder "Auralis Download Manager_${version}_x64-setup.exe"
