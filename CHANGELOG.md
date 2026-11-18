@@ -3,6 +3,12 @@
 Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 `.github/workflows/release.yml`).
 
+## Auralis Download Manager 0.3.6 — Windows x64
+
+- Refreshed the extension popup and video overlay, added a switch to restore the video control on a site, and routed Open and Options requests to Auralis windows.
+- Added an experimental in-app YouTube sign-in session for manual video lookups. Google can block embedded sign-in or require additional verification.
+- [Full 0.3.6 release notes](docs/glass-releases/v0.3.6.md). Real Windows, browser and YouTube sign-in checks remain necessary.
+
 ## Auralis Download Manager 0.3.5 — Windows x64
 
 - Added guided extension setup, a recent browser-connection indicator, clearer selected rows, and a bulk-delete disk checkbox.

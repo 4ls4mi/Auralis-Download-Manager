@@ -8,7 +8,7 @@ Auralis is an independent fork of [Mister Download Manager](https://github.com/a
 
 ## See Auralis
 
-These images show the actual interface rendered with **sample download data**. They are browser-rendered previews rather than Windows desktop captures; native transparency, backdrop effects and scaling can look different on a real system. The extension image shows the upcoming popup update; check the release notes for availability.
+These images show the actual interface rendered with **sample download data**. They are browser-rendered previews rather than Windows desktop captures; native transparency, backdrop effects and scaling can look different on a real system. The extension image shows the 0.3.6 popup using a simulated browser connection.
 
 | Download library | Download progress |
 | --- | --- |
