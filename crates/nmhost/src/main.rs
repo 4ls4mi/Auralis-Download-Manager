@@ -7,7 +7,8 @@
 //!   starting anything, and the extension lets the browser have it. `{"rules": true}` asks for
 //!   the file types to offer: `{"ok": true, "types": "EXE ZIP …"}`.
 //! - The download button over videos: `{"panel": true, "url": page}` asks whether it may show on
-//!   that page (`{"ok": …}`, Options' rules); `{"video": true, "url": page}` opens the Download
+//!   that page (`{"ok": …}`, Options' rules; with `"compact": …` when it may, its size, #1278);
+//!   `{"video": true, "url": page}` opens the Download
 //!   video window for it (`src`: the video's own file, or its stream's manifest; with
 //!   `explicit`, the toolbar button's list of the tab's media asked, wherever the button shows);
 //!   `{"hideSite": host}` keeps it off that site from now on;
@@ -292,6 +293,10 @@ struct Reply {
     /// states are never a `why`: they say nothing of whether MDM is reachable.
     #[serde(skip_serializing_if = "Option::is_none")]
     lookup: Option<mdm_ipc::api::VideoLookupAnswer>,
+    /// For `panel` when it may show (#1278): Options → Download panels → Button size is
+    /// Compact (the round button over every video). An older host doesn't say: Full.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    compact: Option<bool>,
 }
 
 impl Reply {
@@ -404,8 +409,10 @@ fn answer(m: Message, rules: &mdm_ipc::capture::CaptureRules) -> Reply {
     // The video button: asked about, clicked, its menu. What it sends goes to the app (started
     // if need be), which opens its window or keeps the setting.
     if m.panel {
+        let ok = rules.panel_on(&m.url, m.referrer.as_deref(), browser);
         return Reply {
-            ok: rules.panel_on(&m.url, m.referrer.as_deref(), browser),
+            ok,
+            compact: ok.then_some(rules.video_panel_compact),
             ..Default::default()
         };
     }
@@ -698,6 +705,9 @@ fn menu_command(
                     title,
                     store_id: store(&l.store_id),
                 }),
+                // The page it was picked on (#607): a stream's address is often signed for each
+                // load of it, so the app knows the same video picked again by its page.
+                page_url: Some(l.page.clone()).filter(|p| p.len() <= PAGE_MAX),
                 referer,
                 origin,
                 cookies: m.cookies.clone().filter(|c| !c.is_empty()),
@@ -955,6 +965,9 @@ fn to_command(m: Message) -> mdm_ipc::Command {
         post_type: m.post.as_ref().and(some(m.post_type)),
         post: m.post,
         private: m.private,
+        // The browser's own download handed over, not the user's explicit "Download with MDM"
+        // (right-click menu, toolbar list): that is an add of its own.
+        browser_handoff: !m.explicit,
         proxy: m.proxy.as_deref().and_then(browser_proxy),
         proxy_pac: m
             .proxy_pac
@@ -1733,6 +1746,23 @@ mod tests {
         };
         assert!(answer(ask("https://videos.test/watch"), &rules).ok);
         assert!(!answer(ask("https://www.quiet.test/watch"), &rules).ok);
+        // #1278: its size comes with the answer where it shows; Full unless Compact is chosen.
+        let r = answer(ask("https://videos.test/watch"), &rules);
+        assert_eq!(r.compact, Some(false));
+        assert_eq!(
+            serde_json::to_value(&r).unwrap(),
+            serde_json::json!({ "ok": true, "compact": false })
+        );
+        rules.video_panel_compact = true;
+        assert_eq!(
+            answer(ask("https://videos.test/watch"), &rules).compact,
+            Some(true)
+        );
+        assert_eq!(
+            answer(ask("https://www.quiet.test/watch"), &rules).compact,
+            None
+        );
+        rules.video_panel_compact = false;
         // #532: a player embedded from another site, in a tab on a listed site.
         let embedded = Message {
             referrer: Some("https://www.quiet.test/post".into()),
@@ -1999,6 +2029,11 @@ mod tests {
             cmd.referer.as_deref(),
             Some("https://videos.test/watch?v=1"),
             "fetched as from its page"
+        );
+        assert_eq!(
+            cmd.page_url.as_deref(),
+            Some("https://videos.test/watch?v=1"),
+            "the page it was picked on goes too: the same video picked again is known by it"
         );
         assert_eq!(cmd.cookies.as_deref(), Some("a=1"));
         assert_eq!(cmd.cookie_jar.len(), 1);
@@ -2764,6 +2799,11 @@ mod tests {
         )
         .unwrap();
         let c = to_command(m);
+        // The download the browser hands over carries its provenance; an explicit add doesn't.
+        assert!(c.browser_handoff);
+        let explicit: Message =
+            serde_json::from_str(r#"{"url":"https://x/a.zip","explicit":true}"#).unwrap();
+        assert!(!to_command(explicit).browser_handoff);
         assert_eq!(c.url.as_deref(), Some("https://x/a.zip"));
         assert_eq!(c.referer.as_deref(), Some("https://x/"));
         assert_eq!(c.cookies.as_deref(), Some("a=1"));

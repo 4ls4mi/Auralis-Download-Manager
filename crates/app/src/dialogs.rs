@@ -19,15 +19,26 @@ pub enum Outcome<T> {
 }
 
 const MAIN_RECT: &str = "mdm-main-rect";
+const MAIN_RECT_PX: &str = "mdm-main-rect-px";
 
 /// The main window publishes its outer rect each frame so dialogs can centre on it, with the
 /// zoom it is measured at (not in the frame the interface size changes: its rect is still
-/// measured at the old one then, scale::settled).
+/// measured at the old one then, scale::settled); and in screen pixels, which mean the same on
+/// every screen whatever its scale (#1311).
 pub fn publish_main_rect(ctx: &egui::Context) {
     if let Some(rc) = ctx.input(|i| i.viewport().outer_rect) {
         let zoom = ctx.zoom_factor();
-        ctx.data_mut(|d| d.insert_temp(egui::Id::unique(MAIN_RECT), (rc, zoom)));
+        let px = rc * ctx.pixels_per_point();
+        ctx.data_mut(|d| {
+            d.insert_temp(egui::Id::unique(MAIN_RECT), (rc, zoom));
+            d.insert_temp(egui::Id::unique(MAIN_RECT_PX), px);
+        });
     }
+}
+
+/// The main window's outer rect as last published, in screen pixels.
+fn main_rect_px(ctx: &egui::Context) -> Option<egui::Rect> {
+    ctx.data(|d| d.get_temp::<egui::Rect>(egui::Id::unique(MAIN_RECT_PX)))
 }
 
 /// The main window's outer rect as last published, in points at the zoom drawn now (#262: the
@@ -45,12 +56,21 @@ fn main_rect(ctx: &egui::Context) -> Option<egui::Rect> {
 /// area (its title bar first, for one larger than the screen), decided once when the dialog
 /// first shows and kept until `forget_place` — so the user can still move it. Placed again when
 /// the interface size changes (#262): the place is in points, which that changes.
+///
+/// The place in points goes to the new window's builder. On Windows the window is then put
+/// where it belongs in screen pixels (`keep_placed`): winit reads the points at the scale of the
+/// screen a new window opens on (the primary), not the main window's, which put a dialog of a
+/// main window on a screen of another scale out of sight (#1311).
 pub fn place(ctx: &egui::Context, key: egui::Id, client: [f32; 2]) -> Option<Pos2> {
     let zoom = ctx.zoom_factor();
     if let Some((p, z)) = ctx.data(|d| d.get_temp::<(Pos2, f32)>(key))
         && z == zoom
     {
         return Some(p);
+    }
+    // Where the main window is as the dialog opens, for keep_placed.
+    if let Some(px) = main_rect_px(ctx) {
+        ctx.data_mut(|d| d.insert_temp(key.with("main-px"), px));
     }
     let main = main_rect(ctx)?;
     // A fixed-frame dialog's outer size is client + (6, 29) (spec "Conventions").
@@ -65,7 +85,86 @@ pub fn place(ctx: &egui::Context, key: egui::Id, client: [f32; 2]) -> Option<Pos
 }
 
 pub fn forget_place(ctx: &egui::Context, key: egui::Id) {
-    ctx.data_mut(|d| d.remove::<(Pos2, f32)>(key));
+    ctx.data_mut(|d| {
+        d.remove::<(Pos2, f32)>(key);
+        d.remove::<egui::Rect>(key.with("main-px"));
+    });
+}
+
+/// How many passes after it is shown a window is still kept where [`place`] put it: its new
+/// screen's scale, given as it is shown, resizes it (follow_scale), and it is centred again.
+#[cfg(windows)]
+const PLACED_AFTER_SHOWN: u32 = 4;
+
+/// Windows: the window `title` (opened at `key`'s [`place`]) put there in screen pixels, centred
+/// on the main window at its actual size, on the main window's screen, whatever the scales of
+/// the screens (#1311): before it is shown, and in its first passes when a new scale resized it.
+/// The safety net under it: a window on no screen is brought onto the main window's.
+///
+/// Elsewhere the builder's place is kept: macOS has one coordinate space in points for every
+/// screen; a Wayland compositor places windows itself; X11 has mostly one scale for every screen
+/// (Xft.dpi).
+#[cfg(windows)]
+fn keep_placed(ctx: &egui::Context, key: egui::Id, title: &str, shown: bool) {
+    // Off-screen test runs keep their windows off the screens.
+    if crate::offscreen() {
+        return;
+    }
+    let after_key = key.with("placed-after");
+    let size_key = key.with("placed-size");
+    let after = ctx.data(|d| d.get_temp::<u32>(after_key).unwrap_or(0));
+    if after >= PLACED_AFTER_SHOWN {
+        return;
+    }
+    if shown {
+        ctx.data_mut(|d| d.insert_temp(after_key, after + 1));
+        ctx.request_repaint();
+    }
+    let Some(([l, t, r, b], visible)) = crate::win32::window_rect(title) else {
+        return;
+    };
+    let at = egui::Rect::from_min_max(
+        egui::pos2(l as f32, t as f32),
+        egui::pos2(r as f32, b as f32),
+    );
+    let placed = ctx.data(|d| d.get_temp::<egui::Vec2>(size_key));
+    // Not shown yet, the window found by the title is ours only while hidden (a progress window
+    // may share its title with one on the screen). Shown, it is moved again only when a new
+    // scale resized it; not when the user moved it.
+    if (!shown && visible) || (shown && placed.is_some_and(|s| s == at.size())) {
+        return;
+    }
+    let screens: Vec<crate::scale::Screen> = crate::win32::screens()
+        .into_iter()
+        .map(|(s, w)| crate::scale::Screen {
+            rect: egui::Rect::from_min_max(
+                egui::pos2(s[0] as f32, s[1] as f32),
+                egui::pos2(s[2] as f32, s[3] as f32),
+            ),
+            work: egui::Rect::from_min_max(
+                egui::pos2(w[0] as f32, w[1] as f32),
+                egui::pos2(w[2] as f32, w[3] as f32),
+            ),
+        })
+        .collect();
+    let main = ctx.data(|d| d.get_temp::<egui::Rect>(key.with("main-px")));
+    let want = main.map_or(at.min, |m| crate::scale::centred_on(m, at.size(), &screens));
+    let want =
+        crate::scale::onto_screens(egui::Rect::from_min_size(want, at.size()), main, &screens)
+            .unwrap_or(want);
+    ctx.data_mut(|d| d.insert_temp(size_key, at.size()));
+    if (want - at.min).length() < 1.0 {
+        return;
+    }
+    // Far from where the builder's place put it: what the screens were, for a report.
+    if (want - at.min).length() > 64.0 {
+        tracing::info!(
+            "window {title:?} at {:?} put at {want:?} (main window {main:?}, screens {:?})",
+            at.min,
+            screens.iter().map(|s| s.rect).collect::<Vec<_>>()
+        );
+    }
+    crate::win32::move_window(title, want.x as i32, want.y as i32);
 }
 
 /// A fixed-size window's client of `size` points as it can be shown on the screen around the
@@ -121,6 +220,7 @@ pub fn keep_theme(
     title: &str,
     dark: bool,
     open: bool,
+    activate: bool,
 ) {
     let theme_key = key.with("theme");
     let shown_key = key.with("shown");
@@ -134,6 +234,8 @@ pub fn keep_theme(
             d.remove::<bool>(shown_key);
             d.remove::<u32>(front_key);
             d.remove::<bool>(caption_key);
+            d.remove::<u32>(key.with("placed-after"));
+            d.remove::<egui::Vec2>(key.with("placed-size"));
         });
     }
     if !open {
@@ -151,6 +253,9 @@ pub fn keep_theme(
     }
     // The theme went out in an earlier frame: show the window now.
     let shown = ctx.data(|d| d.get_temp::<bool>(shown_key).unwrap_or(false));
+    // Where it belongs on the screens before it is seen (#1311).
+    #[cfg(windows)]
+    keep_placed(ctx, key, title, shown);
     if sent.is_some() && !shown {
         ctx.send_viewport_cmd_to(vid, egui::ViewportCommand::Visible(true));
         ctx.data_mut(|d| d.insert_temp(shown_key, true));
@@ -159,8 +264,10 @@ pub fn keep_theme(
     }
     // Shown (in an earlier frame), once: in front of the other programs' windows, where Windows
     // didn't give it the foreground (#208: Download File Info behind the browser that asked for
-    // it). Not in off-screen test runs, whose windows stay out of the way. Elsewhere the window
-    // manager places a new window and decides on its focus; an app has no say there.
+    // it), or on macOS where `makeKeyAndOrderFront:` alone never activates the app behind the
+    // browser or another program. Not in off-screen test runs, whose windows stay out of the way,
+    // and never for passive notices (Download complete). Elsewhere the window manager places a
+    // new window and decides on its focus; an app has no say there.
     // Looked for in a few frames at most (its title may change meanwhile: a progress window's).
     #[cfg(windows)]
     {
@@ -182,7 +289,30 @@ pub fn keep_theme(
             ctx.data_mut(|d| d.insert_temp(front_key, tries));
         }
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        const TRIES: u32 = 30;
+        let tries = ctx.data(|d| d.get_temp::<u32>(front_key).unwrap_or(0));
+        if activate && shown && !crate::offscreen() && tries < TRIES {
+            let tries = match crate::unix::macos_bring_window_forward(title) {
+                Some(lifted) => {
+                    if lifted {
+                        tracing::info!("window {title:?} shown behind another program's: lifted");
+                    }
+                    ctx.send_viewport_cmd_to(vid, egui::ViewportCommand::Focus);
+                    TRIES
+                }
+                None => {
+                    ctx.request_repaint();
+                    tries + 1
+                }
+            };
+            ctx.data_mut(|d| d.insert_temp(front_key, tries));
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = activate;
+    #[cfg(not(any(windows, target_os = "macos")))]
     let _ = front_key;
     // Belt and braces, once per window and theme (until the window is found): asked every frame,
     // the window's thread waited on DWM, or on a busy window of this process while looking for
@@ -194,7 +324,9 @@ pub fn keep_theme(
         ctx.data_mut(|d| d.insert_temp(caption_key, dark));
     }
     #[cfg(not(windows))]
-    let _ = (title, caption_key);
+    let _ = caption_key;
+    #[cfg(not(any(windows, target_os = "macos")))]
+    let _ = title;
 }
 
 /// Whether the window `key` is drawn again after a pass that didn't draw it: egui destroys a
@@ -202,7 +334,7 @@ pub fn keep_theme(
 /// ended without a closing pass, as Download File Info behind the Create folder question, #440).
 /// False while it is drawn pass after pass, whatever the time between them (a minimized main
 /// window runs its passes seconds apart). `key` is this caller's alone.
-fn window_was_gone(ctx: &egui::Context, key: egui::Id) -> bool {
+pub(crate) fn window_was_gone(ctx: &egui::Context, key: egui::Id) -> bool {
     let pass = ctx.cumulative_pass_nr();
     let last = ctx.data(|d| d.get_temp::<u64>(key));
     ctx.data_mut(|d| d.insert_temp(key, pass));
@@ -313,6 +445,13 @@ enum Kind {
     },
 }
 
+/// Interactive dialogs (`Plain` and `Question`) activate MDM and come forward when shown on
+/// macOS; passive `Notice` windows (`Download complete`) stay non-activating so typing in another
+/// program is never interrupted.
+fn dialog_activates_on_open(kind: Kind) -> bool {
+    !matches!(kind, Kind::Notice { .. })
+}
+
 #[allow(clippy::too_many_arguments)]
 fn dialog_window<T>(
     ctx: &egui::Context,
@@ -373,6 +512,7 @@ fn dialog_window<T>(
     }
     crate::crash::window(id);
     let out = ctx.show_viewport_immediate(vid, builder, |ui, _| {
+        keyboard_to_click(ui.ctx());
         // Painted in the pass that closes it too (see close_requested).
         let close = close_requested(ui);
         let out = egui::CentralPanel::no_frame()
@@ -436,12 +576,18 @@ fn dialog_window<T>(
                         d.insert_temp(key.with("hwnd"), h);
                     });
                 }
-            } else if crate::win32::dialog_frame(title, shown, !crate::theme::dark_surface(), scale)
-            {
+            } else if crate::win32::dialog_frame(
+                title,
+                shown,
+                !crate::theme::dark_surface(),
+                scale,
+                owned_by_main(ctx, key, crate::win32::main_in_front),
+            ) {
                 ctx.data_mut(|d| d.insert_temp(framed, want));
             }
         }
     }
+    let activate = dialog_activates_on_open(kind);
     keep_theme(
         ctx,
         ViewportId::from_hash_of(id),
@@ -450,12 +596,14 @@ fn dialog_window<T>(
         // Every dialog follows the mode (the light dialogs too), its caption the theme's surface.
         crate::theme::dark_surface(),
         matches!(out, Outcome::Open),
+        activate,
     );
     // A question takes the focus once it is shown (not while hidden for its theme), and so does
-    // Download File Info outside Windows (#484): asked for from the browser, it opened behind
-    // it. Windows lifts it in keep_theme instead.
+    // Download File Info on Linux (#484): asked for from the browser, it opened behind it.
+    // Windows and macOS lift and focus in `keep_theme` once visible.
     let focused = key.with("focus-sent");
-    let takes_focus = modal || (cfg!(not(windows)) && id == "file-info");
+    let takes_focus =
+        modal || (cfg!(all(not(windows), not(target_os = "macos"))) && id == "file-info");
     if takes_focus && matches!(out, Outcome::Open) && !crate::offscreen() {
         let shown = ctx.data(|d| d.get_temp::<bool>(key.with("shown")).unwrap_or(false));
         if shown && !ctx.data(|d| d.get_temp::<bool>(focused).unwrap_or(false)) {
@@ -487,7 +635,27 @@ fn forget_window(ctx: &egui::Context, vid: ViewportId, key: egui::Id) {
     ctx.data_mut(|d| {
         d.remove::<[f32; 2]>(key.with("framed"));
         d.remove::<isize>(key.with("hwnd"));
+        d.remove::<bool>(key.with("owned"));
     });
+}
+
+/// Whether this opening of a dialog is owned by the main window (Windows, `win32::dialog_frame`):
+/// when it opens while the user works in the main window (`main_in_front`: it, or a dialog it
+/// owns, in front), as IDM's dialogs are. One that opens over another program (Download File
+/// Info or the duplicate question the browser asked for, a notice) or over a window of ours that
+/// stands on its own (a progress window's question) stands on its own too: activating an owned
+/// window brings its owner forward with it, so the main window came up behind it. Asked once per
+/// opening, while the window is still hidden (before it takes the focus itself); a frame applied
+/// again (a new size, another monitor's scale) keeps the answer.
+#[cfg(windows)]
+fn owned_by_main(ctx: &egui::Context, key: egui::Id, main_in_front: impl FnOnce() -> bool) -> bool {
+    let owned = key.with("owned");
+    if let Some(known) = ctx.data(|d| d.get_temp::<bool>(owned)) {
+        return known;
+    }
+    let answer = main_in_front();
+    ctx.data_mut(|d| d.insert_temp(owned, answer));
+    answer
 }
 
 /// Whether the windows' title bars are ours: a style theme's on Windows (#45). Elsewhere the
@@ -865,6 +1033,9 @@ impl AddUrl {
 pub(crate) struct PlaceAsk {
     pub dir: PathBuf,
     pub name: String,
+    /// The place the early download already has, when there is one (#597): its own part and
+    /// state files beside exactly this path are its own, not other data.
+    pub own: Option<PathBuf>,
     /// A name MDM gave: numbered on when it is taken there (`naming::destination`). A typed one
     /// only has its folder looked at (its download is numbered as it starts if it is taken).
     pub number: bool,
@@ -881,10 +1052,18 @@ pub(crate) struct Found {
 pub(crate) type Look = Arc<dyn Fn(&PlaceAsk) -> Found + Send + Sync>;
 
 /// The engine's naming rules on the disk as it is now; on a thread of its own (it may wait).
+/// Once the old files being deleted in that folder for a new start are gone (a duplicate
+/// overwritten: its new copy takes its name, `naming::clear`).
 fn look(ask: &PlaceAsk) -> Found {
+    mdm_engine::naming::wait_cleared(&ask.dir);
     Found {
         dest: if ask.number {
-            mdm_engine::naming::destination(&ask.dir, &ask.name)
+            match &ask.own {
+                // The download that started early is already writing here: its own part and
+                // state files must not number it (#597).
+                Some(own) if mdm_engine::naming::guess(&ask.dir, &ask.name) == *own => own.clone(),
+                _ => mdm_engine::naming::destination(&ask.dir, &ask.name),
+            }
         } else {
             ask.dir.join(&ask.name)
         },
@@ -901,6 +1080,9 @@ fn look(ask: &PlaceAsk) -> Found {
 pub(crate) struct SaveAsPlace {
     look: Look,
     repaint: Option<egui::Context>,
+    /// The early download's own place (#597), if the dialog started one: Save As keeps that
+    /// name even though its `.mdm.part` and `.mdm.json` sit beside it.
+    own: Option<PathBuf>,
     /// The last question, Save As's text it is for (as the answer set it, once taken), and its
     /// answer to come. A new question asks on a thread of its own: one that hangs on a dead
     /// share holds up nothing else.
@@ -918,8 +1100,14 @@ impl SaveAsPlace {
         SaveAsPlace {
             look,
             repaint: repaint.cloned(),
+            own: None,
             asking: None,
         }
+    }
+
+    /// The place the download this dialog started early has (#597); None when there is none.
+    pub fn own(&mut self, own: Option<PathBuf>) {
+        self.own = own;
     }
 
     /// `name` in `dir` as MDM names it: Save As's text for now (fitted, not numbered: no wait
@@ -929,6 +1117,7 @@ impl SaveAsPlace {
         let ask = PlaceAsk {
             dir: dir.to_owned(),
             name: name.to_owned(),
+            own: self.own.clone(),
             number: true,
         };
         self.ask(ask, &shown);
@@ -972,6 +1161,12 @@ impl SaveAsPlace {
         Some(found.folder)
     }
 
+    /// The last question's answer isn't taken any more (a name chosen in the Save dialog stays
+    /// as chosen): the next [`Self::folder`] asks afresh about Save As as it is then.
+    pub fn forget(&mut self) {
+        self.asking = None;
+    }
+
     /// Whether Save As's folder is there, as looked at for the text it shows (None: not known
     /// yet). A path typed in Save As is asked about here, as it is (its folder only).
     pub fn folder(&mut self, save_as: &mut String) -> Option<bool> {
@@ -988,6 +1183,7 @@ impl SaveAsPlace {
         let ask = PlaceAsk {
             dir: dir.to_owned(),
             name: name.to_string_lossy().into_owned(),
+            own: self.own.clone(),
             number: false,
         };
         self.ask(ask, &save_as.clone());
@@ -1057,6 +1253,12 @@ pub struct FileInfo {
     /// Save As's name numbered in its folder, and whether the folder is there, looked at off the
     /// window's thread (#743).
     place: SaveAsPlace,
+    /// The file the system Save dialog asked "Replace?" about, answered Yes (#1088): the
+    /// download replaces it as it completes, while Save As still names it ([`Self::replaces`]).
+    replace: Option<PathBuf>,
+    /// Set on the Save dialog's thread with its answer: whether it replaces a file
+    /// (`winui::replaces_picked`).
+    picked_replaces: Arc<std::sync::atomic::AtomicBool>,
 }
 
 pub enum Start {
@@ -1145,6 +1347,8 @@ impl FileInfo {
             route,
             through,
             direct,
+            replace: None,
+            picked_replaces: Default::default(),
         }
     }
 
@@ -1235,12 +1439,23 @@ impl FileInfo {
     }
 
     /// The system Save dialog's answer (`winui::saved_name`): Save As takes its folder and the
-    /// name typed there as a name typed in Save As is taken (#1088): not numbered, and a name
-    /// taken by the time the download starts is numbered then (`Item::number_at_start`), so
-    /// nothing is overwritten.
-    fn set_saved(&mut self, path: &Path) {
+    /// name typed there as a name typed in Save As is taken (#1088): not numbered. With
+    /// `replace` (the dialog asked "Replace?" about that file and was answered Yes) the download
+    /// replaces it as it completes, never before. Otherwise a name taken by the time the
+    /// download starts is numbered then (`Item::number_at_start`), so nothing is overwritten.
+    fn set_saved(&mut self, path: &Path, replace: bool) {
         self.save_as = display_path(path);
         self.edited = true;
+        // A look at the disk still under way for the name shown before would number this one
+        // if it is the same name (the user just chose it as it is).
+        self.place.forget();
+        self.replace = replace.then(|| self.dest());
+    }
+
+    /// The file the download replaces as it completes (`Item::replace_file`): the one the Save
+    /// dialog was told to replace, while Save As still names it.
+    pub fn replaces(&self) -> Option<PathBuf> {
+        self.replace.clone().filter(|p| *p == self.dest())
     }
 
     /// "Remember this path for … category": the category and the folder to keep for it.
@@ -1282,6 +1497,12 @@ impl FileInfo {
     /// The chosen destination as an absolute path.
     pub fn dest(&self) -> PathBuf {
         resolve_path(&self.save_as)
+    }
+
+    /// The place the download this dialog started early already has (#597): Save As's look
+    /// keeps its own part and state files from counting its name as taken.
+    pub fn set_early_place(&mut self, dest: Option<PathBuf>) {
+        self.place.own(dest);
     }
 
     pub(crate) fn set_category(&mut self, c: Category) {
@@ -1486,13 +1707,23 @@ impl FileInfo {
                         .map(|n| n.to_string_lossy().into_owned())
                         .unwrap_or_default();
                     let title = crate::i18n::t("Save As").to_owned();
+                    let replaces = self.picked_replaces.clone();
                     winui::start_pick(ui.ctx(), "file-info-save-as", move || {
                         let picked = winui::save_dialog(&title, &dir, &name).save_file()?;
-                        Some(winui::saved_name(&name, &picked))
+                        let saved = winui::saved_name(&name, &picked);
+                        // On the dialog's thread: it looks at the disk.
+                        replaces.store(
+                            winui::replaces_picked(&picked, &saved),
+                            std::sync::atomic::Ordering::Relaxed,
+                        );
+                        Some(saved)
                     });
                 }
                 if let Some(path) = winui::picked(ui.ctx(), "file-info-save-as") {
-                    self.set_saved(&path);
+                    let replace = self
+                        .picked_replaces
+                        .load(std::sync::atomic::Ordering::Relaxed);
+                    self.set_saved(&path, replace);
                 }
 
                 let caption = crate::i18n::fmt(
@@ -2042,24 +2273,13 @@ impl Complete {
                     if grip.hovered() {
                         ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
                     }
-                    // The file is looked for beside the window, with the drag (#743); where a move
-                    // took it comes back to the app (`dragged_out`), however late.
                     if grip.drag_started() {
-                        let (id, from, wake) = (self.id, self.path.clone(), ui.ctx().clone());
-                        let followed = move |out| {
-                            DRAGGED_OUT
-                                .lock()
-                                .unwrap_or_else(|e| e.into_inner())
-                                .push((id, from, out));
-                            wake.request_repaint();
-                        };
-                        if let Err(e) = crate::win32::drag_file_out(
+                        drag_downloads_out(
+                            ui.ctx(),
                             crate::i18n::t("Download complete"),
-                            &self.path,
-                            followed,
-                        ) {
-                            tracing::warn!("drag out: {e}");
-                        }
+                            vec![(self.id, self.path.clone())],
+                            DraggedFrom::Complete,
+                        );
                     }
                     p.rect_filled(handle, 0.0, winui::FIELD());
                     p.rect_stroke(
@@ -3029,8 +3249,24 @@ pub fn raise(ctx: &egui::Context, viewport: ViewportId) {
     ctx.send_viewport_cmd_to(viewport, egui::ViewportCommand::Minimized(false));
     // Off-screen test runs never take the focus (main.rs `offscreen`), as the other paths here.
     if !crate::offscreen() {
+        #[cfg(target_os = "macos")]
+        crate::unix::macos_activate_app();
         ctx.send_viewport_cmd_to(viewport, egui::ViewportCommand::Focus);
     }
+}
+
+/// A click in the window this pass draws (the main window, a dialog, a progress window; never a
+/// menu's, which leaves the keyboard with the window it opened from) while it hasn't the keyboard
+/// gives it the keyboard: on X11 the window manager may have left the X input focus elsewhere
+/// (unix::take_keyboard_on_click). Windows and macOS: the system gives a clicked window the
+/// keyboard itself.
+pub fn keyboard_to_click(ctx: &egui::Context) {
+    #[cfg(target_os = "linux")]
+    if ctx.input(|i| i.pointer.any_pressed() && !i.focused) {
+        crate::unix::take_keyboard_on_click();
+    }
+    #[cfg(not(target_os = "linux"))]
+    let _ = ctx;
 }
 
 /// A dialog's window ([`window`], [`question`]) by its id.
@@ -3066,10 +3302,10 @@ fn tell_turn_off_failed(why: String) {
     );
 }
 
-/// What became of a file dragged out of Download complete (#869), when the drop target moved
-/// it (a copy or a link leaves it where it was: nothing to say).
+/// What became of a file dragged out of Download complete (#869) or the list (#1210), when the
+/// drop target moved it (a copy or a link leaves it where it was: nothing to say).
 #[derive(Clone, Debug, PartialEq, Eq)]
-// Made by Windows' drag only (the grip is Windows-only, see Complete::show).
+// Made by Windows' drag only (see drag_downloads_out).
 #[cfg_attr(not(windows), allow(dead_code))]
 pub enum DraggedOut {
     /// Moved there (the shell said where).
@@ -3079,12 +3315,70 @@ pub enum DraggedOut {
     MovedAway,
 }
 
-/// Files dragged out and moved: (download, the path it was dragged from, what became of it).
-static DRAGGED_OUT: Mutex<Vec<(u64, PathBuf, DraggedOut)>> = Mutex::new(Vec::new());
+/// Where downloads' files were dragged out from: the download's note says so.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(not(windows), allow(dead_code))]
+pub enum DraggedFrom {
+    /// Download complete's grip (#869).
+    Complete,
+    /// The main window's list (#1210).
+    List,
+}
+
+/// A download's file dragged out and moved.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub struct Followed {
+    pub id: u64,
+    /// The path it was dragged from (the download follows only while it still points there).
+    pub from: PathBuf,
+    pub out: DraggedOut,
+    pub dragged_from: DraggedFrom,
+}
+
+/// Files dragged out and moved, for the app to update their downloads.
+static DRAGGED_OUT: Mutex<Vec<Followed>> = Mutex::new(Vec::new());
 
 /// What [`DRAGGED_OUT`] was given since the last call (the app updates its downloads).
-pub fn dragged_out() -> Vec<(u64, PathBuf, DraggedOut)> {
+pub fn dragged_out() -> Vec<Followed> {
     std::mem::take(&mut *DRAGGED_OUT.lock().unwrap_or_else(|e| e.into_inner()))
+}
+
+/// Drag downloads' files (download, its file) out of our window titled `title` (in the
+/// interface language), as Explorer drags files: Download complete's grip and the list's rows
+/// share it. The files are looked for beside the window, with the drag (#743): those not there
+/// are left out. Where a move took each one comes back to the app (`dragged_out`), however late.
+/// Windows only: dragging files out to another program goes through OLE there; Linux and macOS
+/// have no such drag yet (their window library has no drag source), so nothing starts one there.
+#[cfg(windows)]
+pub fn drag_downloads_out(
+    ctx: &egui::Context,
+    title: &str,
+    files: Vec<(u64, PathBuf)>,
+    dragged_from: DraggedFrom,
+) {
+    // One file for downloads that share it, in the order given.
+    let mut paths: Vec<PathBuf> = Vec::new();
+    for (_, f) in &files {
+        if !paths.contains(f) {
+            paths.push(f.clone());
+        }
+    }
+    let wake = ctx.clone();
+    let followed = move |from: PathBuf, out: DraggedOut| {
+        let mut told = DRAGGED_OUT.lock().unwrap_or_else(|e| e.into_inner());
+        for (id, _) in files.iter().filter(|(_, f)| *f == from) {
+            told.push(Followed {
+                id: *id,
+                from: from.clone(),
+                out: out.clone(),
+                dragged_from,
+            });
+        }
+        wake.request_repaint();
+    };
+    if let Err(e) = crate::win32::drag_files_out(title, paths, followed) {
+        tracing::warn!("drag out: {e}");
+    }
 }
 
 /// Something that failed, to tell the user (the app shows it in its notice): from any window,
@@ -3124,6 +3418,9 @@ fn open_file_platform(path: &Path) -> Result<(), std::io::Error> {
     {
         crate::win32::open_file_shell(path)
     }
+    // Linux and macOS: no folder to give. Their file managers start a file's program in no
+    // folder of the file's either (macOS's LaunchServices starts every app in `/`; a Linux
+    // desktop's in the launcher's own), and programs there don't write beside themselves.
     #[cfg(not(windows))]
     {
         open::that_detached(path)
@@ -3140,12 +3437,12 @@ pub fn open_download_now(path: &Path, moved_away: bool) -> bool {
 }
 
 /// Why a download's file isn't where MDM saved it, when it was dragged out of Download complete
-/// to a place MDM couldn't learn (#869).
+/// (#869) or the list (#1210) to a place MDM couldn't learn.
 fn moved_away_text(path: &Path) -> String {
     let name = crate::i18n::isolate(&path.file_name().unwrap_or_default().to_string_lossy());
     crate::i18n::fmt(
         crate::i18n::t(
-            "{file} was moved elsewhere by dragging it out of Download complete, and MDM couldn't learn where. Look for it where you dropped it.",
+            "{file} was moved elsewhere by dragging it out of MDM, and MDM couldn't learn where. Look for it where you dropped it.",
         ),
         &[("file", &name)],
     )
@@ -3986,6 +4283,27 @@ fn ensure_folder_with<T>(
 mod tests {
     use super::*;
 
+    /// A dialog that opened over the browser stays on its own for as long as it is open, even
+    /// once it is the window in front (its frame applied again at a new size); the next opening
+    /// asks again.
+    #[cfg(windows)]
+    #[test]
+    fn a_dialog_is_owned_or_not_once_per_opening() {
+        let ctx = egui::Context::default();
+        let key = egui::Id::unique("owned-test");
+        assert!(
+            !owned_by_main(&ctx, key, || false),
+            "over the browser: on its own"
+        );
+        assert!(
+            !owned_by_main(&ctx, key, || true),
+            "in front now, still on its own"
+        );
+        forget_window(&ctx, ViewportId::from_hash_of("owned-test"), key);
+        assert!(owned_by_main(&ctx, key, || true), "opened from MDM: owned");
+        assert!(owned_by_main(&ctx, key, || panic!("asked again")));
+    }
+
     /// #440: Download File Info behind the Create folder question ended without a closing pass,
     /// and the next one opened as a new, hidden window that was never told to show: later
     /// downloads waited behind it for good.
@@ -4202,7 +4520,7 @@ mod tests {
             Box::leak(Box::new(crate::clipboard::Reader::new(
                 move || {
                     let _ = stuck.lock().unwrap().recv();
-                    Some(
+                    crate::clipboard::Read::Text(
                         " https://late.example/a.zip
 "
                         .to_owned(),
@@ -4531,6 +4849,33 @@ mod tests {
         assert_eq!(save_as, display_path(&gone.join("a.zip")));
     }
 
+    /// #597: with Start immediately on, the early download's own `.mdm.part` and `.mdm.json`
+    /// sit beside its name. Picking the same folder in Save As keeps that name, so `adopt_early`
+    /// sees no move and the download is not restarted.
+    #[test]
+    fn the_early_downloads_own_part_and_state_keep_its_name() {
+        let d = tempfile::tempdir().unwrap();
+        let own = d.path().join("song.mp3");
+        std::fs::write(mdm_engine::naming::part_path(&own), b"x").unwrap();
+        std::fs::write(mdm_engine::state::state_path(&own), b"{}").unwrap();
+        let mut place = SaveAsPlace::new(None);
+        place.own(Some(own.clone()));
+        let mut save_as = place.name_in(d.path(), "song.mp3");
+        assert_eq!(answered(&mut place, &mut save_as), Some(true));
+        assert_eq!(save_as, display_path(&own));
+        // What `adopt_early` compares: the dialog's place is the item's own, so no restart.
+        assert_eq!(resolve_path(&save_as), own);
+        // Another download's part beside another name still counts.
+        std::fs::write(
+            mdm_engine::naming::part_path(&d.path().join("other.mp3")),
+            b"x",
+        )
+        .unwrap();
+        let mut other = place.name_in(d.path(), "other.mp3");
+        assert_eq!(answered(&mut place, &mut other), Some(true));
+        assert_eq!(other, display_path(&d.path().join("other (1).mp3")));
+    }
+
     /// #1088: a name chosen in the Save dialog that a file there already has is taken as a typed
     /// one: Save As keeps it as chosen (not renumbered under the user), its folder looked at; the
     /// download numbers it as it starts (`Item::number_at_start`), so nothing is overwritten.
@@ -4555,6 +4900,82 @@ mod tests {
             mdm_engine::naming::destination(d.path(), "testName.7z"),
             d.path().join("testName (1).7z")
         );
+    }
+
+    /// Download File Info for a file `name` the browser named (no look-up), downloads in
+    /// `downloads`; the runtime it was given, kept alive with it.
+    fn file_info(downloads: &Path, name: &str) -> (FileInfo, tokio::runtime::Runtime) {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
+        let fi = FileInfo::new(
+            NewUrl {
+                url: Url::parse(&format!("http://127.0.0.1:9/{name}")).unwrap(),
+                login: None,
+            },
+            mdm_ipc::Command {
+                name: Some(name.to_owned()),
+                ..Default::default()
+            },
+            crate::app::RequestParts {
+                headers: Default::default(),
+                opts: Default::default(),
+            },
+            Default::default(),
+            downloads.to_owned(),
+            Vec::new(),
+            rt.handle(),
+            &egui::Context::default(),
+        );
+        (fi, rt)
+    }
+
+    /// #1088: a file the Save dialog asked "Replace?" about, answered Yes, is the one the
+    /// download replaces (`Item::replace_file`), under that exact name, while Save As names it.
+    /// A name the dialog asked nothing about (a file there or not) replaces nothing.
+    #[test]
+    fn a_file_the_save_dialog_was_told_to_replace_is_replaced() {
+        let d = tempfile::tempdir().unwrap();
+        let taken = d.path().join("taken.7z");
+        std::fs::write(&taken, b"the old file").unwrap();
+        let (mut fi, _rt) = file_info(d.path(), "MPC-BE.1.9.3.x86.7z");
+        assert_eq!(fi.replaces(), None);
+        fi.set_saved(&taken, true);
+        assert_eq!(fi.dest(), taken);
+        assert_eq!(fi.replaces(), Some(taken.clone()));
+        // Save As changed since: the new name replaces nothing; the chosen one again does.
+        fi.save_as = display_path(&d.path().join("other.7z"));
+        assert_eq!(fi.replaces(), None);
+        fi.save_as = display_path(&taken);
+        assert_eq!(fi.replaces(), Some(taken.clone()));
+        // Another answer of the dialog that asked nothing.
+        fi.set_saved(&taken, false);
+        assert_eq!(fi.replaces(), None);
+    }
+
+    /// #1088: the name chosen in the Save dialog is the one Download File Info had guessed, and
+    /// the disk's numbered answer for that guess comes after: Save As keeps the name as chosen
+    /// (it used to become `taken (1).7z`, and the download with it).
+    #[test]
+    fn a_late_answer_never_numbers_the_name_chosen_in_the_save_dialog() {
+        let d = tempfile::tempdir().unwrap();
+        let (mut fi, _rt) = file_info(d.path(), "taken.7z");
+        let (look, release) = slow_look(&["taken.7z"]);
+        fi.place = SaveAsPlace::with(look, None);
+        fi.save_as = fi.place.name_in(d.path(), "taken.7z");
+        let taken = d.path().join("taken.7z");
+        assert_eq!(fi.dest(), taken, "the guess, not numbered yet");
+        fi.set_saved(&taken, true);
+        drop(release);
+        let mut there = None;
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while there.is_none() && std::time::Instant::now() < until {
+            there = fi.folder_found();
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        assert_eq!(there, Some(true));
+        assert_eq!(fi.dest(), taken);
+        assert_eq!(fi.replaces(), Some(taken));
     }
 
     /// #743: Start in a dialog whose folder is on a disk slow to answer holds up no frame: the
@@ -4605,5 +5026,13 @@ mod tests {
             next = ensure_folder_with(&ctx, &mut gate, Outcome::Open, &folder, |_| true);
         }
         assert!(matches!(next, Outcome::Done(9)));
+    }
+
+    #[test]
+    fn passive_notices_never_activate_on_open() {
+        assert!(dialog_activates_on_open(Kind::Plain));
+        assert!(dialog_activates_on_open(Kind::Question));
+        assert!(!dialog_activates_on_open(Kind::Notice { on_top: true }));
+        assert!(!dialog_activates_on_open(Kind::Notice { on_top: false }));
     }
 }
