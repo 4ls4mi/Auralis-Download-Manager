@@ -275,3 +275,8 @@
 /* Give the remaining width to the transfer graph instead of stretching each connection. */
 .cg-window .cg-indicator-row{grid-template-columns:minmax(0,1fr) minmax(0,245px)}
 @media(max-width:650px){.cg-window .cg-indicator-row{grid-template-columns:minmax(0,1fr) minmax(0,190px)}}
+/* Let the graph fill only the space left after details and actions. */
+.cg-minimal-progress .cg-indicator-row{flex:1 1 0;min-height:0}
+.cg-minimal-progress .cg-progress-combined,.cg-minimal-progress .cg-selected-chunks{min-height:0}
+.cg-progress-combined .cg-compact-speed .cg-graph{height:0;min-height:32px}
+.cg-minimal-progress>.cg-bottom-actions{flex-shrink:0}
