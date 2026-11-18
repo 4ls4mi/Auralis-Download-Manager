@@ -15,6 +15,12 @@ on:
       - "glass-ui/**"
       - ".github/workflows/auralis-windows.yml"
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      source_ref:
+        description: 'Revision to build when warming the shared cache'
+        required: true
+        type: string
   create:
 
 permissions:
@@ -34,6 +40,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
+          ref: ${{ inputs.source_ref || github.sha }}
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -45,6 +52,11 @@ jobs:
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
         with:
+          shared-key: auralis-windows-x64
+          cache-all-crates: true
+          # Branches may refresh their own cache. Tags restore the shared
+          # default-branch baseline without saving another large copy.
+          save-if: ${{ startsWith(github.ref, 'refs/heads/') }}
           workspaces: |
             . -> target
             glass-ui/src-tauri -> target
@@ -70,10 +82,15 @@ jobs:
       - name: Test original engine workspace
         run: cargo test --workspace --target x86_64-pc-windows-msvc
 
+      - name: Locate npm cache
+        id: npm-cache-dir
+        shell: pwsh
+        run: '"path=$(npm config get cache)" >> $env:GITHUB_OUTPUT'
+
       - name: Cache npm downloads
         uses: actions/cache@v4
         with:
-          path: ~\\AppData\\Local\\npm-cache
+          path: ${{ steps.npm-cache-dir.outputs.path }}
           key: npm-windows-${{ hashFiles('glass-ui/package.json') }}
           restore-keys: |
             npm-windows-
