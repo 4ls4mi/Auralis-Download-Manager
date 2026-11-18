@@ -129,6 +129,30 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Package Chromium and Firefox extensions
+        shell: pwsh
+        run: |
+          node --check auralis-extension/background.js
+          if ($LASTEXITCODE) { throw "Invalid extension background script" }
+          node --check auralis-extension/video.js
+          if ($LASTEXITCODE) { throw "Invalid extension video script" }
+          node --check auralis-extension/thumbnail.js
+          if ($LASTEXITCODE) { throw "Invalid extension thumbnail script" }
+          New-Item -ItemType Directory -Force -Path extension-packages, extension-staging/chromium, extension-staging/firefox | Out-Null
+          Copy-Item auralis-extension/* extension-staging/chromium/ -Recurse -Force
+          Copy-Item auralis-extension/* extension-staging/firefox/ -Recurse -Force
+          Copy-Item extension-staging/firefox/manifest.firefox.json extension-staging/firefox/manifest.json -Force
+          Compress-Archive -Path extension-staging/chromium/* -DestinationPath extension-packages/auralis-chromium.zip
+          Compress-Archive -Path extension-staging/firefox/* -DestinationPath extension-packages/auralis-firefox.zip
+
+      - name: Upload browser extension packages
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: auralis-browser-extensions
+          path: extension-packages/*.zip
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Publish Auralis Windows x64 release
         if: startsWith(github.ref, 'refs/tags/v0.3.')
         shell: pwsh
@@ -140,7 +164,9 @@ jobs:
           $folder = "glass-ui/src-tauri/target/release/bundle/nsis"
           $installer = Join-Path $folder "Auralis Download Manager_${version}_x64-setup.exe"
           $legacy = Join-Path $folder "Mister.Hybrid.Glass_${version}_x64-setup.exe"
-          foreach ($file in @($installer, $legacy)) {
+          $chromium = "extension-packages/auralis-chromium.zip"
+          $firefox = "extension-packages/auralis-firefox.zip"
+          foreach ($file in @($installer, $legacy, $chromium, $firefox)) {
             if (-not (Test-Path $file)) { throw "Missing release asset: $file" }
           }
           $title = "Auralis Download Manager $version — Windows x64"
@@ -153,11 +179,11 @@ jobs:
               Write-Host "Release $env:GITHUB_REF_NAME is already published; leaving its assets unchanged."
               exit 0
             }
-            gh release upload "$env:GITHUB_REF_NAME" $installer $legacy --clobber
+            gh release upload "$env:GITHUB_REF_NAME" $installer $legacy $chromium $firefox --clobber
             if ($LASTEXITCODE) { throw "Uploading Auralis release assets failed" }
             gh release edit "$env:GITHUB_REF_NAME" --verify-tag --title $title --notes-file $notes --draft=false --prerelease=false --latest
             if ($LASTEXITCODE) { throw "Publishing the Auralis release failed" }
           } else {
-            gh release create "$env:GITHUB_REF_NAME" --verify-tag --title $title --notes-file $notes --latest $installer $legacy
+            gh release create "$env:GITHUB_REF_NAME" --verify-tag --title $title --notes-file $notes --latest $installer $legacy $chromium $firefox
             if ($LASTEXITCODE) { throw "GitHub release creation or asset upload failed" }
           }
