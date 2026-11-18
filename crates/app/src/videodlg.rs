@@ -1461,6 +1461,7 @@ pub fn from_browser(c: &mdm_ipc::Command) -> mdm_tools::proc::FromBrowser {
         user_agent: c.user_agent.clone(),
         cookies: c.cookies.clone(),
         explicit_cookies: c.video_explicit_cookies,
+        cookie_browser: c.video_cookie_browser.clone(),
         jar: c.cookie_jar.clone(),
     }
 }

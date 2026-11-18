@@ -56,6 +56,10 @@ pub struct Command {
     #[serde(skip_serializing_if = "is_false")]
     #[schemars(skip)]
     pub video_explicit_cookies: bool,
+    /// Browser selected specifically for this video lookup.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(skip)]
+    pub video_cookie_browser: Option<String>,
     /// From the browser: the same cookies, each with the domain, path and flags the browser
     /// keeps for it, for yt-dlp's cookie file. yt-dlp may ask another host than the page's (a
     /// YouTube Music page is looked up on www.youtube.com), and a cookie of `.youtube.com` goes

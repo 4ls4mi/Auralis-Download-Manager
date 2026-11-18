@@ -659,6 +659,7 @@ pub struct FromBrowser {
     pub cookies: Option<String>,
     /// This request explicitly chose its own cookie source.
     pub explicit_cookies: bool,
+    pub cookie_browser: Option<String>,
     pub jar: Vec<mdm_ipc::BrowserCookie>,
 }
 
@@ -681,6 +682,10 @@ impl FromBrowser {
         }
         let mut args = Vec::new();
         if self.explicit_cookies { args.push("--auralis-explicit-cookies".to_owned()); }
+        if let Some(browser) = self.cookie_browser.as_deref() {
+            if BrowserCookies::new(browser, "").is_none() { return Err(ProcError::BadArgument); }
+            args.extend(["--cookies-from-browser".to_owned(), browser.to_owned()]);
+        }
         if let Some(r) = given(&self.referer) {
             args.extend(["--referer".to_owned(), safe(r)?.to_owned()]);
         }
@@ -1856,6 +1861,12 @@ mod tests {
         layers_with_manual(&mut cmd, &[], &ours, None, Some("global.txt")).unwrap();
         let args: Vec<_> = cmd.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
         assert_eq!(args, ["--cookies", "video.txt"]);
+        let browser = FromBrowser { explicit_cookies: true, cookie_browser: Some("edge".into()), ..Default::default() };
+        let (ours, _) = browser.args("https://example.test/video").unwrap();
+        let mut cmd = Command::new("yt-dlp");
+        layers_with_manual(&mut cmd, &[], &ours, None, Some("global.txt")).unwrap();
+        let args: Vec<_> = cmd.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
+        assert_eq!(args, ["--cookies-from-browser", "edge"]);
     }
 
     /// #360: yt-dlp is told of Node.js or Bun, from the PATH or nvm, and left alone with Deno.

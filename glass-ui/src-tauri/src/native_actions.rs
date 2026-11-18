@@ -84,9 +84,14 @@ pub async fn clipboard_text() -> ApiResult<String> {
 
 /// Original MDM video quality lookup; the engine owns the token and choices.
 #[tauri::command]
-pub async fn video_tool(action:String,value:String,choice:Option<usize>,subs:Option<serde_json::Value>,cookies:Option<String>) -> ApiResult<serde_json::Value> {
+pub async fn video_tool(action:String,value:String,choice:Option<usize>,subs:Option<serde_json::Value>,cookies:Option<String>,cookie_browser:Option<String>) -> ApiResult<serde_json::Value> {
     if value.len()>8192 {return Err("Video request is too long".into());}
     let mut command=mdm_ipc::Command::default();
+    if let Some(browser) = cookie_browser.filter(|b| !b.is_empty()) {
+        if action != "lookup" || !matches!(browser.as_str(), "edge"|"chrome"|"firefox"|"brave"|"chromium"|"opera"|"vivaldi") { return Err("Choose a supported browser".into()); }
+        command.video_cookie_browser=Some(browser);
+        command.video_explicit_cookies=true;
+    }
     if let Some(cookies) = cookies.filter(|c| !c.trim().is_empty()) {
         if action != "lookup" || cookies.len() > 8192 || !cookies.contains('=') || cookies.contains(['\r','\n','\0']) { return Err("Enter cookies as name=value pairs separated by semicolons".into()); }
         command.cookies=Some(cookies);

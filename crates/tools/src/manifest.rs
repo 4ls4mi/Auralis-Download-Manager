@@ -1417,6 +1417,7 @@ mod tests {
             user_agent: Some("UA/1".into()),
             cookies: Some("sid=secret".into()),
             explicit_cookies: false,
+            cookie_browser: None,
             jar: vec![mdm_ipc::BrowserCookie {
                 name: "jar".into(),
                 value: "never".into(),
