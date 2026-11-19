@@ -453,12 +453,15 @@ async fn slow_connections_reconnect_instead_of_holding_the_end() {
     // Every third request crawls at 1 KB/s. The other connections split such a request's part
     // and take its halves over, down to pieces too small to split again (64 KiB here): without
     // shedding, a slow request holds the end on such a piece for over a minute.
-    let s = server("rate=8M&slow_every=3&slow_rate=1K").await;
+    let s = server("rate=100M&slow_every=3&slow_rate=1K").await;
     let opts = Options {
         min_split: 64 << 10,
         ..fast_opts()
     };
-    let (log, size) = fetch(&s, "/gen/8M/slow.bin?seed=32", 32, opts).await;
+    let (log, size) = tokio::time::timeout(
+        std::time::Duration::from_secs(40),
+        fetch(&s, "/gen/8M/slow.bin?seed=32", 32, opts),
+    ).await.expect("a slow connection must not hold the test indefinitely");
     assert_eq!(size, 8 << 20);
     // Timed from each slow request's own start, not the download's (#201: on a starved CPU the
     // whole download took 8-25 s against an 8 s budget, and at 20 KB/s it took under 8 s without

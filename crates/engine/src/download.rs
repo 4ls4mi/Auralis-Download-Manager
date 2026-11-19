@@ -4577,6 +4577,7 @@ async fn receive(
         match complete {
             Some(end) => {
                 note_best(ctx, &pace);
+                note_short_completion(ctx, &pace);
                 // A segment another connection shortened leaves an HTTP body far from its end
                 // (dropped); an FTP session is kept either way.
                 if err.is_none() && (out.pos >= to || matches!(body, Body::Ftp(_))) {
@@ -4890,6 +4891,23 @@ fn note_best(ctx: &Ctx, pace: &Pace) {
         ctx.shared.best_speed.fetch_max(speed, Ordering::Relaxed);
     }
     note_link(&ctx.shared);
+}
+
+/// Fast fixed ranges can finish before a normal speed sample exists. Record a deliberately
+/// conservative lower bound so a remaining connection crawling for minutes can reconnect.
+/// Divide by the full configured connection count to avoid penalizing a shared link.
+fn short_completion_floor(bytes: u64, elapsed: Duration, connections: u32) -> Option<u64> {
+    if bytes < 256 * 1024 || elapsed >= BEST_AFTER { return None; }
+    Some(rate(bytes, Duration::from_secs(1)) / u64::from(connections.max(1)))
+}
+
+fn note_short_completion(ctx: &Ctx, pace: &Pace) {
+    let count = ctx.opts.connections();
+    let Some(floor) = short_completion_floor(pace.received, pace.started.elapsed(), count).filter(|v| *v > 0) else { return; };
+    if ctx.shared.best_speed.compare_exchange(0, floor, Ordering::Relaxed, Ordering::Relaxed).is_ok() {
+        let mut link = ctx.shared.link.lock().unwrap();
+        link.best = link.best.max(floor.saturating_mul(u64::from(count)));
+    }
 }
 
 /// What a download's connections receive together, window by window (`LINK_WINDOW`).
@@ -5314,6 +5332,17 @@ mod tests {
         assert_eq!(shed_bar(2 * mb, 16 * mb, 2), 2 * mb);
         // Nothing measured together yet: the one connection's best.
         assert_eq!(shed_bar(first, 0, 8), first);
+    }
+
+    #[test]
+    fn short_fixed_range_provides_a_conservative_slow_connection_floor() {
+        let mb = 1u64 << 20;
+        let floor = short_completion_floor(mb, Duration::from_millis(30), 8).unwrap();
+        assert_eq!(floor, mb / 8);
+        assert!(too_slow(1024, Duration::from_secs(3), floor, mb, None));
+        assert!(!too_slow(mb / 8, Duration::from_secs(3), floor, mb, None));
+        assert_eq!(short_completion_floor(100 << 10, Duration::from_millis(30), 8), None);
+        assert_eq!(short_completion_floor(mb, BEST_AFTER, 8), None);
     }
 
     #[test]
