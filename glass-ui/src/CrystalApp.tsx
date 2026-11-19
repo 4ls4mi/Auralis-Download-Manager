@@ -192,6 +192,20 @@ export default function CrystalApp(){
   };
   const execute=async(action:string,item:MdmFile|null=picked)=>{
     setOpenMenu(null);setContext(null);setError("");
+    if(action==="selected-start"){
+      if(!online){setError("The download service is unavailable.");return}
+      setBusy(true);
+      try{
+        const skipped:string[]=[];
+        for(let start=0;start<selectedItems.length;start+=100){
+          const result=await invoke<{done:number[];skipped:{why:string}[]}>("download_action",{action:"start",ids:selectedItems.slice(start,start+100).map(d=>d.id)});
+          skipped.push(...result.skipped.map(x=>x.why));
+        }
+        if(skipped.length)setError(skipped.join("; "));
+        await refresh();
+      }catch(e){setError(String(e))}finally{setBusy(false)}
+      return;
+    }
     if(["remove","delete","delete-completed","selected-delete"].includes(action)){
       const items=action==="delete-completed"?data.downloads.filter(x=>x.status==="Complete"):item&&selected.includes(item.id)&&selectedItems.length>1?selectedItems:item?[item]:[];
       if(!items.length)return;
@@ -401,20 +415,21 @@ export default function CrystalApp(){
           <small>{shown.length} of {data.downloads.length} downloads • Double-click for the floating progress window</small></div>
           <label className="cg-sort">Sort <select aria-label="Sort downloads" value={sort} onChange={e=>setSort(e.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="name">Name</option><option value="size">Size</option><option value="status">Status</option></select></label><label className="cg-search"><Search size={17}/><input ref={searchRef} placeholder="Search downloads..." value={term} onChange={e=>setTerm(e.target.value)}/></label>
         </header>
-        {selectedItems.length>1&&<div className="cg-selection-actions" role="toolbar" aria-label="Selected downloads"><strong>{selectedItems.length} selected</strong><button className="cg-btn" onClick={()=>void execute("selected-open")}>Open files</button><button className="cg-btn" onClick={()=>void execute("selected-folder")}>Open folders</button><button className="cg-btn" onClick={()=>void execute("selected-extract")}>Extract archives</button><label className="cg-delete-disk"><input type="checkbox" checked={deleteDisk} onChange={e=>setDeleteDisk(e.target.checked)}/> Also delete from disk</label><button className="cg-btn cg-btn-danger" onClick={()=>void execute("selected-delete")}>Delete…</button><button className="cg-btn" onClick={()=>{setSelected([]);setChosen(null)}}>Clear</button></div>}
-        <div className="cg-table-viewport" tabIndex={0} aria-label="Downloads list"><div className="cg-table" style={{"--download-columns":columnWidths.map((w,i)=>i===0||i===3?`minmax(${w}px,1fr)`:`${w}px`).join(" "),minWidth:columnWidths.reduce((a,b)=>a+b,0)+36} as CSSProperties}>
-          <header className="cg-cols">{columnLabels.map((label,index)=><span key={label}>{label}<span className="cg-column-resize" role="separator" aria-label={`Resize ${label.toLowerCase()} column`} aria-orientation="vertical" tabIndex={0}
+        {selectedItems.length>0&&<div className="cg-selection-actions" role="toolbar" aria-label="Selected downloads"><strong>{selectedItems.length} selected</strong><button className="cg-btn cg-btn-primary" disabled={busy||!online} onClick={()=>void execute("selected-start")}>Start selected</button>{selectedItems.length>1&&<><button className="cg-btn" onClick={()=>void execute("selected-open")}>Open files</button><button className="cg-btn" onClick={()=>void execute("selected-folder")}>Open folders</button><button className="cg-btn" onClick={()=>void execute("selected-extract")}>Extract archives</button><label className="cg-delete-disk"><input type="checkbox" checked={deleteDisk} onChange={e=>setDeleteDisk(e.target.checked)}/> Also delete from disk</label><button className="cg-btn cg-btn-danger" onClick={()=>void execute("selected-delete")}>Delete…</button></>}<button className="cg-btn" onClick={()=>{setSelected([]);setChosen(null)}}>Clear</button></div>}
+        <div className="cg-table-viewport" tabIndex={0} aria-label="Downloads list"><div className="cg-table" style={{"--download-columns":`28px ${columnWidths.map((w,i)=>i===0||i===3?`minmax(${w}px,1fr)`:`${w}px`).join(" ")}`,minWidth:columnWidths.reduce((a,b)=>a+b,0)+64} as CSSProperties}>
+          <header className="cg-cols"><label className="cg-select-cell"><input type="checkbox" aria-label="Select all visible downloads" disabled={!shown.length} checked={shown.length>0&&shown.every(d=>selected.includes(d.id))} ref={el=>{if(el)el.indeterminate=shown.some(d=>selected.includes(d.id))&&!shown.every(d=>selected.includes(d.id))}} onChange={e=>{const visible=new Set(shown.map(d=>d.id));const next=e.target.checked?Array.from(new Set([...selected,...visible])):selected.filter(id=>!visible.has(id));setSelected(next);setChosen(next.at(-1)??null)}}/></label>{columnLabels.map((label,index)=><span key={label}>{label}<span className="cg-column-resize" role="separator" aria-label={`Resize ${label.toLowerCase()} column`} aria-orientation="vertical" tabIndex={0}
             onPointerDown={e=>{e.preventDefault();e.stopPropagation();const fit=e.currentTarget.closest<HTMLElement>('.cg-fit-content');resizingColumn.current={index,start:e.clientX,width:columnWidths[index],scale:fit?fit.getBoundingClientRect().width/fit.offsetWidth:1};e.currentTarget.setPointerCapture(e.pointerId)}}
             onPointerMove={e=>{const drag=resizingColumn.current;if(drag?.index===index)setColumnWidth(index,drag.width+(e.clientX-drag.start)/(drag.scale||1))}}
             onPointerUp={()=>{resizingColumn.current=null}} onPointerCancel={()=>{resizingColumn.current=null}}
             onKeyDown={e=>{if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();setColumnWidth(index,columnWidths[index]+(e.key==='ArrowRight'?10:-10))}}}/></span>)}</header>
-          {shown.map(d=><button className={"cg-row "+(selected.includes(d.id)?"selected":"")} key={d.id}
-            aria-pressed={selected.includes(d.id)} onClick={e=>{const next=selectDownload(shown.map(x=>x.id),selected,anchor.current,d.id,e.shiftKey,e.ctrlKey||e.metaKey);setSelected(next);if(!e.shiftKey)anchor.current=d.id;setChosen(next.includes(d.id)?d.id:next.at(-1)??null);setContext(null)}} onDoubleClick={()=>rowDouble(d)}
+          {shown.map(d=><div className={"cg-row "+(selected.includes(d.id)?"selected":"")} key={d.id} role="group" aria-label={`Download ${d.file}`}
+            onClick={e=>{const next=selectDownload(shown.map(x=>x.id),selected,anchor.current,d.id,e.shiftKey,e.ctrlKey||e.metaKey);setSelected(next);if(!e.shiftKey)anchor.current=d.id;setChosen(next.includes(d.id)?d.id:next.at(-1)??null);setContext(null)}} onDoubleClick={()=>rowDouble(d)}
             onContextMenu={e=>{
               e.preventDefault();if(!selected.includes(d.id)){setSelected([d.id]);anchor.current=d.id}setChosen(d.id);setOpenMenu(null);
               const fit=e.currentTarget.closest<HTMLElement>(".cg-fit-content");if(fit){const box=fit.getBoundingClientRect(),scale=box.width/fit.offsetWidth;setContext({id:d.id,x:(e.clientX-box.left)/scale,y:(e.clientY-box.top)/scale});}
             }}>
-            <span className="cg-file"><FileSymbol name={d.file}/><span className="cg-file-info">
+            <label className="cg-select-cell" onClick={e=>e.stopPropagation()} onDoubleClick={e=>e.stopPropagation()}><input type="checkbox" aria-label={`Select ${d.file}`} checked={selected.includes(d.id)} onChange={e=>{const next=e.target.checked?[...selected,d.id]:selected.filter(id=>id!==d.id);setSelected(next);setChosen(e.target.checked?d.id:next.at(-1)??null);anchor.current=d.id;setContext(null)}}/></label>
+            <span className="cg-file" role="button" tabIndex={0} aria-pressed={selected.includes(d.id)} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();setSelected([d.id]);setChosen(d.id);anchor.current=d.id}}}><FileSymbol name={d.file}/><span className="cg-file-info">
               <strong title={d.file}>{d.file}</strong><small>{units(d.downloaded)} / {units(d.size)}</small></span></span>
             <span>{units(d.size)}</span><StatusBadge item={d}/>
             <span className="cg-row-progress">
@@ -424,7 +439,7 @@ export default function CrystalApp(){
             </span>
             <span>{d.status==="Downloading"?rate(d.speed):"—"}</span>
             <span>{timeLeft(d)}</span>
-          </button>)}
+          </div>)}
           {!shown.length&&<div className="cg-empty"><FolderOpen size={35}/><strong>{online?"No downloads in this view":"Connecting to MDM"}</strong>
             <p>{online?"Add a URL or torrent to begin.":message}</p>
             {online&&<button className="cg-btn cg-btn-primary" onClick={()=>add()}><Plus size={15}/> Add URL</button>}

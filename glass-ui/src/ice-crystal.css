@@ -637,6 +637,9 @@
 /* Fill the available connection panel; the 24px cap made the blocks tiny. */
 .cg-window .cg-selected-chunks .cg-fixed-connections,.cg-window.cg-material-frosted-water-351 .cg-selected-chunks .cg-fixed-connections{grid-template-columns:repeat(8,minmax(0,1fr));max-width:none;width:100%;grid-template-rows:repeat(4,minmax(24px,1fr));gap:4px}
 .cg-window .cg-chunk-map>span>i{position:absolute;bottom:0;left:0;width:100%!important;transition:height .45s linear}
+.cg-window .cg-select-cell{display:flex;align-items:center;justify-content:center;min-width:0;align-self:stretch}
+.cg-window .cg-select-cell input{width:16px;height:16px;accent-color:var(--accent);cursor:pointer}
+.cg-window .cg-row .cg-file:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
 .cg-footer-version{font-weight:650;white-space:nowrap;color:var(--ink)}
 .cg-update-toast{box-sizing:border-box;width:100vw;height:100vh;padding:18px 20px;border:1px solid #9de8fa88;border-radius:16px;background:linear-gradient(145deg,#334d6ef5,#122435f5);box-shadow:inset 0 1px #fff8;color:#fff;font:15px/1.4 'Segoe UI',sans-serif;display:flex;flex-direction:column;gap:8px}
 .cg-update-toast strong{font-size:17px}.cg-update-toast div{display:flex;gap:8px;margin-top:auto}.cg-update-toast button{padding:8px 13px;border-radius:8px;border:1px solid #75e6d7a0;color:#fff;background:#197c6d;cursor:pointer}.cg-update-toast button+button{background:#34485d}

@@ -269,11 +269,11 @@ export function CrystalWindow({ children, target = "main" }: {
   useEffect(()=>{const report=(event:Event)=>setWindowError(String((event as CustomEvent).detail));window.addEventListener("glass-window-error",report);return()=>window.removeEventListener("glass-window-error",report)},[]);
   useLayoutEffect(()=>{
     const el=frame.current;if(!el)return;
-    let disposed=false,raf=0;
+    let disposed=false,raf=0,resizing=false,resizeTimer=0;
     const baseScale=()=>appearance.uiScale/100;
     const measure=()=>{
       cancelAnimationFrame(raf);raf=requestAnimationFrame(()=>{
-        if(disposed)return;
+        if(disposed||resizing)return;
         const fit=el.querySelector<HTMLElement>('.cg-fit-content');if(!fit)return;
         let ratio=1;
         for(const box of [fit,...el.querySelectorAll<HTMLElement>('.cg-page,.cg-window-add,.cg-main-body,.cg-workspace,.cg-toolbar,.cg-window-top,.cg-original-editor')]){
@@ -291,15 +291,17 @@ export function CrystalWindow({ children, target = "main" }: {
     const mutations=new MutationObserver(measure);mutations.observe(el,{childList:true,subtree:true});
     const sectionClick=(event:Event)=>{if((event.target as Element).closest('nav button,.cg-appearance-tabs button,details summary'))reset()};
     el.addEventListener('click',sectionClick);el.addEventListener('change',reset);el.addEventListener('toggle',reset,true);
-    window.addEventListener('resize',reset);reset();
-    return()=>{disposed=true;cancelAnimationFrame(raf);observer.disconnect();mutations.disconnect();el.removeEventListener('click',sectionClick);el.removeEventListener('change',reset);el.removeEventListener('toggle',reset,true);window.removeEventListener('resize',reset)};
+    const resize=()=>{resizing=true;window.clearTimeout(resizeTimer);resizeTimer=window.setTimeout(()=>{resizing=false;reset()},120)};
+    window.addEventListener('resize',resize);reset();
+    return()=>{disposed=true;window.clearTimeout(resizeTimer);cancelAnimationFrame(raf);observer.disconnect();mutations.disconnect();el.removeEventListener('click',sectionClick);el.removeEventListener('change',reset);el.removeEventListener('toggle',reset,true);window.removeEventListener('resize',resize)};
   },[appearance.uiScale,appearance.fontSize,appearance.fontFamily,target]);
   useEffect(()=>{
-    let disposed=false, pending=false, running=false, frame=0;
-    const apply=async()=>{if(disposed)return;if(running){pending=true;return}running=true;try{await invoke("set_material_window_shape",{material:appearance.material})}catch(e){if(!disposed)setWindowError(`Material outline unavailable: ${String(e)}`)}finally{running=false;if(pending&&!disposed){pending=false;void apply()}}};
-    const resize=()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(()=>void apply())};
-    window.addEventListener("resize",resize);apply();
-    return()=>{disposed=true;cancelAnimationFrame(frame);window.removeEventListener("resize",resize)};
+    let disposed=false, pending=false, running=false, timer=0, outline:number[][]|null=null;
+    const apply=async()=>{if(disposed)return;if(running){pending=true;return}running=true;try{await invoke("set_material_window_shape",{material:appearance.material,outline})}catch(e){if(!disposed)setWindowError(`Material outline unavailable: ${String(e)}`)}finally{running=false;if(pending&&!disposed){pending=false;void apply()}}};
+    const resize=()=>{if(!timer)timer=window.setTimeout(()=>{timer=0;void apply()},50)};
+    const onOutline=(event:Event)=>{outline=(event as CustomEvent<number[][]>).detail;void apply()};
+    window.addEventListener("resize",resize);window.addEventListener("glass-frost-outline",onOutline);void apply();
+    return()=>{disposed=true;window.clearTimeout(timer);window.removeEventListener("resize",resize);window.removeEventListener("glass-frost-outline",onOutline)};
   },[appearance.material]);
   const main = target === "main", mode = main ? appearance.mainMode : appearance.detailMode;
   const path = main ? appearance.wallMain : (appearance.wallDetail || appearance.wallMain);

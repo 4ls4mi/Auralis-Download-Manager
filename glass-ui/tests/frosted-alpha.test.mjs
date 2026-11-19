@@ -17,6 +17,10 @@ test('frosted material leaves transparent corners in desktop, wallpaper and soli
     window.__TAURI_INTERNALS__={metadata:{currentWindow:{label:'main'},currentWebview:{label:'main'}},invoke:async(c,args)=>{window.calls.push({c,args});return c==='dashboard_snapshot'?{downloads:[],speed:0,queues:[],categories:[]}:c==='glass_update_check'?{state:'latest'}:null},transformCallback:()=>1,unregisterCallback:()=>{}};
    },mode);
    await page.goto(server.resolvedUrls.local[0]);
+   await page.waitForFunction(()=>window.calls.some(c=>c.c==='set_material_window_shape'&&c.args.outline?.length>3));
+   const outline=await page.evaluate(()=>window.calls.find(c=>c.c==='set_material_window_shape'&&c.args.outline?.length>3).args.outline);
+   assert.ok(outline.every(([x,y])=>x>=0&&x<=1&&y>=0&&y<=1));
+   assert.ok(outline.some(([x])=>x>.1),'outline follows the glass rather than the rectangular corner');
    if(mode!=='desktop')await page.waitForSelector('.cg-frost-mask-ready');
    await page.waitForTimeout(200);
    const png=await page.screenshot({omitBackground:true});

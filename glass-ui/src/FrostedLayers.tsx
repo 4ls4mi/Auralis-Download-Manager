@@ -1,6 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import {frostFragment,frostVertex} from './frostedLayersShader';
 import {frostedResizeDirection} from './frostedResize';
+import {frostedOutline} from './frostedOutline';
 import {getCurrentWindow} from '@tauri-apps/api/window';
 
 /** Draw the supplied Water Bubble 3.5.1 pane stack behind Auralis controls. */
@@ -32,12 +33,14 @@ export default function FrostedLayers({maskBackdrop=false,tintHue=210,tintStreng
     alpha=mask.getImageData(0,0,maskCanvas.width,maskCanvas.height).data;
     host.classList.add('cg-frost-edge-ready');
     if(maskBackdrop){host.style.setProperty('--frost-shell-mask',`url("${maskCanvas.toDataURL('image/png')}")`);host.classList.add('cg-frost-mask-ready');}
+    const outline=frostedOutline(alpha,maskCanvas.width,maskCanvas.height);
+    if(outline.length)window.dispatchEvent(new CustomEvent('glass-frost-outline',{detail:outline}));
    };
    const edgeAt=(event:MouseEvent)=>{if(!alpha)return null;const target=event.target as Element|null;if(target?.closest('button,input,select,textarea,a,[role="button"],.cg-resize'))return null;const bounds=el.getBoundingClientRect();return frostedResizeDirection(alpha,maskCanvas.width,maskCanvas.height,bounds.width,bounds.height,event.clientX-bounds.left,event.clientY-bounds.top)};
    const mouseDown=(event:MouseEvent)=>{if(event.button!==0)return;const direction=edgeAt(event);if(!direction)return;event.preventDefault();event.stopPropagation();void getCurrentWindow().startResizeDragging(direction).catch(e=>window.dispatchEvent(new CustomEvent('glass-window-error',{detail:String(e)})))};
    const mouseMove=(event:MouseEvent)=>{if(!host)return;const direction=edgeAt(event);host.style.cursor=direction?({North:'n-resize',South:'s-resize',East:'e-resize',West:'w-resize',NorthEast:'ne-resize',NorthWest:'nw-resize',SouthEast:'se-resize',SouthWest:'sw-resize'} as const)[direction]:''};
    host?.addEventListener('mousedown',mouseDown,true);host?.addEventListener('mousemove',mouseMove);
-   const draw=()=>{frame=0;if(disposed||document.hidden||ctx.isContextLost())return;const rect=el.getBoundingClientRect();if(!rect.width||!rect.height)return;const dpr=Math.min(window.devicePixelRatio||1,2),w=Math.max(1,Math.round(rect.width*dpr)),h=Math.max(1,Math.round(rect.height*dpr));if(el.width!==w||el.height!==h){el.width=w;el.height=h}ctx.viewport(0,0,w,h);ctx.useProgram(program);ctx.uniform2f(viewport,w,h);ctx.drawArrays(ctx.TRIANGLES,0,3);applyMask();setFallback(false)};
+   const draw=()=>{frame=0;if(disposed||document.hidden||ctx.isContextLost())return;const rect=el.getBoundingClientRect();if(!rect.width||!rect.height)return;const dpr=Math.min(window.devicePixelRatio||1,2),w=Math.max(1,Math.round(rect.width*dpr)),h=Math.max(1,Math.round(rect.height*dpr));if(el.width!==w||el.height!==h){el.width=w;el.height=h}ctx.viewport(0,0,w,h);ctx.useProgram(program);ctx.uniform2f(viewport,w,h);ctx.drawArrays(ctx.TRIANGLES,0,3);if(!alpha)applyMask();setFallback(false)};
    const request=()=>{if(!frame)frame=requestAnimationFrame(draw)};const observer=new ResizeObserver(request);observer.observe(el);document.addEventListener('visibilitychange',request);request();
    return()=>{disposed=true;cancelAnimationFrame(frame);observer.disconnect();host?.removeEventListener('mousedown',mouseDown,true);host?.removeEventListener('mousemove',mouseMove);host?.style.removeProperty('cursor');host?.classList.remove('cg-frost-edge-ready');host?.classList.remove('cg-frost-mask-ready');host?.style.removeProperty('--frost-shell-mask');document.removeEventListener('visibilitychange',request);el.removeEventListener('webglcontextlost',lost);el.removeEventListener('webglcontextrestored',restored);ctx.deleteBuffer(buffer);ctx.deleteProgram(program);ctx.deleteShader(vs);ctx.deleteShader(fs)};
   }catch{failed()}

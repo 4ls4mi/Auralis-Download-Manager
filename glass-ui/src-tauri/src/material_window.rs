@@ -1,13 +1,13 @@
 //! Native Windows clipping for the material outline. The UI draws inside this
 //! region; Windows clips the WebView and native backdrop together.
 #[tauri::command]
-pub fn set_material_window_shape(window: tauri::WebviewWindow, material: String) -> Result<(), String> {
+pub fn set_material_window_shape(window: tauri::WebviewWindow, material: String, outline: Option<Vec<[f64; 2]>>) -> Result<(), String> {
     #[cfg(windows)]
     {
         use windows_sys::Win32::Foundation::POINT;
         use windows_sys::Win32::Graphics::Gdi::{CreatePolygonRgn, CreateRoundRectRgn, DeleteObject, SetWindowRgn, WINDING};
         let hwnd = window.hwnd().map_err(|e| e.to_string())?.0 as windows_sys::Win32::Foundation::HWND;
-        if material == "frosted-water-351" || window.is_maximized().map_err(|e| e.to_string())? {
+        if window.is_maximized().map_err(|e| e.to_string())? {
             // A maximized window must occupy the entire monitor work area.
             unsafe { SetWindowRgn(hwnd, std::ptr::null_mut(), 1); }
             return Ok(());
@@ -17,6 +17,15 @@ pub fn set_material_window_shape(window: tauri::WebviewWindow, material: String)
         let height = i32::try_from(size.height).map_err(|e| e.to_string())?;
         if width < 2 || height < 2 { return Ok(()); }
         let shape = match material.as_str() {
+            "frosted-water-351" => {
+                let Some(outline) = outline.filter(|p| p.len() >= 3 && p.len() <= 2048 && p.iter().flatten().all(|v| v.is_finite() && (0.0..=1.0).contains(v))) else {
+                    // The renderer will supply its outline after its first frame.
+                    unsafe { SetWindowRgn(hwnd, std::ptr::null_mut(), 1); }
+                    return Ok(());
+                };
+                let points: Vec<POINT> = outline.iter().map(|p| POINT{x:(p[0] * f64::from(width)).round() as i32,y:(p[1] * f64::from(height)).round() as i32}).collect();
+                unsafe { CreatePolygonRgn(points.as_ptr(), points.len() as i32, WINDING) }
+            },
             "ice-edge" | "diamond-facet" | "prismatic-glass" => {
                 let cut = (width.min(height) / 30).clamp(6, 18);
                 let points = [POINT{x:cut,y:0},POINT{x:width-cut,y:0},POINT{x:width,y:cut},POINT{x:width,y:height-cut},POINT{x:width-cut,y:height},POINT{x:cut,y:height},POINT{x:0,y:height-cut},POINT{x:0,y:cut}];
@@ -40,5 +49,5 @@ pub fn set_material_window_shape(window: tauri::WebviewWindow, material: String)
         Ok(())
     }
     #[cfg(not(windows))]
-    { let _ = (window, material); Err("Native material outlines are available on Windows".into()) }
+    { let _ = (window, material, outline); Err("Native material outlines are available on Windows".into()) }
 }
