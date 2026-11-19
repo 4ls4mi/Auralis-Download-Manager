@@ -233,7 +233,8 @@ export const ribbonFragment = `
       track += vec3(.14,.22,.28)*inner*.125;
 
       if (trackFinish > .5 && trackFinish < 1.5) track = mix(track, vec3(.72,.84,.91), .48);
-      if (trackFinish > 1.5) track = mix(track, vec3(.045,.09,.15), .54);
+      if (trackFinish > 1.5 && trackFinish < 2.5) track = mix(track, vec3(.045,.09,.15), .54);
+      if (trackFinish > 2.5) track = mix(track, vec3(.56,.78,.86), .40) + vec3(.055,.09,.10)*inner;
       vec3 gradientTint = mix(mix(trackTintA, trackTintB, smoothstep(0.0, 0.5, clamp((p.x-128.)/560.,0.,1.))), mix(trackTintB, trackTintC, smoothstep(0.5, 1.0, clamp((p.x-128.)/560.,0.,1.))), step(0.5, clamp((p.x-128.)/560.,0.,1.)));
       track = mix(track, gradientTint, trackTintStrength);
 

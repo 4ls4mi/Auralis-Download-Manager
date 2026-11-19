@@ -13,6 +13,12 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 - Reduced overlapping visual layers and added manual Netscape-format cookie-file selection for video helpers. Google-account autodetection/direct connection remains unfinished.
 - Remaining manual Windows checks include physical DPI/transparency review and native drag-to-Explorer/application behavior. Automated success does not establish complete original-MDM feature parity.
 
+### Auralis Download Manager 0.3.11 — Windows x64
+
+- Makes the ice-ribbon clear backdrop visibly distinct from its default finish.
+- Preserves the selected backdrop and progress fill if WebGL is unavailable.
+- Adds browser rendering checks for backdrop finishes and the fallback.
+
 ### Auralis Download Manager 0.3.10 — Windows x64
 
 - Checks for Auralis updates at startup, on release signals and when reconnecting, with a system notification and a movable changelog window offering download or reminders.
