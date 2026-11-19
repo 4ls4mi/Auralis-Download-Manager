@@ -15,7 +15,7 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 
 ### Auralis Download Manager 0.3.10 — Windows x64
 
-- Checks for Auralis updates independently of the download engine, with a system notification and a movable changelog window offering download or reminders.
+- Checks for Auralis updates at startup and approximately every five minutes independently of the download engine, with a system notification and a movable changelog window offering download or reminders.
 - Masks wallpaper and solid backgrounds to the Frosted Layers pane outline and targets resize drags at the visible glass edge.
 - Gives main-list progress and connection indicators more space and adds glass highlights to standard gradient bars.
 - Windows notifications, desktop compositing and edge dragging still need real-device verification. See [full notes](docs/glass-releases/v0.3.10.md).

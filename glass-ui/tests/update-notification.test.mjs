@@ -13,7 +13,7 @@ test('background update appears even when engine startup fails, respects reminde
   async function pageFor(snoozeVersion){
    const page=await browser.newPage();
    await page.addInitScript(({snoozeVersion})=>{
-    window.calls=[];window.notices=[];localStorage.setItem('auralis-browser-guide-seen','1');
+    window.calls=[];window.notices=[];window.intervals=[];const originalSetInterval=window.setInterval;window.setInterval=(fn,delay,...args)=>{window.intervals.push(delay);return originalSetInterval(fn,delay,...args)};localStorage.setItem('auralis-browser-guide-seen','1');
     if(snoozeVersion){localStorage.setItem('auralis-update-snooze',String(Date.now()+3600000));localStorage.setItem('auralis-update-snooze-version',snoozeVersion)}
     class FakeNotification {static permission='granted';constructor(title,options){window.notices.push({title,body:options.body})}}
     window.Notification=FakeNotification;
@@ -25,6 +25,7 @@ test('background update appears even when engine startup fails, respects reminde
   const fresh=await pageFor(null);
   assert.ok(await fresh.evaluate(()=>window.calls.some(c=>c.cmd==='open_glass_window'&&c.args.label==='tool-update-notice')),'update window should open even when engine fails');
   assert.equal(await fresh.evaluate(()=>window.notices.length),1,'system notification should be sent once');
+  assert.ok(await fresh.evaluate(()=>window.intervals.includes(300000)),'background checks should run every five minutes');
   assert.match(await fresh.locator('.cg-update-notice').innerText(),/1\.2\.3/);
   await fresh.close();
   const snoozed=await pageFor('1.2.3');

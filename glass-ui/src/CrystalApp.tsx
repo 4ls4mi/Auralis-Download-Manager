@@ -131,7 +131,7 @@ export default function CrystalApp(){
       finally{inFlight=false}
     };
     void check();
-    const updateTimer=window.setInterval(()=>void check(),6*60*60*1000);
+    const updateTimer=window.setInterval(()=>void check(),5*60*1000);
     const reminder=window.setInterval(()=>{const due=Number(localStorage.getItem("auralis-update-snooze")||0);if(due>0&&due<=Date.now())void check(true)},60000);
     return()=>{mounted=false;window.clearInterval(updateTimer);window.clearInterval(reminder)};
   },[]);
