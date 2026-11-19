@@ -84,6 +84,26 @@ jobs:
           rustup target add x86_64-pc-windows-msvc
           if ($LASTEXITCODE) { throw 'Could not install the Windows MSVC target.' }
 
+      - name: Set up cached CMake and NASM
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $cacheDir = Join-Path $env:RUNNER_WORKSPACE 'auralis-cache'
+          $tools = @(
+            @{ Name='CMake'; Archive='cmake-3.31.10-windows-x86_64.zip'; Url='https://cmake.org/files/v3.31/cmake-3.31.10-windows-x86_64.zip'; Sha='13d1a463d7130df5339baedd63d8ae990aaf385062b2f42f372796143ae94086'; Bin='cmake-3.31.10-windows-x86_64/bin'; Exe='cmake.exe' },
+            @{ Name='NASM'; Archive='nasm-2.16.03-win64.zip'; Url='https://www.nasm.us/pub/nasm/releasebuilds/2.16.03/win64/nasm-2.16.03-win64.zip'; Sha='3ee4782247bcb874378d02f7eab4e294a84d3d15f3f6ee2de2f47a46aa7226e6'; Bin='nasm-2.16.03'; Exe='nasm.exe' }
+          )
+          foreach ($tool in $tools) {
+            $bin = Join-Path $cacheDir $tool.Bin
+            if (!(Test-Path (Join-Path $bin $tool.Exe))) {
+              $archive = Join-Path $cacheDir $tool.Archive
+              if (!(Test-Path $archive)) { Invoke-WebRequest $tool.Url -OutFile $archive }
+              if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne $tool.Sha) { Remove-Item $archive -Force; throw "$($tool.Name) archive checksum mismatch." }
+              Expand-Archive -Path $archive -DestinationPath $cacheDir -Force
+            }
+            $bin >> $env:GITHUB_PATH
+          }
+
       - name: Prepare verified Deno runtime
         shell: pwsh
         run: |
