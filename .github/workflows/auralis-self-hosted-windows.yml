@@ -23,6 +23,7 @@ concurrency:
 
 jobs:
   windows-x64:
+    name: Build and test on your PC
     # Only the owner's trusted release branch may execute on a personal computer.
     if: github.ref == 'refs/heads/feature/auralis-frosted-candidate'
     runs-on: [self-hosted, Windows, X64, auralis]
