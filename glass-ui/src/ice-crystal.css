@@ -586,3 +586,15 @@
 .cg-window .cg-palette-track.cg-track-clear .cg-ribbon-fallback-track{background:linear-gradient(180deg,#ffffff99,#a0d9ed22,#efffff77),linear-gradient(90deg,var(--cg-backdrop-a),var(--cg-backdrop-b),var(--cg-backdrop-c))}
 .cg-window .cg-palette-track.cg-track-frosted .cg-ribbon-fallback-track{background:linear-gradient(180deg,#f7ffffbd,#e5f6ff99,#efffffc9),linear-gradient(90deg,var(--cg-backdrop-a),var(--cg-backdrop-b),var(--cg-backdrop-c))}
 .cg-window .cg-palette-track.cg-track-recessed .cg-ribbon-fallback-track{background:linear-gradient(180deg,#07192bd9,#152c43ad),linear-gradient(90deg,var(--cg-backdrop-a),var(--cg-backdrop-b),var(--cg-backdrop-c))}
+
+/* Keep the 32 connection slots, graph and actions in their own layout space
+   even when the user increases interface scale or resizes the window. */
+.cg-window .cg-minimal-progress{min-height:0;overflow:auto;overscroll-behavior:contain}
+.cg-window .cg-minimal-progress .cg-mdm-details{flex:0 0 auto}
+.cg-window .cg-minimal-progress .cg-mdm-details dl{grid-template-columns:repeat(2,minmax(0,1fr));column-gap:12px}
+.cg-window .cg-minimal-progress .cg-mdm-details dl>div{grid-template-columns:max-content minmax(0,1fr);gap:7px}
+.cg-window .cg-minimal-progress .cg-mdm-details dl>div:last-child{grid-column:1/-1}
+.cg-window .cg-minimal-progress .cg-indicator-row{grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;flex:1 0 150px;min-height:150px}
+.cg-window .cg-minimal-progress .cg-progress-combined,.cg-window .cg-minimal-progress .cg-selected-chunks{min-height:0;min-width:0}
+.cg-window .cg-minimal-progress>.cg-bottom-actions{flex:0 0 auto}
+@media(max-width:470px){.cg-window .cg-minimal-progress .cg-indicator-row{grid-template-columns:minmax(0,1fr);min-height:0}.cg-window .cg-minimal-progress .cg-indicator-row>section{min-height:150px}.cg-window .cg-minimal-progress .cg-mdm-details dl{grid-template-columns:minmax(0,1fr)}}

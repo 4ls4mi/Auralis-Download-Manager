@@ -15,6 +15,7 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 
 ### Auralis Download Manager 0.3.11 — Windows x64
 
+- Prevents the download graph, connection blocks and buttons from overlapping when the window or interface is scaled; scrolls when space is limited.
 - Makes the ice-ribbon clear backdrop visibly distinct from its default finish.
 - Preserves the selected backdrop and progress fill if WebGL is unavailable.
 - Adds browser rendering checks for backdrop finishes and the fallback.

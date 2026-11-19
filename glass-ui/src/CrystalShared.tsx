@@ -266,6 +266,8 @@ export function CrystalWindow({ children, target = "main" }: {
         const fit=el.querySelector<HTMLElement>('.cg-fit-content');if(!fit)return;
         let ratio=1;
         for(const box of [fit,...el.querySelectorAll<HTMLElement>('.cg-page,.cg-window-add,.cg-main-body,.cg-workspace,.cg-toolbar,.cg-window-top,.cg-original-editor')]){
+          // The progress page scrolls intentionally when controls need more room.
+          if(box.classList.contains('cg-minimal-progress'))continue;
           if(box.clientHeight>0&&box.scrollHeight>box.clientHeight+2)ratio=Math.min(ratio,box.clientHeight/box.scrollHeight);
           if(box.clientWidth>0&&box.scrollWidth>box.clientWidth+2)ratio=Math.min(ratio,box.clientWidth/box.scrollWidth);
         }
