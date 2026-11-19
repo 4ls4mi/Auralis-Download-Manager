@@ -92,10 +92,10 @@ export const frostFragment = `
       // Rear seams soften wherever the front pane's fog lies over them.
       float front = frontDistance(p);
       float blur = 1.-smoothstep(-23.,-2.,front);
-      result = merge(result,pane(p,vec2(342.,270.),vec2(326.,163.),-.082,68.,.73,vec3(.37,.50,.59),blur));
+      result = merge(result,pane(p,vec2(382.,270.),vec2(326.,163.),-.082,68.,.73,vec3(.37,.50,.59),blur));
       result = merge(result,pane(p,vec2(393.,247.),vec2(310.,201.), .092,65.,.64,vec3(.31,.44,.52),blur));
       result = merge(result,pane(p,vec2(415.,255.),vec2(307.,204.),-.061,56.,.62,vec3(.28,.43,.52),blur));
-      result = merge(result,pane(p,vec2(374.,292.),vec2(332.,168.), .060,64.,.68,vec3(.36,.50,.59),blur));
+      result = merge(result,pane(p,vec2(400.,292.),vec2(332.,168.), .060,64.,.68,vec3(.36,.50,.59),blur));
       result = merge(result,pane(p,vec2(395.,280.),vec2(315.,200.),-.041,54.,.59,vec3(.30,.43,.53),blur));
       result = merge(result,frontPane(p));
       float depth = max(-front,0.);

@@ -93,7 +93,7 @@ pub async fn open_youtube_sign_in(app: AppHandle) -> ApiResult<()> {
             window.show().map_err(|e|e.to_string())?;
             let _=window.unminimize();let _=window.set_focus();return Ok(());
         }
-        let url=tauri::Url::parse("https://www.youtube.com/").map_err(|e|e.to_string())?;
+        let url=tauri::Url::parse("https://accounts.google.com/ServiceLogin?service=youtube&continue=https%3A%2F%2Fwww.youtube.com%2F").map_err(|e|e.to_string())?;
         let mut builder=tauri::WebviewWindowBuilder::new(&app,"youtube-login",tauri::WebviewUrl::External(url));
         // WebView2 instances sharing a profile must use the same environment options.
         if let Some(args)=test_browser_args(){builder=builder.additional_browser_args(&args);}
@@ -114,12 +114,16 @@ fn youtube_session_cookies(app:&AppHandle) -> ApiResult<Vec<mdm_ipc::BrowserCook
             result.push(mdm_ipc::BrowserCookie{name:cookie.name().to_owned(),value:cookie.value().to_owned(),host_only:cookie.domain().is_none(),domain,path,secure:cookie.secure().unwrap_or(false),expires:None});
         }
     }
-    if !result.iter().any(|c|matches!(c.name.as_str(),"SID"|"SAPISID"|"__Secure-3PSID"|"LOGIN_INFO")) {
+    if !result.iter().any(|c|matches!(c.name.as_str(),"SID"|"SAPISID"|"__Secure-1PSID"|"__Secure-3PSID"|"__Secure-1PAPISID"|"__Secure-3PAPISID")) {
         return Err("No YouTube sign-in cookies were found. Sign in in the Auralis YouTube window, then try again. If Google blocks embedded sign-in, use the extension in your regular browser or manually supplied cookies.".into());
     }
     Ok(result)
 }
 
+#[tauri::command]
+pub async fn youtube_session_status(app:AppHandle)->ApiResult<bool> {
+    tauri::async_runtime::spawn_blocking(move||youtube_session_cookies(&app).map(|_|true)).await.map_err(|e|e.to_string())?
+}
 #[tauri::command]
 pub async fn video_tool(app:AppHandle,action:String,value:String,choice:Option<usize>,subs:Option<serde_json::Value>,cookies:Option<String>,cookie_browser:Option<String>,app_session:Option<bool>) -> ApiResult<serde_json::Value> {
     if value.len()>8192 {return Err("Video request is too long".into());}
@@ -147,7 +151,7 @@ pub async fn video_tool(app:AppHandle,action:String,value:String,choice:Option<u
         "lookup" if value.starts_with("https://")||value.starts_with("http://") => command.video_lookup=Some(mdm_ipc::VideoLookup{address:value,..Default::default()}),
         "tracks" if !value.is_empty()&&value.len()<=256 => {command.query=Some("glass-video-tracks".into());command.queue=Some(value)},
         "poll" if !value.is_empty()&&value.len()<=256 => command.video_poll=Some(value),
-        "pick" if !value.is_empty()&&value.len()<=256&&choice.is_some_and(|n|n<1000) => {command.video_pick=Some(mdm_ipc::VideoPick{token:value,choice:choice.unwrap_or_default(),..Default::default()});if let Some(subs)=subs {command.category=Some("glass-subtitles".into());command.queue=Some(subs.to_string());}},
+        "pick" if !value.is_empty()&&value.len()<=256&&choice.is_some_and(|n|n<1000) => {command.show=Some("glass-manual-video".into());command.video_pick=Some(mdm_ipc::VideoPick{token:value,choice:choice.unwrap_or_default(),..Default::default()});if let Some(subs)=subs {command.category=Some("glass-subtitles".into());command.queue=Some(subs.to_string());}},
         _=>return Err("Enter a valid video page address".into()),
     }
     tauri::async_runtime::spawn_blocking(move||{

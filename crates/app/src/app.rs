@@ -861,6 +861,8 @@ pub struct App {
     add_url: Option<AddUrl>,
     file_info: Option<FileInfo>,
     glass_info_serial: u64,
+    glass_active_video: Option<crate::videodlg::VideoAdd>,
+    glass_video_waiting: std::collections::VecDeque<crate::videodlg::VideoAdd>,
     glass_video_serial: u64,
     glass_videos: std::collections::HashMap<u64, (String, ipc::api::VideoLookupAnswer, bool)>,
     glass_import_serial: u64,
@@ -1641,6 +1643,8 @@ impl App {
             update_checked_this_run: None,
             file_info: None,
             glass_info_serial: 0,
+            glass_active_video: None,
+            glass_video_waiting: Default::default(),
             glass_video_serial: 0,
             glass_videos: Default::default(),
             glass_import_serial: 0,
@@ -4815,6 +4819,12 @@ impl App {
         let Some(add) = add else {
             return VideoLookupAnswer::of(lookup::USE_WINDOW);
         };
+        // Auralis confirms the selected video destination before starting it. Preserve the
+        // resolved quality, subtitles and browser context without serializing credentials.
+        if self.glass_owned() && cmd.show.as_deref()!=Some("glass-manual-video") {
+            self.glass_video_waiting.push_back(add);
+            return VideoLookupAnswer::of(lookup::SENT);
+        }
         // Its category's folder, made when it isn't there yet (the window asks first; the
         // choice was made in the browser).
         if let Some(dir) = add.dest.parent() {
@@ -6063,6 +6073,14 @@ impl App {
                 })
             }).collect::<Vec<_>>();
             return serde_json::json!({ "downloads": files }).to_string();
+        }
+        if !cmd.remote && cmd.query.as_deref() == Some("glass-network-adapters") {
+            if !glass_owned { return line(&ErrorAnswer { error: "glass backend not active".into(), code: None }); }
+            let adapters=mdm_engine::net::adapters().into_iter().map(|a| {
+                let address=a.v4.first().map(ToString::to_string).or_else(||a.v6.first().map(ToString::to_string));
+                serde_json::json!({"name":a.name,"address":address})
+            }).collect::<Vec<_>>();
+            return serde_json::json!({"adapters":adapters}).to_string();
         }
         if !cmd.remote && cmd.query.as_deref() == Some("glass-settings") {
             if !glass_owned {

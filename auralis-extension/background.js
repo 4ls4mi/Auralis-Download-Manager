@@ -2966,8 +2966,21 @@ const beside = (tab) => ({
   ...(Number.isInteger(tab.index) ? { index: tab.index + 1 } : {}),
 });
 
+// Check only for the presence of sign-in cookies. Cookie values remain private and
+// the existing lookup path sends the browser session only when requested.
+async function youtubeSignIn(sender = {}) {
+  try {
+    const tab=sender.tab||{};
+    const query={url:"https://www.youtube.com/",...(tab.cookieStoreId?{storeId:tab.cookieStoreId}:tab.incognito?{storeId:"1"}:{})};
+    const cookies=await ext.cookies.getAll(query);
+    if(cookies.some(c=>["SID","SAPISID","__Secure-1PSID","__Secure-3PSID","__Secure-1PAPISID","__Secure-3PAPISID"].includes(c.name)&&c.value)) return {ok:true,signedIn:true};
+    await ext.tabs.create({url:"https://accounts.google.com/ServiceLogin?service=youtube&continue=https%3A%2F%2Fwww.youtube.com%2F"});
+    return {ok:true,signedIn:false};
+  } catch {return {ok:false,error:"Could not check browser cookies. Check extension permissions and try again."};}
+}
+
 async function pageMessage(m, sender) {
-  if(m.type === "youtube-sign-in") {await ext.tabs.create({url:"https://www.youtube.com/"});return {ok:true};}
+  if(m.type === "youtube-sign-in") return youtubeSignIn(sender);
   const page = senderPage(sender);
   const tab = sender.tab || {};
   if (m.type === "panel") {
@@ -3052,8 +3065,8 @@ async function pageMessage(m, sender) {
   return { ok: false };
 }
 
-async function popupMessage(m) {
-  if(m.type === "youtube-sign-in") {await ext.tabs.create({url:"https://www.youtube.com/"});return {ok:true};}
+async function popupMessage(m, sender) {
+  if(m.type === "youtube-sign-in") return youtubeSignIn(sender);
   if (m.type === "state") {
     const r = await refreshRules();
     const { paused } = await ext.storage.local.get({ paused: false });
@@ -3129,7 +3142,7 @@ ext.runtime.onMessage.addListener((m, sender, sendResponse) => {
   // pages; content scripts send from the web page they are in.
   const own = String(sender.url || "").startsWith(ext.runtime.getURL(""));
   const fromPage = Boolean(sender.tab) && !own;
-  (fromPage ? pageMessage(m, sender) : popupMessage(m)).then(sendResponse, () => sendResponse({ ok: false }));
+  (fromPage ? pageMessage(m, sender) : popupMessage(m, sender)).then(sendResponse, () => sendResponse({ ok: false }));
   return true; // answered later
 });
 

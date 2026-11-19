@@ -188,7 +188,7 @@ export default function CrystalApp(){
       const request:DeleteRequest={ids:items.map(x=>x.id),name:items.length===1?items[0].file:`${items.length} downloads`,disk:action==="delete",dontAsk:false};
       const latest=await invoke<{confirm_delete:boolean;delete_files_too:boolean}>("glass_settings");
       request.disk=action==="selected-delete"?deleteDisk:action==="delete"||latest.delete_files_too;
-      if(latest.confirm_delete){localStorage.setItem("glass-delete-request",JSON.stringify(request));openWindow("tool-delete","/?tool=delete",620,410)}else await remove(request);
+      if(latest.confirm_delete&&!(action==="selected-delete"&&deleteDisk)){localStorage.setItem("glass-delete-request",JSON.stringify(request));openWindow("tool-delete","/?tool=delete",620,410)}else await remove(request);
       return;
     }
     if(action.startsWith("selected-")) {

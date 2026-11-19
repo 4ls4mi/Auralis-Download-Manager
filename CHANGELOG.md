@@ -13,6 +13,14 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 - Reduced overlapping visual layers and added manual Netscape-format cookie-file selection for video helpers. Google-account autodetection/direct connection remains unfinished.
 - Remaining manual Windows checks include physical DPI/transparency review and native drag-to-Explorer/application behavior. Automated success does not establish complete original-MDM feature parity.
 
+### Auralis Download Manager 0.3.13 — Windows x64
+
+- Adds an adapter selector, current version display, cookie-file and other path pickers, and explanations for technical settings.
+- Presents browser video selections in Download File Info before starting, followed by a foreground progress window.
+- Improves browser-session sign-in feedback and cookie handoff for video lookups, narrows the Frosted Layers left edge, and extends text/icon shading to other materials.
+- Honors the checked multi-selection delete-from-disk option without a second confirmation.
+- Adds a Windows passive installer and automatic-restart check.
+
 ### Auralis Download Manager 0.3.12 — Windows x64
 
 - Adds six crystalline color themes, applies the chosen tint across materials, and removes the solid light/dark buttons.

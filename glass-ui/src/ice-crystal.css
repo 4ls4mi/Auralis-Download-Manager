@@ -611,3 +611,7 @@
 .cg-window.cg-material-frosty-glass.cg-dark .cg-content{background:linear-gradient(150deg,var(--glass-tint),transparent 65%),rgba(var(--glass),var(--panel-opacity))!important}
 .cg-window.cg-material-frosted-water-351 .cg-frost-fallback:not([hidden]){background:linear-gradient(155deg,var(--glass-tint),rgba(var(--glass),.90) 65%,rgba(var(--accent-rgb),.4))}
 .cg-window.cg-material-frosted-water-351 .cg-content .cg-glass{background:rgba(var(--glass),.48)!important}
+
+/* Give text and icons the same legible definition across the material styles. */
+.cg-window.cg-dark .cg-fit-content :is(h1,h2,h3,h4,strong,small,p,label,dt,dd,.cg-title,.cg-row,.cg-menu-trigger,.cg-sidebar button,.cg-page-tabs button,.cg-footer-message){text-shadow:0 1px 2px #00101f,0 0 3px #00101f}
+.cg-window.cg-dark .cg-fit-content svg:not(.cg-graph):not(.cg-sculpted-track){filter:drop-shadow(0 1px 1px #00101f) drop-shadow(0 0 2px #00101f)}

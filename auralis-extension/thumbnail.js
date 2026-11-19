@@ -83,7 +83,7 @@
         const mode=controls.querySelector('select'),input=controls.querySelector('input');
         mode.addEventListener('change',()=>{input.hidden=mode.value!=='manual';});
         const result=document.createElement('div');
-        controls.querySelector('.sign-in').addEventListener('click',async e=>{e.preventDefault();e.stopPropagation();const r=await ext.runtime.sendMessage({type:'youtube-sign-in'}).catch(()=>null);result.textContent=r?.ok?'Sign in in this browser, then return and fetch qualities again.':'Could not open YouTube sign-in.'});
+        controls.querySelector('.sign-in').addEventListener('click',async e=>{e.preventDefault();e.stopPropagation();const r=await ext.runtime.sendMessage({type:'youtube-sign-in'}).catch(()=>null);result.textContent=r?.ok?(r.signedIn?'YouTube sign-in cookies found. Fetch qualities using Browser session.':'Sign in on the Google page, then return and fetch qualities.'):(r?.error||'Could not check YouTube sign-in.')});
         controls.querySelector('.fetch').addEventListener('click',()=>void lookup(`https://www.youtube.com/watch?v=${id}`,result,mode.value,input.value));
         menu.append(controls,result); void lookup(`https://www.youtube.com/watch?v=${id}`,result,'browser','');
       });

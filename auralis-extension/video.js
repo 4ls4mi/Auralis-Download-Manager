@@ -1121,7 +1121,7 @@ button:focus-visible { outline: none; }
     if (cookieMode.value === "manual" && !cookieHeader.value.trim()) { say("Paste cookies first."); return; }
     if (video) { const c = describeNow(video); if (c.key) looks.delete(c.key); startLook(c, true); }
   });
-  $(".youtube-sign-in").addEventListener("click",async e=>{e.preventDefault();e.stopPropagation();const result=await send({type:"youtube-sign-in"});say(result?.ok?"Sign in in this browser, then return and fetch qualities again.":"Could not open YouTube sign-in.");});
+  $(".youtube-sign-in").addEventListener("click",async e=>{e.preventDefault();e.stopPropagation();const result=await send({type:"youtube-sign-in"});say(result?.ok?(result.signedIn?"YouTube sign-in cookies found. Fetch qualities using Browser session.":"Sign in on the Google page, then return and fetch qualities."):(result?.error||"Could not check YouTube sign-in."));});
   const rows = $(".rows");
   const item = (act) => menu.querySelector(`[data-act="${act}"]`);
   const dir = ext.i18n.getMessage("@@bidi_dir") || "ltr";

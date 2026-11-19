@@ -14,7 +14,7 @@ pub fn fit_size(app:&AppHandle,width:f64,height:f64)->(f64,f64) {
 }
 
 pub fn open(app: &AppHandle, label: &str, route: &str, width: f64, height: f64) -> ApiResult<()> {
-    let priority = label.starts_with("info-") || label.starts_with("tool-video-") || label == "tool-update-notice";
+    let priority = label.starts_with("info-") || label.starts_with("download-") || label.starts_with("tool-video-") || label == "tool-update-notice";
     if let Some(w) = app.get_webview_window(label) {
         if priority { let _ = w.set_always_on_top(true); }
         let _ = w.emit("glass-navigate", route);
@@ -25,7 +25,7 @@ pub fn open(app: &AppHandle, label: &str, route: &str, width: f64, height: f64) 
         }
         let _ = w.unminimize();
         let _ = w.set_focus();
-        if priority { let _ = w.set_always_on_top(false); }
+        if priority { let raised=w.clone(); thread::spawn(move||{thread::sleep(Duration::from_millis(1200));let _=raised.set_always_on_top(false);}); }
         return Ok(());
     }
     let (width,height)=fit_size(app,width,height);
@@ -36,7 +36,7 @@ pub fn open(app: &AppHandle, label: &str, route: &str, width: f64, height: f64) 
         .min_inner_size(width.min(440.0), height.min(320.0)).center().decorations(false)
         .transparent(true).background_color(tauri::window::Color(0,0,0,0)).shadow(false).resizable(true).build()
         .map_err(|e| e.to_string())?;
-    if priority { let _ = w.show(); let _ = w.set_focus(); let _ = w.set_always_on_top(false); }
+    if priority { let _ = w.show(); let _ = w.set_focus(); let raised=w.clone(); thread::spawn(move||{thread::sleep(Duration::from_millis(1200));let _=raised.set_always_on_top(false);}); }
     Ok(())
 }
 
@@ -213,6 +213,25 @@ pub async fn glass_tool(action:String,payload:Option<serde_json::Value>) -> ApiR
     }).await.map_err(|e|e.to_string())?
 }
 
+#[tauri::command]
+pub async fn list_network_adapters()->ApiResult<serde_json::Value> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let reply=send_ipc(&mdm_ipc::Command{query:Some("glass-network-adapters".into()),..Default::default()})?;
+        let value:serde_json::Value=serde_json::from_str(&reply).map_err(|e|e.to_string())?;
+        if let Some(error)=value.get("error") {return Err(error.to_string())} Ok(value)
+    }).await.map_err(|e|e.to_string())?
+}
+#[tauri::command]
+pub async fn choose_setting_file(kind:String)->ApiResult<Option<String>> {
+    tauri::async_runtime::spawn_blocking(move|| {
+        let picker=rfd::FileDialog::new();
+        let selected=match kind.as_str() {
+            "cookies"=>picker.set_title("Choose a Netscape cookies file").add_filter("Text files", &["txt"]).pick_file(),
+            "sound"=>picker.set_title("Choose a notification sound").add_filter("Audio files", &["wav","mp3","ogg"]).pick_file(),
+            _=>return Err("Unsupported file type".into()),
+        };Ok(selected.map(|p|p.to_string_lossy().into_owned()))
+    }).await.map_err(|e|e.to_string())?
+}
 #[tauri::command]
 pub async fn choose_folder()->ApiResult<Option<String>> {
     tauri::async_runtime::spawn_blocking(||Ok(rfd::FileDialog::new().set_title("Choose folder").pick_folder().map(|p|p.to_string_lossy().into_owned()))).await.map_err(|e|e.to_string())?

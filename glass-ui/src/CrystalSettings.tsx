@@ -5,6 +5,7 @@ import CrystalUpstream from "./CrystalUpstream";
 import CrystalOriginalSettings from "./CrystalOriginalSettings";
 import { useEffect, useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { getVersion } from "@tauri-apps/api/app";
 import { Activity, Check, CheckCircle2, Download, Folder, Gauge, Globe2, Image, Network, Palette, RotateCcw, Settings, SlidersHorizontal } from "lucide-react";
 import { CrystalWindow, WindowTop, GradientBar, SpeedGraph, ConnectionMap, themes, themeHue, indicatorPalettes, useCrystal, openWindow } from "./CrystalShared";
 import type { Appearance, BackgroundMode, Queue } from "./CrystalShared";
@@ -41,6 +42,13 @@ export default function CrystalSettings(){
   const [busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
   const [browser,setBrowser]=useState("");
   const [extensionBrowser,setExtensionBrowser]=useState("edge");
+  const [appVersion,setAppVersion]=useState("");
+  const [adapters,setAdapters]=useState<{name:string;address:string|null}[]>([]);
+  const [adapterError,setAdapterError]=useState("");
+  useEffect(()=>{void getVersion().then(setAppVersion).catch(()=>setAppVersion("unavailable"))},[]);
+  useEffect(()=>{if(tab!=="Connection"&&!(tab==="Advanced"&&settingsPanel==="Updates"))return;let active=true;void invoke<{adapters:{name:string;address:string|null}[]}>("list_network_adapters").then(result=>{if(active){setAdapters(result.adapters);setAdapterError("")}}).catch(e=>{if(active)setAdapterError(String(e))});return()=>{active=false}},[tab,settingsPanel]);
+  const adapterPicker=()=>cfg&&<label className="cg-field">Preferred network adapter<select value={cfg.net_adapter} disabled={busy||Boolean(adapterError)} onChange={e=>void change("net_adapter",e.target.value)}><option value="">Automatic — Windows chooses</option>{cfg.net_adapter&&!adapters.some(a=>a.name===cfg.net_adapter)&&<option value={cfg.net_adapter}>{cfg.net_adapter} (not connected)</option>}{adapters.map(a=><option key={a.name} value={a.name}>{a.name} {a.address?`— ${a.address}`:"(not connected)"}</option>)}</select><small>Choose Automatic unless you need to route downloads through a specific adapter or VPN. Downloads may stop if that adapter disconnects.</small>{adapterError&&<small>Unable to list adapters: {adapterError}</small>}</label>;
+
   const [connection,setConnection]=useState<{recently_connected:boolean;previously_connected:boolean}|null>(null);
   const {appearance,set}=useCrystal();
   const load=useCallback(async()=>{
@@ -120,6 +128,7 @@ export default function CrystalSettings(){
         <div className="cg-settings-fallback">More options includes category folders, duplicate-download handling, and archive extraction preferences.</div>
       </>;
       case "Connection":return <>
+        {adapterPicker()}
         {number("max_connections","Maximum connections per download","The selected connection count for new downloads",1,128)}
         {check("speed_limit_on","Enable global per-file speed limiter","Apply configured speed threshold")}
         {number("speed_limit_kb","Maximum speed per file (KB/s)","The default limit for each download",0,10000000)}
@@ -224,9 +233,9 @@ export default function CrystalSettings(){
       {error&&<p className="cg-error">{error}</p>}
       {notice&&<p className="cg-success"><CheckCircle2 size={14}/> {notice}</p>}
       {tab!=="Appearance"&&tab!=="Accounts"&&<nav className="cg-appearance-tabs"><button className={settingsPanel==="Main options"?"selected":""} onClick={()=>setSettingsPanel("Main options")}>Common settings</button><button className={settingsPanel==="More options"?"selected":""} onClick={()=>setSettingsPanel("More options")}>All original settings</button>{tab==="Advanced"&&<button className={settingsPanel==="Updates"?"selected":""} onClick={()=>setSettingsPanel("Updates")}>Updates</button>}</nav>}
-      <div>{tab==="Advanced"&&settingsPanel==="Updates"?<><CrystalUpstream/>{cfg&&<label className="cg-field">Preferred network adapter<input defaultValue={cfg.net_adapter} key={cfg.net_adapter} onBlur={e=>{if(e.target.value!==cfg.net_adapter)void change("net_adapter",e.target.value)}}/></label>}</>:tab==="Appearance"||tab==="Accounts"||settingsPanel==="Main options"?body():<CrystalOriginalSettings section={tab}/>}</div>
+      <div>{tab==="Advanced"&&settingsPanel==="Updates"?<><CrystalUpstream/>{adapterPicker()}</>:tab==="Appearance"||tab==="Accounts"||settingsPanel==="Main options"?body():<CrystalOriginalSettings section={tab}/>}</div>
     </div></div>
-    <footer className="cg-bottom-actions" style={{padding:"9px 18px"}}><span className="cg-muted" style={{marginRight:"auto",fontSize:"var(--min-text-size)"}}>Windows x64 • Changes are saved automatically</span>
+    <footer className="cg-bottom-actions" style={{padding:"9px 18px"}}><span className="cg-muted" style={{marginRight:"auto",fontSize:"var(--min-text-size)"}}>Auralis {appVersion||"…"} • Windows x64 • Changes are saved automatically</span>
       <button className="cg-btn cg-btn-primary" onClick={()=>void import("@tauri-apps/api/window").then(m=>m.getCurrentWindow().close())}>Done</button>
     </footer>
   </CrystalWindow>;

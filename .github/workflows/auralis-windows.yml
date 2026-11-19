@@ -135,6 +135,10 @@ jobs:
         working-directory: glass-ui
         run: npm run tauri -- build --bundles nsis
 
+      - name: Verify passive upgrade reopens Auralis automatically
+        shell: pwsh
+        run: ./tools/lab/auralis-installer-restart.ps1
+
       - name: Verify YouTube sign-in window does not block Auralis
         shell: pwsh
         run: |

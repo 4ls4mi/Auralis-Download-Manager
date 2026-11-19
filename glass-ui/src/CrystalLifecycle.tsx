@@ -6,7 +6,7 @@ import { CrystalWindow, CountryFlag, WindowTop, units, openWindow } from './Crys
 import type { Dashboard, Download, ServerPlace } from './CrystalShared';
 
 const close=()=>getCurrentWindow().close();
-type Pending={categories?:Dashboard['categories'];id:number;waiting:number;info:null|{url:string;save_as:string;category:string;description:string;remember:boolean;size:number|null;probing:boolean;error:string|null;server:{country_code:string|null;place?:ServerPlace|null;rtt_ms:number|null}}};
+type Pending={categories?:Dashboard['categories'];id:number;waiting:number;info:null|{url:string;save_as:string;category:string;description:string;remember:boolean;size:number|null;probing:boolean;error:string|null;video?:boolean;server:{country_code:string|null;place?:ServerPlace|null;rtt_ms:number|null}}};
 export function CrystalFileInfo({id}:{id:number}){
  const [pending,setPending]=useState<Pending|null>(null),[categories,setCategories]=useState<Dashboard['categories']>([]);
  const [form,setForm]=useState({save_as:'',description:'',remember:false,chunks:8});
@@ -27,7 +27,7 @@ export function CrystalFileInfo({id}:{id:number}){
   return()=>{active=false;clearInterval(timer)};
  },[id]);
  const perform=async(action:string,payload:unknown=null)=>invoke<{id?:number}>('file_info_action',{id,action,payload});
- const start=async(later:boolean)=>{setBusy(true);setError('');try{await perform('commit',{...form,later});await close()}catch(e){setError(String(e));setBusy(false)}};
+ const start=async(later:boolean)=>{setBusy(true);setError('');try{const result=await perform('commit',{...form,later});if(!later&&info?.video&&result.id)openWindow(`download-${result.id}`,`/?detail=${result.id}`,880,440);await close()}catch(e){setError(String(e));setBusy(false)}};
  const info=pending?.info;
  return <CrystalWindow target="details"><WindowTop noMax title="Download File Info"/>
   <main className="cg-page cg-file-info">

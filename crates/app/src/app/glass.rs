@@ -15,11 +15,18 @@ impl App {
     }
 
     fn glass_next_info(&mut self) {
-        if self.file_info.is_none()
-            && let Some((new, context)) = self.file_info_waiting.pop_front()
-        {
-            let ctx = self.ui_ctx.clone();
+        if self.file_info.is_some() { return; }
+        let ctx = self.ui_ctx.clone();
+        if let Some((new, context)) = self.file_info_waiting.pop_front() {
             self.open_file_info(new, context, &ctx);
+        } else if let Some(add) = self.glass_video_waiting.pop_front() {
+            let new=dialogs::NewUrl { url:add.page.clone(), login:None };
+            self.open_file_info(new, add.context.clone(), &ctx);
+            if let Some(fi)=self.file_info.as_mut() {
+                fi.set_category(add.category);
+                fi.glass_destination(add.dest.to_string_lossy().into_owned());
+            }
+            self.glass_active_video=Some(add);
         }
     }
 
@@ -58,8 +65,12 @@ impl App {
         if cmd.query.as_deref() == Some("glass-file-info") {
             self.glass_next_info();
             let serial = self.glass_info_serial;
-            return Some(json!({"id": serial, "info": self.file_info.as_mut().map(FileInfo::glass_view),
-                "categories":Category::all().into_iter().map(|c|json!({"key":c.key(),"name":c.label()})).collect::<Vec<_>>(), "waiting": self.file_info_waiting.len()}).to_string());
+            let mut info=self.file_info.as_mut().map(FileInfo::glass_view);
+            if let (Some(view),Some(video))=(&mut info,&self.glass_active_video) {
+                view["size"]=json!(video.size);view["probing"]=json!(false);view["error"]=Value::Null;view["video"]=json!(true);
+            }
+            return Some(json!({"id": serial, "info": info,
+                "categories":Category::all().into_iter().map(|c|json!({"key":c.key(),"name":c.label()})).collect::<Vec<_>>(), "waiting": self.file_info_waiting.len()+self.glass_video_waiting.len()}).to_string());
         }
         if cmd.query.as_deref()==Some("glass-move-status") {
             let Some(id)=cmd.ids.first().copied() else {return Some(json!({"error":"Choose a download"}).to_string());};
@@ -118,6 +129,7 @@ impl App {
             }
             if cmd.category.as_deref() == Some("cancel") {
                 self.file_info.take();
+                self.glass_active_video.take();
                 self.glass_next_info();
                 return Some(json!({"ok":true}).to_string());
             }
@@ -153,9 +165,20 @@ impl App {
             let later = payload["later"].as_bool().unwrap_or(false);
             fi.context.connections = count;
             let id = self.next_id;
-            self.add(&mut fi, if later { Start::Later } else { Start::Now });
+            if let Some(mut video)=self.glass_active_video.take() {
+                if let Some((category,dir))=fi.remembered() {
+                    self.settings.keep_category_dir(category,std::path::Path::new(&dir),&self.downloads);
+                }
+                video.dest=path;video.category=fi.category;video.context.connections=count;
+                video.start_now=!later;video.named=true;
+                self.add_video_checked(video, true);
+                if let Some(item)=self.item(id) { item.description=fi.description.clone(); }
+            } else {
+                self.add(&mut fi, if later { Start::Later } else { Start::Now });
+            }
             self.glass_next_info();
-            return Some(json!({"ok":true,"id":id}).to_string());
+            let created=self.items.iter().any(|item|item.id==id);
+            return Some(json!({"ok":true,"id":if created {Some(id)} else {None}}).to_string());
         }
         if action != "glass-item" { return None; }
         let id = *cmd.ids.first()?;

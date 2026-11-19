@@ -1,0 +1,14 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {existsSync} from 'node:fs';
+import {fileURLToPath} from 'node:url';
+import {chromium} from 'playwright-core';
+import {createServer} from 'vite';
+const browserPath=process.env.AURALIS_TEST_BROWSER||(process.platform==='linux'?'/usr/bin/chromium':'');
+test('settings provide adapter choices, current version and cookie-file picker',{skip:!browserPath||!existsSync(browserPath)},async()=>{
+ const server=await createServer({configFile:false,root:fileURLToPath(new URL('..',import.meta.url)),server:{host:'127.0.0.1',port:0},logLevel:'silent'});await server.listen();const browser=await chromium.launch({headless:true,executablePath:browserPath,args:['--no-sandbox']});
+ try{const page=await browser.newPage();await page.addInitScript(()=>{window.calls=[];window.cfg={net_adapter:'',category_dirs:[]};window.__TAURI_EVENT_PLUGIN_INTERNALS__={unregisterListener:()=>{}};window.__TAURI_INTERNALS__={metadata:{currentWindow:{label:'settings'},currentWebview:{label:'settings'}},transformCallback:()=>1,unregisterCallback:()=>{},invoke:async(cmd,args)=>{window.calls.push({cmd,args});if(cmd==='plugin:app|version')return '0.3.13';if(cmd==='glass_settings')return window.cfg;if(cmd==='dashboard_snapshot')return {queues:[]};if(cmd==='list_network_adapters')return {adapters:[{name:'Wi-Fi',address:'192.168.1.5'},{name:'VPN',address:null}]};if(cmd==='update_glass_setting'){window.cfg[args.key]=args.value;return null}if(cmd==='choose_setting_file')return 'C:\\Users\\Example\\cookies.txt';if(cmd==='glass_tool'&&args.action==='original-settings')return {fields:[{key:'video_cookies_file',label:'Manual video cookies file (Netscape)',section:'Advanced',kind:'text',value:''}]};return null}}});
+ await page.goto(server.resolvedUrls.local[0]+'?settings=1&tab=Connection');const adapter=page.getByLabel('Preferred network adapter');await adapter.waitFor();await page.getByRole('option',{name:/Wi-Fi/}).waitFor({state:'attached'});assert.ok(await page.getByText(/Auralis 0\.3\.13/).count());await adapter.selectOption('Wi-Fi');await page.waitForFunction(()=>window.calls.some(c=>c.cmd==='update_glass_setting'&&c.args.value==='Wi-Fi'));
+ await page.getByRole('button',{name:'Advanced',exact:true}).click();await page.getByRole('button',{name:'All original settings'}).click();await page.getByRole('button',{name:'Choose cookies file…'}).click();assert.equal(await page.getByLabel('Selected cookie file').inputValue(),'C:\\Users\\Example\\cookies.txt');assert.equal(await page.getByLabel('Selected cookie file').getAttribute('readonly'),'');await page.getByRole('button',{name:'Save preference'}).click();await page.waitForFunction(()=>window.calls.some(c=>c.cmd==='glass_tool'&&c.args.action==='original-setting'&&c.args.payload.value==='C:\\Users\\Example\\cookies.txt'));
+ }finally{await browser.close();await server.close()}
+});
