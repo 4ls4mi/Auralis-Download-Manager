@@ -8,7 +8,7 @@ permissions:
   contents: write
 jobs:
   publish:
-    if: contains(github.event.head_commit.message, '[publish-auralis-039]')
+    if: contains(github.event.head_commit.message, '[finish-auralis-039]')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -16,13 +16,9 @@ jobs:
       GH_REPO: ${{ github.repository }}
       TESTED_SHA: 4be7d92507ce6edba290320f06e53d9f6a13c120
       TESTED_RUN: '44420891773'
+      RELEASE_ID: '450708121'
     steps:
-      - name: Check out the exact tested release notes
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          ref: 4be7d92507ce6edba290320f06e53d9f6a13c120
-          persist-credentials: false
-      - name: Verify tested run and download its artifacts
+      - name: Verify run and retrieve exact artifacts
         shell: bash
         run: |
           set -euo pipefail
@@ -35,29 +31,34 @@ jobs:
           test -f extensions/auralis-chromium.zip
           test -f extensions/auralis-firefox.zip
           test "$(find installer -type f | wc -l)" -eq 1
-          test "$(od -An -tx1 -N2 'installer/Auralis Download Manager_0.3.9_x64-setup.exe' | tr -d ' \n')" = 4d5a
-          unzip -tq extensions/auralis-chromium.zip
-          unzip -tq extensions/auralis-firefox.zip
-          sha256sum 'installer/Auralis Download Manager_0.3.9_x64-setup.exe' > installer.sha256
-      - name: Create a draft release from the verified artifacts
+      - name: Check draft and all artifact digests
         shell: bash
         run: |
           set -euo pipefail
-          if gh release view v0.3.9 >/dev/null 2>&1; then echo 'Release already exists; refusing to replace it.' >&2; exit 1; fi
-          gh release create v0.3.9 --target "$TESTED_SHA" --draft \
-            --title 'Auralis Download Manager 0.3.9 — Windows x64' \
-            --notes-file docs/glass-releases/v0.3.9.md \
-            'installer/Auralis Download Manager_0.3.9_x64-setup.exe' \
-            extensions/auralis-chromium.zip extensions/auralis-firefox.zip
-      - name: Verify the published installer digest and publish
+          gh api "repos/$GH_REPO/releases/$RELEASE_ID" > release.json
+          python3 - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          release = json.loads(Path('release.json').read_text())
+          assert release['draft'] and release['tag_name'] == 'v0.3.9'
+          assert release['target_commitish'] == os.environ['TESTED_SHA']
+          files = {
+            'Auralis.Download.Manager_0.3.9_x64-setup.exe': Path('installer/Auralis Download Manager_0.3.9_x64-setup.exe'),
+            'auralis-chromium.zip': Path('extensions/auralis-chromium.zip'),
+            'auralis-firefox.zip': Path('extensions/auralis-firefox.zip'),
+          }
+          assets = {asset['name']:asset for asset in release['assets']}
+          assert set(assets) == set(files), f'Unexpected release assets: {list(assets)}'
+          for name, path in files.items():
+              digest = hashlib.sha256(path.read_bytes()).hexdigest()
+              assert assets[name]['digest'] == 'sha256:' + digest, f'Digest mismatch: {name}'
+              assert assets[name]['size'] == path.stat().st_size, f'Size mismatch: {name}'
+              print(f'Verified {name}: sha256:{digest}')
+          PY
+      - name: Publish verified release
         shell: bash
         run: |
           set -euo pipefail
-          expected=$(cut -d ' ' -f1 installer.sha256)
-          for attempt in {1..6}; do
-            digest=$(gh api "repos/$GH_REPO/releases/tags/v0.3.9" --jq '.assets[] | select(.name == "Auralis Download Manager_0.3.9_x64-setup.exe") | .digest // ""')
-            if [ "$digest" = "sha256:$expected" ]; then break; fi
-            sleep 5
-          done
-          test "$digest" = "sha256:$expected" || { echo 'Release installer SHA-256 mismatch or digest unavailable' >&2; exit 1; }
-          gh release edit v0.3.9 --verify-tag --draft=false --prerelease=false --latest
+          gh release edit v0.3.9 --draft=false --prerelease=false --latest
+          gh api "repos/$GH_REPO/git/ref/tags/v0.3.9" --jq .object.sha > tag-sha.txt
+          test "$(cat tag-sha.txt)" = "$TESTED_SHA"
