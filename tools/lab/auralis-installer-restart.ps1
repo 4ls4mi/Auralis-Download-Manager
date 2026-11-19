@@ -5,6 +5,8 @@ $data = Join-Path $env:RUNNER_TEMP 'auralis-upgrade-data'
 $oldSetup = Join-Path $env:RUNNER_TEMP 'auralis-0.3.12.exe'
 $exe = Join-Path $root 'auralis-download-manager.exe'
 $newSetup = @(Get-ChildItem 'glass-ui/src-tauri/target/release/bundle/nsis' -Filter '*.exe' -File)
+$expectedVersion = (Get-Content 'glass-ui/src-tauri/tauri.conf.json' -Raw | ConvertFrom-Json).version
+if ($expectedVersion -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid candidate version in Tauri configuration' }
 if ($newSetup.Count -ne 1) { throw 'Expected one Auralis installer' }
 Invoke-WebRequest 'https://github.com/4ls4mi/Auralis-Download-Manager/releases/download/v0.3.12/Auralis.Download.Manager_0.3.12_x64-setup.exe' -OutFile $oldSetup
 if ((Get-FileHash $oldSetup -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'b97f1e185e83806442f28c38d098eac3e0e72b030849289ed94b06a77855f2fe') { throw 'The 0.3.12 installer digest differs from the verified release' }
@@ -24,7 +26,7 @@ try {
   }
   if (!$restarted) { throw 'The updated app did not restart automatically' }
   $version=(Get-Item $exe).VersionInfo.ProductVersion
-  if ($version -notlike '0.3.13*') { throw "Expected 0.3.13 after upgrade, got $version" }
+  if ($version -notlike "$expectedVersion*") { throw "Expected $expectedVersion after upgrade, got $version" }
   Write-Host "PASS: 0.3.12 upgraded to $version and automatically reopened."
 } finally {
   Get-Process -Name 'auralis-download-manager','mdm-legacy' -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($root,[System.StringComparison]::OrdinalIgnoreCase) } | Stop-Process -Force -ErrorAction SilentlyContinue
