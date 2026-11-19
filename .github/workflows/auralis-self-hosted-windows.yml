@@ -64,9 +64,9 @@ jobs:
           (Join-Path $env:CARGO_HOME 'bin') >> $env:GITHUB_PATH
           if (!(Test-Path (Join-Path $env:CARGO_HOME 'bin/rustup.exe'))) {
             $installer = Join-Path $cacheDir 'rustup-init.exe'
-            $url = 'https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe'
+            $url = 'https://static.rust-lang.org/rustup/archive/1.29.3/x86_64-pc-windows-msvc/rustup-init.exe'
             Invoke-WebRequest $url -OutFile $installer
-            $expected = ((Invoke-WebRequest "${url}.sha256").Content -split '\s+')[0].ToLowerInvariant()
+            $expected = '38027d51d69a5d05493627a0634dbea52d6cd793c8f072d2373d3f4163eec7db'
             if ((Get-FileHash $installer -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) { throw 'Rust installer checksum mismatch.' }
             & $installer -y --profile minimal --default-toolchain stable --no-modify-path
             if ($LASTEXITCODE) { throw 'Rust toolchain setup failed.' }
