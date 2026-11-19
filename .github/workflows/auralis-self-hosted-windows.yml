@@ -111,6 +111,21 @@ jobs:
             $bin >> $env:GITHUB_PATH
           }
 
+      - name: Set up cached libclang
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $cacheDir = Join-Path $env:RUNNER_WORKSPACE 'auralis-cache'
+          $folder = Join-Path $cacheDir 'libclang-18.1.3.2'
+          $native = Join-Path $folder 'runtimes/win-x64/native'
+          if (!(Test-Path (Join-Path $native 'libclang.dll'))) {
+            $archive = Join-Path $cacheDir 'libclang-win-x64-18.1.3.2.zip'
+            if (!(Test-Path $archive)) { Invoke-WebRequest 'https://api.nuget.org/v3-flatcontainer/libclang.runtime.win-x64/18.1.3.2/libclang.runtime.win-x64.18.1.3.2.nupkg' -OutFile $archive }
+            if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne '524e5cce91f43a74d5bbf57debc42c11b87e8fa86f1fc95be7375dd67b427e18') { Remove-Item $archive -Force; throw 'libclang archive checksum mismatch.' }
+            Expand-Archive -Path $archive -DestinationPath $folder -Force
+          }
+          "LIBCLANG_PATH=$native" >> $env:GITHUB_ENV
+
       - name: Prepare verified Deno runtime
         shell: pwsh
         run: |
