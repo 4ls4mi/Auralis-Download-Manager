@@ -16,6 +16,13 @@
   addEventListener('resize', () => activeMenu?.position());
   addEventListener('scroll', () => activeMenu?.position(), true);
   const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const sizeLabel = item => {
+    const bytes=Number(item?.size);
+    if (!Number.isFinite(bytes) || bytes<=0) return 'Size unavailable';
+    const units=[['GB',1024**3],['MB',1024**2],['KB',1024],['B',1]];
+    const [unit,scale]=units.find(([,value])=>bytes>=value);
+    return `${item.approx?'~':''}${(bytes/scale).toLocaleString(undefined,{maximumFractionDigits:1})} ${unit}`;
+  };
   async function lookup(url, menu, cookieMode, cookieFile) {
     menu.replaceChildren();
     const status = document.createElement('div'); status.className='lookup-status'; status.textContent = 'Looking up qualities…'; menu.append(status);
@@ -44,7 +51,7 @@
       const list=document.createElement('div');list.className='subtitle-list';
       const none=document.createElement('button');none.type='button';none.textContent='No subtitles';none.setAttribute('aria-pressed','true');none.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();subs.value='none';list.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b===none)))});list.append(none);
       for(const [kind,tracks] of [['manual',answer.subtitles||[]],['auto',answer.automatic_subtitles||[]]]) for(const track of tracks){
-        const option=document.createElement('button');option.type='button';option.textContent=`${track.name||track.code} (${track.code})${kind==='auto'?' · automatic':''}`;option.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();subs.value=`${kind}:${track.code}`;list.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b===option)))});list.append(option);
+        const option=document.createElement('button');option.type='button';option.textContent=`${track.name||track.code} (${track.code})${kind==='auto'?' · automatic':''} · ${sizeLabel(track)}`;option.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();subs.value=`${kind}:${track.code}`;list.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b===option)))});list.append(option);
       }
       if(list.childElementCount)subsSection.append(list);
       const videoSection=document.createElement('section'), audioSection=document.createElement('section');
@@ -52,7 +59,7 @@
       let videoCount=0,audioCount=0;
       for (const [index,choice] of answer.choices.entries()) {
         const button=document.createElement('button'); button.type='button';
-        button.className='quality'; button.textContent = `${choice.label || choice.ext || 'Download'}  ↓`;
+        button.className='quality'; button.textContent = `${choice.label || choice.ext || 'Download'} · ${sizeLabel(choice)}  ↓`;
         button.addEventListener('click', async event => {
           event.preventDefault(); event.stopPropagation(); button.disabled=true;
           try { const [kind,code]=subs.value.split(':'); const subtitles={langs:code?[code]:[],automatic:kind==='auto',embed:false}; const result=await ext.runtime.sendMessage({type:'video-pick',token:answer.token,choice:index,subs:subtitles});

@@ -2041,7 +2041,7 @@ button:focus-visible { outline: none; }
       add("none","No subtitles");let count=0;
       for(const [kind,tracks] of [["manual",look.subtitles||[]],["auto",look.automatic_subtitles||[]]]){
         if(tracks.length)add(`${kind}:all`,kind==="auto"?"All automatic captions":"All subtitles");
-        for(const track of tracks){add(`${kind}:${track.code}`,`${track.name||track.code} (${track.code})${kind==="auto"?" · automatic":""}`);count++;}
+        for(const track of tracks){add(`${kind}:${track.code}`,`${track.name||track.code} (${track.code})${kind==="auto"?" · automatic":""} · ${choiceSize(track, lang)||"Size unavailable"}`);count++;}
       }
       if(!count){const text=document.createElement("div");text.className="note";text.textContent="No subtitle languages available";subtitleSection.append(text)}
       subtitleSection.append(list);rows.prepend(subtitleSection);
@@ -2136,7 +2136,7 @@ button:focus-visible { outline: none; }
     const { q, f } = lineWords(c, t);
     const fs = span("f", f);
     if (best) fs.append(span("best", t("video_best")));
-    b.append(span("n", String(n)), span("q", q), fs, span("z", rowText(c, lang).size));
+    b.append(span("n", String(n)), span("q", q), fs, span("z", rowText(c, lang).size || "Size unavailable"));
     return b;
   }
 

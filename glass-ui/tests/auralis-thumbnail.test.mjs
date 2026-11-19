@@ -12,7 +12,7 @@ test('thumbnail control targets its own video and sends selected subtitle', {ski
       const attach=Element.prototype.attachShadow;
       Element.prototype.attachShadow=function(init){return attach.call(this,{...init,mode:'open'})};
       globalThis.sentMessages=[];
-      globalThis.chrome={runtime:{sendMessage:async message=>{globalThis.sentMessages.push(message);return {lookup:{state:'ready',token:'sample',title:'Sample',subtitles:[{code:'en',name:'English'}],choices:[{label:'1080p'},{label:'128 kbps',audio:true}]}}}}};
+      globalThis.chrome={runtime:{sendMessage:async message=>{globalThis.sentMessages.push(message);return {lookup:{state:'ready',token:'sample',title:'Sample',subtitles:[{code:'en',name:'English'}],choices:[{label:'1080p',size:104857600},{label:'128 kbps',audio:true,size:10485760,approx:true},{label:'720p'}]}}}}};
     });
     await page.goto('https://www.youtube.com/');
     await page.addScriptTag({content:readFileSync(new URL('../../auralis-extension/thumbnail.js',import.meta.url),'utf8')});
@@ -26,6 +26,9 @@ test('thumbnail control targets its own video and sends selected subtitle', {ski
     assert.ok(sections.some(text=>text.includes('Video')&&text.includes('1080p')));
     assert.ok(sections.some(text=>text.includes('Audio')&&text.includes('128 kbps')));
     assert.ok(sections.some(text=>text.includes('Subtitles')&&text.includes('English')));
+    assert.ok(sections.some(text=>text.includes('100 MB')&&text.includes('Size unavailable')));
+    assert.ok(sections.some(text=>text.includes('~10 MB')));
+    assert.ok(sections.some(text=>text.includes('English')&&text.includes('Size unavailable')));
     // Reopening and reinjecting must never leave an interactive old menu behind.
     await page.keyboard.press('Escape');
     assert.equal(await panel.count(),0);

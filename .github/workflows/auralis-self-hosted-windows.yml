@@ -34,6 +34,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+          fetch-depth: 0
           # Keep target/ and node_modules/ on this dedicated runner between builds.
           clean: false
 
@@ -144,6 +145,9 @@ jobs:
       - name: Build Auralis engine and browser host
         shell: pwsh
         run: |
+          $env:AURALIS_ENGINE_REV = (git log -1 --format=%h -- crates i18n assets Cargo.toml Cargo.lock .cargo rust-toolchain.toml).Trim()
+          if ($LASTEXITCODE -ne 0 -or !$env:AURALIS_ENGINE_REV) { throw 'Could not determine backend revision.' }
+          "AURALIS_ENGINE_REV=$env:AURALIS_ENGINE_REV" >> $env:GITHUB_ENV
           cargo build --release --target x86_64-pc-windows-msvc -p mdm-app -p mdm-nmhost
           if ($LASTEXITCODE) { throw 'Auralis engine build failed.' }
           Copy-Item "$env:CARGO_TARGET_DIR/x86_64-pc-windows-msvc/release/misterdownloadmanager.exe" glass-ui/src-tauri/resources/mdm-legacy.exe -Force

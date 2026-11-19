@@ -29,7 +29,13 @@ pub fn open(app: &AppHandle, label: &str, route: &str, width: f64, height: f64) 
         return Ok(());
     }
     let (width,height)=fit_size(app,width,height);
-    let mut builder=WebviewWindowBuilder::new(app, label, WebviewUrl::App(format!("index.html?{route}").into()));
+    // Use the same transparent-window configuration as the main window. In
+    // particular this includes Windows noRedirectionBitmap, which avoids an
+    // opaque/white backing around secondary glass windows on some systems.
+    let mut config=app.config().app.windows.first().cloned().ok_or("Main window configuration is missing")?;
+    config.label=label.to_owned();
+    config.url=WebviewUrl::App(format!("index.html?{route}").into());
+    let mut builder=WebviewWindowBuilder::from_config(app, &config).map_err(|e|e.to_string())?;
     if let Some(args)=test_browser_args(){builder=builder.additional_browser_args(&args);}
     let w = builder
         .title("Auralis Download Manager").always_on_top(priority).inner_size(width, height)

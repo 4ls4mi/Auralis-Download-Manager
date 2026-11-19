@@ -247,7 +247,7 @@
 .cg-window.cg-light .cg-window-top{background:#d7e7f2!important;backdrop-filter:none!important}
 .cg-window .cg-selected-chunks .cg-fixed-connections{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));grid-auto-rows:clamp(16px,5vh,30px);gap:4px;max-width:340px;margin-top:10px}
 .cg-window .cg-fixed-connections>span{height:100%;width:100%;border-radius:5px;background:#344155;box-shadow:none}
-.cg-window .cg-fixed-connections>span.lost{background:#e13d50!important;border-color:#ff7888;box-shadow:inset 0 1px #ffffff50}
+.cg-window .cg-chunk-map>span.lost{background:#e13d50!important;border-color:#ff7888;box-shadow:inset 0 1px #ffffff50}
 .cg-window .cg-fixed-connections>span.paused{background:#e13d50!important;border-color:#ff7888;box-shadow:inset 0 1px #ffffff50}
 .cg-window .cg-fixed-connections>span.cg-connection-empty{background:#344155;opacity:.62}
 .cg-window .cg-fixed-connections>span:focus-visible{outline:2px solid #fff;outline-offset:2px}

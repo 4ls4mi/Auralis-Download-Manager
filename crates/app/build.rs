@@ -137,15 +137,19 @@ fn languages(root: &std::path::Path) {
 /// The commit this is built from (`MDM_COMMIT`, "unknown" outside a git checkout), for Help →
 /// About and problem reports.
 fn commit() {
-    println!("cargo:rerun-if-changed=../../.git/HEAD");
-    println!("cargo:rerun-if-changed=../../.git/logs/HEAD");
-    let hash = std::process::Command::new("git")
+    println!("cargo:rerun-if-env-changed=AURALIS_ENGINE_REV");
+    let supplied = std::env::var("AURALIS_ENGINE_REV").ok().filter(|s| !s.is_empty());
+    if supplied.is_none() {
+        println!("cargo:rerun-if-changed=../../.git/HEAD");
+        println!("cargo:rerun-if-changed=../../.git/logs/HEAD");
+    }
+    let hash = supplied.or_else(|| std::process::Command::new("git")
         .args(["rev-parse", "--short", "HEAD"])
         .output()
         .ok()
         .filter(|o| o.status.success())
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned())
-        .filter(|h| !h.is_empty())
+        .filter(|h| !h.is_empty()))
         .unwrap_or_else(|| "unknown".into());
     println!("cargo:rustc-env=MDM_COMMIT={hash}");
 }
