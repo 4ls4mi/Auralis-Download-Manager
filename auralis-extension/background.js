@@ -2902,8 +2902,29 @@ async function videoLookup(m, page, sender) {
       if (!seen.has(key)) { seen.add(key); v.cookieJar.push(c); }
     }
   }
-  // Per-video override: never persist pasted session cookies or include them in logs.
-  if (m.cookieMode === "manual") {
+  // Per-video override: session credentials stay in memory and are never logged.
+  if (m.cookieMode === "file") {
+    const invalidCookies = () => ({lookup:{state:"failed",reason:"invalid-cookies",message:"Choose a valid, unexpired Netscape cookies.txt file for this site."}});
+    if (typeof m.cookieFile !== "string" || m.cookieFile.length > 262144) return invalidCookies();
+    const target = new URL(v.own).hostname.toLowerCase();
+    const youtube = isYouTube(v.own);
+    const jar = [];
+    for (let line of m.cookieFile.split(/\r?\n/)) {
+      if (line.startsWith("#HttpOnly_")) line = line.slice(10);
+      else if (!line || line.startsWith("#")) continue;
+      const fields = line.split("\t");
+      if (fields.length !== 7) continue;
+      const [domain, includeSubdomains, path, secure, expiration, name, value] = fields;
+      const host = domain.replace(/^\./, "").toLowerCase();
+      const allowed = host && (target === host || target.endsWith(`.${host}`) || (youtube && (host === "youtube.com" || host.endsWith(".youtube.com") || host === "google.com" || host.endsWith(".google.com"))));
+      const expires = Number(expiration);
+      if (!allowed || !name || !path.startsWith("/") || !Number.isFinite(expires) || (expires > 0 && expires <= Date.now()/1000)) continue;
+      jar.push({name,value,domain,path,hostOnly:includeSubdomains.toUpperCase()!=="TRUE",secure:secure.toUpperCase()==="TRUE",...(expires>0?{expirationDate:expires}:{})});
+      if (jar.length > 500) return invalidCookies();
+    }
+    if (!jar.length) return invalidCookies();
+    v.cookies = ""; v.cookieJar = jar;
+  } else if (m.cookieMode === "manual") {
     if (typeof m.cookieHeader !== "string" || !m.cookieHeader.trim() || m.cookieHeader.length > 8192 || /[\r\n\0]/.test(m.cookieHeader)) return {ok:false, why:"invalid-cookies"};
     v.cookies = m.cookieHeader.trim(); v.cookieJar = [];
   } else if (m.cookieMode === "none") { v.cookies = ""; v.cookieJar = []; }
@@ -2919,7 +2940,7 @@ async function videoLookup(m, page, sender) {
     },
     cookies: v.cookies,
     cookieJar: v.cookieJar,
-    explicitVideoCookies: m.cookieMode === "browser" || m.cookieMode === "manual",
+    explicitVideoCookies: m.cookieMode === "browser" || m.cookieMode === "manual" || m.cookieMode === "file",
     ...(v.fetchedWith ? { fetchedWith: v.fetchedWith } : {}),
     private: Boolean(tab.incognito),
   });

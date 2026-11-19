@@ -279,7 +279,7 @@
   // didn't happen (busy, off, too late, another MDM) or that YouTube's player answers for.
   function playedWanted(s) {
     const state = s && typeof s === "object" ? s.state : "";
-    return state === "feed" || state === "failed" || (state === "ready" && !(Array.isArray(s.choices) && s.choices.length));
+    return state === "feed" || (state === "failed" && s.reason !== "invalid-cookies") || (state === "ready" && !(Array.isArray(s.choices) && s.choices.length));
   }
 
   // The app's word on what the look-up lacked, to show with its qualities (#852: YouTube without
@@ -1092,7 +1092,7 @@ button:focus-visible { outline: none; }
   <div class="mh"><img alt="" draggable="false"><div><span class="t"></span><span class="s"></span></div></div>
   <div class="hr"></div>
   <div class="note" role="status" hidden></div>
-  <div class="cookie-controls"><label>Cookies <select class="cookie-mode"><option value="browser">Browser session</option><option value="manual">Paste cookies</option></select></label><input class="cookie-header" type="password" placeholder="name=value; …" aria-label="Cookies" hidden><button type="button" class="cookie-fetch">Fetch qualities</button><button type="button" class="youtube-sign-in">Sign in to YouTube</button></div>
+  <div class="cookie-controls"><label>Cookies <select class="cookie-mode"><option value="browser">Browser session</option><option value="file">Choose cookies file</option></select></label><input class="cookie-header" type="file" accept=".txt,text/plain" aria-label="Cookies file" hidden><button type="button" class="cookie-fetch">Fetch qualities</button><button type="button" class="youtube-sign-in">Sign in to YouTube</button></div>
   <div class="rows" role="group"></div>
   <div class="hr"></div>
   <button role="menuitem" data-act="window"><span class="mi"><svg viewBox="0 0 16 16" ${ICON} stroke-width="1.4"><path d="M2.5 4h11M2.5 8h11M2.5 12h7"/></svg></span><span></span></button>
@@ -1115,11 +1115,13 @@ button:focus-visible { outline: none; }
   const menu = $(".menu");
   const note = $(".note");
   const cookieMode = $(".cookie-mode"), cookieHeader = $(".cookie-header"), cookieFetch = $(".cookie-fetch");
-  cookieMode.addEventListener("change", () => { cookieHeader.hidden = cookieMode.value !== "manual"; });
-  cookieFetch.addEventListener("click", e => {
+  cookieMode.addEventListener("change", () => { cookieHeader.hidden = cookieMode.value !== "file"; });
+  cookieFetch.addEventListener("click", async e => {
     e.stopPropagation();
-    if (cookieMode.value === "manual" && !cookieHeader.value.trim()) { say("Paste cookies first."); return; }
-    if (video) { const c = describeNow(video); if (c.key) looks.delete(c.key); startLook(c, true); }
+    const file=cookieHeader.files?.[0];
+    if (cookieMode.value === "file" && (!file || file.size > 262144)) { say("Choose a cookies.txt file under 256 KB."); return; }
+    const cookieFile=cookieMode.value === "file" ? await file.text() : undefined;
+    if (video) { const c = describeNow(video); if (c.key) looks.delete(c.key); startLook(c, true, cookieFile); }
   });
   $(".youtube-sign-in").addEventListener("click",async e=>{e.preventDefault();e.stopPropagation();const result=await send({type:"youtube-sign-in"});say(result?.ok?(result.signedIn?"YouTube sign-in cookies found. Fetch qualities using Browser session.":"Sign in on the Google page, then return and fetch qualities."):(result?.error||"Could not check YouTube sign-in."));});
   const rows = $(".rows");
@@ -1209,12 +1211,12 @@ button:focus-visible { outline: none; }
   // or one nothing names), unless one is kept. `l.done` resolves once it ended. `byUser`: the user's
   // click or menu, for which one the app was too busy for before the click (other videos' early
   // look-ups running, #1053) is asked again rather than kept.
-  function startLook(c, byUser = false) {
+  function startLook(c, byUser = false, cookieFile) {
     if (!c || !c.key || c.d.drm || (c.d.src && !STREAM.test(c.d.src))) return null;
     const kept = looks.get(c.key);
     if (usable(kept) && !(byUser && (kept.state === "busy" || (cookieMode.value === "browser" && !kept.asked?.includeGoogleCookies)))) return kept;
     const og = location.href === landedAt ? document.querySelector('meta[property="og:title"]')?.content : "";
-    const asked = { src: c.d.src, title: (og || document.title || "").trim(), url: c.d.url, at: c.d.at, cookieMode: cookieMode.value, includeGoogleCookies:byUser, ...(cookieMode.value === "manual" ? {cookieHeader:cookieHeader.value} : {}) };
+    const asked = { src: c.d.src, title: (og || document.title || "").trim(), url: c.d.url, at: c.d.at, cookieMode: cookieMode.value, includeGoogleCookies:byUser, ...(cookieMode.value === "file" ? {cookieFile} : {}) };
     const l = { state: "pending", at: Date.now(), href: location.href, asked };
     looks.set(c.key, l);
     const alive = () => looks.get(c.key) === l && location.href === l.href;
@@ -1222,6 +1224,7 @@ button:focus-visible { outline: none; }
     // `end`: the background's first answer and the state it came to.
     const lookUp = async (more, end) => {
       const r = await within(send({ type: "video-lookup", ...asked, ...more }), LOOKUP_MS);
+      delete asked.cookieFile;
       let s = replyState(r) || { state: "gone" };
       if (s.state === "pending") {
         s =

@@ -3,11 +3,11 @@
   const ext = globalThis.browser ?? globalThis.chrome;
   const seen = new WeakMap();
   const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-  async function lookup(url, menu, cookieMode, cookieHeader) {
+  async function lookup(url, menu, cookieMode, cookieFile) {
     menu.replaceChildren();
     const status = document.createElement('div'); status.className='lookup-status'; status.textContent = 'Looking up qualities…'; menu.append(status);
     try {
-      let r = await ext.runtime.sendMessage({type:'video-lookup',url,thumbnail:true,cookieMode,cookieHeader,includeGoogleCookies:true});
+      let r = await ext.runtime.sendMessage({type:'video-lookup',url,thumbnail:true,cookieMode,cookieFile,includeGoogleCookies:true});
       let answer = r?.lookup;
       for (let n=0; answer?.state==='pending' && n<60; n++) {
         await delay(1000);
@@ -79,12 +79,12 @@
         if(menu.hidden)return;
         menu.replaceChildren();
         const controls=document.createElement('div');
-        controls.innerHTML='<label>Cookies <select aria-label="Cookies"><option value="browser">Browser session</option><option value="manual">Paste cookies</option></select></label><input type="password" placeholder="name=value; …" aria-label="Cookie header" hidden><button type="button" class="fetch">Fetch qualities</button><button type="button" class="sign-in">Sign in to YouTube</button>';
+        controls.innerHTML='<label>Cookies <select aria-label="Cookies"><option value="browser">Browser session</option><option value="file">Choose cookies file</option></select></label><input type="file" accept=".txt,text/plain" aria-label="Cookies file" hidden><button type="button" class="fetch">Fetch qualities</button><button type="button" class="sign-in">Sign in to YouTube</button>';
         const mode=controls.querySelector('select'),input=controls.querySelector('input');
-        mode.addEventListener('change',()=>{input.hidden=mode.value!=='manual';});
+        mode.addEventListener('change',()=>{input.hidden=mode.value!=='file';});
         const result=document.createElement('div');
         controls.querySelector('.sign-in').addEventListener('click',async e=>{e.preventDefault();e.stopPropagation();const r=await ext.runtime.sendMessage({type:'youtube-sign-in'}).catch(()=>null);result.textContent=r?.ok?(r.signedIn?'YouTube sign-in cookies found. Fetch qualities using Browser session.':'Sign in on the Google page, then return and fetch qualities.'):(r?.error||'Could not check YouTube sign-in.')});
-        controls.querySelector('.fetch').addEventListener('click',()=>void lookup(`https://www.youtube.com/watch?v=${id}`,result,mode.value,input.value));
+        controls.querySelector('.fetch').addEventListener('click',async e=>{e.preventDefault();e.stopPropagation();const file=input.files?.[0];if(mode.value==='file'&&(!file||file.size>262144)){result.textContent='Choose a cookies.txt file under 256 KB.';return}const content=mode.value==='file'?await file.text():undefined;void lookup(`https://www.youtube.com/watch?v=${id}`,result,mode.value,content)});
         menu.append(controls,result); void lookup(`https://www.youtube.com/watch?v=${id}`,result,'browser','');
       });
       if (getComputedStyle(anchor).position === 'static') anchor.style.position='relative';

@@ -30,6 +30,13 @@ test('thumbnail control targets its own video and sends selected subtitle', {ski
     assert.ok(sent.some(m=>m.type==='youtube-sign-in'));
     assert.equal(sent[0].url,'https://www.youtube.com/watch?v=abcdef12345');
     assert.deepEqual(sent[1].subs.langs,['en']);
+    await host.evaluate(e=>{const root=e.shadowRoot;const select=root.querySelector('select[aria-label="Cookies"]');select.value='file';select.dispatchEvent(new Event('change'))});
+    await host.locator('input[type="file"]').setInputFiles({name:'cookies.txt',mimeType:'text/plain',buffer:Buffer.from('# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t0\tSID\ttest-value\n')});
+    assert.equal(await host.evaluate(e=>e.shadowRoot.querySelector('input[type="file"]').files.length),1);
+    await host.evaluate(e=>e.shadowRoot.querySelector('.fetch').click());
+    await page.waitForFunction(()=>globalThis.sentMessages.some(m=>m.cookieMode==='file'));
+    const uploaded=await page.evaluate(()=>globalThis.sentMessages.find(m=>m.cookieMode==='file'));
+    assert.match(uploaded.cookieFile,/youtube\.com/);
     await page.locator('#thumbnail').evaluate(e=>e.setAttribute('href','/watch?v=zyxwvu98765'));
     await page.waitForTimeout(100);
     assert.equal(await host.count(),1);
