@@ -43,8 +43,19 @@ export const themes: Theme[] = [
   { id: "silver", name: "Graphite", accent: "#b1c9e0", secondary: "#70a2cc", rgb: "177,201,224" },
   { id: "navy", name: "Deep Indigo", accent: "#748cff", secondary: "#a679fd", rgb: "116,140,255" },
   { id: "orange", name: "Black Orange", accent: "#ff942f", secondary: "#ff5136", rgb: "255,148,47" },
-  { id: "rose", name: "Rose Quartz", accent: "#ff82bb", secondary: "#b986ff", rgb: "255,130,187" }
+  { id: "rose", name: "Rose Quartz", accent: "#ff82bb", secondary: "#b986ff", rgb: "255,130,187" },
+  { id:"glacier-ice",name:"Glacier Blue Ice",accent:"#57d5ff",secondary:"#287cff",rgb:"87,213,255" },
+  { id:"amethyst-ice",name:"Amethyst Ice",accent:"#d091ff",secondary:"#7544f4",rgb:"208,145,255" },
+  { id:"emerald-frost",name:"Emerald Frost",accent:"#50edc4",secondary:"#05a676",rgb:"80,237,196" },
+  { id:"rose-crystal",name:"Rose Quartz Ice",accent:"#ff8bc6",secondary:"#d74c9c",rgb:"255,139,198" },
+  { id:"amber-crystal",name:"Amber Crystal",accent:"#ffc15d",secondary:"#ef8421",rgb:"255,193,93" },
+  { id:"obsidian-aurora",name:"Obsidian Aurora",accent:"#58e8dd",secondary:"#a36bff",rgb:"88,232,221" }
 ];
+export function themeHue(theme:Theme){
+ const [r,g,b]=theme.rgb.split(',').map(v=>Number(v)/255),max=Math.max(r,g,b),min=Math.min(r,g,b),delta=max-min;
+ if(!delta)return 0;const hue=max===r?((g-b)/delta)%6:max===g?(b-r)/delta+2:(r-g)/delta+4;
+ return Math.round((hue*60+360)%360);
+}
 export type BackgroundMode = "desktop" | "wallpaper" | "solid";
 export type Appearance = {
   theme: string; wallMain: string; wallDetail: string; mainMode: BackgroundMode;
@@ -301,11 +312,12 @@ export function CrystalWindow({ children, target = "main" }: {
     return()=>{active=false};
   }, [mode, appearance.acrylic, appearance.material]);
   // Glass designs have one appearance; the light setting applies to solid backgrounds.
-  const effectiveLight = mode === "solid" && appearance.material !== "frosted-water-351" && appearance.lightMode;
+  const effectiveLight = false;
   const style = {
     "--accent": effectiveLight ? (({plexo:"#086e84",ocean:"#146c9b",purple:"#7050b5",pink:"#b73962",gold:"#8a5b05",green:"#19765b",silver:"#4c6680",navy:"#394ea2",orange:"#ad4700",rose:"#a42b70"} as Record<string,string>)[theme.id]??"#086e84") : theme.accent,
     "--accent-secondary": theme.secondary,
     "--accent-rgb": effectiveLight ? (({plexo:"8,110,132",ocean:"20,108,155",purple:"112,80,181",pink:"183,57,98",gold:"138,91,5",green:"25,118,91",silver:"76,102,128",navy:"57,78,162",orange:"173,71,0",rose:"164,43,112"} as Record<string,string>)[theme.id]??"8,110,132") : theme.rgb,
+    "--glass": theme.rgb.split(",").map(n=>Math.round(Number(n)*.14)).join(","),
     "--glass-tint": `hsl(${Math.max(0,Math.min(360,appearance.tintHue))} 85% 64% / ${Math.max(0,Math.min(65,appearance.tintStrength))/100})`,
     "--panel-opacity": Math.min(1, Math.max(.45, appearance.opacity / 100)),
     "--crystal-blur": appearance.blur + "px",
@@ -324,7 +336,7 @@ export function CrystalWindow({ children, target = "main" }: {
       <span style={{ background: `rgba(3,9,19,${appearance.dim / 100})` }} />
     </div>}
     {mode === "solid" && <div className="cg-solid" />}
-    <div className="cg-content" ref={frame}>{appearance.material === "frosted-water-351" && <FrostedLayers maskBackdrop={mode!=="desktop"}/>}<div className="cg-fit-content">{children}</div></div>
+    <div className="cg-content" ref={frame}>{appearance.material === "frosted-water-351" && <FrostedLayers maskBackdrop={mode!=="desktop"} tintHue={appearance.tintHue} tintStrength={appearance.tintStrength}/>}<div className="cg-fit-content">{children}</div></div>
     {windowError&&<aside className="cg-window-notice cg-error" role="alert"><span>{windowError}</span><button title="Dismiss" onClick={()=>setWindowError("")}><X size={15}/></button></aside>}
     <ResizeGrips />
   </div>;

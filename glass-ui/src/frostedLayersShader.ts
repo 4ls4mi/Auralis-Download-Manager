@@ -4,6 +4,8 @@ export const frostVertex = `attribute vec2 position; void main(){ gl_Position=ve
 export const frostFragment = `
     precision highp float;
     uniform vec2 viewport;
+    uniform vec3 themeTint;
+    uniform float themeStrength;
     uniform float seconds;
     uniform float progress;
     uniform float unknown;
@@ -102,6 +104,10 @@ export const frostFragment = `
     }
     void main() {
       vec2 p=vec2(gl_FragCoord.x/viewport.x,1.-gl_FragCoord.y/viewport.y)*vec2(742.,522.);
-      gl_FragColor=shell(p);
+      vec4 glass=shell(p);
+      float luminance=dot(glass.rgb,vec3(.2126,.7152,.0722));
+      vec3 colored=luminance*(vec3(.24)+themeTint*.95);
+      glass.rgb=mix(glass.rgb,colored,themeStrength*.90);
+      gl_FragColor=glass;
     }
 `;

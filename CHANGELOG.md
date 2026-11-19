@@ -15,6 +15,8 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 
 ### Auralis Download Manager 0.3.12 — Windows x64
 
+- Adds six crystalline color themes, applies the chosen tint across materials, and removes the solid light/dark buttons.
+
 - Removes the newer sculpted indicator designs and makes the approved ice ribbon available with every remaining progress shape.
 - Shows download progress and verification status in the update window and settings.
 - Starts the verified installer and automatic restart after download, without a second confirmation.

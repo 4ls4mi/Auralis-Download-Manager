@@ -4,7 +4,7 @@ import {frostedResizeDirection} from './frostedResize';
 import {getCurrentWindow} from '@tauri-apps/api/window';
 
 /** Draw the supplied Water Bubble 3.5.1 pane stack behind Auralis controls. */
-export default function FrostedLayers({maskBackdrop=false}:{maskBackdrop?:boolean}){
+export default function FrostedLayers({maskBackdrop=false,tintHue=210,tintStrength=50}:{maskBackdrop?:boolean;tintHue?:number;tintStrength?:number}){
  const canvas=useRef<HTMLCanvasElement>(null),[fallback,setFallback]=useState(false),[generation,setGeneration]=useState(0);
  useEffect(()=>{
   const el=canvas.current;if(!el)return;let disposed=false,frame=0,gl:WebGLRenderingContext|null=null;
@@ -18,6 +18,8 @@ export default function FrostedLayers({maskBackdrop=false}:{maskBackdrop?:boolea
    ctx.attachShader(program,vs);ctx.attachShader(program,fs);ctx.linkProgram(program);if(!ctx.getProgramParameter(program,ctx.LINK_STATUS))throw Error(ctx.getProgramInfoLog(program)||'Shader link failed');
    ctx.useProgram(program);const buffer=ctx.createBuffer();if(!buffer)throw Error('Buffer unavailable');ctx.bindBuffer(ctx.ARRAY_BUFFER,buffer);ctx.bufferData(ctx.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),ctx.STATIC_DRAW);const position=ctx.getAttribLocation(program,'position');ctx.enableVertexAttribArray(position);ctx.vertexAttribPointer(position,2,ctx.FLOAT,false,0,0);
    const viewport=ctx.getUniformLocation(program,'viewport');
+   const h=((tintHue%360)+360)%360/60,x=1-Math.abs(h%2-1);const rgb=h<1?[1,x,0]:h<2?[x,1,0]:h<3?[0,1,x]:h<4?[0,x,1]:h<5?[x,0,1]:[1,0,x];
+   ctx.uniform3f(ctx.getUniformLocation(program,'themeTint'),rgb[0],rgb[1],rgb[2]);ctx.uniform1f(ctx.getUniformLocation(program,'themeStrength'),Math.max(0,Math.min(1,tintStrength/65)));
    const host=el.closest<HTMLElement>('.cg-window');
    const maskCanvas=document.createElement('canvas');maskCanvas.width=371;maskCanvas.height=261;
    let alpha:Uint8ClampedArray|null=null;
@@ -39,6 +41,6 @@ export default function FrostedLayers({maskBackdrop=false}:{maskBackdrop?:boolea
    return()=>{disposed=true;cancelAnimationFrame(frame);observer.disconnect();host?.removeEventListener('mousedown',mouseDown,true);host?.removeEventListener('mousemove',mouseMove);host?.style.removeProperty('cursor');host?.classList.remove('cg-frost-edge-ready');host?.classList.remove('cg-frost-mask-ready');host?.style.removeProperty('--frost-shell-mask');document.removeEventListener('visibilitychange',request);el.removeEventListener('webglcontextlost',lost);el.removeEventListener('webglcontextrestored',restored);ctx.deleteBuffer(buffer);ctx.deleteProgram(program);ctx.deleteShader(vs);ctx.deleteShader(fs)};
   }catch{failed()}
   return()=>{disposed=true;cancelAnimationFrame(frame);el.removeEventListener('webglcontextlost',lost);el.removeEventListener('webglcontextrestored',restored)};
- },[generation,maskBackdrop]);
+ },[generation,maskBackdrop,tintHue,tintStrength]);
  return <><div className="cg-frost-fallback" aria-hidden="true" hidden={!fallback}/><canvas ref={canvas} className="cg-frost-canvas" aria-hidden="true"/></>;
 }
