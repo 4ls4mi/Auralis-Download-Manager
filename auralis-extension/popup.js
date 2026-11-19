@@ -314,6 +314,7 @@ if ((manifest.optional_permissions || []).includes("proxy")) {
   });
 }
 
+$("youtube-cookie-export").addEventListener("click",()=>void ext.tabs.create({url:ext.runtime.getURL("cookie-export.html")}));
 $("youtube-sign-in").addEventListener("click",async()=>{const result=await ask({type:"youtube-sign-in"});const said=$("action-said");said.hidden=false;said.textContent=result.ok?(result.signedIn?"YouTube sign-in cookies found in this browser. Fetch qualities again using Browser session.":"Sign in on the Google page, then return and fetch qualities using Browser session."):(result.error||"Could not check YouTube sign-in.");});
 $("take").addEventListener("change", async (e) => {
   await ask({ type: "pause", paused: !e.target.checked });
