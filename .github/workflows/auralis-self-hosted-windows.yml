@@ -35,6 +35,11 @@ jobs:
           # Keep target/ and node_modules/ on this dedicated runner between builds.
           clean: false
 
+      - name: Set up Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+
       - name: Check required tools
         shell: pwsh
         run: |
