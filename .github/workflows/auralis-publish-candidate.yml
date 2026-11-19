@@ -1,0 +1,63 @@
+name: Publish verified Auralis candidate
+on:
+  push:
+    branches: [feature/auralis-frosted-candidate]
+    paths: [.github/workflows/auralis-publish-candidate.yml]
+permissions:
+  actions: read
+  contents: write
+jobs:
+  publish:
+    if: contains(github.event.head_commit.message, '[publish-auralis-039]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TESTED_SHA: 4be7d92507ce6edba290320f06e53d9f6a13c120
+      TESTED_RUN: '44420891773'
+    steps:
+      - name: Check out the exact tested release notes
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: 4be7d92507ce6edba290320f06e53d9f6a13c120
+          persist-credentials: false
+      - name: Verify tested run and download its artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run view "$TESTED_RUN" --json headSha,conclusion --jq '[.headSha,.conclusion] | @tsv' > run.txt
+          IFS=$'\t' read -r sha conclusion < run.txt
+          test "$sha" = "$TESTED_SHA" && test "$conclusion" = success
+          gh run download "$TESTED_RUN" --name auralis-download-manager-windows-x64 --dir installer
+          gh run download "$TESTED_RUN" --name auralis-browser-extensions --dir extensions
+          test -f 'installer/Auralis Download Manager_0.3.9_x64-setup.exe'
+          test -f extensions/auralis-chromium.zip
+          test -f extensions/auralis-firefox.zip
+          test "$(find installer -type f | wc -l)" -eq 1
+          test "$(od -An -tx1 -N2 'installer/Auralis Download Manager_0.3.9_x64-setup.exe' | tr -d ' \n')" = 4d5a
+          unzip -tq extensions/auralis-chromium.zip
+          unzip -tq extensions/auralis-firefox.zip
+          sha256sum 'installer/Auralis Download Manager_0.3.9_x64-setup.exe' > installer.sha256
+      - name: Create a draft release from the verified artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view v0.3.9 >/dev/null 2>&1; then echo 'Release already exists; refusing to replace it.' >&2; exit 1; fi
+          gh release create v0.3.9 --target "$TESTED_SHA" --draft \
+            --title 'Auralis Download Manager 0.3.9 — Windows x64' \
+            --notes-file docs/glass-releases/v0.3.9.md \
+            'installer/Auralis Download Manager_0.3.9_x64-setup.exe' \
+            extensions/auralis-chromium.zip extensions/auralis-firefox.zip
+      - name: Verify the published installer digest and publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected=$(cut -d ' ' -f1 installer.sha256)
+          for attempt in {1..6}; do
+            digest=$(gh api "repos/$GH_REPO/releases/tags/v0.3.9" --jq '.assets[] | select(.name == "Auralis Download Manager_0.3.9_x64-setup.exe") | .digest // ""')
+            if [ "$digest" = "sha256:$expected" ]; then break; fi
+            sleep 5
+          done
+          test "$digest" = "sha256:$expected" || { echo 'Release installer SHA-256 mismatch or digest unavailable' >&2; exit 1; }
+          gh release edit v0.3.9 --verify-tag --draft=false --prerelease=false --latest
