@@ -1,0 +1,20 @@
+name: Test isolated Edge unpacked extension automation
+on:
+  push:
+    branches: [feature/auralis-frosted-candidate]
+    paths:
+      - .github/workflows/auralis-edge-extension-probe.yml
+      - tools/lab/edge-extension-probe/**
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test isolated unpacked installation and restart
+        run: node tools/lab/edge-extension-probe/probe.mjs
