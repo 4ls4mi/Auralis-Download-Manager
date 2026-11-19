@@ -18,12 +18,16 @@ pub fn set_material_window_shape(window: tauri::WebviewWindow, material: String,
         if width < 2 || height < 2 { return Ok(()); }
         let shape = match material.as_str() {
             "frosted-water-351" => {
-                let Some(outline) = outline.filter(|p| p.len() >= 3 && p.len() <= 2048 && p.iter().flatten().all(|v| v.is_finite() && (0.0..=1.0).contains(v))) else {
+                let Some(outline) = outline.filter(|p| p.len() >= 3 && p.len() <= 4096 && p.iter().flatten().all(|v| v.is_finite() && (0.0..=1.0).contains(v))) else {
                     // The renderer will supply its outline after its first frame.
                     unsafe { SetWindowRgn(hwnd, std::ptr::null_mut(), 1); }
                     return Ok(());
                 };
-                let points: Vec<POINT> = outline.iter().map(|p| POINT{x:(p[0] * f64::from(width)).round() as i32,y:(p[1] * f64::from(height)).round() as i32}).collect();
+                // Keep the hard Windows region just outside the shader's antialiased edge.
+                // The tiny transparent margin preserves smooth pixels without restoring a
+                // large rectangular area that intercepts clicks.
+                let middle = outline.len() / 2;
+                let points: Vec<POINT> = outline.iter().enumerate().map(|(i,p)| POINT{x:((p[0] * f64::from(width)).round() as i32 + if i < middle {-2} else {2}).clamp(0,width),y:((p[1] * f64::from(height)).round() as i32 + if p[1] < 0.5 {-2} else {2}).clamp(0,height)}).collect();
                 unsafe { CreatePolygonRgn(points.as_ptr(), points.len() as i32, WINDING) }
             },
             "ice-edge" | "diamond-facet" | "prismatic-glass" => {

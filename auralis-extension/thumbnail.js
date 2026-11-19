@@ -1,7 +1,12 @@
 // Auralis controls on YouTube cards work even before hover previews create a <video>.
 (() => {
+  // Content scripts can be reinjected into a live YouTube page after an extension update.
+  // Tear down the previous instance, including any detached floating panel.
+  globalThis.__auralisThumbnail?.teardown?.();
+  for (const old of document.querySelectorAll('[data-auralis-thumbnail-control], [data-auralis-thumbnail-menu]')) old.remove();
   const ext = globalThis.browser ?? globalThis.chrome;
   const seen = new WeakMap();
+  const entries = new Set();
   let activeMenu = null;
   const panelResize = new ResizeObserver(() => activeMenu?.position());
   document.addEventListener('pointerdown', e => {
@@ -64,11 +69,13 @@
     } catch { status.textContent='Could not reach Auralis.'; }
   }
   function scan() {
+    for (const entry of entries) if (!entry.host.isConnected) { entry.close(); entries.delete(entry); }
     for (const anchor of document.querySelectorAll('a#thumbnail[href*="watch?v="]')) {
       const href = new URL(anchor.href, location.href); const id=href.searchParams.get('v');
       if (!id || !/^[\w-]{6,32}$/.test(id)) continue;
-      const old=seen.get(anchor); if(old?.id===id)continue; if(old){old.close();old.host.remove();}
+      const old=seen.get(anchor); if(old?.id===id && old.host.isConnected)continue; if(old){old.close();old.host.remove();entries.delete(old);}
       const host=document.createElement('span'); host.style.cssText='position:absolute;right:8px;top:8px;z-index:1000;display:block';
+      host.setAttribute('data-auralis-thumbnail-control','');
       const root=host.attachShadow({mode:'closed'});
       root.innerHTML=`<style>
 :host{font:13px/1.35 system-ui,sans-serif;color:#f4f6ff;letter-spacing:.01em}
@@ -119,9 +126,11 @@
         menu.append(controls,result); void lookup(`https://www.youtube.com/watch?v=${id}`,result,'browser','');
       });
       if (getComputedStyle(anchor).position === 'static') anchor.style.position='relative';
-      anchor.append(host); seen.set(anchor,{id,host,portal,close:closeMenu});
+      anchor.append(host); const record={id,host,portal,close:closeMenu}; seen.set(anchor,record); entries.add(record);
     }
   }
-  new MutationObserver(() => { if (!scan.pending) { scan.pending=true; requestAnimationFrame(()=>{scan.pending=false;scan()}); } }).observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['href']});
+  const observer = new MutationObserver(() => { if (!scan.pending) { scan.pending=true; requestAnimationFrame(()=>{scan.pending=false;scan()}); } });
+  observer.observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['href']});
+  globalThis.__auralisThumbnail = {teardown(){observer.disconnect();activeMenu?.close();for(const entry of entries){entry.close();entry.host.remove()}entries.clear()}};
   scan();
 })();

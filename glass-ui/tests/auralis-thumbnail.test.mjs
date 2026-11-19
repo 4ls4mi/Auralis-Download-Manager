@@ -26,12 +26,23 @@ test('thumbnail control targets its own video and sends selected subtitle', {ski
     assert.ok(sections.some(text=>text.includes('Video')&&text.includes('1080p')));
     assert.ok(sections.some(text=>text.includes('Audio')&&text.includes('128 kbps')));
     assert.ok(sections.some(text=>text.includes('Subtitles')&&text.includes('English')));
+    // Reopening and reinjecting must never leave an interactive old menu behind.
+    await page.keyboard.press('Escape');
+    assert.equal(await panel.count(),0);
+    await host.locator('button.control').click();
+    assert.equal(await panel.count(),1);
+    await page.addScriptTag({content:readFileSync(new URL('../../auralis-extension/thumbnail.js',import.meta.url),'utf8')});
+    assert.equal(await panel.count(),0);
+    assert.equal(await page.locator('[data-auralis-thumbnail-control]').count(),1);
+    await host.locator('button.control').click();
+    assert.equal(await panel.count(),1);
+    await page.waitForFunction(()=>document.querySelector('[data-auralis-thumbnail-menu]')?.shadowRoot?.querySelector('select[aria-label="Subtitles"]'));
     await panel.evaluate(e=>{const root=e.shadowRoot;root.querySelector('select[aria-label="Subtitles"]').value='manual:en';[...root.querySelectorAll('.menu button')].find(b=>b.textContent.includes('1080p')).click()});
     await panel.evaluate(e=>e.shadowRoot.querySelector('.sign-in').click());
     const sent=await page.evaluate(()=>globalThis.sentMessages);
     assert.ok(sent.some(m=>m.type==='youtube-sign-in'));
     assert.equal(sent[0].url,'https://www.youtube.com/watch?v=abcdef12345');
-    assert.deepEqual(sent[1].subs.langs,['en']);
+    assert.deepEqual(sent.find(m=>m.type==='video-pick').subs.langs,['en']);
     await panel.evaluate(e=>{const root=e.shadowRoot;const select=root.querySelector('select[aria-label="Cookies"]');select.value='file';select.dispatchEvent(new Event('change'))});
     await panel.locator('input[type="file"]').setInputFiles({name:'cookies.txt',mimeType:'text/plain',buffer:Buffer.from('# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t0\tSID\ttest-value\n')});
     assert.equal(await panel.evaluate(e=>e.shadowRoot.querySelector('input[type="file"]').files.length),1);

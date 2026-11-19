@@ -23,7 +23,7 @@ export default function FrostedLayers({maskBackdrop=false,tintHue=210,tintStreng
    ctx.uniform3f(ctx.getUniformLocation(program,'themeTint'),rgb[0],rgb[1],rgb[2]);ctx.uniform1f(ctx.getUniformLocation(program,'themeStrength'),Math.max(0,Math.min(1,tintStrength/65)));
    ctx.uniform1f(ctx.getUniformLocation(program,'glassOpacity'),Math.max(.1,Math.min(1,opacity/100)));
    const host=el.closest<HTMLElement>('.cg-window');
-   const maskCanvas=document.createElement('canvas');maskCanvas.width=371;maskCanvas.height=261;
+   const maskCanvas=document.createElement('canvas');maskCanvas.width=1484;maskCanvas.height=1044;
    let alpha:Uint8ClampedArray|null=null;
    const applyMask=()=>{
     if(!host)return;
