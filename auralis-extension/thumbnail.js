@@ -2,6 +2,14 @@
 (() => {
   const ext = globalThis.browser ?? globalThis.chrome;
   const seen = new WeakMap();
+  let activeMenu = null;
+  const panelResize = new ResizeObserver(() => activeMenu?.position());
+  document.addEventListener('pointerdown', e => {
+    if (activeMenu && !e.composedPath().includes(activeMenu.host) && !e.composedPath().includes(activeMenu.portal)) activeMenu.close();
+  }, true);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && activeMenu) activeMenu.close(true); });
+  addEventListener('resize', () => activeMenu?.position());
+  addEventListener('scroll', () => activeMenu?.position(), true);
   const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
   async function lookup(url, menu, cookieMode, cookieFile) {
     menu.replaceChildren();
@@ -52,14 +60,14 @@
       videoTitle.textContent=`Video · ${videoCount}`;audioTitle.textContent=`Audio · ${audioCount}`;
       if(!videoCount){const empty=document.createElement('small');empty.textContent='No video qualities available';videoSection.append(empty)}
       if(!audioCount){const empty=document.createElement('small');empty.textContent='No audio qualities available';audioSection.append(empty)}
-      menu.append(subsSection,videoSection,audioSection);
+      menu.append(videoSection,audioSection,subsSection);
     } catch { status.textContent='Could not reach Auralis.'; }
   }
   function scan() {
     for (const anchor of document.querySelectorAll('a#thumbnail[href*="watch?v="]')) {
       const href = new URL(anchor.href, location.href); const id=href.searchParams.get('v');
       if (!id || !/^[\w-]{6,32}$/.test(id)) continue;
-      const old=seen.get(anchor); if(old?.id===id)continue; if(old)old.host.remove();
+      const old=seen.get(anchor); if(old?.id===id)continue; if(old){old.close();old.host.remove();}
       const host=document.createElement('span'); host.style.cssText='position:absolute;right:8px;top:8px;z-index:1000;display:block';
       const root=host.attachShadow({mode:'closed'});
       root.innerHTML=`<style>
@@ -73,10 +81,33 @@
 </style><button type="button" class="control" aria-label="Auralis video qualities" aria-expanded="false"><img alt=""><span>⌄</span></button><div class="menu" hidden></div>`;
       root.querySelector('img').src='data:image/png;base64,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';
       const button=root.querySelector('.control'),menu=root.querySelector('.menu');
+      // The thumbnail and its ancestors often clip overflow. Keep the small button on the
+      // thumbnail, but render its panel in a separate viewport-level shadow root.
+      const portal=document.createElement('div');
+      portal.setAttribute('data-auralis-thumbnail-menu','');
+      portal.style.cssText='position:fixed;inset:0;pointer-events:none;z-index:2147483647';
+      const panelRoot=portal.attachShadow({mode:'closed'});
+      panelRoot.append(root.querySelector('style').cloneNode(true));
+      const portalStyle=document.createElement('style');
+      portalStyle.textContent='.menu{position:fixed;top:0;left:0;right:auto;width:min(330px,calc(100vw - 16px));max-height:calc(100vh - 16px);box-sizing:border-box;pointer-events:auto}';
+      panelRoot.append(portalStyle,menu);
+      const positionMenu=()=>{
+        if(menu.hidden)return;
+        const r=button.getBoundingClientRect(),pad=8,w=Math.min(330,innerWidth-2*pad);
+        menu.style.width=w+'px'; menu.style.maxHeight=Math.min(420,innerHeight-2*pad)+'px';
+        const h=menu.getBoundingClientRect().height;
+        const top=r.bottom+6+h<=innerHeight-pad?r.bottom+6:Math.max(pad,r.top-h-6);
+        menu.style.top=Math.max(pad,Math.min(top,innerHeight-pad-h))+'px';
+        menu.style.left=Math.max(pad,Math.min(r.right-w,innerWidth-pad-w))+'px';
+      };
+      const closeMenu=(focus=false)=>{menu.hidden=true;button.setAttribute('aria-expanded','false');if(activeMenu?.portal===portal){panelResize.disconnect();activeMenu=null}portal.remove();if(focus)button.focus()};
+      const entry={host,portal,position:positionMenu,close:closeMenu};
       host.addEventListener('click',e=>e.stopPropagation());
       button.addEventListener('click',e=>{
-        e.preventDefault();e.stopPropagation();menu.hidden=!menu.hidden;button.setAttribute('aria-expanded',String(!menu.hidden));
-        if(menu.hidden)return;
+        e.preventDefault();e.stopPropagation();
+        if(!menu.hidden){closeMenu();return}
+        activeMenu?.close();document.body.append(portal);menu.hidden=false;button.setAttribute('aria-expanded','true');activeMenu=entry;panelResize.observe(menu);
+        positionMenu();
         menu.replaceChildren();
         const controls=document.createElement('div');
         controls.innerHTML='<label>Cookies <select aria-label="Cookies"><option value="browser">Browser session</option><option value="file">Choose cookies file</option></select></label><input type="file" accept=".txt,text/plain" aria-label="Cookies file" hidden><button type="button" class="fetch">Fetch qualities</button><button type="button" class="sign-in">Sign in to YouTube</button>';
@@ -88,7 +119,7 @@
         menu.append(controls,result); void lookup(`https://www.youtube.com/watch?v=${id}`,result,'browser','');
       });
       if (getComputedStyle(anchor).position === 'static') anchor.style.position='relative';
-      anchor.append(host); seen.set(anchor,{id,host});
+      anchor.append(host); seen.set(anchor,{id,host,portal,close:closeMenu});
     }
   }
   new MutationObserver(() => { if (!scan.pending) { scan.pending=true; requestAnimationFrame(()=>{scan.pending=false;scan()}); } }).observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['href']});

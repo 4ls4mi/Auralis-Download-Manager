@@ -35,6 +35,22 @@ test('detail slots stay fixed without inventing workers and cap the display at 3
  const many=Array.from({length:40},(_,id)=>({id}));assert.equal(connectionSlots(many).length,32);assert.equal(connectionSlots(many)[31].id,31);assert.equal(connectionSlots(many,true).length,40);
 });
 
+test('connections keep their own block when another connection disappears and returns',()=>{
+ const first=connectionSlots([{id:0},{id:1},{id:2}]);
+ const disconnected=connectionSlots([{id:0},{id:2}]);
+ const returned=connectionSlots([{id:0},{id:1},{id:2}]);
+ assert.equal(first[2].id,2);assert.equal(disconnected[1],null);assert.equal(disconnected[2].id,2);assert.equal(returned[2].id,2);
+});
+
+test('a lost connection retains its measured fill and resumes from the same range',()=>{
+ const range={start:100,cursor:140,end:200,worker:1,last_worker:1};
+ const receiving=connectionIndicators([{id:1,downloaded:40,speed:10,state:'Receiving'}],[range])[0];
+ const retrying=connectionIndicators([{id:1,downloaded:40,speed:0,state:'Retrying'}],[{...range,worker:null}])[0];
+ const resumed=connectionIndicators([{id:1,downloaded:45,speed:10,state:'Receiving'}],[{...range,cursor:145}])[0];
+ assert.equal(receiving.percent,40);assert.equal(retrying.percent,40);assert.equal(resumed.percent,45);
+ assert.equal(connectionLost(retrying,true),true);
+});
+
 test('loss styling follows only reported retry, failure or recent disconnect',()=>{
  const base={id:0,downloaded:20,speed:0,state:'Receiving'};
  assert.equal(connectionLost(base,true),false);

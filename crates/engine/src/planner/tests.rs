@@ -45,6 +45,26 @@ fn fixed_ranges_can_fall_back_if_a_server_refuses_a_worker() {
     check_invariants(&p);
 }
 
+#[test]
+fn refused_connection_does_not_enable_repeated_dynamic_splits() {
+    let mut p = Planner::new(120, 1);
+    p.reserve_fixed_ranges(3);
+    for w in 0..3 { p.assign(w, None).unwrap(); }
+    assert_eq!(p.claim(1, 40, 10), Claim::Granted(10));
+    p.commit(1, 50);
+    p.release(1);
+    p.reassign_abandoned(1);
+    assert_eq!(p.claim(0, 0, 40), Claim::Granted(40));
+    assert_eq!(p.commit(0, 40), Some(40));
+    let next = p.assign(0, Some(40)).unwrap();
+    assert_eq!((next.from, next.to), (50, 80));
+    assert_eq!(p.claim(0, 50, 30), Claim::Granted(30));
+    assert_eq!(p.commit(0, 80), Some(80));
+    assert_eq!(p.assign(0, Some(80)), None, "worker 0 must not split worker 2's range");
+    assert_eq!(p.downloaded(), 80);
+    check_invariants(&p);
+}
+
 fn check_invariants(p: &Planner) {
     let mut expect = 0;
     let mut workers = std::collections::HashSet::new();

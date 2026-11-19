@@ -11,8 +11,10 @@ export function connectionIndicators(connections:EngineConnection[],ranges:Conne
 }
 
 /** The detail window reserves exactly 32 places; empty places are not workers. */
-export function connectionSlots<T>(workers:T[],compact=false):(T|null)[]{
- return compact?workers:Array.from({length:32},(_,index)=>workers[index]??null);
+export function connectionSlots<T extends {id:number}>(workers:T[],compact=false):(T|null)[]{
+ if(compact)return workers;
+ const byId=new Map(workers.map(worker=>[worker.id,worker]));
+ return Array.from({length:32},(_,index)=>byId.get(index)??null);
 }
 
 /** A connection loss is reported by the engine, never inferred from low speed. */

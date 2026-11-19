@@ -24,6 +24,8 @@ concurrency:
 jobs:
   windows-x64:
     name: Build and test on your PC
+    permissions:
+      contents: read
     # Only the owner's trusted release branch may execute on a personal computer.
     if: github.ref == 'refs/heads/feature/auralis-frosted-candidate'
     runs-on: [self-hosted, Windows, X64, auralis]
@@ -36,9 +38,39 @@ jobs:
           clean: false
 
       - name: Set up Node.js 22
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: 22
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $cacheDir = Join-Path $env:RUNNER_WORKSPACE 'auralis-cache'
+          New-Item -ItemType Directory -Force $cacheDir | Out-Null
+          $archive = Join-Path $cacheDir 'node-v22.23.5-win-x64.zip'
+          $nodeDir = Join-Path $cacheDir 'node-v22.23.5-win-x64'
+          if (!(Test-Path (Join-Path $nodeDir 'node.exe'))) {
+            if (!(Test-Path $archive)) { Invoke-WebRequest 'https://nodejs.org/dist/v22.23.5/node-v22.23.5-win-x64.zip' -OutFile $archive }
+            if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne '4a191082e9706866830379d577d2cc8a50c776fcd9436a8d061b063ed0d9a0e3') { Remove-Item $archive -Force; throw 'Node archive checksum mismatch.' }
+            Expand-Archive -Path $archive -DestinationPath $cacheDir -Force
+          }
+          $nodeDir >> $env:GITHUB_PATH
+
+      - name: Set up cached Rust toolchain
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $cacheDir = Join-Path $env:RUNNER_WORKSPACE 'auralis-cache'
+          $env:CARGO_HOME = Join-Path $cacheDir 'cargo'
+          $env:RUSTUP_HOME = Join-Path $cacheDir 'rustup'
+          "CARGO_HOME=$env:CARGO_HOME" >> $env:GITHUB_ENV
+          "RUSTUP_HOME=$env:RUSTUP_HOME" >> $env:GITHUB_ENV
+          (Join-Path $env:CARGO_HOME 'bin') >> $env:GITHUB_PATH
+          if (!(Test-Path (Join-Path $env:CARGO_HOME 'bin/rustup.exe'))) {
+            $installer = Join-Path $cacheDir 'rustup-init.exe'
+            $url = 'https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe'
+            Invoke-WebRequest $url -OutFile $installer
+            $expected = ((Invoke-WebRequest "${url}.sha256").Content -split '\s+')[0].ToLowerInvariant()
+            if ((Get-FileHash $installer -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) { throw 'Rust installer checksum mismatch.' }
+            & $installer -y --profile minimal --default-toolchain stable --no-modify-path
+            if ($LASTEXITCODE) { throw 'Rust toolchain setup failed.' }
+          }
 
       - name: Check required tools
         shell: pwsh
@@ -96,6 +128,7 @@ jobs:
         working-directory: glass-ui
         shell: pwsh
         run: |
+          Remove-Item src-tauri/target/release/bundle/nsis -Recurse -Force -ErrorAction SilentlyContinue
           npm run tauri -- build --bundles nsis
           if ($LASTEXITCODE) { throw 'Installer build failed.' }
 
@@ -106,3 +139,91 @@ jobs:
           path: glass-ui/src-tauri/target/release/bundle/nsis/*.exe
           if-no-files-found: error
           retention-days: 14
+
+      - name: Package Auralis browser extensions
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($script in @('background.js','video.js','thumbnail.js')) {
+            node --check (Join-Path 'auralis-extension' $script)
+            if ($LASTEXITCODE) { throw "Invalid extension script: $script" }
+          }
+          Remove-Item extension-staging, extension-packages -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path extension-packages, extension-staging/chromium, extension-staging/edge-store, extension-staging/firefox | Out-Null
+          Copy-Item auralis-extension/* extension-staging/chromium/ -Recurse -Force
+          Copy-Item auralis-extension/* extension-staging/edge-store/ -Recurse -Force
+          $manifest = Get-Content extension-staging/edge-store/manifest.json -Raw | ConvertFrom-Json
+          $manifest.PSObject.Properties.Remove('key')
+          $manifest | ConvertTo-Json -Depth 100 | Set-Content extension-staging/edge-store/manifest.json -Encoding utf8
+          Copy-Item auralis-extension/* extension-staging/firefox/ -Recurse -Force
+          Copy-Item extension-staging/firefox/manifest.firefox.json extension-staging/firefox/manifest.json -Force
+          Compress-Archive -Path extension-staging/chromium/* -DestinationPath extension-packages/auralis-chromium.zip
+          Compress-Archive -Path extension-staging/edge-store/* -DestinationPath extension-packages/auralis-edge-store.zip
+          Compress-Archive -Path extension-staging/firefox/* -DestinationPath extension-packages/auralis-firefox.zip
+
+      - name: Upload Auralis browser extensions
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: auralis-browser-extensions
+          path: extension-packages/*.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish verified Auralis release
+    needs: windows-x64
+    if: github.event_name == 'push' && github.ref == 'refs/heads/feature/auralis-frosted-candidate'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Publish successful build and verify assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          version="$(python3 -c 'import tomllib; print(tomllib.load(open("glass-ui/src-tauri/Cargo.toml", "rb"))["package"]["version"])')"
+          tag="v$version"
+          if gh release view "$tag" --json isDraft --jq .isDraft 2>/dev/null | grep -qx false; then
+            echo "$tag is already published; leaving it unchanged."
+            exit 0
+          fi
+          if gh api "repos/$GH_REPO/git/ref/tags/$tag" >/dev/null 2>&1; then
+            echo "Tag $tag already exists; refusing to replace it." >&2; exit 1
+          fi
+          test -f "docs/glass-releases/$tag.md"
+          gh run download "$GITHUB_RUN_ID" --name auralis-download-manager-windows-x64 --dir installer
+          gh run download "$GITHUB_RUN_ID" --name auralis-browser-extensions --dir extensions
+          test "$(find installer -type f | wc -l)" -eq 1
+          test -f "installer/Auralis Download Manager_${version}_x64-setup.exe"
+          for name in auralis-chromium.zip auralis-edge-store.zip auralis-firefox.zip; do test -f "extensions/$name"; done
+          cp "installer/Auralis Download Manager_${version}_x64-setup.exe" "Auralis.Download.Manager_${version}_x64-setup.exe"
+          gh release create "$tag" --draft --target "$GITHUB_SHA" --title "Auralis Download Manager $version — Windows x64" --notes-file "docs/glass-releases/$tag.md"
+          gh release upload "$tag" "Auralis.Download.Manager_${version}_x64-setup.exe" extensions/*.zip
+          release_id="$(gh api "repos/$GH_REPO/releases" --jq "[.[] | select(.tag_name==\"$tag\" and .draft==true)] | if length==1 then .[0].id else empty end")"
+          test -n "$release_id"
+          gh api "repos/$GH_REPO/releases/$release_id" > release.json
+          export AURALIS_VERSION="$version"
+          python3 - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          version=os.environ['AURALIS_VERSION']
+          files=[Path(f'Auralis.Download.Manager_{version}_x64-setup.exe'),*(Path('extensions')/name for name in ('auralis-chromium.zip','auralis-edge-store.zip','auralis-firefox.zip'))]
+          release=json.loads(Path('release.json').read_text())
+          assert release['draft'] and release['target_commitish']==os.environ['GITHUB_SHA']
+          assets={item['name']:item for item in release['assets']}
+          assert set(assets)=={path.name for path in files}
+          for path in files:
+              asset=assets[path.name]
+              assert asset['size']==path.stat().st_size
+              assert asset['digest']=='sha256:'+hashlib.sha256(path.read_bytes()).hexdigest()
+          PY
+          gh release edit "$tag" --draft=false --prerelease=false --latest
+          test "$(gh api "repos/$GH_REPO/git/ref/tags/$tag" --jq .object.sha)" = "$GITHUB_SHA"

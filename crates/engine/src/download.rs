@@ -3656,7 +3656,7 @@ async fn worker(ctx: Arc<Ctx>, id: WorkerId, mut first: Option<Body>) -> Result<
                         ));
                         ctx.shared
                             .conn(id, |c| c.status = ConnStatus::Retired { host, cap });
-                        ctx.shared.with_planner(|p| p.allow_reassignment());
+                        ctx.shared.with_planner(|p| p.reassign_abandoned(id));
                         return Ok(());
                     }
                 }
@@ -3677,7 +3677,7 @@ async fn worker(ctx: Arc<Ctx>, id: WorkerId, mut first: Option<Body>) -> Result<
                     };
                     ctx.shared
                         .conn(id, |c| c.status = ConnStatus::Failed(e.clone()));
-                    ctx.shared.with_planner(|p| p.allow_reassignment());
+                    ctx.shared.with_planner(|p| p.reassign_abandoned(id));
                     return if others { Ok(()) } else { Err(e) };
                 }
                 let mut received = 0;
@@ -3691,7 +3691,7 @@ async fn worker(ctx: Arc<Ctx>, id: WorkerId, mut first: Option<Body>) -> Result<
                     let others = ctx.shared.with_planner(|p| p.active_workers()) > 0;
                     ctx.shared
                         .conn(id, |c| c.status = ConnStatus::Failed(e.clone()));
-                    ctx.shared.with_planner(|p| p.allow_reassignment());
+                    ctx.shared.with_planner(|p| p.reassign_abandoned(id));
                     return if others { Ok(()) } else { Err(e) };
                 }
                 ctx.shared

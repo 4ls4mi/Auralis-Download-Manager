@@ -1038,7 +1038,7 @@ button:focus-visible { outline: none; }
 .pill,.menu {--accent:#d0b4ff;--tx:#f5f8ff;--tx2:#c4cee4;--hov:rgba(176,143,255,.24);--bd:rgba(213,228,255,.30);--go:#65e4d0;--warn:#ffce79;--err:#ff9ba8}
 .pill {background:linear-gradient(145deg,rgba(73,56,112,.94),rgba(15,28,45,.96));border:1px solid #dfd2ff77;box-shadow:inset 0 1px #ffffff55,0 6px 18px #0009}
 .pill:not(.bare) .go:hover,.pill .more:hover {background:#b48dff55}
-.menu {padding:8px;border-radius:16px;background:linear-gradient(145deg,rgba(52,43,79,.97),rgba(15,25,43,.98));border-color:#d6c8ff77;backdrop-filter:blur(20px);box-shadow:inset 0 1px #ffffff44,0 14px 35px #000a}
+.menu {width:min(330px,calc(100vw - 16px));max-height:calc(100vh - 16px);overflow-y:auto;overscroll-behavior:contain;padding:8px;border-radius:16px;background:linear-gradient(145deg,rgba(52,43,79,.97),rgba(15,25,43,.98));border-color:#d6c8ff77;backdrop-filter:blur(20px);box-shadow:inset 0 1px #ffffff44,0 14px 35px #000a}
 .menu button {height:32px;border-radius:8px;cursor:pointer}.menu button:hover {background:#b99aff3d}.menu .cap{color:#d9c6ff}.menu .rows{scrollbar-width:thin;scrollbar-color:#a98ee2 transparent}
 .menu .subtitle-section{margin:5px 2px;padding:5px;border:1px solid #ffffff30;border-radius:9px;background:#ffffff0b}.menu .subtitle-list{max-height:140px;overflow:auto}.menu .subtitle-list button[aria-pressed="true"]{background:#a886fa66;box-shadow:inset 3px 0 #dbcbff}.menu [data-act="window"] {display:none!important}
 .cookie-controls {padding:6px;display:flex;gap:5px;align-items:center;flex-wrap:wrap}.cookie-controls button {width:auto;height:auto;background:#355983;padding:5px 7px}.cookie-controls input {max-width:150px}.cookie-controls select,.cookie-controls input,.rows select {background:#20334f;color:#fff;border:1px solid #8ab3d788;border-radius:5px;padding:4px}
@@ -1601,9 +1601,11 @@ button:focus-visible { outline: none; }
   // The open menu opens below the button, or above it near the bottom of the window.
   function placeMenu(top, left, w) {
     const h = menu.offsetHeight;
-    const below = top + 36 + h < innerHeight;
-    menu.style.top = below ? "36px" : `${-h - 6}px`;
-    menu.style.left = towardEnd(left, w) ? `${w - menu.offsetWidth}px` : "0";
+    const width = menu.offsetWidth;
+    const desiredTop = top + 36 + h <= innerHeight - 8 ? top + 36 : top - h - 6;
+    const desiredLeft = towardEnd(left, w) ? left + w - width : left;
+    menu.style.top = `${Math.max(8, Math.min(desiredTop, innerHeight - h - 8)) - top}px`;
+    menu.style.left = `${Math.max(8, Math.min(desiredLeft, innerWidth - width - 8)) - left}px`;
   }
 
   function placeTip(left, w) {

@@ -174,6 +174,34 @@ impl Planner {
     /// complete it instead of leaving the download stuck.
     pub fn allow_reassignment(&mut self) { self.fixed = false; }
 
+    /// A permanently unavailable worker gives its remaining fixed ranges to one
+    /// connection that is still working. Keep fixed scheduling enabled so the
+    /// remaining connections do not repeatedly split and exchange work.
+    pub fn reassign_abandoned(&mut self, failed: WorkerId) {
+        if !self.fixed { return; }
+        let Some(target) = self.segs.iter().find_map(|s| s.worker.filter(|&w| w != failed)) else {
+            self.allow_reassignment();
+            return;
+        };
+        let mut i = 0;
+        while i < self.segs.len() {
+            let s = self.segs[i];
+            if s.last_worker == Some(failed) && s.worker.is_none() && s.cursor < s.end {
+                if s.cursor > s.start {
+                    self.segs[i].end = s.cursor;
+                    self.segs[i].reserved = s.cursor;
+                    let mut remainder = fresh(s.cursor, s.end, None);
+                    remainder.last_worker = Some(target);
+                    self.segs.insert(i + 1, remainder);
+                    i += 1;
+                } else {
+                    self.segs[i].last_worker = Some(target);
+                }
+            }
+            i += 1;
+        }
+    }
+
     pub fn save(&self) -> Vec<SavedSegment> {
         self.segs
             .iter()
