@@ -13,6 +13,12 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 - Reduced overlapping visual layers and added manual Netscape-format cookie-file selection for video helpers. Google-account autodetection/direct connection remains unfinished.
 - Remaining manual Windows checks include physical DPI/transparency review and native drag-to-Explorer/application behavior. Automated success does not establish complete original-MDM feature parity.
 
+### Auralis Download Manager 0.3.12 — Windows x64
+
+- Removes the newer sculpted indicator designs and makes the approved ice ribbon available with every remaining progress shape.
+- Shows download progress and verification status in the update window and settings.
+- Starts the verified installer and automatic restart after download, without a second confirmation.
+
 ### Auralis Download Manager 0.3.11 — Windows x64
 
 - Prevents the download graph, connection blocks and buttons from overlapping when the window or interface is scaled; scrolls when space is limited.

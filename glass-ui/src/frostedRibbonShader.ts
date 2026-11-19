@@ -4,6 +4,7 @@ export const ribbonFragment = `
     uniform vec2 viewport;
     uniform float seconds;
     uniform float progress;
+    uniform float shapeGeometry;
     uniform float unknown;
     uniform float trackFinish;
     uniform vec3 trackTint;
@@ -205,7 +206,7 @@ export const ribbonFragment = `
 
     vec4 ribbonBar(vec2 p,vec4 background) {
       vec2 q = p-vec2(408.,253.5);
-      float d = rounded(q,vec2(280.,24.),24.);
+      float d = rounded(q,vec2(280.,24.),mix(24.,2.,shapeGeometry));
       float end = 128.+560.*progress;
       float active = (1.-smoothstep(end-5.,end+12.,p.x))*smoothstep(.035,.35,progress);
       float pool = band(p.x,472.,103.);

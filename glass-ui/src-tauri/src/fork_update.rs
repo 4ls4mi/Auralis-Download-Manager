@@ -1,8 +1,8 @@
 //! Fork-only Windows updater. Releases and checksums come from the fixed GitHub repository.
-use std::{fs::{self, File, OpenOptions}, io::{Read, Write}, path::PathBuf, sync::{Mutex, OnceLock}, time::{Duration, SystemTime, UNIX_EPOCH}};
+use std::{fs::{self, File, OpenOptions}, io::{Read, Write}, path::PathBuf, sync::{Mutex, OnceLock}, time::{Duration, Instant, SystemTime, UNIX_EPOCH}};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 
 const FEED: &str = "https://api.github.com/repos/4ls4mi/Auralis-Download-Manager/releases?per_page=30";
 const ASSET_PREFIX: &str = "https://github.com/4ls4mi/Auralis-Download-Manager/releases/download/";
@@ -12,6 +12,11 @@ struct Candidate { version: String, notes: String, url: String, sha256: String, 
 static CANDIDATE: OnceLock<Mutex<Option<Candidate>>> = OnceLock::new();
 fn candidate() -> &'static Mutex<Option<Candidate>> { CANDIDATE.get_or_init(|| Mutex::new(None)) }
 fn lock() -> Result<std::sync::MutexGuard<'static, Option<Candidate>>, String> { candidate().lock().map_err(|_| "Update state is unavailable".into()) }
+#[derive(Clone, Serialize)]
+struct UpdateProgress { phase: &'static str, downloaded: u64, total: u64 }
+fn progress(app: &AppHandle, phase: &'static str, downloaded: u64, total: u64) {
+    let _ = app.emit("auralis-update-progress", UpdateProgress { phase, downloaded, total });
+}
 #[derive(Serialize)]
 pub struct UpdateStatus { state: &'static str, version: Option<String>, notes: Option<String> }
 fn client() -> Result<reqwest::blocking::Client, String> {
@@ -80,7 +85,10 @@ pub async fn glass_update_download(app:AppHandle) -> Result<(),String> {
         let result=(|| -> Result<(),String> {
             let mut source=client()?.get(&c.url).send().map_err(|e|e.to_string())?.error_for_status().map_err(|e|e.to_string())?;
             let mut file=OpenOptions::new().write(true).create_new(true).open(&tmp).map_err(|e|e.to_string())?;
-            let mut buf=[0u8;65536];let mut count=0u64;loop{let n=source.read(&mut buf).map_err(|e|e.to_string())?;if n==0{break}count+=n as u64;if count>c.size||count>MAX_BYTES{return Err("Installer size does not match the release".into())}file.write_all(&buf[..n]).map_err(|e|e.to_string())?;}
+            let mut buf=[0u8;65536];let mut count=0u64;let mut last=Instant::now();
+            progress(&app,"downloading",0,c.size);
+            loop{let n=source.read(&mut buf).map_err(|e|e.to_string())?;if n==0{break}count+=n as u64;if count>c.size||count>MAX_BYTES{return Err("Installer size does not match the release".into())}file.write_all(&buf[..n]).map_err(|e|e.to_string())?;if last.elapsed()>=Duration::from_millis(100){progress(&app,"downloading",count,c.size);last=Instant::now();}}
+            progress(&app,"verifying",count,c.size);
             file.sync_all().map_err(|e|e.to_string())?;drop(file);
             let (hash,size)=hash_file(&tmp)?;if hash!=c.sha256||size!=c.size{return Err("Installer verification failed".into())}
             fs::rename(&tmp,&final_path).map_err(|e|e.to_string())?;Ok(())

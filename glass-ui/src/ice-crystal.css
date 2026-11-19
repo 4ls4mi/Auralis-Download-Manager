@@ -598,3 +598,6 @@
 .cg-window .cg-minimal-progress .cg-progress-combined,.cg-window .cg-minimal-progress .cg-selected-chunks{min-height:0;min-width:0}
 .cg-window .cg-minimal-progress>.cg-bottom-actions{flex:0 0 auto}
 @media(max-width:470px){.cg-window .cg-minimal-progress .cg-indicator-row{grid-template-columns:minmax(0,1fr);min-height:0}.cg-window .cg-minimal-progress .cg-indicator-row>section{min-height:150px}.cg-window .cg-minimal-progress .cg-mdm-details dl{grid-template-columns:minmax(0,1fr)}}
+.cg-update-progress{display:flex;flex-direction:column;gap:5px;margin:8px 0;color:var(--ink)}
+.cg-update-progress progress{width:100%;height:18px;accent-color:var(--accent)}
+.cg-update-progress small{color:var(--ink)}
