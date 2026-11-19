@@ -1,0 +1,33 @@
+name: Deploy Auralis release notifications
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/auralis-frosted-candidate]
+    paths:
+      - .github/workflows/auralis-release-push-deploy.yml
+permissions:
+  contents: read
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: release-push
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      GITHUB_WEBHOOK_SECRET: ${{ secrets.AURALIS_WEBHOOK_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test release signal
+        run: node --test worker.test.mjs
+      - name: Deploy Worker and securely configure webhook secret
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN" && test -n "$CLOUDFLARE_ACCOUNT_ID" && test -n "$GITHUB_WEBHOOK_SECRET"
+          npx --yes wrangler@4 deploy
+          printf '%s' "$GITHUB_WEBHOOK_SECRET" | npx --yes wrangler@4 secret put GITHUB_WEBHOOK_SECRET
