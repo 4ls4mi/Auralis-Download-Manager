@@ -91,8 +91,15 @@ fn boot_existing_engine(app: &AppHandle) -> ApiResult<String> {
     // The ORIGINAL project already implements --headless. No egui window
     // opens, no original tray icon is created, and its download logic and
     // saved data are preserved. Disable its separate remote HTTP server.
-    ProcessCommand::new(backend)
-        .arg("--headless")
+    let mut engine = ProcessCommand::new(&backend);
+    // The packaged Deno runtime lets yt-dlp solve YouTube's JavaScript
+    // challenges without requiring users to install a system-wide runtime.
+    if let Some(dir) = backend.parent().filter(|dir| dir.join("deno.exe").is_file()) {
+        let mut paths = vec![dir.to_path_buf()];
+        if let Some(existing) = std::env::var_os("PATH") { paths.extend(std::env::split_paths(&existing)); }
+        if let Ok(path) = std::env::join_paths(paths) { engine.env("PATH", path); }
+    }
+    engine.arg("--headless")
         .env("MDM_GLASS_HEADLESS", "1")
         .env("MDM_REMOTE", "off")
         .stdin(Stdio::null())

@@ -10,3 +10,17 @@ test('browser sign-in checks session cookies without leaking them to status',{ti
 test('explicit browser-session video lookup passes scoped Google and YouTube cookies',async()=>{
  const sent=[];const tab={id:1,cookieStoreId:'container-1'};const context=vm.createContext({remoteTarget:async()=>false,readStatus:async()=>({videoLookup:true}),videoTarget:async()=>({own:'https://www.youtube.com/watch?v=x',cookieJar:[],cookies:''}),isYouTube:url=>url.includes('youtube.com'),videoCookies:async(url,ctx)=>({cookieJar:[{domain:new URL(url).hostname,path:'/',name:'SID',value:'secret'}]}),native:async message=>{sent.push(message);return {lookup:{state:'pending'}}},URL});const code=source.slice(source.indexOf('async function videoLookup('),source.indexOf('async function videoPoll('));vm.runInContext(code+'\nthis.testLookup=videoLookup;',context);await context.testLookup({cookieMode:'browser',includeGoogleCookies:true},'https://www.youtube.com/watch?v=x',{tab});assert.equal(sent[0].explicitVideoCookies,true);assert.ok(sent[0].cookieJar.some(c=>c.domain==='www.youtube.com'));assert.ok(sent[0].cookieJar.some(c=>c.domain==='accounts.google.com'));
 });
+
+test('a video lookup refreshes a stale unsupported status before giving up',async()=>{
+ let supported=false, refreshed=0, sent=0;
+ const context=vm.createContext({remoteTarget:async()=>false,readStatus:async()=>({videoLookup:supported}),refreshRules:async()=>{refreshed++;supported=true},videoTarget:async()=>({own:'https://example.com/watch',cookieJar:[],cookies:''}),isYouTube:()=>false,native:async()=>{sent++;return {lookup:{state:'pending'}}},URL});
+ const code=source.slice(source.indexOf('async function videoLookup('),source.indexOf('async function videoPoll('));vm.runInContext(code+'\nthis.lookup=videoLookup;',context);
+ const result=await context.lookup({cookieMode:'browser'},'https://example.com/watch',{tab:{id:1}});assert.equal(refreshed,1);assert.equal(sent,1);assert.equal(result.lookup.state,'pending');
+});
+
+test('temporary native-host errors do not disable video capability',async()=>{
+ let disabled=false;
+ const context=vm.createContext({remoteTarget:async()=>false,readStatus:async()=>({videoLookup:true}),videoTarget:async()=>({own:'https://example.com/watch',cookieJar:[],cookies:''}),isYouTube:()=>false,native:async()=>({ok:false,why:'not-running'}),noteLookup:async()=>{disabled=true},URL});
+ const code=source.slice(source.indexOf('async function videoLookup('),source.indexOf('async function videoPoll('));vm.runInContext(code+'\nthis.lookup=videoLookup;',context);
+ const result=await context.lookup({cookieMode:'browser'},'https://example.com/watch',{tab:{id:1}});assert.equal(result.lookup.reason,'connection');assert.match(result.lookup.message,/not-running/);assert.equal(disabled,false);
+});

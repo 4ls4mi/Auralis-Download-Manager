@@ -76,6 +76,26 @@ jobs:
           choco install nsis --no-progress -y
           if ($LASTEXITCODE) { throw "NSIS installation failed" }
 
+      - name: Cache Deno archive
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/auralis-deno.zip
+          key: deno-windows-x64-2.9.8-cba84b26
+
+      - name: Bundle verified Deno runtime for video lookup
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP 'auralis-deno.zip'
+          if (!(Test-Path $archive)) { Invoke-WebRequest 'https://github.com/denoland/deno/releases/download/v2.9.8/deno-x86_64-pc-windows-msvc.zip' -OutFile $archive }
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'cba84b26e0df5ae7f74fc66b86a95b866872a86292ebd84fa1e959927edd93bf') { throw 'Deno archive checksum mismatch' }
+          $folder = Join-Path $env:RUNNER_TEMP 'auralis-deno'
+          Expand-Archive -Path $archive -DestinationPath $folder
+          New-Item -ItemType Directory -Force glass-ui/src-tauri/resources | Out-Null
+          Copy-Item (Join-Path $folder 'deno.exe') glass-ui/src-tauri/resources/deno.exe
+          Invoke-WebRequest 'https://raw.githubusercontent.com/denoland/deno/v2.9.8/LICENSE.md' -OutFile glass-ui/src-tauri/resources/deno-LICENSE.md
+          & glass-ui/src-tauri/resources/deno.exe --version
+          if ($LASTEXITCODE) { throw 'Deno runtime failed its version check' }
+
       - name: Build Auralis headless engine and browser host
         shell: pwsh
         run: |

@@ -2882,11 +2882,10 @@ async function videoTarget(m, page, sender) {
 async function videoLookup(m, page, sender) {
   if (await remoteTarget()) return { fallback: true };
   if (!(await readStatus()).videoLookup) {
-    // An MDM updated since its rules were last asked may look up now: they are asked again,
-    // for the next click.
-    const r = await storedRules();
-    if (!r || Date.now() - r.at > 60000) refreshRules();
-    return { fallback: true };
+    // Refresh immediately: a cached "unsupported" status may be from an older
+    // app or a failed lookup, even when the capture rules themselves are fresh.
+    await refreshRules();
+    if (!(await readStatus()).videoLookup) return { fallback: true };
   }
   const tab = sender.tab || {};
   const v = await videoTarget(m, page, sender);
@@ -2947,6 +2946,9 @@ async function videoLookup(m, page, sender) {
   // `show`: the address MDM lists a download of it under (the button's "Show"); `post`: the
   // post's own page, when the video sits in a feed (its "Open post").
   if (reply.lookup && typeof reply.lookup === "object") return { lookup: reply.lookup, show: v.src || v.own, ...(v.post ? { post: v.post } : {}) };
+  if (reply.why && reply.why !== "refused") {
+    return {lookup:{state:"failed",reason:"connection",message:`Auralis could not complete the video lookup (${reply.why}). Check its browser connection and try again.`}};
+  }
   // No `lookup`: a host or an app that can't look up after all (an older one refuses the message),
   // or a host that failed. Not kept as able; its rules are asked again, and this click opens
   // the window.
