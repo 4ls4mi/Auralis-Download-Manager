@@ -1,3 +1,4 @@
+import {LiquidProgress, LiquidChunk, isLiquidMaterial} from "./LiquidIndicators";
 import FrostedRibbon from "./FrostedRibbon";
 import FrostedLayers from "./FrostedLayers";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
@@ -61,7 +62,7 @@ export type Appearance = {
   theme: string; wallMain: string; wallDetail: string; mainMode: BackgroundMode;
   detailMode: BackgroundMode; dim: number; opacity: number; blur: number;
   acrylic: boolean; autoPopups: boolean; uiScale: number; highContrast: boolean;
-  lightMode: boolean; fontFamily: string; fontSize: number; material: string; indicator: string; progressMaterial: string; trackFinish: string; trackColor: string; progressShape: string; graphIndicator: string; graphShape: string; connectionTrackFinish: string; connectionTrackColor: string; connectionIndicator: string; connectionShape: string; clipboardMode: string; tintHue: number; tintStrength: number
+  lightMode: boolean; fontFamily: string; fontSize: number; material: string; indicator: string; progressMaterial: string; connectionMaterial: string; graphMaterial: string; trackFinish: string; trackColor: string; progressShape: string; graphIndicator: string; graphShape: string; connectionTrackFinish: string; connectionTrackColor: string; connectionIndicator: string; connectionShape: string; clipboardMode: string; tintHue: number; tintStrength: number
 };
 const key = "mh-glass-";
 const stored = (name: string, fallback: string) => {
@@ -71,7 +72,7 @@ const stored = (name: string, fallback: string) => {
 const supportedShape=(shape:string)=>shape==="wave"?"droplet":["rounded","square","faceted","droplet"].includes(shape)?shape:"rounded";
 export function loadAppearance(): Appearance {
   return {
-    theme: stored("theme", "silver"), material: ["brushed-glass","frosted-water-351","rose-pine","window-glass","oversimplified"].includes(stored("material", "frosted-water-351")) ? stored("material", "frosted-water-351") : "frosted-water-351", tintHue: Number(stored("tint-hue", "209")), tintStrength: Number(stored("tint-strength", "50")), indicator: stored("indicator", "blue-purple"), progressMaterial: stored("progress-material", "gradient"), trackFinish: stored("track-finish", "recessed"), trackColor: stored("track-color", "ice"), progressShape: supportedShape(stored("progress-shape", "rounded")), graphIndicator: stored("graph-indicator", stored("indicator", "blue-purple")), graphShape: stored("graph-shape", "area"), connectionTrackFinish: stored("connection-track-finish", "recessed"), connectionTrackColor: stored("connection-track-color", "ice"), connectionIndicator: stored("connection-indicator", stored("indicator", "blue-purple")), connectionShape: supportedShape(stored("connection-shape", stored("progress-shape", "rounded"))), clipboardMode: stored("clipboard-mode", "paste"),
+    theme: stored("theme", "silver"), material: ["brushed-glass","frosted-water-351","rose-pine","window-glass","oversimplified"].includes(stored("material", "frosted-water-351")) ? stored("material", "frosted-water-351") : "frosted-water-351", tintHue: Number(stored("tint-hue", "209")), tintStrength: Number(stored("tint-strength", "50")), indicator: stored("indicator", "blue-purple"), progressMaterial: stored("progress-material", "gradient"), connectionMaterial: stored("connection-material", "gradient"), graphMaterial: stored("graph-material", "gradient"), trackFinish: stored("track-finish", "recessed"), trackColor: stored("track-color", "ice"), progressShape: supportedShape(stored("progress-shape", "rounded")), graphIndicator: stored("graph-indicator", stored("indicator", "blue-purple")), graphShape: stored("graph-shape", "area"), connectionTrackFinish: stored("connection-track-finish", "recessed"), connectionTrackColor: stored("connection-track-color", "ice"), connectionIndicator: stored("connection-indicator", stored("indicator", "blue-purple")), connectionShape: supportedShape(stored("connection-shape", stored("progress-shape", "rounded"))), clipboardMode: stored("clipboard-mode", "paste"),
     wallMain: stored("wall-main", ""), wallDetail: stored("wall-detail", ""),
     mainMode: stored("back-main", "desktop") as BackgroundMode,
     detailMode: stored("back-details", "desktop") as BackgroundMode,
@@ -84,7 +85,7 @@ export function loadAppearance(): Appearance {
   };
 }
 const keys: Record<keyof Appearance, string> = {
-  theme: "theme", material: "material", tintHue: "tint-hue", tintStrength: "tint-strength", indicator: "indicator", progressMaterial: "progress-material", trackFinish: "track-finish", trackColor: "track-color", progressShape: "progress-shape", graphIndicator: "graph-indicator", graphShape: "graph-shape", connectionTrackFinish: "connection-track-finish", connectionTrackColor: "connection-track-color", connectionIndicator: "connection-indicator", connectionShape: "connection-shape", clipboardMode: "clipboard-mode", wallMain: "wall-main", wallDetail: "wall-detail",
+  theme: "theme", material: "material", tintHue: "tint-hue", tintStrength: "tint-strength", indicator: "indicator", progressMaterial: "progress-material", connectionMaterial: "connection-material", graphMaterial: "graph-material", trackFinish: "track-finish", trackColor: "track-color", progressShape: "progress-shape", graphIndicator: "graph-indicator", graphShape: "graph-shape", connectionTrackFinish: "connection-track-finish", connectionTrackColor: "connection-track-color", connectionIndicator: "connection-indicator", connectionShape: "connection-shape", clipboardMode: "clipboard-mode", wallMain: "wall-main", wallDetail: "wall-detail",
   mainMode: "back-main", detailMode: "back-details", dim: "dim",
   opacity: "opacity", blur: "blur", acrylic: "acrylic",
   autoPopups: "auto-popups", uiScale: "ui-scale", highContrast: "high-contrast",
@@ -169,12 +170,12 @@ export function timeLeft(d: Download) {
 }
 // One continuous, factual total-file percentage. Its gradient stays in the
 // same absolute position as the file fills—purple is only reached near 100%.
-export function GradientBar({percent,showLabel=false}:{percent:number;showLabel?:boolean}){
+export function GradientBar({percent,showLabel=false,size,active=true}:{percent:number;showLabel?:boolean;size?:number|null;active?:boolean}){
   const {appearance}=useCrystal();const colors=indicatorColors(appearance.indicator);
   const fill=Math.max(0,Math.min(100,percent));
   return <div className="cg-percent-wrap" aria-label={`Download ${fill.toFixed(1)} percent completed`}>
     <div className={`cg-percent-track cg-track-${appearance.trackFinish} cg-track-color-${appearance.trackColor} ${backdropPalette(appearance.trackColor)?"cg-palette-track":""}`} style={backdropStyle(appearance.trackColor)}>
-      {appearance.progressMaterial === "frosted-ribbon" ? <FrostedRibbon shape={appearance.progressShape} percent={fill} colors={colors} finish={appearance.trackFinish} tint={appearance.trackColor} tintColors={backdropPalette(appearance.trackColor)} fallback={`linear-gradient(90deg,${colors.join(",")})`}/> : fill>0&&<span className="cg-percent-fill" style={{
+      {isLiquidMaterial(appearance.progressMaterial) ? <LiquidProgress percent={fill} colors={colors} material={appearance.progressMaterial} size={size} active={active}/> : appearance.progressMaterial === "frosted-ribbon" ? <FrostedRibbon shape={appearance.progressShape} percent={fill} colors={colors} finish={appearance.trackFinish} tint={appearance.trackColor} tintColors={backdropPalette(appearance.trackColor)} fallback={`linear-gradient(90deg,${colors.join(",")})`}/> : fill>0&&<span className="cg-percent-fill" style={{
         width:`${fill}%`,
         backgroundImage:`linear-gradient(90deg,${colors.join(",")})`,
         backgroundSize:`${10000/fill}% 100%`,
@@ -199,20 +200,25 @@ export function ConnectionMap({segments,connections,downloading,paused=false,com
     <div className={`cg-chunk-map cg-connection-track-${appearance.connectionTrackFinish} cg-connection-tint-${appearance.connectionTrackColor} ${backdropPalette(appearance.connectionTrackColor)?"cg-palette-track":""} `+(compact?"compact":"cg-fixed-connections")} style={{...backdropStyle(appearance.connectionTrackColor),...(compact?{gridTemplateColumns:`repeat(${Math.max(1,slots.length)},minmax(0,1fr))`}:{})}} role="group" aria-label={connections?`${visible.length} engine connections${visible.length>32?', first 32 shown':''}`:"Connections unavailable"}>
      {slots.map((c,index)=>{if(!c)return <span key={`empty-${index}`} className="cg-connection-empty" aria-hidden="true"/>;
       const fill=c.percent;const active=downloading&&c.state==="Receiving";const lost=connectionLost(c,downloading);const label=`Connection ${c.id+1}: ${paused?"Paused":lost?"Connection lost or retrying":downloading?c.state:"Not active"}; downloaded ${units(c.downloaded)}; ${rate(c.speed)}; ${fill===null?"assigned range unavailable":`${units(c.received)} of ${units(c.assigned)} (${fill.toFixed(1)}%)`}`;
-      return <span key={c.id} data-worker={c.id} className={paused?"paused":lost?"lost":active?"active":""} title={label} aria-label={label} tabIndex={0}>{!paused&&fill!==null&&fill>0&&<i style={{height:`${fill}%`,backgroundImage:`linear-gradient(0deg,${colors.join(",")})`,boxShadow:`0 0 8px ${colors[1]}, inset 0 1px 2px #ffffff99`}}/>}</span>})}
+      return <span key={c.id} data-worker={c.id} className={paused?"paused":lost?"lost":active?"active":""} title={label} aria-label={label} tabIndex={0}>{!paused&&fill!==null&&fill>0&&(isLiquidMaterial(appearance.connectionMaterial)?<LiquidChunk percent={fill} colors={colors} material={appearance.connectionMaterial} animate={active&&!lost} index={c.id}/>:<i style={{height:`${fill}%`,backgroundImage:`linear-gradient(0deg,${colors.join(",")})`,boxShadow:`0 0 8px ${colors[1]}, inset 0 1px 2px #ffffff99`}}/>)}</span>})}
     </div>
   </div>;
 }
 
+const clampGraph=(value:number)=>Math.max(0,Math.min(1,Number.isFinite(value)?value:0));
 // Live connection/speed data only—one unique SVG gradient ID per graph, so
 // many small row graphs never collide with each other or the footer graph.
 export function SpeedGraph({values,small=false}:{values:number[];small?:boolean}){
   const {appearance}=useCrystal();const colors=indicatorColors(appearance.graphIndicator);
   const id=useId().replace(/:/g,"-");
   const seq=values.length>1?values:[0,0],peak=Math.max(1,...seq)*1.12;
-  const points=seq.map((v,i)=>(i/(seq.length-1)*100).toFixed(2)+","+(58-v/peak*48).toFixed(2)).join(" ");
+  const liquid=isLiquidMaterial(appearance.graphMaterial);
+  const coords=seq.map((v,i)=>({x:i/(seq.length-1)*100,y:(liquid?65:58)-clampGraph(v/peak)*(liquid?55:48)}));
+  const points=coords.map(({x,y})=>`${x},${y}`).join(" ");
   const trail=`0,65 ${points} 100,65`;
-  return <svg className={`cg-graph ${small?"cg-graph-small":""}`} viewBox="0 0 100 65"
+  const curved=coords.slice(1).reduce((path,pt,i)=>{const prev=coords[i],mid=(prev.x+pt.x)/2;return `${path} C${mid},${prev.y} ${mid},${pt.y} ${pt.x},${pt.y}`},`M${coords[0].x},${coords[0].y}`);
+  const surface=`${curved} L100,65 L0,65 Z`;
+  return <svg className={`cg-graph ${small?"cg-graph-small":""} ${liquid?`cg-liquid-graph ${appearance.graphMaterial}`:""}`} viewBox="0 0 100 65"
     preserveAspectRatio="none" role="img" aria-label="Real measured transfer-speed history">
     <defs>
       <linearGradient id={`${id}-line`} x1="0%" x2="100%" y1="0%" y2="0%">
@@ -223,14 +229,16 @@ export function SpeedGraph({values,small=false}:{values:number[];small?:boolean}
         <stop offset="50%" stopColor={colors[1]} stopOpacity=".30"/>
         <stop offset="100%" stopColor={colors[2]} stopOpacity=".36"/>
       </linearGradient>
+      <clipPath id={`${id}-liquid-clip`}><path d={surface}/></clipPath>
+      <linearGradient id={`${id}-depth`} x1="0" x2="0" y1="0" y2="1"><stop stopColor="#fff" stopOpacity={appearance.graphMaterial==='liquid-crystal'?'.65':appearance.graphMaterial==='liquid-aero'?'.32':'.45'}/><stop offset=".3" stopColor="#fff" stopOpacity=".02"/><stop offset="1" stopColor="#00102e" stopOpacity={appearance.graphMaterial==='liquid-crystal'?'.72':'.50'}/></linearGradient>
     </defs>
 
     {[15,37,57].map(y=><line key={y} x1="0" x2="100" y1={y} y2={y}
       stroke="rgba(180,227,242,.11)" strokeWidth=".4"/>)}
-    {appearance.graphShape==="area"&&<polygon points={trail} fill={`url(#${id}-fill)`}/>}
-    {appearance.graphShape==="bars"&&seq.map((v,i)=><rect key={i} x={i*100/seq.length} y={58-v/peak*48} width={Math.max(.1,80/seq.length)} height={v/peak*48} fill={`url(#${id}-line)`}/>)}
-    {appearance.graphShape!=="bars"&&<polyline points={points} fill="none" stroke={`url(#${id}-line)`} strokeWidth={small?"1.9":"1.7"}
-      strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke"/>}
+    {appearance.graphShape==="area"&&(liquid?<><path d={surface} fill={`url(#${id}-line)`} opacity=".72"/><path d={surface} fill={`url(#${id}-depth)`}/><g clipPath={`url(#${id}-liquid-clip)`}><g className="cg-liquid-graph-light"><path d="M-25 33 Q0 20 25 33 T75 33 T125 33" fill="none" stroke="rgba(220,255,255,.14)" strokeWidth="1.2" vectorEffect="non-scaling-stroke"/></g>{appearance.graphMaterial==='liquid-glass'&&[14,36,61,83].map((x,i)=><circle key={x} cx={x} cy={54+(i%2)*5} r=".65" fill="none" stroke="rgba(235,255,255,.4)" strokeWidth=".3"/>)}{appearance.graphMaterial==='liquid-crystal'&&<path d={curved} transform="translate(0 3)" fill="none" stroke="rgba(240,255,255,.32)" strokeWidth=".6" vectorEffect="non-scaling-stroke"/>}{appearance.graphMaterial==='liquid-aero'&&<path d={curved} transform="translate(0 5)" fill="none" stroke="rgba(240,255,255,.18)" strokeWidth="3" vectorEffect="non-scaling-stroke"/>}</g></>:<polygon points={trail} fill={`url(#${id}-fill)`}/>)}
+    {appearance.graphShape==="bars"&&seq.map((v,i)=>{const ratio=clampGraph(v/peak),x=i*100/seq.length,width=Math.max(.1,80/seq.length),y=(liquid?65:58)-ratio*(liquid?55:48),height=ratio*(liquid?55:48);return <g key={i}><rect x={x} y={y} width={width} height={height} fill={`url(#${id}-line)`}/>{liquid&&<rect x={x} y={y} width={width} height={height} fill={`url(#${id}-depth)`}/>}</g>})}
+    {appearance.graphShape!=="bars"&&(liquid?<path d={curved} fill="none" stroke={`url(#${id}-line)`} strokeWidth={small?"2.4":"2.1"} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke"/>:<polyline points={points} fill="none" stroke={`url(#${id}-line)`} strokeWidth={small?"1.9":"1.7"} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke"/>)}
+    {liquid&&appearance.graphShape!=="bars"&&<path d={curved} fill="none" stroke="rgba(240,255,255,.68)" strokeWidth={appearance.graphMaterial==='liquid-crystal'?'.9':'.55'} strokeLinecap="round" vectorEffect="non-scaling-stroke"/>}
   </svg>;
 }
 const directions = ["North", "South", "East", "West", "NorthEast", "NorthWest", "SouthEast", "SouthWest"] as const;

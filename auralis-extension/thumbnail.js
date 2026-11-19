@@ -7,6 +7,7 @@
   const ext = globalThis.browser ?? globalThis.chrome;
   const seen = new WeakMap();
   const entries = new Set();
+  let disposed = false, scanFrame = 0;
   let activeMenu = null;
   const panelResize = new ResizeObserver(() => activeMenu?.position());
   document.addEventListener('pointerdown', e => {
@@ -136,8 +137,8 @@
       anchor.append(host); const record={id,host,portal,close:closeMenu}; seen.set(anchor,record); entries.add(record);
     }
   }
-  const observer = new MutationObserver(() => { if (!scan.pending) { scan.pending=true; requestAnimationFrame(()=>{scan.pending=false;scan()}); } });
+  const observer = new MutationObserver(() => { if (!scan.pending) { scan.pending=true; scanFrame=requestAnimationFrame(()=>{scan.pending=false;scanFrame=0;if(!disposed)scan()}); } });
   observer.observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['href']});
-  globalThis.__auralisThumbnail = {teardown(){observer.disconnect();activeMenu?.close();for(const entry of entries){entry.close();entry.host.remove()}entries.clear()}};
+  globalThis.__auralisThumbnail = {teardown(){disposed=true;observer.disconnect();if(scanFrame)cancelAnimationFrame(scanFrame);activeMenu?.close();for(const entry of entries){entry.close();entry.host.remove()}entries.clear()}};
   scan();
 })();

@@ -433,7 +433,7 @@ export default function CrystalApp(){
               <strong title={d.file}>{d.file}</strong><small>{units(d.downloaded)} / {units(d.size)}</small></span></span>
             <span>{units(d.size)}</span><StatusBadge item={d}/>
             <span className="cg-row-progress">
-              <GradientBar percent={pct(d)} showLabel/>
+              <GradientBar percent={pct(d)} size={d.size} active={d.status==="Downloading"} showLabel/>
               <ConnectionMap segments={visuals[d.id]?.segments} connections={visuals[d.id]?.connections} downloading={d.status==="Downloading"} compact/>
               <SpeedGraph values={fileRates[d.id]??[d.speed,d.speed]} small/>
             </span>
