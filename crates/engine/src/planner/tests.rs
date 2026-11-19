@@ -63,6 +63,33 @@ fn reassigned_segment_reports_the_bytes_already_written() {
 }
 
 #[test]
+fn different_worker_does_not_claim_previous_workers_completed_bytes() {
+    let mut p = Planner::new(10 * MB, MB);
+    p.assign(0, None).unwrap();
+    assert_eq!(p.claim(0, 0, 3 * MB), Claim::Granted(3 * MB));
+    p.commit(0, 3 * MB);
+    p.release(0);
+    let a = p.assign(1, None).unwrap();
+    assert_eq!((a.from, a.to, a.written), (3 * MB, 10 * MB, 3 * MB));
+    assert_eq!(p.segments()[0].last_worker, Some(0));
+    assert_eq!((p.segments()[0].start, p.segments()[0].cursor, p.segments()[0].end), (0, 3 * MB, 3 * MB));
+    assert_eq!((p.segments()[1].start, p.segments()[1].worker), (3 * MB, Some(1)));
+    assert_eq!(p.downloaded(), 3 * MB);
+    check_invariants(&p);
+}
+
+#[test]
+fn restored_bytes_are_not_attributed_to_new_connection() {
+    let saved = [SavedSegment { start: 0, cursor: 3 * MB, end: 10 * MB }];
+    let mut p = Planner::resume(10 * MB, MB, &saved).unwrap();
+    let a = p.assign(1, None).unwrap();
+    assert_eq!((a.from, a.written), (3 * MB, 3 * MB));
+    assert_eq!(p.segments()[0].last_worker, None);
+    assert_eq!(p.segments()[1].worker, Some(1));
+    check_invariants(&p);
+}
+
+#[test]
 fn ramp_up_always_halves_the_largest() {
     let mut p = Planner::new(64 * MB, MB);
     for w in 0..8 {

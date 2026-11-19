@@ -71,7 +71,7 @@ const stored = (name: string, fallback: string) => {
 const supportedShape=(shape:string)=>shape==="wave"?"droplet":["rounded","square","faceted","droplet"].includes(shape)?shape:"rounded";
 export function loadAppearance(): Appearance {
   return {
-    theme: stored("theme", "navy"), material: ["ice-edge","smoked-crystal","frosted-layers","aero-gloss","prismatic-glass","liquid-glass","obsidian-glass","diamond-facet","holographic-film","pearl-mist","aurora-veil","brushed-glass","water-bubble","frosted-water-351","rose-pine","window-glass","oversimplified","tinted-glass","frosty-glass","raycast"].includes(stored("material", "brushed-glass")) ? stored("material", "brushed-glass") : "brushed-glass", tintHue: Number(stored("tint-hue", "255")), tintStrength: Number(stored("tint-strength", "50")), indicator: stored("indicator", "aurora"), progressMaterial: stored("progress-material", "gradient"), trackFinish: stored("track-finish", "default"), trackColor: stored("track-color", "ice"), progressShape: supportedShape(stored("progress-shape", "rounded")), graphIndicator: stored("graph-indicator", stored("indicator", "aurora")), graphShape: stored("graph-shape", "area"), connectionTrackFinish: stored("connection-track-finish", "default"), connectionTrackColor: stored("connection-track-color", "ice"), connectionIndicator: stored("connection-indicator", stored("indicator", "aurora")), connectionShape: supportedShape(stored("connection-shape", stored("progress-shape", "rounded"))), clipboardMode: stored("clipboard-mode", "paste"),
+    theme: stored("theme", "navy"), material: ["brushed-glass","frosted-water-351","rose-pine","window-glass","oversimplified"].includes(stored("material", "brushed-glass")) ? stored("material", "brushed-glass") : "brushed-glass", tintHue: Number(stored("tint-hue", "255")), tintStrength: Number(stored("tint-strength", "50")), indicator: stored("indicator", "aurora"), progressMaterial: stored("progress-material", "gradient"), trackFinish: stored("track-finish", "default"), trackColor: stored("track-color", "ice"), progressShape: supportedShape(stored("progress-shape", "rounded")), graphIndicator: stored("graph-indicator", stored("indicator", "aurora")), graphShape: stored("graph-shape", "area"), connectionTrackFinish: stored("connection-track-finish", "default"), connectionTrackColor: stored("connection-track-color", "ice"), connectionIndicator: stored("connection-indicator", stored("indicator", "aurora")), connectionShape: supportedShape(stored("connection-shape", stored("progress-shape", "rounded"))), clipboardMode: stored("clipboard-mode", "paste"),
     wallMain: stored("wall-main", ""), wallDetail: stored("wall-detail", ""),
     mainMode: stored("back-main", "desktop") as BackgroundMode,
     detailMode: stored("back-details", "desktop") as BackgroundMode,
@@ -177,7 +177,8 @@ export function GradientBar({percent,showLabel=false}:{percent:number;showLabel?
       {appearance.progressMaterial === "frosted-ribbon" ? <FrostedRibbon shape={appearance.progressShape} percent={fill} colors={colors} finish={appearance.trackFinish} tint={appearance.trackColor} tintColors={backdropPalette(appearance.trackColor)} fallback={`linear-gradient(90deg,${colors.join(",")})`}/> : fill>0&&<span className="cg-percent-fill" style={{
         width:`${fill}%`,
         backgroundImage:`linear-gradient(90deg,${colors.join(",")})`,
-        backgroundSize:`${10000/fill}% 100%`
+        backgroundSize:`${10000/fill}% 100%`,
+        boxShadow:`inset 0 1px 2px #ffffffb0, 0 0 10px ${colors[1]}, 0 0 20px ${colors[0]}88`
       }}/>}
     </div>{showLabel&&<strong>{fill.toFixed(0)}%</strong>}
   </div>;
@@ -198,7 +199,7 @@ export function ConnectionMap({segments,connections,downloading,paused=false,com
     <div className={`cg-chunk-map cg-connection-track-${appearance.connectionTrackFinish} cg-connection-tint-${appearance.connectionTrackColor} ${backdropPalette(appearance.connectionTrackColor)?"cg-palette-track":""} `+(compact?"compact":"cg-fixed-connections")} style={{...backdropStyle(appearance.connectionTrackColor),...(compact?{gridTemplateColumns:`repeat(${Math.max(1,slots.length)},minmax(0,1fr))`}:{})}} role="group" aria-label={connections?`${visible.length} engine connections${visible.length>32?', first 32 shown':''}`:"Connections unavailable"}>
      {slots.map((c,index)=>{if(!c)return <span key={`empty-${index}`} className="cg-connection-empty" aria-hidden="true"/>;
       const fill=c.percent;const active=downloading&&c.state==="Receiving";const lost=connectionLost(c,downloading);const label=`Connection ${c.id+1}: ${paused?"Paused":lost?"Connection lost or retrying":downloading?c.state:"Not active"}; downloaded ${units(c.downloaded)}; ${rate(c.speed)}; ${fill===null?"assigned range unavailable":`${units(c.received)} of ${units(c.assigned)} (${fill.toFixed(1)}%)`}`;
-      return <span key={c.id} data-worker={c.id} className={paused?"paused":lost?"lost":active?"active":""} title={label} aria-label={label} tabIndex={0}>{!paused&&fill!==null&&fill>0&&<i style={{width:`${fill}%`,backgroundImage:`linear-gradient(90deg,${colors.join(",")})`}}/>}</span>})}
+      return <span key={c.id} data-worker={c.id} className={paused?"paused":lost?"lost":active?"active":""} title={label} aria-label={label} tabIndex={0}>{!paused&&fill!==null&&fill>0&&<i style={{width:`${fill}%`,backgroundImage:`linear-gradient(90deg,${colors.join(",")})`,boxShadow:`0 0 8px ${colors[1]}, inset 0 1px 2px #ffffff99`}}/>}</span>})}
     </div>
   </div>;
 }
@@ -294,11 +295,11 @@ export function CrystalWindow({ children, target = "main" }: {
     return()=>{disposed=true;cancelAnimationFrame(raf);observer.disconnect();mutations.disconnect();el.removeEventListener('click',sectionClick);el.removeEventListener('change',reset);el.removeEventListener('toggle',reset,true);window.removeEventListener('resize',reset)};
   },[appearance.uiScale,appearance.fontSize,appearance.fontFamily,target]);
   useEffect(()=>{
-    let disposed=false, timer:ReturnType<typeof setTimeout>|undefined;
-    const apply=()=>{if(!disposed)void invoke("set_material_window_shape",{material:appearance.material}).catch(e=>{if(!disposed)setWindowError(`Material outline unavailable: ${String(e)}`)});};
-    const resize=()=>{clearTimeout(timer);timer=setTimeout(apply,75)};
+    let disposed=false, pending=false, running=false, frame=0;
+    const apply=async()=>{if(disposed)return;if(running){pending=true;return}running=true;try{await invoke("set_material_window_shape",{material:appearance.material})}catch(e){if(!disposed)setWindowError(`Material outline unavailable: ${String(e)}`)}finally{running=false;if(pending&&!disposed){pending=false;void apply()}}};
+    const resize=()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(()=>void apply())};
     window.addEventListener("resize",resize);apply();
-    return()=>{disposed=true;clearTimeout(timer);window.removeEventListener("resize",resize)};
+    return()=>{disposed=true;cancelAnimationFrame(frame);window.removeEventListener("resize",resize)};
   },[appearance.material]);
   const main = target === "main", mode = main ? appearance.mainMode : appearance.detailMode;
   const path = main ? appearance.wallMain : (appearance.wallDetail || appearance.wallMain);

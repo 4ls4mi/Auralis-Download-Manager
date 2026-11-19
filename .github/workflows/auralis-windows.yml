@@ -153,7 +153,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Package Chromium and Firefox extensions
+      - name: Package Chromium, Edge Add-ons, and Firefox extensions
         shell: pwsh
         run: |
           node --check auralis-extension/background.js
@@ -162,11 +162,16 @@ jobs:
           if ($LASTEXITCODE) { throw "Invalid extension video script" }
           node --check auralis-extension/thumbnail.js
           if ($LASTEXITCODE) { throw "Invalid extension thumbnail script" }
-          New-Item -ItemType Directory -Force -Path extension-packages, extension-staging/chromium, extension-staging/firefox | Out-Null
+          New-Item -ItemType Directory -Force -Path extension-packages, extension-staging/chromium, extension-staging/edge-store, extension-staging/firefox | Out-Null
           Copy-Item auralis-extension/* extension-staging/chromium/ -Recurse -Force
+          Copy-Item auralis-extension/* extension-staging/edge-store/ -Recurse -Force
+          $manifest = Get-Content extension-staging/edge-store/manifest.json -Raw | ConvertFrom-Json
+          $manifest.PSObject.Properties.Remove('key')
+          $manifest | ConvertTo-Json -Depth 100 | Set-Content extension-staging/edge-store/manifest.json -Encoding utf8
           Copy-Item auralis-extension/* extension-staging/firefox/ -Recurse -Force
           Copy-Item extension-staging/firefox/manifest.firefox.json extension-staging/firefox/manifest.json -Force
           Compress-Archive -Path extension-staging/chromium/* -DestinationPath extension-packages/auralis-chromium.zip
+          Compress-Archive -Path extension-staging/edge-store/* -DestinationPath extension-packages/auralis-edge-store.zip
           Compress-Archive -Path extension-staging/firefox/* -DestinationPath extension-packages/auralis-firefox.zip
 
       - name: Upload browser extension packages

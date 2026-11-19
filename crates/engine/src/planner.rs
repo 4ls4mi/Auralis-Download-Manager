@@ -327,7 +327,24 @@ impl Planner {
         true
     }
 
-    fn give(&mut self, i: usize, w: WorkerId, preempted: Option<WorkerId>) -> Assignment {
+    fn give(&mut self, mut i: usize, w: WorkerId, preempted: Option<WorkerId>) -> Assignment {
+        // Keep already-written bytes attributed to their previous owner. A resumed or
+        // reassigned connection owns only the unfinished suffix, not bytes written by
+        // another worker (or restored from an earlier session).
+        let original = self.segs[i];
+        let written = original.cursor - original.start;
+        if original.cursor > original.start && original.cursor < original.end
+            && original.last_worker != Some(w)
+            && original.worker.is_none()
+        {
+            let split = original.cursor;
+            self.segs[i].end = split;
+            self.segs[i].reserved = split;
+            self.segs[i].receiving = false;
+            self.segs[i].given_at = None;
+            self.segs.insert(i + 1, fresh(split, original.end, None));
+            i += 1;
+        }
         let s = &mut self.segs[i];
         s.worker = Some(w);
         s.last_worker = Some(w);
@@ -337,7 +354,9 @@ impl Planner {
         Assignment {
             from: s.cursor,
             to: s.end,
-            written: s.cursor - s.start,
+            // Resume verification still needs the bytes preceding `from`, including
+            // when those bytes now live in the preserved prefix segment.
+            written,
             preempted,
         }
     }

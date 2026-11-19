@@ -518,7 +518,7 @@
    separate GPU blur for each of the 32 live connections. */
 .cg-sculpted-detailed{filter:drop-shadow(0 2px 3px rgba(3,34,57,.55)) drop-shadow(0 0 4px rgba(110,226,255,.45))}
 /* Give the standard square, faceted and rounded gradient fills a glass finish. */
-.cg-percent-fill{position:relative;overflow:hidden;box-shadow:inset 0 1px 2px #ffffffb0,inset 0 -2px 4px #002b5090,0 0 8px #68dfff80!important}
+.cg-percent-fill{position:relative;overflow:hidden;box-shadow:inset 0 1px 2px #ffffffb0,inset 0 -2px 4px #002b5090,0 0 8px #68dfff80}
 .cg-percent-fill::after{content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;background:linear-gradient(180deg,rgba(255,255,255,.65),rgba(255,255,255,.08) 35%,rgba(0,53,92,.14) 68%,rgba(151,247,255,.45))}
 .cg-percent-fill::before{content:"";position:absolute;z-index:1;top:10%;bottom:10%;width:22%;left:-25%;pointer-events:none;background:linear-gradient(100deg,transparent,rgba(235,255,255,.72),transparent);transform:skewX(-22deg);animation:cg-linear-glass-sweep 3.5s ease-in-out infinite}
 @keyframes cg-linear-glass-sweep{0%,15%{left:-25%}75%,100%{left:110%}}
@@ -615,3 +615,6 @@
 /* Give text and icons the same legible definition across the material styles. */
 .cg-window.cg-dark .cg-fit-content :is(h1,h2,h3,h4,strong,small,p,label,dt,dd,.cg-title,.cg-row,.cg-menu-trigger,.cg-sidebar button,.cg-page-tabs button,.cg-footer-message){text-shadow:0 1px 2px #00101f,0 0 3px #00101f}
 .cg-window.cg-dark .cg-fit-content svg:not(.cg-graph):not(.cg-sculpted-track){filter:drop-shadow(0 1px 1px #00101f) drop-shadow(0 0 2px #00101f)}
+
+/* Preserve the selected surface geometry while deriving its tint from the theme. */
+.cg-window.cg-material-rose-pine .cg-glass{background:linear-gradient(145deg,var(--glass-tint),transparent 85%),rgba(var(--glass),.52)!important;border-color:rgba(var(--accent-rgb),.38)!important}
