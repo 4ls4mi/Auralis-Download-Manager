@@ -170,9 +170,38 @@ jobs:
         working-directory: glass-ui
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           Remove-Item "$env:CARGO_TARGET_DIR/release/bundle/nsis" -Recurse -Force -ErrorAction SilentlyContinue
-          npm run tauri -- build --bundles nsis
-          if ($LASTEXITCODE) { throw 'Installer build failed.' }
+          # NSIS is a 32-bit program. A runner under System32 is redirected to SysWOW64,
+          # so inputs must be staged outside System32 before makensis reads them.
+          $staging = Join-Path $env:LOCALAPPDATA 'AuralisRunner/bundle-resources'
+          $extension = Join-Path $staging 'auralis-extension'
+          New-Item -ItemType Directory -Force $staging | Out-Null
+          Remove-Item $extension -Recurse -Force -ErrorAction SilentlyContinue
+          Copy-Item '../auralis-extension' $extension -Recurse -Force
+          foreach ($file in @('mdm-legacy.exe','misterdownloadmanager-nmhost.exe','deno.exe','deno-LICENSE.md')) {
+            Copy-Item (Join-Path 'src-tauri/resources' $file) (Join-Path $staging $file) -Force
+          }
+          foreach ($file in @('auralis.ico','auralis.png')) {
+            Copy-Item (Join-Path 'src-tauri/icons' $file) (Join-Path $staging $file) -Force
+          }
+          $configPath = (Resolve-Path 'src-tauri/tauri.conf.json').Path
+          $original = [IO.File]::ReadAllText($configPath)
+          try {
+            $config = $original | ConvertFrom-Json -AsHashtable
+            $resources = [ordered]@{}
+            foreach ($file in @('mdm-legacy.exe','misterdownloadmanager-nmhost.exe','deno.exe','deno-LICENSE.md')) {
+              $resources[(Join-Path $staging $file).Replace('\','/')] = $file
+            }
+            $resources[$extension.Replace('\','/') + '/'] = 'auralis-extension/'
+            $config.bundle.resources = $resources
+            $config.bundle.icon = @((Join-Path $staging 'auralis.ico').Replace('\','/'), (Join-Path $staging 'auralis.png').Replace('\','/'))
+            [IO.File]::WriteAllText($configPath, ($config | ConvertTo-Json -Depth 100), [Text.UTF8Encoding]::new($false))
+            npm run tauri -- build --bundles nsis
+            if ($LASTEXITCODE) { throw 'Installer build failed.' }
+          } finally {
+            [IO.File]::WriteAllText($configPath, $original, [Text.UTF8Encoding]::new($false))
+          }
 
       - name: Upload Auralis installer
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
