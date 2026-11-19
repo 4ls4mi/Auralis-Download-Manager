@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import {connectReleasePush} from "./releasePush";
 import {isPermissionGranted, requestPermission, sendNotification} from "@tauri-apps/plugin-notification";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import {
   Activity, Archive, CheckCircle2, Clock3, Download as DownloadIcon, File,
   FileArchive, Film, Folder, FolderOpen,
@@ -23,6 +24,9 @@ type Menu = "Tasks" | "File" | "Downloads" | "View" | "Help";
 type MenuEntry = { label: string; action: string; disabled?: boolean; shortcut?: string; children?:MenuEntry[] };
 const menus: Menu[]=["Tasks","File","Downloads","View","Help"];
 const blank:Dashboard={downloads:[],speed:0,queues:[],categories:[]};
+const columnLabels=["FILE NAME","SIZE","STATUS","PROGRESS","SPEED","TIME LEFT"];
+const defaultColumns=[220,76,100,220,85,75];
+function loadColumns(){try{const v=JSON.parse(localStorage.getItem("auralis-download-columns")||"null");if(Array.isArray(v)&&v.length===6&&v.every(n=>typeof n==="number"&&Number.isFinite(n)))return v.map(n=>Math.max(60,Math.min(600,n)))}catch{}return [...defaultColumns]}
 const pop = (id:number)=>openWindow("download-"+id,"/?detail="+id,880,440);
 const settings = (tab="General", panel="")=>openWindow("settings","/?settings=1&tab="+encodeURIComponent(tab)+"&panel="+encodeURIComponent(panel),968,765);
 const add=(torrent=false)=>openWindow(torrent?"add-torrent":"add-url",`/?add=${torrent?"torrent":"url"}`,590,390);
@@ -51,6 +55,9 @@ export default function CrystalApp(){
   const [doubleClickOpen,setDoubleClickOpen]=useState(false);
   const [showCategories,setShowCategories]=useState(true);
   const [updateVersion,setUpdateVersion]=useState<string|null>(null);
+  const [columnWidths,setColumnWidths]=useState<number[]>(loadColumns);
+  const resizingColumn=useRef<{index:number;start:number;width:number;scale:number}|null>(null);
+  const setColumnWidth=(index:number,width:number)=>setColumnWidths(old=>{const next=old.map((v,i)=>i===index?Math.max(60,Math.min(600,Math.round(width))):v);try{localStorage.setItem("auralis-download-columns",JSON.stringify(next))}catch{}return next});
 
   const contextRef=useRef<HTMLDivElement>(null);
   useLayoutEffect(()=>{
@@ -392,8 +399,12 @@ export default function CrystalApp(){
           <label className="cg-sort">Sort <select aria-label="Sort downloads" value={sort} onChange={e=>setSort(e.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="name">Name</option><option value="size">Size</option><option value="status">Status</option></select></label><label className="cg-search"><Search size={17}/><input ref={searchRef} placeholder="Search downloads..." value={term} onChange={e=>setTerm(e.target.value)}/></label>
         </header>
         {selectedItems.length>1&&<div className="cg-selection-actions" role="toolbar" aria-label="Selected downloads"><strong>{selectedItems.length} selected</strong><button className="cg-btn" onClick={()=>void execute("selected-open")}>Open files</button><button className="cg-btn" onClick={()=>void execute("selected-folder")}>Open folders</button><button className="cg-btn" onClick={()=>void execute("selected-extract")}>Extract archives</button><label className="cg-delete-disk"><input type="checkbox" checked={deleteDisk} onChange={e=>setDeleteDisk(e.target.checked)}/> Also delete from disk</label><button className="cg-btn cg-btn-danger" onClick={()=>void execute("selected-delete")}>Delete…</button><button className="cg-btn" onClick={()=>{setSelected([]);setChosen(null)}}>Clear</button></div>}
-        <div className="cg-table-viewport" tabIndex={0} aria-label="Downloads list"><div className="cg-table">
-          <header className="cg-cols"><span>FILE NAME</span><span>SIZE</span><span>STATUS</span><span>PROGRESS</span><span>SPEED</span><span>TIME LEFT</span></header>
+        <div className="cg-table-viewport" tabIndex={0} aria-label="Downloads list"><div className="cg-table" style={{"--download-columns":columnWidths.map((w,i)=>i===0||i===3?`minmax(${w}px,1fr)`:`${w}px`).join(" "),minWidth:columnWidths.reduce((a,b)=>a+b,0)+36} as CSSProperties}>
+          <header className="cg-cols">{columnLabels.map((label,index)=><span key={label}>{label}<span className="cg-column-resize" role="separator" aria-label={`Resize ${label.toLowerCase()} column`} aria-orientation="vertical" tabIndex={0}
+            onPointerDown={e=>{e.preventDefault();e.stopPropagation();const fit=e.currentTarget.closest<HTMLElement>('.cg-fit-content');resizingColumn.current={index,start:e.clientX,width:columnWidths[index],scale:fit?fit.getBoundingClientRect().width/fit.offsetWidth:1};e.currentTarget.setPointerCapture(e.pointerId)}}
+            onPointerMove={e=>{const drag=resizingColumn.current;if(drag?.index===index)setColumnWidth(index,drag.width+(e.clientX-drag.start)/(drag.scale||1))}}
+            onPointerUp={()=>{resizingColumn.current=null}} onPointerCancel={()=>{resizingColumn.current=null}}
+            onKeyDown={e=>{if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();setColumnWidth(index,columnWidths[index]+(e.key==='ArrowRight'?10:-10))}}}/></span>)}</header>
           {shown.map(d=><button className={"cg-row "+(selected.includes(d.id)?"selected":"")} key={d.id}
             aria-pressed={selected.includes(d.id)} onClick={e=>{const next=selectDownload(shown.map(x=>x.id),selected,anchor.current,d.id,e.shiftKey,e.ctrlKey||e.metaKey);setSelected(next);if(!e.shiftKey)anchor.current=d.id;setChosen(next.includes(d.id)?d.id:next.at(-1)??null);setContext(null)}} onDoubleClick={()=>rowDouble(d)}
             onContextMenu={e=>{

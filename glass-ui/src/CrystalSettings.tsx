@@ -186,7 +186,7 @@ export default function CrystalSettings(){
         {mode("main")}{mode("details")}
         </>}
         {appearanceTab==="Appearance"&&<>
-        {slider("opacity","Crystal glass opacity",45,94,"%")}
+        {slider("opacity","Crystal glass opacity",45,100,"%")}
         {slider("blur","Wallpaper blur",0,20," px")}
         {slider("dim","Wallpaper darkness",0,80,"%")}
         {slider("uiScale","Interface size",80,150,"%")}
@@ -212,8 +212,8 @@ export default function CrystalSettings(){
         <button className="cg-btn" style={{marginTop:15}} onClick={()=>{
           set("mainMode","desktop");set("detailMode","desktop");
           set("acrylic",false);set("dim",26);set("opacity",77);set("blur",3);
-          set("uiScale",100);set("lightMode",false);set("fontFamily","Segoe UI");
-          set("fontSize",14);set("highContrast",true);set("theme","plexo");set("material","brushed-glass");set("tintHue",265);set("tintStrength",22);set("indicator","blue-purple");
+          set("uiScale",90);set("lightMode",false);set("fontFamily","Trebuchet MS");
+          set("fontSize",14);set("highContrast",true);set("theme","plexo");set("material","brushed-glass");set("tintHue",265);set("tintStrength",22);set("indicator","blue-purple");set("connectionIndicator","blue-purple");set("graphIndicator","blue-purple");set("progressShape","rounded");set("connectionShape","rounded");set("trackFinish","recessed");set("connectionTrackFinish","recessed");set("trackColor","ice");set("connectionTrackColor","ice");
         }}><RotateCcw size={15}/> Restore default Glass appearance</button>
       </>;
       case "Advanced":return <>

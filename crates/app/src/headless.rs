@@ -123,7 +123,9 @@ pub fn main(args: Vec<String>) -> ExitCode {
     // No one to ask: the language is the system's, and nothing opens a window.
     s.language_asked = true;
     s.show_start_dialog = false;
-    s.show_complete = false;
+    // Glass owns the completion window and must receive the user's saved setting.
+    // Standalone headless mode has no window to show.
+    if !glass_owned { s.show_complete = false; }
     let hosts = setting(&args, "hosts", "MDM_REMOTE_HOSTS");
     crate::remote::set_hosts(hosts.as_deref());
     let downloads = setting(&args, "downloads", "MDM_DOWNLOADS").map(PathBuf::from);

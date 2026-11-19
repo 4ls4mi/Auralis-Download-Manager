@@ -71,16 +71,16 @@ const stored = (name: string, fallback: string) => {
 const supportedShape=(shape:string)=>shape==="wave"?"droplet":["rounded","square","faceted","droplet"].includes(shape)?shape:"rounded";
 export function loadAppearance(): Appearance {
   return {
-    theme: stored("theme", "navy"), material: ["brushed-glass","frosted-water-351","rose-pine","window-glass","oversimplified"].includes(stored("material", "brushed-glass")) ? stored("material", "brushed-glass") : "brushed-glass", tintHue: Number(stored("tint-hue", "255")), tintStrength: Number(stored("tint-strength", "50")), indicator: stored("indicator", "aurora"), progressMaterial: stored("progress-material", "gradient"), trackFinish: stored("track-finish", "default"), trackColor: stored("track-color", "ice"), progressShape: supportedShape(stored("progress-shape", "rounded")), graphIndicator: stored("graph-indicator", stored("indicator", "aurora")), graphShape: stored("graph-shape", "area"), connectionTrackFinish: stored("connection-track-finish", "default"), connectionTrackColor: stored("connection-track-color", "ice"), connectionIndicator: stored("connection-indicator", stored("indicator", "aurora")), connectionShape: supportedShape(stored("connection-shape", stored("progress-shape", "rounded"))), clipboardMode: stored("clipboard-mode", "paste"),
+    theme: stored("theme", "navy"), material: ["brushed-glass","frosted-water-351","rose-pine","window-glass","oversimplified"].includes(stored("material", "brushed-glass")) ? stored("material", "brushed-glass") : "brushed-glass", tintHue: Number(stored("tint-hue", "255")), tintStrength: Number(stored("tint-strength", "50")), indicator: stored("indicator", "blue-purple"), progressMaterial: stored("progress-material", "gradient"), trackFinish: stored("track-finish", "recessed"), trackColor: stored("track-color", "ice"), progressShape: supportedShape(stored("progress-shape", "rounded")), graphIndicator: stored("graph-indicator", stored("indicator", "blue-purple")), graphShape: stored("graph-shape", "area"), connectionTrackFinish: stored("connection-track-finish", "recessed"), connectionTrackColor: stored("connection-track-color", "ice"), connectionIndicator: stored("connection-indicator", stored("indicator", "blue-purple")), connectionShape: supportedShape(stored("connection-shape", stored("progress-shape", "rounded"))), clipboardMode: stored("clipboard-mode", "paste"),
     wallMain: stored("wall-main", ""), wallDetail: stored("wall-detail", ""),
     mainMode: stored("back-main", "desktop") as BackgroundMode,
     detailMode: stored("back-details", "desktop") as BackgroundMode,
     dim: Number(stored("dim", "26")), opacity: Number(stored("opacity", "100")),
     blur: Number(stored("blur", "3")), acrylic: stored("acrylic", "false") === "true",
     autoPopups: stored("auto-popups", "true") === "true", highContrast: stored("high-contrast", "true") === "true",
-    uiScale: Number(stored("ui-scale", "100")),
+    uiScale: Number(stored("ui-scale", "90")),
     lightMode: stored("light-mode", "false") === "true",
-    fontFamily: stored("font-family","Tahoma"),fontSize:Number(stored("font-size","18"))
+    fontFamily: stored("font-family","Trebuchet MS"),fontSize:Number(stored("font-size","14"))
   };
 }
 const keys: Record<keyof Appearance, string> = {
@@ -337,7 +337,7 @@ export function CrystalWindow({ children, target = "main" }: {
       <span style={{ background: `rgba(3,9,19,${appearance.dim / 100})` }} />
     </div>}
     {mode === "solid" && <div className="cg-solid" />}
-    <div className="cg-content" ref={frame}>{appearance.material === "frosted-water-351" && <FrostedLayers maskBackdrop={mode!=="desktop"} tintHue={appearance.tintHue} tintStrength={appearance.tintStrength}/>}<div className="cg-fit-content">{children}</div></div>
+    <div className="cg-content" ref={frame}>{appearance.material === "frosted-water-351" && <FrostedLayers maskBackdrop={mode!=="desktop"} tintHue={appearance.tintHue} tintStrength={appearance.tintStrength} opacity={appearance.opacity}/>}<div className="cg-fit-content">{children}</div></div>
     {windowError&&<aside className="cg-window-notice cg-error" role="alert"><span>{windowError}</span><button title="Dismiss" onClick={()=>setWindowError("")}><X size={15}/></button></aside>}
     <ResizeGrips />
   </div>;

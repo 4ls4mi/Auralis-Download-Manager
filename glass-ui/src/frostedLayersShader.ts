@@ -6,6 +6,7 @@ export const frostFragment = `
     uniform vec2 viewport;
     uniform vec3 themeTint;
     uniform float themeStrength;
+    uniform float glassOpacity;
     uniform float seconds;
     uniform float progress;
     uniform float unknown;
@@ -108,6 +109,7 @@ export const frostFragment = `
       float luminance=dot(glass.rgb,vec3(.2126,.7152,.0722));
       vec3 colored=luminance*(vec3(.24)+themeTint*.95);
       glass.rgb=mix(glass.rgb,colored,themeStrength*.90);
+      glass.a *= glassOpacity;
       gl_FragColor=glass;
     }
 `;

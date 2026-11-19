@@ -4,7 +4,7 @@ import {frostedResizeDirection} from './frostedResize';
 import {getCurrentWindow} from '@tauri-apps/api/window';
 
 /** Draw the supplied Water Bubble 3.5.1 pane stack behind Auralis controls. */
-export default function FrostedLayers({maskBackdrop=false,tintHue=210,tintStrength=50}:{maskBackdrop?:boolean;tintHue?:number;tintStrength?:number}){
+export default function FrostedLayers({maskBackdrop=false,tintHue=210,tintStrength=50,opacity=100}:{maskBackdrop?:boolean;tintHue?:number;tintStrength?:number;opacity?:number}){
  const canvas=useRef<HTMLCanvasElement>(null),[fallback,setFallback]=useState(false),[generation,setGeneration]=useState(0);
  useEffect(()=>{
   const el=canvas.current;if(!el)return;let disposed=false,frame=0,gl:WebGLRenderingContext|null=null;
@@ -20,6 +20,7 @@ export default function FrostedLayers({maskBackdrop=false,tintHue=210,tintStreng
    const viewport=ctx.getUniformLocation(program,'viewport');
    const h=((tintHue%360)+360)%360/60,x=1-Math.abs(h%2-1);const rgb=h<1?[1,x,0]:h<2?[x,1,0]:h<3?[0,1,x]:h<4?[0,x,1]:h<5?[x,0,1]:[1,0,x];
    ctx.uniform3f(ctx.getUniformLocation(program,'themeTint'),rgb[0],rgb[1],rgb[2]);ctx.uniform1f(ctx.getUniformLocation(program,'themeStrength'),Math.max(0,Math.min(1,tintStrength/65)));
+   ctx.uniform1f(ctx.getUniformLocation(program,'glassOpacity'),Math.max(.1,Math.min(1,opacity/100)));
    const host=el.closest<HTMLElement>('.cg-window');
    const maskCanvas=document.createElement('canvas');maskCanvas.width=371;maskCanvas.height=261;
    let alpha:Uint8ClampedArray|null=null;
@@ -41,6 +42,6 @@ export default function FrostedLayers({maskBackdrop=false,tintHue=210,tintStreng
    return()=>{disposed=true;cancelAnimationFrame(frame);observer.disconnect();host?.removeEventListener('mousedown',mouseDown,true);host?.removeEventListener('mousemove',mouseMove);host?.style.removeProperty('cursor');host?.classList.remove('cg-frost-edge-ready');host?.classList.remove('cg-frost-mask-ready');host?.style.removeProperty('--frost-shell-mask');document.removeEventListener('visibilitychange',request);el.removeEventListener('webglcontextlost',lost);el.removeEventListener('webglcontextrestored',restored);ctx.deleteBuffer(buffer);ctx.deleteProgram(program);ctx.deleteShader(vs);ctx.deleteShader(fs)};
   }catch{failed()}
   return()=>{disposed=true;cancelAnimationFrame(frame);el.removeEventListener('webglcontextlost',lost);el.removeEventListener('webglcontextrestored',restored)};
- },[generation,maskBackdrop,tintHue,tintStrength]);
+ },[generation,maskBackdrop,tintHue,tintStrength,opacity]);
  return <><div className="cg-frost-fallback" aria-hidden="true" hidden={!fallback}/><canvas ref={canvas} className="cg-frost-canvas" aria-hidden="true"/></>;
 }
