@@ -25,6 +25,17 @@ jobs:
           node-version: '22'
       - name: Test release signal
         run: node --test worker.test.mjs
+      - name: Check basic Worker deployment permissions
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN" && test -n "$CLOUDFLARE_ACCOUNT_ID"
+          probe_name="auralis-probe-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          probe_dir="$(mktemp -d)"
+          printf 'export default { fetch() { return new Response("ok") } };\n' > "$probe_dir/worker.mjs"
+          printf 'name = "%s"\nmain = "worker.mjs"\ncompatibility_date = "2025-01-01"\n' "$probe_name" > "$probe_dir/wrangler.toml"
+          npx --yes wrangler@4 deploy --config "$probe_dir/wrangler.toml"
+          npx --yes wrangler@4 delete --force --config "$probe_dir/wrangler.toml"
       - name: Deploy Worker and securely configure webhook secret
         run: |
           set -euo pipefail
