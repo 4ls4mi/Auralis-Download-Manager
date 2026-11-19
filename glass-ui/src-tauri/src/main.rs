@@ -580,6 +580,7 @@ fn main() {
     let mut context=tauri::generate_context!();
     if let Some(args)=test_browser_args(){if let Some(window)=context.config_mut().app.windows.first_mut(){window.additional_browser_args=Some(args);}}
     tauri::Builder::default()
+        .plugin(tauri_plugin_notification::init())
         // Glass is the one and only UI process: a second launch restores it.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             show_main(app);

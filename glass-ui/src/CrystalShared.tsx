@@ -321,7 +321,7 @@ export function CrystalWindow({ children, target = "main" }: {
       <span style={{ background: `rgba(3,9,19,${appearance.dim / 100})` }} />
     </div>}
     {mode === "solid" && <div className="cg-solid" />}
-    <div className="cg-content" ref={frame}>{appearance.material === "frosted-water-351" && <FrostedLayers/>}<div className="cg-fit-content">{children}</div></div>
+    <div className="cg-content" ref={frame}>{appearance.material === "frosted-water-351" && <FrostedLayers maskBackdrop={mode!=="desktop"}/>}<div className="cg-fit-content">{children}</div></div>
     {windowError&&<aside className="cg-window-notice cg-error" role="alert"><span>{windowError}</span><button title="Dismiss" onClick={()=>setWindowError("")}><X size={15}/></button></aside>}
     <ResizeGrips />
   </div>;

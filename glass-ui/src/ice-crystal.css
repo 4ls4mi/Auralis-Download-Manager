@@ -517,3 +517,47 @@
 /* Larger bars get soft reflected glow; compact worker indicators avoid a
    separate GPU blur for each of the 32 live connections. */
 .cg-sculpted-detailed{filter:drop-shadow(0 2px 3px rgba(3,34,57,.55)) drop-shadow(0 0 4px rgba(110,226,255,.45))}
+/* Give the standard square, faceted and rounded gradient fills a glass finish. */
+.cg-percent-fill{position:relative;overflow:hidden;box-shadow:inset 0 1px 2px #ffffffb0,inset 0 -2px 4px #002b5090,0 0 8px #68dfff80!important}
+.cg-percent-fill::after{content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;background:linear-gradient(180deg,rgba(255,255,255,.65),rgba(255,255,255,.08) 35%,rgba(0,53,92,.14) 68%,rgba(151,247,255,.45))}
+.cg-percent-fill::before{content:"";position:absolute;z-index:1;top:10%;bottom:10%;width:22%;left:-25%;pointer-events:none;background:linear-gradient(100deg,transparent,rgba(235,255,255,.72),transparent);transform:skewX(-22deg);animation:cg-linear-glass-sweep 3.5s ease-in-out infinite}
+@keyframes cg-linear-glass-sweep{0%,15%{left:-25%}75%,100%{left:110%}}
+@media(prefers-reduced-motion:reduce){.cg-percent-fill::before{animation:none;display:none}}
+/* Clip wallpaper/solid backing to the actual transparent pane stack. */
+.cg-window.cg-material-frosted-water-351 :is(.cg-wallpaper,.cg-solid){visibility:hidden;border-radius:0}
+.cg-window.cg-material-frosted-water-351.cg-frost-mask-ready :is(.cg-wallpaper,.cg-solid){visibility:visible;-webkit-mask-image:var(--frost-shell-mask);mask-image:var(--frost-shell-mask);-webkit-mask-size:100% 100%;mask-size:100% 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;mask-mode:alpha}
+/* Once the pane alpha mask is available, resizing is hit-tested at its real
+   visible outline rather than the invisible rectangular WebView boundary. */
+.cg-window.cg-material-frosted-water-351.cg-frost-edge-ready .cg-grips{display:none}
+/* Keep the main-list indicators large enough to read and prevent the graph
+   from competing with the progress bar and individual connection shapes. */
+@media(min-width:751px){
+ .cg-window .cg-cols,.cg-window .cg-row,.cg-window.cg-material-frosted-water-351 .cg-cols,.cg-window.cg-material-frosted-water-351 .cg-row{grid-template-columns:minmax(115px,1.15fr) 55px 75px minmax(240px,2fr) 65px 48px;gap:6px}
+ .cg-window .cg-row{height:98px;min-height:98px}
+}
+.cg-window .cg-row-progress{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:auto auto;gap:4px 8px;overflow:hidden;align-items:center}
+.cg-window .cg-row-progress .cg-percent-wrap{min-width:0;overflow:visible}
+.cg-window .cg-row-progress .cg-percent-track{height:18px;min-height:18px}
+.cg-window .cg-row-progress .cg-chunk-label{font-size:12px;line-height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cg-window .cg-row-progress .cg-chunk-map.compact>span{height:16px}
+.cg-window .cg-row-progress .cg-graph-small{grid-column:1/-1;height:18px;min-height:18px;width:100%}
+@media(max-width:750px){.cg-window .cg-row-progress{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+.cg-window .cg-row-progress .cg-percent-track:has(.cg-sculpted-track){height:32px;min-height:32px}
+.cg-window .cg-row-progress .cg-chunk-map.compact>span{height:24px}
+.cg-window .cg-row-progress{grid-template-columns:minmax(0,1fr) minmax(0,1.35fr)}
+.cg-window .cg-row-progress .cg-chunk-map.compact>span{height:30px}
+.cg-window .cg-row .cg-status{font-size:max(12px,calc(var(--font-size) * .78));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media(min-width:751px){.cg-window .cg-row{height:110px;min-height:110px}}
+.cg-window .cg-row-progress .cg-percent-track{height:24px;min-height:24px}
+.cg-window .cg-row-progress .cg-percent-track:has(.cg-sculpted-track){height:40px;min-height:40px}
+.cg-window .cg-row-progress .cg-chunk-map.compact>span{height:32px}
+/* Give each row's progress and connections the full indicator width. */
+.cg-window .cg-row-progress{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto;gap:3px}
+.cg-window .cg-row-progress .cg-graph-small{grid-column:1;height:14px;min-height:14px}
+.cg-window .cg-row-progress .cg-chunks.compact{display:flex;align-items:center;gap:6px;min-width:0}
+.cg-window .cg-row-progress .cg-chunk-label{flex:0 0 auto;margin:0;max-width:42%;font-size:12px;line-height:14px}
+.cg-window .cg-row-progress .cg-chunk-map.compact{flex:1;min-width:0}
+.cg-window .cg-row-progress .cg-chunk-map.compact>span{height:24px}
+.cg-window .cg-row-progress .cg-percent-track:has(.cg-sculpted-track){height:30px;min-height:30px}
+@media(min-width:751px){.cg-window .cg-cols,.cg-window .cg-row,.cg-window.cg-material-frosted-water-351 .cg-cols,.cg-window.cg-material-frosted-water-351 .cg-row{grid-template-columns:minmax(105px,1.1fr) 55px 100px minmax(225px,2fr) 65px 48px;gap:6px}}
+@media(min-width:751px){.cg-window .cg-cols,.cg-window .cg-row,.cg-window.cg-material-frosted-water-351 .cg-cols,.cg-window.cg-material-frosted-water-351 .cg-row{grid-template-columns:minmax(100px,1fr) 70px 100px minmax(225px,2fr) 65px 48px;gap:6px}.cg-window .cg-row>span:nth-child(2){white-space:nowrap;font-size:max(12px,calc(var(--font-size) * .78))}}

@@ -68,3 +68,6 @@ The user clarified that the opaque dark input fields, rather than the layered wi
 
 ## Sculpted indicator depth pass
 The user reported that shaped indicators looked flat. Added a shadow, layered glass rim and narrow upper and lower reflections; full-sized indicators also receive a soft glow, while compact connection indicators avoid the full-size blur treatment. Browser checks retained the receiving, lost and paused connection semantics and the 32-slot display. The new shading is still a work in progress and needs Windows and performance review, especially with many downloads.
+
+## Transparent background and edge resize follow-up
+The user reported a rectangular tinted area outside the panes and resize grips far away from the visible glass. Wallpaper and solid background elements are now masked by the rendered pane alpha, and newly created windows explicitly request a transparent native background. Frosted Layers hit-tests its resize directions against the rendered alpha contour, instead of the invisible rectangular WebView boundary. Browser tests check transparent corners and dispatch a resize from a visible edge; actual Windows compositing and native resize dragging still require verification. Main-list progress and connection indicators also received more space in populated rows.

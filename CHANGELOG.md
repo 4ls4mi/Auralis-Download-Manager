@@ -13,6 +13,13 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 - Reduced overlapping visual layers and added manual Netscape-format cookie-file selection for video helpers. Google-account autodetection/direct connection remains unfinished.
 - Remaining manual Windows checks include physical DPI/transparency review and native drag-to-Explorer/application behavior. Automated success does not establish complete original-MDM feature parity.
 
+### Auralis Download Manager 0.3.10 — Windows x64
+
+- Checks for Auralis updates independently of the download engine, with a system notification and a movable changelog window offering download or reminders.
+- Masks wallpaper and solid backgrounds to the Frosted Layers pane outline and targets resize drags at the visible glass edge.
+- Gives main-list progress and connection indicators more space and adds glass highlights to standard gradient bars.
+- Windows notifications, desktop compositing and edge dragging still need real-device verification. See [full notes](docs/glass-releases/v0.3.10.md).
+
 ### Auralis Download Manager 0.3.9 — Windows x64
 
 - Adds the experimental Frosted Layers material and independently selectable sculpted progress, connection and graph-backdrop designs.

@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import {isPermissionGranted, requestPermission, sendNotification} from "@tauri-apps/plugin-notification";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Activity, Archive, CheckCircle2, Clock3, Download as DownloadIcon, File,
@@ -88,7 +89,7 @@ export default function CrystalApp(){
     finally{pending.current=false}
   },[]);
   useEffect(()=>{
-    let mounted=true;let updateTimer:number|undefined;
+    let mounted=true;
     void invoke<string>("boot_engine").then(text=>{
       if(!mounted)return;
       setMessage(text);void refresh();
@@ -98,31 +99,42 @@ export default function CrystalApp(){
           else if(mounted)localStorage.setItem("auralis-browser-guide-seen","1");
         }).catch(()=>undefined);
       }
-      const checkUpdates=()=>void invoke<{state:string;version?:string;notes?:string}>("glass_update_check").then(update=>{
-        if(!mounted||update.state!=="available"||!update.version)return;
-        setUpdateVersion(update.version);
-        if(localStorage.getItem("auralis-update-dismissed")===update.version||Number(localStorage.getItem("auralis-update-snooze")||0)>Date.now())return;
-        localStorage.setItem("auralis-update-notice",JSON.stringify(update));
-        openWindow("tool-update-notice","/?tool=update-notice",680,520);
-      }).catch(()=>undefined);
-      checkUpdates();
-      // Check infrequently; the reminder itself is scheduled below.
-      updateTimer=window.setInterval(checkUpdates,6*60*60*1000);
       void invoke<{double_click_open:boolean;confirm_delete:boolean;delete_files_too:boolean}>("glass_settings").then(s=>{
         if(mounted){setDoubleClickOpen(Boolean(s.double_click_open));}
       }).catch(()=>undefined);
     }).catch(e=>{if(mounted){setOnline(false);setMessage(String(e))}});
     const timer=window.setInterval(()=>{if(mounted)void refresh()},1200);
-    const reminder=window.setInterval(()=>{
-      const due=Number(localStorage.getItem("auralis-update-snooze")||0);
-      if(due>0&&due<=Date.now()){
-        localStorage.removeItem("auralis-update-snooze");
-        const pending=localStorage.getItem("auralis-update-notice");
-        if(pending)openWindow("tool-update-notice","/?tool=update-notice",680,520);
-      }
-    },60000);
-    return()=>{mounted=false;window.clearInterval(timer);window.clearInterval(reminder);if(updateTimer)window.clearInterval(updateTimer)}
+    return()=>{mounted=false;window.clearInterval(timer)}
   },[refresh]);
+  // Update checks must not depend on the download engine starting or the
+  // Settings window being opened. Only the main window owns this scheduler.
+  useEffect(()=>{
+    let mounted=true,inFlight=false,lastShown="";
+    const check=async(reminder=false)=>{
+      if(inFlight)return;inFlight=true;
+      try{
+        const update=await invoke<{state:string;version?:string;notes?:string}>("glass_update_check");
+        if(!mounted)return;
+        if(update.state!=="available"||!update.version){setUpdateVersion(null);return}
+        setUpdateVersion(update.version);
+        localStorage.setItem("auralis-update-notice",JSON.stringify(update));
+        const snooze=Number(localStorage.getItem("auralis-update-snooze")||0);
+        const snoozeVersion=localStorage.getItem("auralis-update-snooze-version");
+        const applies=!snoozeVersion||snoozeVersion===update.version;
+        if(localStorage.getItem("auralis-update-dismissed")===update.version||(applies&&snooze>Date.now()))return;
+        if(lastShown===update.version&&!reminder)return;
+        if(applies&&snooze>0&&snooze<=Date.now()){localStorage.removeItem("auralis-update-snooze");localStorage.removeItem("auralis-update-snooze-version")}
+        lastShown=update.version;
+        openWindow("tool-update-notice","/?tool=update-notice",680,520);
+        void (async()=>{try{let granted=await isPermissionGranted();if(!granted)granted=(await requestPermission())==="granted";if(granted)sendNotification({title:"Auralis update available",body:`Version ${update.version} is available. Open the update window to review the changes.`})}catch{/* The in-app notice remains available if Windows notifications are disabled. */}})();
+      }catch{/* Network failures are retried on the next scheduled check. */}
+      finally{inFlight=false}
+    };
+    void check();
+    const updateTimer=window.setInterval(()=>void check(),6*60*60*1000);
+    const reminder=window.setInterval(()=>{const due=Number(localStorage.getItem("auralis-update-snooze")||0);if(due>0&&due<=Date.now())void check(true)},60000);
+    return()=>{mounted=false;window.clearInterval(updateTimer);window.clearInterval(reminder)};
+  },[]);
   useEffect(()=>{
     const changed=(event:StorageEvent)=>{if(event.key==="glass-downloads-changed")void refresh()};
     window.addEventListener("storage",changed);
@@ -343,7 +355,7 @@ export default function CrystalApp(){
     <span className="cg-muted" style={{fontSize:"var(--min-text-size)",whiteSpace:"nowrap",marginRight:9}}>{online?"● Connected":"○ Offline"}</span>
   </WindowTop>
   <div className="cg-main-body" onContextMenu={e=>e.preventDefault()}>
-    {updateVersion&&<div className="cg-update-notice" role="status"><span>Auralis Download Manager {updateVersion} is available.</span><button className="cg-btn" onClick={()=>{setUpdateVersion(null);openWindow("settings","/?settings=1&tab=Advanced&panel=Updates",1012,770)}}>View update</button><button className="cg-btn" aria-label="Dismiss update notice" onClick={()=>setUpdateVersion(null)}>Close</button></div>}
+    {updateVersion&&<div className="cg-update-notice" role="status"><span>Auralis Download Manager {updateVersion} is available.</span><button className="cg-btn" onClick={()=>{openWindow("tool-update-notice","/?tool=update-notice",680,520)}}>View update</button><button className="cg-btn" aria-label="Dismiss update notice" onClick={()=>setUpdateVersion(null)}>Close</button></div>}
     <div className="cg-menubar">
       {menus.map(menu=><div className="cg-menu-parent" key={menu}>
         <button className={"cg-menu-trigger "+(openMenu===menu?"active":"")} onClick={()=>{setContext(null);setOpenMenu(openMenu===menu?null:menu)}}>{menu}</button>

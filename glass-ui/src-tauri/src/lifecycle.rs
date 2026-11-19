@@ -14,7 +14,7 @@ pub fn fit_size(app:&AppHandle,width:f64,height:f64)->(f64,f64) {
 }
 
 pub fn open(app: &AppHandle, label: &str, route: &str, width: f64, height: f64) -> ApiResult<()> {
-    let priority = label.starts_with("info-") || label.starts_with("tool-video-");
+    let priority = label.starts_with("info-") || label.starts_with("tool-video-") || label == "tool-update-notice";
     if let Some(w) = app.get_webview_window(label) {
         if priority { let _ = w.set_always_on_top(true); }
         let _ = w.emit("glass-navigate", route);
@@ -34,7 +34,7 @@ pub fn open(app: &AppHandle, label: &str, route: &str, width: f64, height: f64) 
     let w = builder
         .title("Auralis Download Manager").always_on_top(priority).inner_size(width, height)
         .min_inner_size(width.min(440.0), height.min(320.0)).center().decorations(false)
-        .transparent(true).shadow(false).resizable(true).build()
+        .transparent(true).background_color(tauri::window::Color(0,0,0,0)).shadow(false).resizable(true).build()
         .map_err(|e| e.to_string())?;
     if priority { let _ = w.show(); let _ = w.set_focus(); let _ = w.set_always_on_top(false); }
     Ok(())
