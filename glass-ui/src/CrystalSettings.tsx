@@ -226,7 +226,7 @@ export default function CrystalSettings(){
       {tabs.map(t=>{const Icon=t.icon;return <button key={t.name} className={tab===t.name?"selected":""} onClick={()=>{setTab(t.name);setSettingsPanel("Main options")}}><Icon size={17}/><span>{t.name}</span></button>})}
     </aside><div className="cg-settings-body cg-glass">
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <div><h2>{tab}</h2><p>Download and appearance preferences</p></div>
+        <div><h2>{tab}</h2><p>Download and appearance preferences</p><p className="cg-settings-version">Current version: <strong>{appVersion||"Checking…"}</strong></p></div>
         <span className="cg-status-message">{busy?"Saving…":cfg?<><Check size={14}/> Connected</>:"Connecting"}</span>
       </div>
       {error&&<p className="cg-error">{error}</p>}

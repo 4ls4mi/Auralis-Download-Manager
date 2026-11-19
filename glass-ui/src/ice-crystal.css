@@ -633,3 +633,4 @@
 .cg-window .cg-selected-chunks .cg-fixed-connections{max-width:none;min-height:104px;grid-template-rows:repeat(4,minmax(22px,1fr))}
 .cg-window.cg-material-frosted-water-351 .cg-selected-chunks .cg-fixed-connections{max-width:none;min-height:104px;grid-template-rows:repeat(4,minmax(22px,1fr))}
 .cg-window.cg-material-frosted-water-351 .cg-frost-fallback{opacity:var(--panel-opacity)}
+.cg-settings-version{margin:4px 0 8px;color:var(--ink);font-size:max(13px,var(--min-text-size));line-height:1.35}
