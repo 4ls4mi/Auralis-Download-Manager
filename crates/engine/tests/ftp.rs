@@ -63,9 +63,9 @@ async fn a_file_comes_over_several_connections() {
 }
 
 #[tokio::test]
-async fn sessions_are_reused_between_parts() {
-    // Every other session is slow: the fast ones finish early and take over the rest of the
-    // slow ones' parts, on the sessions they already have (no new connect and login).
+async fn ftp_connections_keep_their_fixed_ranges() {
+    // On a healthy server each of the four connections downloads one fixed range,
+    // even if the other connections finish first.
     let s = server(FtpConfig {
         rate: Some(4 << 20),
         slow_every: Some(2),
@@ -78,12 +78,8 @@ async fn sessions_are_reused_between_parts() {
         ..opts(&s)
     };
     fetch(&s, "/gen/8M/s2/z.bin", 2, o, HeaderMap::new()).await;
-    assert!(
-        s.transfers() > s.sessions(),
-        "{} sessions for {} transfers",
-        s.sessions(),
-        s.transfers()
-    );
+    assert_eq!(s.transfers(), 4, "one transfer per fixed range");
+    assert_eq!(s.sessions(), 4, "one FTP session per connection");
 }
 
 #[tokio::test]
