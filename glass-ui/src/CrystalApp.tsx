@@ -1,4 +1,6 @@
+/// <reference types="vite/client" />
 import { invoke } from "@tauri-apps/api/core";
+import {connectReleasePush} from "./releasePush";
 import {isPermissionGranted, requestPermission, sendNotification} from "@tauri-apps/plugin-notification";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
@@ -109,9 +111,9 @@ export default function CrystalApp(){
   // Update checks must not depend on the download engine starting or the
   // Settings window being opened. Only the main window owns this scheduler.
   useEffect(()=>{
-    let mounted=true,inFlight=false,lastShown="";
+    let mounted=true,inFlight=false,queued=false,lastShown="";
     const check=async(reminder=false)=>{
-      if(inFlight)return;inFlight=true;
+      if(inFlight){queued=true;return}inFlight=true;
       try{
         const update=await invoke<{state:string;version?:string;notes?:string}>("glass_update_check");
         if(!mounted)return;
@@ -127,13 +129,16 @@ export default function CrystalApp(){
         lastShown=update.version;
         openWindow("tool-update-notice","/?tool=update-notice",680,520);
         void (async()=>{try{let granted=await isPermissionGranted();if(!granted)granted=(await requestPermission())==="granted";if(granted)sendNotification({title:"Auralis update available",body:`Version ${update.version} is available. Open the update window to review the changes.`})}catch{/* The in-app notice remains available if Windows notifications are disabled. */}})();
-      }catch{/* Network failures are retried on the next scheduled check. */}
-      finally{inFlight=false}
+      }catch{/* A later reconnect, signal or manual check can retry. */}
+      finally{inFlight=false;if(queued&&mounted){queued=false;void check()}}
     };
     void check();
-    const updateTimer=window.setInterval(()=>void check(),5*60*1000);
+    // Push wakes the updater; every hint and reconnection is verified with GitHub.
+    // Startup and manual checks remain available when the service is offline.
+    let stopPush:(()=>void)|undefined;
+    try{stopPush=connectReleasePush("wss://auralis-release-push.auralis-updates.workers.dev/events",()=>void check(),()=>void check())}catch{/* Initial/manual check remains available. */}
     const reminder=window.setInterval(()=>{const due=Number(localStorage.getItem("auralis-update-snooze")||0);if(due>0&&due<=Date.now())void check(true)},60000);
-    return()=>{mounted=false;window.clearInterval(updateTimer);window.clearInterval(reminder)};
+    return()=>{mounted=false;stopPush?.();window.clearInterval(reminder)};
   },[]);
   useEffect(()=>{
     const changed=(event:StorageEvent)=>{if(event.key==="glass-downloads-changed")void refresh()};

@@ -20,16 +20,17 @@ export const sculptedShapes: Record<string,{label:string;path:string}> = {
   openring:{label:"Open ring",path:"M 83 62 C 59 43 75 13 100 13 C 125 13 141 43 117 62"}
 };
 export function isSculptedShape(id:string){return Object.hasOwn(sculptedShapes,id)}
-export default function SculptedTrack({shape,percent,colors,lost=false,finish="default",tint="ice",animate=true,compact=false}:{shape:string;percent:number;colors:string[];lost?:boolean;finish?:string;tint?:string;animate?:boolean;compact?:boolean}){
+export default function SculptedTrack({shape,percent,colors,lost=false,finish="default",tint="ice",tintColors,animate=true,compact=false}:{shape:string;percent:number;colors:string[];lost?:boolean;finish?:string;tint?:string;tintColors?:string[];animate?:boolean;compact?:boolean}){
  const id=useId().replace(/:/g,"-"),design=sculptedShapes[shape];if(!design)return null;
  const value=sculptedPercent(percent);
  const parts=design.path.split(/(?=M )/).filter(Boolean);
  const outline=shape==="hourglass"?"M 18 25 C 36 25 68 35 100 35 C 132 35 164 25 182 25 C 197 25 197 55 182 55 C 164 55 132 45 100 45 C 68 45 36 55 18 55 C 3 55 3 25 18 25 Z":shape==="taperedwave"?"M 10 34 C 38 56 48 54 68 35 C 88 16 102 21 122 36 C 141 51 150 43 171 31 C 180 26 187 31 192 36 L 187 45 C 179 42 176 40 171 42 C 153 54 140 63 119 50 C 99 37 90 33 78 46 C 54 69 38 68 7 46 Z":null;
  const trackColor=({ice:"#aacfe5",violet:"#c1a2ec",teal:"#77ded9",amber:"#f3c184"} as Record<string,string>)[tint]??"#aacfe5";
- const innerColor=finish==="frosted"?"#97b9cc":finish==="recessed"?"#12273b":"#1d4b69";
+ const innerColor=finish==="frosted"?"#97b9cc":finish==="recessed"?"#12273b":finish==="clear"?"#3d7185":"#1d4b69";
  const valueFor=(index:number)=>sculptedPartPercent(value,parts.length,index,shape==="links");
  return <svg className={`cg-sculpted-track ${compact?"cg-sculpted-compact":"cg-sculpted-detailed"}`} viewBox="0 0 200 80" preserveAspectRatio="none" aria-hidden="true">
   <defs>
+   {tintColors&&<linearGradient id={`${id}-track-tint`}><stop stopColor={tintColors[0]}/><stop offset=".5" stopColor={tintColors[1]}/><stop offset="1" stopColor={tintColors[2]}/></linearGradient>}
    <linearGradient id={`${id}-fill`} gradientUnits="userSpaceOnUse" x1="0" x2="200" y1="0" y2="80"><stop stopColor={colors[0]}/><stop offset=".5" stopColor={colors[1]}/><stop offset="1" stopColor={colors[2]}/></linearGradient>
    <linearGradient id={`${id}-gloss`} gradientUnits="userSpaceOnUse" x1="0" x2="0" y1="0" y2="80"><stop stopColor="#f4ffff" stopOpacity=".85"/><stop offset=".45" stopColor="#c2f9ff" stopOpacity=".12"/><stop offset="1" stopColor="#7be5ff" stopOpacity=".45"/></linearGradient>
    <linearGradient id={`${id}-rim`} x1="0" y1="0" x2="0" y2="1"><stop stopColor="#efffff" stopOpacity=".95"/><stop offset=".38" stopColor="#88c7e5" stopOpacity=".5"/><stop offset=".72" stopColor="#173d5e" stopOpacity=".85"/><stop offset="1" stopColor="#c2faff" stopOpacity=".92"/></linearGradient>
@@ -37,11 +38,12 @@ export default function SculptedTrack({shape,percent,colors,lost=false,finish="d
    {outline&&<clipPath id={`${id}-outline`}><path d={outline}/></clipPath>}
    <mask id={`${id}-fill-mask`} maskUnits="userSpaceOnUse" x="0" y="0" width="200" height="80">{parts.map((path,index)=>valueFor(index)>0&&<path key={index} d={path} pathLength="100" strokeDasharray={`${valueFor(index)} 100`} fill="none" stroke="white" strokeWidth={outline?"35":"18"} strokeLinecap="round" strokeLinejoin="round"/>)}</mask>
   </defs>
-  {outline?<g><path d={outline} fill="#05283e" fillOpacity=".40" transform="translate(0 2)"/><path d={outline} fill={lost?"#b61b37":innerColor} fillOpacity=".7" stroke={lost?"#ff6981":trackColor} strokeWidth="1.6"/>{!lost&&<path d={outline} fill={`url(#${id}-depth)`} opacity=".7"/>}<path d={outline} fill={`url(#${id}-fill)`} mask={`url(#${id}-fill-mask)`}/><path d={outline} fill={`url(#${id}-depth)`} mask={`url(#${id}-fill-mask)`}/></g>:parts.map((path,index)=>{const partValue=valueFor(index);return <g key={index}>
+  {outline?<g><path d={outline} fill="#05283e" fillOpacity=".40" transform="translate(0 2)"/><path d={outline} fill={lost?"#b61b37":innerColor} fillOpacity=".7" stroke={lost?"#ff6981":trackColor} strokeWidth="1.6"/>{!lost&&<><path d={outline} fill={tintColors?`url(#${id}-track-tint)`:trackColor} fillOpacity=".45"/><path d={outline} fill={`url(#${id}-depth)`} opacity=".7"/></>}<path d={outline} fill={`url(#${id}-fill)`} mask={`url(#${id}-fill-mask)`}/><path d={outline} fill={`url(#${id}-depth)`} mask={`url(#${id}-fill-mask)`}/></g>:parts.map((path,index)=>{const partValue=valueFor(index);return <g key={index}>
    <path d={path} transform="translate(0 2)" fill="none" stroke="#031d32" strokeOpacity=".45" strokeWidth="25" strokeLinecap="round" strokeLinejoin="round"/>
    <path d={path} fill="none" stroke={lost?"#e63350":trackColor} strokeOpacity={lost?.95:.6} strokeWidth="22" strokeLinecap="round" strokeLinejoin="round"/>
    {!lost&&<path d={path} fill="none" stroke={`url(#${id}-rim)`} strokeWidth="20" strokeLinecap="round" strokeLinejoin="round"/>}
    <path d={path} fill="none" stroke={lost?"#b61b37":innerColor} strokeOpacity=".90" strokeWidth="17" strokeLinecap="round" strokeLinejoin="round"/>
+   {!lost&&<path d={path} fill="none" stroke={tintColors?`url(#${id}-track-tint)`:trackColor} strokeOpacity=".45" strokeWidth="17" strokeLinecap="round" strokeLinejoin="round"/>}
    {!lost&&<path d={path} fill="none" stroke={`url(#${id}-depth)`} strokeWidth="17" strokeLinecap="round" strokeLinejoin="round"/>}
    {partValue>0&&<><path d={path} pathLength="100" strokeDasharray={`${partValue} 100`} fill="none" stroke={`url(#${id}-fill)`} strokeWidth="18" strokeLinecap="round" strokeLinejoin="round"/><path d={path} pathLength="100" strokeDasharray={`${partValue} 100`} fill="none" stroke={`url(#${id}-gloss)`} strokeWidth="15" strokeLinecap="round" strokeLinejoin="round"/></>}
   </g>})}

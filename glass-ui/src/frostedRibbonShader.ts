@@ -7,6 +7,9 @@ export const ribbonFragment = `
     uniform float unknown;
     uniform float trackFinish;
     uniform vec3 trackTint;
+    uniform vec3 trackTintA;
+    uniform vec3 trackTintB;
+    uniform vec3 trackTintC;
     uniform float trackTintStrength;
     uniform vec3 fillColorA;
     uniform vec3 fillColorB;
@@ -231,7 +234,8 @@ export const ribbonFragment = `
 
       if (trackFinish > .5 && trackFinish < 1.5) track = mix(track, vec3(.72,.84,.91), .48);
       if (trackFinish > 1.5) track = mix(track, vec3(.045,.09,.15), .54);
-      track = mix(track, trackTint, trackTintStrength);
+      vec3 gradientTint = mix(mix(trackTintA, trackTintB, smoothstep(0.0, 0.5, clamp((p.x-128.)/560.,0.,1.))), mix(trackTintB, trackTintC, smoothstep(0.5, 1.0, clamp((p.x-128.)/560.,0.,1.))), step(0.5, clamp((p.x-128.)/560.,0.,1.)));
+      track = mix(track, gradientTint, trackTintStrength);
 
       // Keep the actual fill position tied to transferred bytes. These
       // coordinates map the visible folds to the width shown in the reference.

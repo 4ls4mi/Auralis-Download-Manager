@@ -22,7 +22,7 @@ function getRenderer() {
   } catch { renderer=null }
   return renderer;
 }
-export default function FrostedRibbon({percent, colors, fallback, finish, tint}:{percent:number;colors:string[];fallback:string;finish:string;tint:string}) {
+export default function FrostedRibbon({percent, colors, fallback, finish, tint, tintColors}:{percent:number;colors:string[];fallback:string;finish:string;tint:string;tintColors?:string[]}) {
   const ref=useRef<HTMLCanvasElement>(null),[failed,setFailed]=useState(false);
   useEffect(()=>{
     const target=ref.current;if(!target)return;
@@ -40,6 +40,7 @@ export default function FrostedRibbon({percent, colors, fallback, finish, tint}:
       r.gl.uniform3f(r.gl.getUniformLocation(r.program,"trackTint"),tc[0],tc[1],tc[2]);
       r.gl.uniform1f(r.gl.getUniformLocation(r.program,"trackTintStrength"),tint==="ice"?0:.42);
       const rgb=(hex:string)=>{const match=/^#([0-9a-f]{6})$/i.exec(hex);if(!match)return [0.3,0.7,1];const n=parseInt(match[1],16);return [(n>>16&255)/255,(n>>8&255)/255,(n&255)/255]};
+      for(const [index,name] of ["trackTintA","trackTintB","trackTintC"].entries()){const c=tintColors?rgb(tintColors[index]):tc;r.gl.uniform3f(r.gl.getUniformLocation(r.program,name),c[0],c[1],c[2])}
       for(const [index,name] of ["fillColorA","fillColorB","fillColorC"].entries()){const c=rgb(colors[index]??"#80cfff");r.gl.uniform3f(r.gl.getUniformLocation(r.program,name),c[0],c[1],c[2])}
       r.gl.uniform1f(r.gl.getUniformLocation(r.program,"unknown"),0);
       r.gl.uniform1f(r.gl.getUniformLocation(r.program,"seconds"),0);
@@ -47,6 +48,6 @@ export default function FrostedRibbon({percent, colors, fallback, finish, tint}:
     };
     const observer=new ResizeObserver(draw);observer.observe(target);draw();
     return()=>observer.disconnect();
-  },[percent,finish,tint,colors]);
+  },[percent,finish,tint,colors,tintColors]);
   return <><canvas className="cg-frost-ribbon" ref={ref} aria-hidden="true"/>{failed&&<span className="cg-ribbon-fallback" style={{width:`${percent}%`,background:fallback}}/>}</>;
 }
