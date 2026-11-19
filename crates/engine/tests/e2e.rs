@@ -590,11 +590,12 @@ async fn per_node_etags_fall_back_to_the_date() {
 
 #[tokio::test]
 async fn sockets_are_reused_between_segments() {
-    // Every other connection is slow: the fast ones finish early and take over the rest of the
-    // slow ones' segments, on the keep-alive sockets they already have.
+    // A capped request requires several HTTP requests for each fixed worker range; those
+    // requests should reuse their existing keep-alive sockets.
     let s = server("rate=4M&slow_every=2&slow_rate=512K").await;
     let opts = Options {
         max_connections: 4,
+        request_cap: Some(512 * 1024),
         ..fast_opts()
     };
     let (log, _) = fetch(&s, "/gen/8M?seed=18", 18, opts).await;

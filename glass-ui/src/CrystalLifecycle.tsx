@@ -27,7 +27,7 @@ export function CrystalFileInfo({id}:{id:number}){
   return()=>{active=false;clearInterval(timer)};
  },[id]);
  const perform=async(action:string,payload:unknown=null)=>invoke<{id?:number}>('file_info_action',{id,action,payload});
- const start=async(later:boolean)=>{setBusy(true);setError('');try{const result=await perform('commit',{...form,later});if(!later&&info?.video&&result.id)openWindow(`download-${result.id}`,`/?detail=${result.id}`,880,440);await close()}catch(e){setError(String(e));setBusy(false)}};
+ const start=async(later:boolean)=>{setBusy(true);setError('');try{const result=await perform('commit',{...form,later});if(!later&&info?.video&&result.id)openWindow(`download-${result.id}`,`/?detail=${result.id}`,760,560);await close()}catch(e){setError(String(e));setBusy(false)}};
  const info=pending?.info;
  return <CrystalWindow target="details"><WindowTop noMax title="Download File Info"/>
   <main className="cg-page cg-file-info">

@@ -85,6 +85,8 @@ pub struct Planner {
     preempt_after: std::time::Duration,
     /// Sorted by `start`, contiguous, covering `[0, size)`.
     segs: Vec<Segment>,
+    /// When enabled, each segment is reserved for the same worker until it completes.
+    fixed: bool,
 }
 
 impl Planner {
@@ -100,6 +102,7 @@ impl Planner {
             min_split: min_split.max(1),
             preempt_after: std::time::Duration::ZERO,
             segs,
+            fixed: false,
         }
     }
 
@@ -139,8 +142,37 @@ impl Planner {
             min_split: min_split.max(1),
             preempt_after: std::time::Duration::ZERO,
             segs,
+            fixed: false,
         })
     }
+
+    /// Partition the file into stable worker ranges, preserving every saved byte. Existing
+    /// segments can have arbitrary boundaries, so a worker may own several segments.
+    pub fn reserve_fixed_ranges(&mut self, workers: u32) {
+        if self.size == 0 || workers == 0 { return; }
+        let workers = u64::from(workers).min(self.size);
+        let mut parts = Vec::new();
+        for original in &self.segs {
+            let mut start = original.start;
+            while start < original.end {
+                let owner = (((start as u128 + 1) * workers as u128 - 1) / self.size as u128) as u64;
+                let end = original.end.min((((owner + 1) as u128 * self.size as u128) / workers as u128) as u64);
+                let cursor = original.cursor.clamp(start, end);
+                let mut segment = fresh(start, end, None);
+                segment.cursor = cursor;
+                segment.reserved = cursor;
+                segment.last_worker = Some(owner as WorkerId);
+                parts.push(segment);
+                start = end;
+            }
+        }
+        self.segs = parts;
+        self.fixed = true;
+    }
+
+    /// A server refused an assignment permanently; allow the remaining connections to
+    /// complete it instead of leaving the download stuck.
+    pub fn allow_reassignment(&mut self) { self.fixed = false; }
 
     pub fn save(&self) -> Vec<SavedSegment> {
         self.segs
@@ -186,6 +218,11 @@ impl Planner {
     /// `None` means there is nothing worth splitting: the worker should stop.
     pub fn assign(&mut self, w: WorkerId, after: Option<u64>) -> Option<Assignment> {
         self.release(w);
+
+        if self.fixed {
+            let i = self.segs.iter().position(|s| s.last_worker == Some(w) && s.worker.is_none() && s.unclaimed() > 0)?;
+            return Some(self.give(i, w, None));
+        }
 
         // 1. An unassigned, unfinished segment — prefer the one continuing where `w` stopped.
         let open = |s: &Segment| s.worker.is_none() && s.unclaimed() > 0;

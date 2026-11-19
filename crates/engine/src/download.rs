@@ -3462,13 +3462,6 @@ where
 async fn supervise(ctx: Arc<Ctx>, first: Option<Body>) -> Result<(), Error> {
     let mut set = JoinSet::new();
     let mut next_id: WorkerId = 0;
-    if let Some(body) = first {
-        // The probe's body is byte 0 onward: reserve that segment for connection 0 before any
-        // other connection can split or take it.
-        ctx.shared.with_planner(|p| p.assign(0, None));
-        set.spawn(worker(ctx.clone(), 0, Some(body)));
-        next_id = 1;
-    }
     // No more connections than the host is known to allow.
     let host = ctx.target().url.host_str().unwrap_or("").to_owned();
     let learned = ctx.opts.host_limits.as_ref().and_then(|h| h.cap(&host));
@@ -3488,6 +3481,16 @@ async fn supervise(ctx: Arc<Ctx>, first: Option<Body>) -> Result<(), Error> {
     // A POST the server hasn't shown to take ranges: one connection, until a 206 says the
     // others may follow (a second POST may do the form's work twice).
     let mut held = ctx.wait_for_ranges;
+    // A POST awaiting proof of range support must retain the existing single-stream
+    // negotiation. Ordinary downloads reserve their ranges before any worker starts.
+    if !held {
+        ctx.shared.with_planner(|p| p.reserve_fixed_ranges(max));
+    }
+    if let Some(body) = first {
+        ctx.shared.with_planner(|p| p.assign(0, None));
+        set.spawn(worker(ctx.clone(), 0, Some(body)));
+        next_id = 1;
+    }
     while next_id < if held { 1 } else { max } {
         set.spawn(worker(ctx.clone(), next_id, None));
         next_id += 1;
@@ -3653,6 +3656,7 @@ async fn worker(ctx: Arc<Ctx>, id: WorkerId, mut first: Option<Body>) -> Result<
                         ));
                         ctx.shared
                             .conn(id, |c| c.status = ConnStatus::Retired { host, cap });
+                        ctx.shared.with_planner(|p| p.allow_reassignment());
                         return Ok(());
                     }
                 }
@@ -3673,6 +3677,7 @@ async fn worker(ctx: Arc<Ctx>, id: WorkerId, mut first: Option<Body>) -> Result<
                     };
                     ctx.shared
                         .conn(id, |c| c.status = ConnStatus::Failed(e.clone()));
+                    ctx.shared.with_planner(|p| p.allow_reassignment());
                     return if others { Ok(()) } else { Err(e) };
                 }
                 let mut received = 0;
@@ -3686,6 +3691,7 @@ async fn worker(ctx: Arc<Ctx>, id: WorkerId, mut first: Option<Body>) -> Result<
                     let others = ctx.shared.with_planner(|p| p.active_workers()) > 0;
                     ctx.shared
                         .conn(id, |c| c.status = ConnStatus::Failed(e.clone()));
+                    ctx.shared.with_planner(|p| p.allow_reassignment());
                     return if others { Ok(()) } else { Err(e) };
                 }
                 ctx.shared

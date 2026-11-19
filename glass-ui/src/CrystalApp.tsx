@@ -1,5 +1,6 @@
 /// <reference types="vite/client" />
 import { invoke } from "@tauri-apps/api/core";
+import { getVersion } from "@tauri-apps/api/app";
 import {connectReleasePush} from "./releasePush";
 import {isPermissionGranted, requestPermission, sendNotification} from "@tauri-apps/plugin-notification";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -27,7 +28,7 @@ const blank:Dashboard={downloads:[],speed:0,queues:[],categories:[]};
 const columnLabels=["FILE NAME","SIZE","STATUS","PROGRESS","SPEED","TIME LEFT"];
 const defaultColumns=[220,76,100,220,85,75];
 function loadColumns(){try{const v=JSON.parse(localStorage.getItem("auralis-download-columns")||"null");if(Array.isArray(v)&&v.length===6&&v.every(n=>typeof n==="number"&&Number.isFinite(n)))return v.map(n=>Math.max(60,Math.min(600,n)))}catch{}return [...defaultColumns]}
-const pop = (id:number)=>openWindow("download-"+id,"/?detail="+id,880,440);
+const pop = (id:number)=>openWindow("download-"+id,"/?detail="+id,760,560);
 const settings = (tab="General", panel="")=>openWindow("settings","/?settings=1&tab="+encodeURIComponent(tab)+"&panel="+encodeURIComponent(panel),968,765);
 const add=(torrent=false)=>openWindow(torrent?"add-torrent":"add-url",`/?add=${torrent?"torrent":"url"}`,590,390);
 const props=(id:number)=>openWindow("properties-"+id,"/?properties="+id,760,600);
@@ -55,6 +56,8 @@ export default function CrystalApp(){
   const [doubleClickOpen,setDoubleClickOpen]=useState(false);
   const [showCategories,setShowCategories]=useState(true);
   const [updateVersion,setUpdateVersion]=useState<string|null>(null);
+  const [appVersion,setAppVersion]=useState("");
+  useEffect(()=>{void getVersion().then(setAppVersion).catch(()=>setAppVersion("unavailable"))},[]);
   const [columnWidths,setColumnWidths]=useState<number[]>(loadColumns);
   const resizingColumn=useRef<{index:number;start:number;width:number;scale:number}|null>(null);
   const setColumnWidth=(index:number,width:number)=>setColumnWidths(old=>{const next=old.map((v,i)=>i===index?Math.max(60,Math.min(600,Math.round(width))):v);try{localStorage.setItem("auralis-download-columns",JSON.stringify(next))}catch{}return next});
@@ -134,7 +137,7 @@ export default function CrystalApp(){
         if(lastShown===update.version&&!reminder)return;
         if(applies&&snooze>0&&snooze<=Date.now()){localStorage.removeItem("auralis-update-snooze");localStorage.removeItem("auralis-update-snooze-version")}
         lastShown=update.version;
-        openWindow("tool-update-notice","/?tool=update-notice",680,520);
+        openWindow("tool-update-toast","/?tool=update-toast",420,200);
         void (async()=>{try{let granted=await isPermissionGranted();if(!granted)granted=(await requestPermission())==="granted";if(granted)sendNotification({title:"Auralis update available",body:`Version ${update.version} is available. Open the update window to review the changes.`})}catch{/* The in-app notice remains available if Windows notifications are disabled. */}})();
       }catch{/* A later reconnect, signal or manual check can retry. */}
       finally{inFlight=false;if(queued&&mounted){queued=false;void check()}}
@@ -431,6 +434,7 @@ export default function CrystalApp(){
       </section>
     </div>
     <footer className="cg-footer cg-glass">
+      <span className="cg-footer-version">Auralis v{appVersion||"…"}</span>
       <div className="cg-footer-stats"><span><small>TOTAL SPEED</small><strong>{rate(data.speed)}</strong></span>
         <span><small>ACTIVE</small><strong>{counts.downloading}</strong></span>
         <span><small>COMPLETED</small><strong>{counts.finished}</strong></span></div>

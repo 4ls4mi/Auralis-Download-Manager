@@ -23,17 +23,17 @@ test('background update appears even when engine startup fails, respects reminde
    await page.goto(url);await page.waitForFunction(()=>window.calls.some(c=>c.cmd==='glass_update_check'));await page.waitForTimeout(250);return page;
   }
   const fresh=await pageFor(null);
-  assert.ok(await fresh.evaluate(()=>window.calls.some(c=>c.cmd==='open_glass_window'&&c.args.label==='tool-update-notice')),'update window should open even when engine fails');
+  assert.ok(await fresh.evaluate(()=>window.calls.some(c=>c.cmd==='open_glass_window'&&c.args.label==='tool-update-toast')),'update window should open even when engine fails');
   assert.equal(await fresh.evaluate(()=>window.notices.length),1,'system notification should be sent once');
   assert.equal(await fresh.evaluate(()=>window.intervals.includes(300000)),false,'push must not use five-minute polling');
   assert.ok(await fresh.evaluate(()=>window.socketUrls.includes('wss://auralis-release-push.auralis-updates.workers.dev/events')),'connect to the release signal');
   assert.match(await fresh.locator('.cg-update-notice').innerText(),/1\.2\.3/);
   await fresh.close();
   const snoozed=await pageFor('1.2.3');
-  assert.equal(await snoozed.evaluate(()=>window.calls.some(c=>c.cmd==='open_glass_window'&&c.args.label==='tool-update-notice')),false,'same version reminder should stay snoozed');
+  assert.equal(await snoozed.evaluate(()=>window.calls.some(c=>c.cmd==='open_glass_window'&&c.args.label==='tool-update-toast')),false,'same version reminder should stay snoozed');
   await snoozed.close();
   const newer=await pageFor('1.2.2');
-  assert.ok(await newer.evaluate(()=>window.calls.some(c=>c.cmd==='open_glass_window'&&c.args.label==='tool-update-notice')),'a newer version must not inherit an older version snooze');
+  assert.ok(await newer.evaluate(()=>window.calls.some(c=>c.cmd==='open_glass_window'&&c.args.label==='tool-update-toast')),'a newer version must not inherit an older version snooze');
   await newer.goto(url+'?tool=update-notice');await newer.waitForSelector('.cg-update-changelog');
   assert.match(await newer.locator('.cg-update-changelog').innerText(),/Changes in the new release/);
   await newer.getByRole('button',{name:'Download and install'}).click();

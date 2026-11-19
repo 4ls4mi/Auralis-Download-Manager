@@ -3,6 +3,48 @@ use proptest::prelude::*;
 
 const MB: u64 = 1 << 20;
 
+#[test]
+fn fixed_ranges_stay_with_their_worker_through_a_disconnect() {
+    let mut p = Planner::new(100, 1);
+    p.reserve_fixed_ranges(2);
+    assert_eq!((p.assign(0, None).unwrap().from, p.assign(1, None).unwrap().from), (0, 50));
+    assert_eq!(p.claim(1, 50, 20), Claim::Granted(20));
+    p.commit(1, 70);
+    p.release(1);
+    assert_eq!(p.claim(0, 0, 50), Claim::Granted(50));
+    assert_eq!(p.commit(0, 50), Some(50));
+    assert_eq!(p.assign(0, Some(50)), None, "a worker cannot take another's range");
+    let resumed = p.assign(1, None).unwrap();
+    assert_eq!((resumed.from, resumed.to, resumed.written), (70, 100, 20));
+    assert_eq!(p.downloaded(), 70);
+    check_invariants(&p);
+}
+
+#[test]
+fn fixed_ranges_preserve_progress_from_an_older_resume_file() {
+    let saved = [SavedSegment { start: 0, cursor: 30, end: 60 }, SavedSegment { start: 60, cursor: 75, end: 100 }];
+    let mut p = Planner::resume(100, 1, &saved).unwrap();
+    p.reserve_fixed_ranges(2);
+    assert_eq!(p.downloaded(), 45);
+    assert_eq!(p.assign(0, None).unwrap().from, 30);
+    assert_eq!(p.assign(1, None).unwrap().from, 50);
+    check_invariants(&p);
+}
+
+#[test]
+fn fixed_ranges_can_fall_back_if_a_server_refuses_a_worker() {
+    let mut p = Planner::new(100, 1);
+    p.reserve_fixed_ranges(2);
+    p.assign(0, None).unwrap();
+    p.assign(1, None).unwrap();
+    p.release(1);
+    assert_eq!(p.claim(0, 0, 50), Claim::Granted(50));
+    assert_eq!(p.commit(0, 50), Some(50));
+    p.allow_reassignment();
+    assert_eq!(p.assign(0, None).unwrap().from, 50);
+    check_invariants(&p);
+}
+
 fn check_invariants(p: &Planner) {
     let mut expect = 0;
     let mut workers = std::collections::HashSet::new();
