@@ -24,7 +24,7 @@ jobs:
           signature='sha256='+hmac.new(secret,body,hashlib.sha256).hexdigest()
           url='https://auralis-release-push.auralis-updates.workers.dev/github/webhook'
           def send(sig):
-              request=urllib.request.Request(url,data=body,headers={'Content-Type':'application/json','X-GitHub-Event':'ping','X-Hub-Signature-256':sig},method='POST')
+              request=urllib.request.Request(url,data=body,headers={'Content-Type':'application/json','User-Agent':'GitHub-Hookshot/Auralis-Diagnostic','X-GitHub-Event':'ping','X-Hub-Signature-256':sig},method='POST')
               try:
                   with urllib.request.urlopen(request,timeout=20) as response: return response.status
               except urllib.error.HTTPError as error: return error.code
