@@ -46,3 +46,27 @@
 .cg-window :is(.cg-toolbar>button,.cg-btn):hover:not(:disabled){filter:brightness(1.15);border-color:var(--tone,var(--accent))!important}
 @media(max-width:600px){.cg-window .cg-toolbar>button{min-width:32px}.cg-window .cg-toolbar>button:is([data-action=start],[data-action=remove],[data-action=settings],[data-action=queue-start]){margin-left:2px}}
 @media(prefers-reduced-motion:reduce){.cg-window :is(.cg-toolbar>button,.cg-btn):hover{filter:none}}
+
+/* Each material supplies its own action palette; the theme still tints the glass. */
+.cg-window{--material-action:92,213,230;--material-primary:69,235,142;--material-warn:255,189,74;--material-danger:255,109,98;--material-tool:200,136,255}
+.cg-material-brushed-glass{--material-action:110,190,255;--material-primary:66,220,205;--material-warn:255,193,92;--material-danger:255,111,105;--material-tool:173,174,255}
+.cg-material-rose-pine{--material-action:191,174,255;--material-primary:147,229,190;--material-warn:246,205,140;--material-danger:255,144,177;--material-tool:232,170,244}
+.cg-material-window-glass{--material-action:103,221,255;--material-primary:111,255,205;--material-warn:255,215,122;--material-danger:255,131,147;--material-tool:190,169,255}
+.cg-material-oversimplified{--material-action:111,189,255;--material-primary:68,232,153;--material-warn:255,192,80;--material-danger:255,102,116;--material-tool:200,142,255}
+.cg-material-frosted-water-351{--material-action:105,223,255;--material-primary:105,255,188;--material-warn:255,215,114;--material-danger:255,124,153;--material-tool:225,158,255}
+.cg-material-builtin-obsidian-matte{--material-action:124,178,255;--material-primary:139,222,126;--material-warn:245,169,92;--material-danger:255,104,110;--material-tool:191,142,235}
+.cg-material-builtin-smoked-glass{--material-action:95,217,223;--material-primary:120,238,189;--material-warn:244,207,128;--material-danger:251,126,146;--material-tool:158,165,255}
+.cg-material-builtin-pearl-frost{--material-action:106,194,255;--material-primary:106,236,188;--material-warn:255,199,124;--material-danger:255,132,170;--material-tool:207,159,255}
+.cg-window .cg-toolbar>button,.cg-window .cg-btn{--tone-rgb:var(--material-action)!important;--tone:rgb(var(--tone-rgb))!important}
+.cg-window .cg-toolbar>button:is([data-action=add],[data-action=torrent],[data-action=start],[data-action=queue-start]),.cg-window .cg-btn.cg-btn-primary{--tone-rgb:var(--material-primary)!important}
+.cg-window .cg-toolbar>button:is([data-action=stop],[data-action=stop-all],[data-action=queue-stop]){--tone-rgb:var(--material-warn)!important}
+.cg-window .cg-toolbar>button:is([data-action=remove],[data-action=delete-completed]),.cg-window .cg-btn.cg-btn-danger{--tone-rgb:var(--material-danger)!important}
+.cg-window .cg-toolbar>button:is([data-action=settings],[data-action=scheduler]){--tone-rgb:var(--material-tool)!important}
+.cg-window .cg-btn:not(:disabled){color:#fff!important;background:linear-gradient(155deg,rgba(var(--tone-rgb),.48),rgba(var(--tone-rgb),.16))!important;border-color:rgba(var(--tone-rgb),.78)!important;text-shadow:0 1px 3px #00101f!important}
+.cg-window .cg-btn:not(:disabled) svg{color:rgb(var(--tone-rgb))!important;filter:drop-shadow(0 1px 2px #00101f)}
+.cg-window :is(.cg-toolbar>button,.cg-btn):hover:not(:disabled){background-color:rgba(var(--tone-rgb),.48)!important;box-shadow:inset 0 1px #ffffffaa,0 0 14px rgba(var(--tone-rgb),.5)!important}
+.cg-window[class*="cg-material-custom-"].cg-finish-matte{--material-action:124,178,255;--material-primary:139,222,126;--material-warn:245,169,92;--material-danger:255,104,110;--material-tool:191,142,235}
+.cg-window[class*="cg-material-custom-"].cg-finish-satin{--material-action:110,190,255;--material-primary:66,220,205;--material-warn:255,193,92;--material-danger:255,111,105;--material-tool:173,174,255}
+.cg-window[class*="cg-material-custom-"].cg-finish-gloss{--material-action:174,160,255;--material-primary:105,255,188;--material-warn:255,193,108;--material-danger:255,115,160;--material-tool:218,143,255}
+.cg-window[class*="cg-material-custom-"].cg-finish-frosted{--material-action:106,194,255;--material-primary:106,236,188;--material-warn:255,199,124;--material-danger:255,132,170;--material-tool:207,159,255}
+.cg-window[class*="cg-material-custom-"].cg-finish-clear{--material-action:95,217,223;--material-primary:120,238,189;--material-warn:244,207,128;--material-danger:251,126,146;--material-tool:158,165,255}
