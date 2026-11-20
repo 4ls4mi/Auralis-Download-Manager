@@ -38,6 +38,7 @@ jobs:
           if (!(Test-Path $env:AURALIS_CAPTURE_EXE)) { throw 'The cached Auralis executable is missing; build 0.3.26 first.' }
           $version = (Get-Item $env:AURALIS_CAPTURE_EXE).VersionInfo.ProductVersion
           if ($version -notlike '0.3.26*') { throw "Expected the Auralis 0.3.26 executable, found $version." }
+          "AURALIS_CAPTURE_OUTPUT=$env:AURALIS_CAPTURE_OUTPUT" >> $env:GITHUB_ENV
           Remove-Item $env:AURALIS_CAPTURE_OUTPUT -Recurse -Force -ErrorAction SilentlyContinue
           node docs-source/docs/tools/capture-auralis-windows.mjs
           if ($LASTEXITCODE) { throw 'Screenshot capture failed.' }
@@ -45,6 +46,6 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: auralis-real-windows-screenshots
-          path: ${{ env.LOCALAPPDATA }}/AuralisRunner/screenshot-output
+          path: ${{ env.AURALIS_CAPTURE_OUTPUT }}
           if-no-files-found: error
           retention-days: 7
