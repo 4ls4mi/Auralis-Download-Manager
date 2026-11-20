@@ -22,6 +22,19 @@ const server=createServer((req,res)=>{const m=/^bytes=(\d+)-(\d*)$/.exec(req.hea
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const probe=net.createServer();await new Promise(r=>probe.listen(0,'127.0.0.1',r));const port=probe.address().port;await new Promise(r=>probe.close(r));
 async function ipc(command){const endpoint=JSON.parse(await readFile(path.join(data,'ipc.json'),'utf8'));return new Promise((resolve,reject)=>{let text='';const s=net.connect({host:'127.0.0.1',port:endpoint.port},()=>s.write(JSON.stringify({token:endpoint.token,...command})+'\n'));s.setTimeout(10000,()=>s.destroy(Error('IPC timeout')));s.on('data',b=>{text+=b;if(text.includes('\n')){s.end();resolve(text.trim())}});s.on('end',()=>resolve(text.trim()));s.on('error',reject)})}
+async function browserCapture(url) {
+ const host=process.env.AURALIS_NATIVE_HOST;assert.ok(host,'AURALIS_NATIVE_HOST is required');
+ const message={url,filename:'from-browser.bin',size:contents.length,mime:'application/octet-stream',referrer:url,pageUrl:url,explicit:true,v:'0.2.4'};
+ const body=Buffer.from(JSON.stringify(message)),header=Buffer.alloc(4);header.writeUInt32LE(body.length);
+ return new Promise((resolve,reject)=>{
+  const child=spawn(host,['glass-test.firefox.json','integration@misterdownloadmanager.com'],{env:{...process.env,MDM_DATA_DIR:data},stdio:['pipe','pipe','pipe']});
+  let bytes=Buffer.alloc(0),errors='';const timer=setTimeout(()=>{child.kill();reject(Error('Browser helper timed out'))},30000);
+  child.on('error',e=>{clearTimeout(timer);reject(e)});child.stderr.on('data',b=>errors+=b);
+  child.on('exit',code=>{if(bytes.length<4){clearTimeout(timer);reject(Error(`Browser helper exited ${code}: ${errors}`))}});
+  child.stdout.on('data',b=>{bytes=Buffer.concat([bytes,b]);if(bytes.length>=4&&bytes.length>=4+bytes.readUInt32LE(0)){clearTimeout(timer);child.stdin.end();try{resolve(JSON.parse(bytes.subarray(4,4+bytes.readUInt32LE(0))))}catch(e){reject(e)}}});
+  child.stdin.write(Buffer.concat([header,body]));
+ });
+}
 let app,browser,output='';
 const spawnApp=()=>{
  const child=spawn(exe,[],{env:{...process.env,MDM_DATA_DIR:data,AURALIS_TEST_SKIP_HOST:'1',AURALIS_TEST_PANIC_LOG:path.join(root,'panic.txt'),RUST_BACKTRACE:'1',GLASS_TEST_CDP_PORT:String(port),WEBVIEW2_USER_DATA_FOLDER:path.join(root,'webview')},stdio:['ignore','pipe','pipe']});
@@ -38,6 +51,9 @@ try {
  await ipc({url:`http://127.0.0.1:${server.address().port}/embedded-smoke.bin`,dir:root,name:'embedded-smoke.bin',silent:true});
  const completed=await until(async()=>JSON.parse(await ipc({query:'list'})).downloads.find(d=>d.file==='embedded-smoke.bin'&&d.status==='Complete'),'Fixture download did not finish',120000);
  assert.equal(createHash('sha256').update(await readFile(completed.path)).digest('hex'),hash,'Downloaded file does not match');
+ const browserUrl=`http://127.0.0.1:${server.address().port}/from-browser.bin`;
+ const reply=await browserCapture(browserUrl);assert.equal(reply.ok,true,'Browser helper did not accept capture');
+ await until(async()=>{const view=JSON.parse(await ipc({query:'glass-file-info'}));return view.info&&JSON.stringify(view.info).includes(browserUrl)},'Browser capture did not reach the embedded downloader');
  await page.evaluate(()=>window.__TAURI_INTERNALS__.invoke('quit_glass')).catch(()=>{});
  await until(()=>app.exitCode!==null,'Auralis did not stop and save',45000);assert.equal(app.exitCode,0);
  await browser.close();browser=null;
