@@ -1,6 +1,6 @@
 [package]
 name = "mister-hybrid-glass"
-version = "0.3.24"
+version = "0.3.25"
 edition = "2024"
 license = "GPL-3.0-or-later"
 build = "build.rs"
@@ -11,6 +11,7 @@ name = "auralis-download-manager"
 path = "src/main.rs"
 
 [features]
+default = ["embedded-downloader"]
 embedded-downloader = ["dep:mdm-app"]
 
 [build-dependencies]

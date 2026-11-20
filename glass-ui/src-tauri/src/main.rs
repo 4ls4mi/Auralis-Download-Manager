@@ -1,7 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-// Windows-only Tauri shell. Keeps MDM's production download engine as a
-// bundled, hidden legacy process until app-only logic has been extracted.
-// Frontend never accesses MDM's token or loopback socket directly.
+// Windows-only Auralis shell. The downloader runs inside this process;
+// the frontend never accesses its token or loopback socket directly.
 mod lifecycle;
 mod startup;
 #[cfg(windows)] mod fork_update;

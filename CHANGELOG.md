@@ -13,6 +13,11 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 - Reduced overlapping visual layers and added manual Netscape-format cookie-file selection for video helpers. Google-account autodetection/direct connection remains unfinished.
 - Remaining manual Windows checks include physical DPI/transparency review and native drag-to-Explorer/application behavior. Automated success does not establish complete original-MDM feature parity.
 
+### Auralis Download Manager 0.3.25 — Windows x64
+
+- Runs the downloader inside Auralis instead of starting a separate Mister-based downloader executable. The browser native messaging helper remains a separate process.
+- Preserves the existing data format and adds graceful downloader shutdown for exit and updates.
+
 ### Auralis Download Manager 0.3.24 — Windows x64
 
 - Adds Windows startup controls to General settings, with a choice between the main window and starting minimized in the system tray.
