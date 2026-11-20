@@ -35,6 +35,7 @@ try{
  await until(async()=>main.evaluate(()=>{const table=document.querySelector('.cg-table-viewport');return table&&table.scrollWidth<=table.clientWidth+2}),'Main download columns do not fit in the capture window');
  const downloadUrl=`http://127.0.0.1:${server.address().port}/sample-archive.bin`;await ipc({url:downloadUrl,silent:true});
  const item=await until(async()=>JSON.parse(await ipc({query:'list'})).downloads.find(d=>d.url===downloadUrl&&d.status==='Downloading'),'Download did not start');
+ if(process.env.AURALIS_CAPTURE_MODE!=='neutral'){
  await invoke('open_glass_window',{label:`download-${item.id}`,url:`/?detail=${item.id}`,width:880,height:600});const progress=await pageFor(`detail=${item.id}`);await progress.waitForSelector('.cg-mdm-details');
  // Accumulate real speed samples before capturing the graph.
  await pause(16000);await progress.screenshot({path:path.join(output,'download.png')});
@@ -42,6 +43,7 @@ try{
  await invoke('open_glass_window',{label:'settings',url:'/?settings=1&tab=Appearance',width:1024,height:720});const settings=await pageFor('settings=1');await settings.getByRole('button',{name:'Indicators',exact:true}).click();await pause(500);await settings.screenshot({path:path.join(output,'settings.png')});
  const infoUrl=`http://127.0.0.1:${server.address().port}/new-file.bin`;await ipc({url:infoUrl,silent:false});const pending=await until(async()=>{const p=JSON.parse(await ipc({query:'glass-file-info'}));return p.info&&p.info.url===infoUrl?p:null},'File information unavailable');await invoke('open_glass_window',{label:`info-${pending.id}`,url:`/?request=${pending.id}`,width:850,height:580});const info=await pageFor(`request=${pending.id}`);await info.waitForSelector('.cg-file-info');await pause(500);await info.screenshot({path:path.join(output,'file-info.png')});
  const doneUrl=`http://127.0.0.1:${server.address().port}/completed-example.bin`;await ipc({url:doneUrl,silent:true});const done=await until(async()=>JSON.parse(await ipc({query:'list'})).downloads.find(d=>d.url===doneUrl&&d.status==='Complete'),'Completed fixture did not finish');await invoke('open_glass_window',{label:`complete-${done.id}`,url:`/?complete=${done.id}`,width:780,height:500});const complete=await pageFor(`complete=${done.id}`);await complete.waitForSelector('.cg-complete-page');await pause(300);await complete.screenshot({path:path.join(output,'complete.png')});
+ }
  await main.screenshot({path:path.join(output,'main.png')});
  for(const material of ['frosted-water-351','window-glass'])for(const theme of ['black-onyx','black-smoke','white-frost','white-pearl']){
   await main.evaluate(({material,theme})=>{localStorage.setItem('mh-glass-material',material);localStorage.setItem('mh-glass-theme',theme);localStorage.setItem('mh-glass-tint-strength','50')},{material,theme});
@@ -49,7 +51,7 @@ try{
   await main.screenshot({path:path.join(output,`neutral-${material}-${theme}.png`)});
  }
  await main.evaluate(()=>localStorage.setItem('mh-glass-theme','silver'));
- for(const material of ['brushed-glass','rose-pine','window-glass','oversimplified','builtin-obsidian-matte','builtin-smoked-glass','builtin-pearl-frost']){
+ if(process.env.AURALIS_CAPTURE_MODE!=='neutral')for(const material of ['brushed-glass','rose-pine','window-glass','oversimplified','builtin-obsidian-matte','builtin-smoked-glass','builtin-pearl-frost']){
   await main.evaluate(value=>localStorage.setItem('mh-glass-material',value),material);
   await main.reload();await main.waitForSelector('.cg-toolbar');await pause(600);
   await main.screenshot({path:path.join(output,`material-${material}.png`)});
