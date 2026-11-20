@@ -13,6 +13,13 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 - Reduced overlapping visual layers and added manual Netscape-format cookie-file selection for video helpers. Google-account autodetection/direct connection remains unfinished.
 - Remaining manual Windows checks include physical DPI/transparency review and native drag-to-Explorer/application behavior. Automated success does not establish complete original-MDM feature parity.
 
+### Auralis Download Manager 0.3.26 — Windows x64
+
+- Adds preferences backup and restore, including a first-launch restore option. Passwords, account credentials and browser cookies are excluded.
+- Adds a choice of update notification, fixes the maximize button, and refines hidden-download tray actions and hover details.
+- Animates droplets entering active liquid connection indicators and detects successful browser and yt-dlp setup.
+- Refreshes the Auralis project description, screenshots and liquid animation.
+
 ### Auralis Download Manager 0.3.25 — Windows x64
 
 - Runs the downloader inside Auralis instead of starting a separate Mister-based downloader executable. The browser native messaging helper remains a separate process.
