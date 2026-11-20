@@ -1,9 +1,11 @@
 import CrystalCompletionOptions from './CrystalCompletionOptions';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FileText, Pause, Play, Save } from 'lucide-react';
-import { CrystalWindow, CountryFlag, WindowTop, ConnectionMap, GradientBar, SpeedGraph, pct, units, rate, timeLeft, openWindow } from './CrystalShared';
+import { CrystalWindow, CountryFlag, WindowTop, ConnectionMap, GradientBar, SpeedGraph, pct, units, rate, timeLeft, openWindow, useCrystal, indicatorColors } from './CrystalShared';
+import {TubeBridge} from './ConnectionTubes';
+import {receivingTubeSlots} from './tubeNetwork';
 import type { Dashboard, Download, DownloadVisual, VisualDashboard } from './CrystalShared';
 type Tab='Download status'|'Speed Limiter'|'Options on completion';
 type Limit={own_limit_kb:number|null;is_torrent:boolean};
@@ -13,6 +15,7 @@ export default function CrystalProgress({id}:{id:number}){
  const [item,setItem]=useState<Download|null>(null),[visual,setVisual]=useState<DownloadVisual|null>(null),[tab,setTab]=useState<Tab>('Download status');
  const [values,setValues]=useState<number[]>([]),[error,setError]=useState(''),[busy,setBusy]=useState(false);
  const [limit,setLimit]=useState<Limit|null>(null),[limited,setLimited]=useState(false),[kb,setKb]=useState('512');
+ const pageRef=useRef<HTMLElement>(null),{appearance}=useCrystal();
  useEffect(()=>{
   let active=true,running=false;
   const load=async()=>{if(running)return;running=true;try{const [data,telemetry]=await Promise.all([invoke<Dashboard>('dashboard_snapshot'),invoke<VisualDashboard>('dashboard_visuals')]);if(!active)return;const file=data.downloads.find(d=>d.id===id)??null;setItem(file);setVisual(telemetry.downloads.find(d=>d.id===id)??null);if(file)setValues(v=>[...v.slice(-55),file.speed]);}catch(e){if(active)setError(String(e))}finally{running=false}};
@@ -33,13 +36,15 @@ export default function CrystalProgress({id}:{id:number}){
  ]:[];
  return <CrystalWindow target="details"><WindowTop title={`${item?pct(item).toFixed(0)+'% ':''}${item?.file??'Download'}`}/>
   <nav className="cg-page-tabs">{(['Download status','Speed Limiter','Options on completion'] as Tab[]).map(t=><button className={tab===t?'active':''} key={t} onClick={()=>setTab(t)}>{t}</button>)}</nav>
-  <main className="cg-page cg-minimal-progress">
+  <main ref={pageRef} className="cg-page cg-minimal-progress cg-piped-progress-page">
    {!item?<div className="cg-empty">Waiting for download information…</div>:tab==='Download status'?<>
     <section className="cg-glass cg-mdm-details"><div className="cg-download-url" title={item.url}>{item.url}</div><dl>{metadata.map(([label,value])=><div key={label}><dt>{label}</dt><dd title={value}>{label==='Server'&&<CountryFlag place={server?.place}/>} {value}</dd></div>)}</dl></section>
-    <div className="cg-indicator-row"><section className="cg-glass cg-progress-section cg-progress-combined"><div className="cg-overall"><GradientBar percent={pct(item)} size={item.size} active={item.status==="Downloading"} showLabel/></div><div className="cg-compact-speed"><div className="cg-section-title"><h3>Transfer speed</h3><small>{rate(item.speed)} · last {Math.round(values.length*1.2)} sec</small></div><SpeedGraph values={values}/></div></section>
-    <section className="cg-glass cg-progress-section cg-selected-chunks"><div className="cg-section-title"><h3>Connections</h3></div><ConnectionMap segments={visual?.segments} connections={visual?.connections} downloading={item.status==="Downloading"} paused={item.status==="Stopped"}/></section></div>
+    <section className="cg-glass cg-progress-section cg-progress-tube cg-overall"><GradientBar percent={pct(item)} size={item.size} active={item.status==="Downloading"} showLabel/></section>
+    <div className="cg-indicator-row"><section className="cg-glass cg-progress-section cg-selected-chunks"><div className="cg-section-title"><h3>Connections</h3></div><ConnectionMap segments={visual?.segments} connections={visual?.connections} downloading={item.status==="Downloading"} paused={item.status==="Stopped"} tubes/></section>
+    <section className="cg-glass cg-progress-section cg-progress-combined cg-progress-graph"><div className="cg-compact-speed"><div className="cg-section-title"><h3>Transfer speed</h3><small>{rate(item.speed)} · last {Math.round(values.length*1.2)} sec</small></div><SpeedGraph values={values}/></div></section></div>
     {item.error&&<p className="cg-error">{item.error}</p>}
    </>:tab==='Speed Limiter'?<section className="cg-glass cg-progress-section"><h3>Speed Limiter</h3><label className="cg-toggle"><span><strong>Use Speed Limiter</strong><small>Remember the limit after pause and resume</small></span><input type="checkbox" checked={limited} disabled={!limit||busy} onChange={e=>setLimited(e.target.checked)}/></label><label className="cg-field">Maximum speed (KB/sec)<input type="number" min="1" value={kb} disabled={!limited||busy} onChange={e=>setKb(e.target.value)}/></label><button className="cg-btn cg-btn-primary" disabled={!limit||busy} onClick={()=>void save()}><Save size={16}/>Apply limit</button></section>:<CrystalCompletionOptions id={id}/>}
+   <TubeBridge container={pageRef} ready={!!item&&tab==='Download status'} active={receivingTubeSlots(visual?.connections,item?.status==='Downloading').some(Boolean)} colors={indicatorColors(appearance.connectionIndicator)} progressColors={indicatorColors(appearance.indicator)}/>
    {error&&<p className="cg-error" role="alert">{error}</p>}
    <div className="cg-bottom-actions"><button className="cg-btn cg-neon-violet" onClick={()=>openWindow(`properties-${id}`,`/?properties=${id}`,760,600)}><FileText size={15}/>Properties</button><span className="cg-action-space"/>{item?.status==='Downloading'?<button className="cg-btn cg-neon-amber" disabled={busy} onClick={()=>void run('pause')}><Pause size={16}/>Pause</button>:item&&item.status!=='Complete'?<button className="cg-btn cg-neon-mint" disabled={busy} onClick={()=>void run('start')}><Play size={16}/>Resume</button>:null}<button className="cg-btn cg-btn-danger" disabled={busy} onClick={async()=>{if(item?.status==='Downloading')await run('pause');await getCurrentWindow().close()}}>Cancel</button></div>
   </main></CrystalWindow>;

@@ -1,4 +1,6 @@
 import {LiquidProgress, LiquidChunk, isLiquidMaterial} from "./LiquidIndicators";
+import {ConnectionTubes} from "./ConnectionTubes";
+import {receivingTubeSlots} from "./tubeNetwork";
 import FrostedRibbon from "./FrostedRibbon";
 import FrostedLayers from "./FrostedLayers";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
@@ -186,8 +188,9 @@ export function GradientBar({percent,showLabel=false,size,active=true}:{percent:
 }
 
 // Each block represents an engine worker and only its currently assigned ranges.
-export function ConnectionMap({segments,connections,downloading,paused=false,compact=false}:{segments:Segment[]|undefined;connections:Connection[]|undefined;downloading:boolean;paused?:boolean;compact?:boolean}){
+export function ConnectionMap({segments,connections,downloading,paused=false,compact=false,tubes=false}:{segments:Segment[]|undefined;connections:Connection[]|undefined;downloading:boolean;paused?:boolean;compact?:boolean;tubes?:boolean}){
   const {appearance}=useCrystal();const colors=indicatorColors(appearance.connectionIndicator);
+  const gridRef=useRef<HTMLDivElement>(null);
   const raw=connectionIndicators(connections??[],segments??[]);
   const last=useRef<typeof raw>([]);
   const items=raw.map(c=>{const old=last.current.find(x=>x.id===c.id);return connectionLost(c,downloading)&&c.percent===null&&old?.percent!=null?{...c,assigned:old.assigned,received:old.received,percent:old.percent}:c});
@@ -197,7 +200,8 @@ export function ConnectionMap({segments,connections,downloading,paused=false,com
   const slots=connectionSlots(shown,compact);
   return <div className={"cg-chunks "+(compact?"compact":"")}>
     {compact&&<div className="cg-chunk-label"><span>{connections?`${visible.length} connections`:"Connections unavailable"}</span></div>}
-    <div className={`cg-chunk-map cg-connection-track-${appearance.connectionTrackFinish} cg-connection-tint-${appearance.connectionTrackColor} ${backdropPalette(appearance.connectionTrackColor)?"cg-palette-track":""} `+(compact?"compact":"cg-fixed-connections")} style={{...backdropStyle(appearance.connectionTrackColor),...(compact?{gridTemplateColumns:`repeat(${Math.max(1,slots.length)},minmax(0,1fr))`}:{})}} role="group" aria-label={connections?`${visible.length} engine connections${visible.length>32?', first 32 shown':''}`:"Connections unavailable"}>
+    <div ref={gridRef} className={`cg-chunk-map cg-connection-track-${appearance.connectionTrackFinish} cg-connection-tint-${appearance.connectionTrackColor} ${backdropPalette(appearance.connectionTrackColor)?"cg-palette-track":""} `+(compact?"compact":"cg-fixed-connections")+(tubes&&!compact?" cg-piped-connections":"")} style={{...backdropStyle(appearance.connectionTrackColor),...(compact?{gridTemplateColumns:`repeat(${Math.max(1,slots.length)},minmax(0,1fr))`}:{})}} role="group" aria-label={connections?`${visible.length} engine connections${visible.length>32?', first 32 shown':''}`:"Connections unavailable"}>
+     {tubes&&!compact&&<ConnectionTubes container={gridRef} slots={receivingTubeSlots(connections,downloading&&!paused)} colors={colors}/>}
      {slots.map((c,index)=>{if(!c)return <span key={`empty-${index}`} className="cg-connection-empty" aria-hidden="true"/>;
       const fill=c.percent;const active=downloading&&c.state==="Receiving";const lost=connectionLost(c,downloading);const label=`Connection ${c.id+1}: ${paused?"Paused":lost?"Connection lost or retrying":downloading?c.state:"Not active"}; downloaded ${units(c.downloaded)}; ${rate(c.speed)}; ${fill===null?"assigned range unavailable":`${units(c.received)} of ${units(c.assigned)} (${fill.toFixed(1)}%)`}`;
       return <span key={c.id} data-worker={c.id} className={paused?"paused":lost?"lost":active?"active":""} title={label} aria-label={label} tabIndex={0}>{!paused&&fill!==null&&fill>0&&(isLiquidMaterial(appearance.connectionMaterial)?<LiquidChunk percent={fill} colors={colors} material={appearance.connectionMaterial} animate={active&&!lost} index={c.id}/>:<i style={{height:`${fill}%`,backgroundImage:`linear-gradient(0deg,${colors.join(",")})`,boxShadow:`0 0 8px ${colors[1]}, inset 0 1px 2px #ffffff99`}}/>)}</span>})}

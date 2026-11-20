@@ -13,6 +13,11 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 - Reduced overlapping visual layers and added manual Netscape-format cookie-file selection for video helpers. Google-account autodetection/direct connection remains unfinished.
 - Remaining manual Windows checks include physical DPI/transparency review and native drag-to-Explorer/application behavior. Automated success does not establish complete original-MDM feature parity.
 
+### Auralis Download Manager 0.3.22 — Windows x64
+
+- Moves the transfer graph to the right of the connection grid and adds a translucent tube network connecting the URL, progress bar and connection blocks.
+- Animates colored flow only for reported receiving connections while preserving progress and connection-loss states.
+
 ### Auralis Download Manager 0.3.21 — Windows x64
 
 - Adds three independently selectable liquid materials for progress, connections and graphs, with palette-aware shading and animation.
