@@ -3,6 +3,7 @@
 // bundled, hidden legacy process until app-only logic has been extracted.
 // Frontend never accesses MDM's token or loopback socket directly.
 mod lifecycle;
+mod startup;
 #[cfg(windows)] mod fork_update;
 mod material_window;
 mod native_actions;
@@ -585,12 +586,13 @@ fn test_browser_args()->Option<String>{
 
 fn main() {
     let mut context=tauri::generate_context!();
+    if startup::is_minimized_startup(){if let Some(window)=context.config_mut().app.windows.first_mut(){window.visible=false;}}
     if let Some(args)=test_browser_args(){if let Some(window)=context.config_mut().app.windows.first_mut(){window.additional_browser_args=Some(args);}}
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
         // Glass is the one and only UI process: a second launch restores it.
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            show_main(app);
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            if !startup::is_startup(args) { show_main(app); }
         }))
         .setup(|app| {
             if let Some(dir)=mdm_ipc::data_dir() {let _=mdm_ipc::private_dir(&dir);let _=fs::write(dir.join("auralis-interface-version"),env!("CARGO_PKG_VERSION"));}
@@ -701,7 +703,7 @@ fn main() {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            material_window::set_material_window_shape, pending_file_info, file_info_action, choose_download_path, window_preferences, glass_tool, choose_folder, choose_setting_file, list_network_adapters, open_glass_window, close_progress_windows, hide_download_to_tray, drag_download, drag_state, choose_move, clipboard_text, video_tool, open_youtube_sign_in, youtube_session_status, browser_video,
+            startup::startup_settings, startup::set_startup_settings, material_window::set_material_window_shape, pending_file_info, file_info_action, choose_download_path, window_preferences, glass_tool, choose_folder, choose_setting_file, list_network_adapters, open_glass_window, close_progress_windows, hide_download_to_tray, drag_download, drag_state, choose_move, clipboard_text, video_tool, open_youtube_sign_in, youtube_session_status, browser_video,
             boot_engine, dashboard_snapshot, dashboard_visuals, download_action,
             add_download, select_wallpaper, queue_action, glass_settings, update_glass_setting,
             browser_integration, browser_connection_status, prepare_auralis_extension, extension_store_link, open_extension_store, bulk_action, file_operation, add_torrent_file, quit_glass, open_upstream_releases, fork_update::glass_update_check, fork_update::glass_update_download, fork_update::glass_update_install

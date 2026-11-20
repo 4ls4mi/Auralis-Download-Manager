@@ -43,8 +43,11 @@ export default function CrystalSettings(){
   const [browser,setBrowser]=useState("");
   const [extensionBrowser,setExtensionBrowser]=useState("edge");
   const [appVersion,setAppVersion]=useState("");
+  const [startup,setStartup]=useState<{enabled:boolean;mode:string}|null>(null);
   const [adapters,setAdapters]=useState<{name:string;address:string|null}[]>([]);
   const [adapterError,setAdapterError]=useState("");
+  useEffect(()=>{void invoke<{enabled:boolean;mode:string}>("startup_settings").then(setStartup).catch(e=>setError("Could not read Windows startup settings: "+String(e)))},[]);
+  const changeStartup=async(enabled:boolean,mode:string)=>{setBusy(true);setError("");setNotice("");try{setStartup(await invoke<{enabled:boolean;mode:string}>("set_startup_settings",{enabled,mode}));setNotice("Saved.")}catch(e){setError("Could not update Windows startup: "+String(e))}finally{setBusy(false)}};
   useEffect(()=>{void getVersion().then(setAppVersion).catch(()=>setAppVersion("unavailable"))},[]);
   useEffect(()=>{if(tab!=="Connection"&&!(tab==="Advanced"&&settingsPanel==="Updates"))return;let active=true;void invoke<{adapters:{name:string;address:string|null}[]}>("list_network_adapters").then(result=>{if(active){setAdapters(result.adapters);setAdapterError("")}}).catch(e=>{if(active)setAdapterError(String(e))});return()=>{active=false}},[tab,settingsPanel]);
   const adapterPicker=()=>cfg&&<label className="cg-field">Preferred network adapter<select value={cfg.net_adapter} disabled={busy||Boolean(adapterError)} onChange={e=>void change("net_adapter",e.target.value)}><option value="">Automatic — Windows chooses</option>{cfg.net_adapter&&!adapters.some(a=>a.name===cfg.net_adapter)&&<option value={cfg.net_adapter}>{cfg.net_adapter} (not connected)</option>}{adapters.map(a=><option key={a.name} value={a.name}>{a.name} {a.address?`— ${a.address}`:"(not connected)"}</option>)}</select><small>Choose Automatic unless you need to route downloads through a specific adapter or VPN. Downloads may stop if that adapter disconnects.</small>{adapterError&&<small>Unable to list adapters: {adapterError}</small>}</label>;
@@ -110,6 +113,8 @@ export default function CrystalSettings(){
   const body=()=>{
     switch(tab){
       case "General":return <>
+        <label className="cg-toggle"><span><strong>Start Auralis with Windows</strong><small>Launch Auralis automatically when you sign in to Windows.</small></span><input type="checkbox" disabled={!startup||busy} checked={startup?.enabled??false} onChange={e=>void changeStartup(e.target.checked,startup?.mode??"minimized")}/></label>
+        <label className="cg-field">When Windows starts<select value={startup?.mode??"minimized"} disabled={!startup||busy} onChange={e=>void changeStartup(startup?.enabled??false,e.target.value)}><option value="minimized">Start minimized in the system tray</option><option value="window">Open the main window</option></select><small>Applies to Windows startup. Open Auralis normally from its shortcut whenever you want the main window.</small></label>
         <p>Browser captures wait for Download File Info so you can confirm the destination and download options.</p>
         <label className="cg-field">Copied download links<select value={appearance.clipboardMode} disabled={busy} onChange={async e=>{const mode=e.target.value;setBusy(true);setError('');try{await invoke('glass_tool',{action:'original-setting',payload:{key:'glass_clipboard_auto_download',value:mode==='auto'}});await invoke('glass_tool',{action:'original-setting',payload:{key:'clipboard_autostart',value:mode==='auto'||mode==='offer'}});set('clipboardMode',mode);setNotice('Saved.')}catch(e){setError(String(e))}finally{setBusy(false)}}}><option value="offer">Ask when a link is copied</option><option value="auto">Download supported copied links automatically</option><option value="paste">Paste when Add URL opens</option><option value="off">Do nothing</option></select></label>
         {check("only_add_to_queue","Queue silent download requests","Applies when an address is added without a confirmation dialog")}

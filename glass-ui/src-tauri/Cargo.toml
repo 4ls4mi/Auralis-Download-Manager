@@ -1,6 +1,6 @@
 [package]
 name = "mister-hybrid-glass"
-version = "0.3.23"
+version = "0.3.24"
 edition = "2024"
 license = "GPL-3.0-or-later"
 build = "build.rs"
@@ -27,7 +27,7 @@ open = "5"
 
 [target.'cfg(windows)'.dependencies]
 arboard = { version = "3.7.0", default-features = false }
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_UI_WindowsAndMessaging"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Registry", "Win32_Graphics_Gdi", "Win32_UI_WindowsAndMessaging"] }
 
 [target.'cfg(windows)'.dependencies.reqwest]
 version = "0.12"
