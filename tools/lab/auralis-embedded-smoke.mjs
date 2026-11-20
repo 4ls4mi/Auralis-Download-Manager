@@ -18,7 +18,8 @@ const root=await mkdtemp(path.join(testBase,'auralis-integrated-'));
 const data=path.join(root,'data'),wait=ms=>new Promise(r=>setTimeout(r,ms));
 const until=async(fn,msg,ms=90000)=>{const end=Date.now()+ms;let last;while(Date.now()<end){try{const v=await fn();if(v)return v}catch(e){if(e.fatal)throw e;last=e}await wait(250)}throw Error(msg+(last?': '+last.message:''))};
 const contents=Buffer.alloc(1024*1024,0x41),hash=createHash('sha256').update(contents).digest('hex');
-const server=createServer((req,res)=>{const m=/^bytes=(\d+)-(\d*)$/.exec(req.headers.range||'');const start=m?Number(m[1]):0,end=m&&m[2]?Math.min(Number(m[2]),contents.length-1):contents.length-1;if(start>=contents.length){res.writeHead(416,{'Content-Range':`bytes */${contents.length}`});return res.end()}res.writeHead(m?206:200,{'Content-Type':'application/octet-stream','Content-Length':end-start+1,'Accept-Ranges':'bytes',...(m?{'Content-Range':`bytes ${start}-${end}/${contents.length}`}:{})});res.end(req.method==='HEAD'?undefined:contents.subarray(start,end+1))});
+let requestCount=0,lastStatus=[],addResponse='';
+const server=createServer((req,res)=>{requestCount++;const m=/^bytes=(\d+)-(\d*)$/.exec(req.headers.range||'');const start=m?Number(m[1]):0,end=m&&m[2]?Math.min(Number(m[2]),contents.length-1):contents.length-1;if(start>=contents.length){res.writeHead(416,{'Content-Range':`bytes */${contents.length}`});return res.end()}res.writeHead(m?206:200,{'Content-Type':'application/octet-stream','Content-Length':end-start+1,'Accept-Ranges':'bytes',...(m?{'Content-Range':`bytes ${start}-${end}/${contents.length}`}:{})});res.end(req.method==='HEAD'?undefined:contents.subarray(start,end+1))});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const probe=net.createServer();await new Promise(r=>probe.listen(0,'127.0.0.1',r));const port=probe.address().port;await new Promise(r=>probe.close(r));
 async function ipc(command){const endpoint=JSON.parse(await readFile(path.join(data,'ipc.json'),'utf8'));return new Promise((resolve,reject)=>{let text='';const s=net.connect({host:'127.0.0.1',port:endpoint.port},()=>s.write(JSON.stringify({token:endpoint.token,...command})+'\n'));s.setTimeout(10000,()=>s.destroy(Error('IPC timeout')));s.on('data',b=>{text+=b;if(text.includes('\n')){s.end();resolve(text.trim())}});s.on('end',()=>resolve(text.trim()));s.on('error',reject)})}
@@ -48,8 +49,8 @@ try {
  const page=await until(()=>browser.contexts().flatMap(c=>c.pages()).find(p=>!p.isClosed()&&!p.url().includes('?')),'Main window missing');
  const identity=await until(async()=>JSON.parse(await ipc({query:'glass-backend'})),'Downloader did not start');assert.equal(identity.headless,true);assert.equal(identity.glass,true);
  const ps=spawnSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',`Get-CimInstance Win32_Process -Filter 'ParentProcessId=${app.pid}' | Select-Object -ExpandProperty Name`],{encoding:'utf8',timeout:15000});assert.equal(ps.status,0,'Could not inspect child processes');assert.doesNotMatch(ps.stdout,/^mdm-legacy\.exe\s*$/im,'A legacy downloader process was launched');
- await ipc({url:`http://127.0.0.1:${server.address().port}/embedded-smoke.bin`,dir:root,name:'embedded-smoke.bin',silent:true});
- const completed=await until(async()=>JSON.parse(await ipc({query:'list'})).downloads.find(d=>d.file==='embedded-smoke.bin'&&d.status==='Complete'),'Fixture download did not finish',120000);
+ addResponse=await ipc({url:`http://127.0.0.1:${server.address().port}/embedded-smoke.bin`,dir:root,name:'embedded-smoke.bin',silent:true});
+ const completed=await until(async()=>{lastStatus=JSON.parse(await ipc({query:'list'})).downloads.map(({file,status,downloaded,error})=>({file,status,downloaded,error}));const item=lastStatus.find(d=>d.file==='embedded-smoke.bin');if(item?.status==='Error')throw exited(`Fixture download failed: ${item.error||'unknown error'}`);if(item?.status==='Complete')return JSON.parse(await ipc({query:'list'})).downloads.find(d=>d.file==='embedded-smoke.bin');return null},'Fixture download did not finish',120000);
  assert.equal(createHash('sha256').update(await readFile(completed.path)).digest('hex'),hash,'Downloaded file does not match');
  const browserUrl=`http://127.0.0.1:${server.address().port}/from-browser.bin`;
  const reply=await browserCapture(browserUrl);assert.equal(reply.ok,true,'Browser helper did not accept capture');
@@ -65,6 +66,7 @@ try {
  await until(()=>app.exitCode!==null,'Restarted Auralis did not stop',45000);assert.equal(app.exitCode,0);
  console.log('PASS: integrated downloader ran without a legacy child, downloaded a verified file, saved, and restored it after restart.');
 } catch(error) {
+ console.error('Fixture diagnostics:',JSON.stringify({requestCount,lastStatus,gotAddResponse:Boolean(addResponse),appExit:app?.exitCode}));
  if(output)console.error('Auralis output:',output);
  const panic=await readFile(path.join(root,'panic.txt'),'utf8').catch(()=>null);
  if(panic)console.error('Auralis panic:',panic.slice(-12000));
