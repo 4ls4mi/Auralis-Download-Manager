@@ -114,7 +114,7 @@
     "message": "Pomoc"
   },
   "popup_support": {
-    "message": "Wesprzyj MDM"
+    "message": "Wesprzyj Auralis"
   },
   "popup_fix": {
     "message": "Jak to naprawić"
@@ -297,19 +297,19 @@
     "message": "Pobierz najlepszą jakość"
   },
   "video_sending": {
-    "message": "Wysyłanie do MDM..."
+    "message": "Wysyłanie do Auralis..."
   },
   "video_added": {
-    "message": "Dodano do MDM"
+    "message": "Dodano do Auralis"
   },
   "video_show": {
     "message": "Pokaż"
   },
   "video_no_answer": {
-    "message": "MDM nie odpowiada"
+    "message": "Auralis nie odpowiada"
   },
   "video_get_mdm": {
-    "message": "Pobierz MDM"
+    "message": "Pobierz Auralis"
   },
   "video_retry": {
     "message": "Ponów"

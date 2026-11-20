@@ -114,7 +114,7 @@
     "message": "सहायता"
   },
   "popup_support": {
-    "message": "MDM का समर्थन करें"
+    "message": "Auralis का समर्थन करें"
   },
   "popup_fix": {
     "message": "इसे कैसे ठीक करें"
@@ -297,19 +297,19 @@
     "message": "सर्वश्रेष्ठ गुणवत्ता डाउनलोड करें"
   },
   "video_sending": {
-    "message": "MDM को भेजा जा रहा है..."
+    "message": "Auralis को भेजा जा रहा है..."
   },
   "video_added": {
-    "message": "MDM में जोड़ा गया"
+    "message": "Auralis में जोड़ा गया"
   },
   "video_show": {
     "message": "दिखाएँ"
   },
   "video_no_answer": {
-    "message": "MDM ने जवाब नहीं दिया"
+    "message": "Auralis ने जवाब नहीं दिया"
   },
   "video_get_mdm": {
-    "message": "MDM प्राप्त करें"
+    "message": "Auralis प्राप्त करें"
   },
   "video_retry": {
     "message": "पुनः प्रयास करें"

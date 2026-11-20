@@ -114,7 +114,7 @@
     "message": "Bantuan"
   },
   "popup_support": {
-    "message": "Sokong MDM"
+    "message": "Sokong Auralis"
   },
   "popup_fix": {
     "message": "Cara membetulkannya"
@@ -297,19 +297,19 @@
     "message": "Muat turun kualiti terbaik"
   },
   "video_sending": {
-    "message": "Menghantar ke MDM..."
+    "message": "Menghantar ke Auralis..."
   },
   "video_added": {
-    "message": "Ditambah ke MDM"
+    "message": "Ditambah ke Auralis"
   },
   "video_show": {
     "message": "Tunjuk"
   },
   "video_no_answer": {
-    "message": "MDM tidak menjawab"
+    "message": "Auralis tidak menjawab"
   },
   "video_get_mdm": {
-    "message": "Dapatkan MDM"
+    "message": "Dapatkan Auralis"
   },
   "video_retry": {
     "message": "Cuba lagi"

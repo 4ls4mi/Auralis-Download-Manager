@@ -114,7 +114,7 @@
     "message": "도움말"
   },
   "popup_support": {
-    "message": "MDM 지원"
+    "message": "Auralis 지원"
   },
   "popup_fix": {
     "message": "해결 방법"
@@ -297,19 +297,19 @@
     "message": "최고 화질 다운로드"
   },
   "video_sending": {
-    "message": "MDM으로 보내는 중..."
+    "message": "Auralis으로 보내는 중..."
   },
   "video_added": {
-    "message": "MDM에 추가됨"
+    "message": "Auralis에 추가됨"
   },
   "video_show": {
     "message": "표시"
   },
   "video_no_answer": {
-    "message": "MDM이 응답하지 않음"
+    "message": "Auralis이 응답하지 않음"
   },
   "video_get_mdm": {
-    "message": "MDM 받기"
+    "message": "Auralis 받기"
   },
   "video_retry": {
     "message": "다시 시도"

@@ -207,7 +207,7 @@ pub async fn choose_download_path(current:String) -> ApiResult<Option<String>> {
 
 #[tauri::command]
 pub async fn glass_tool(action:String,payload:Option<serde_json::Value>) -> ApiResult<serde_json::Value> {
-    if !matches!(action.as_str(),"category"|"queues"|"schedule"|"power"|"power-state"|"original-settings"|"original-setting"|"batch"|"grabber"|"grabber-state"|"categories"|"accounts"|"account"|"prompts"|"prompt"|"helpers"|"helpers-install"|"upstream-status"|"upstream-check"|"fork-status"|"fork-check"|"gallery") {return Err("Unsupported tool".into());}
+    if !matches!(action.as_str(),"category"|"queues"|"schedule"|"power"|"power-state"|"original-settings"|"original-setting"|"batch"|"grabber"|"grabber-state"|"categories"|"accounts"|"account"|"prompts"|"prompt"|"helpers"|"helpers-install"|"fork-status"|"fork-check"|"gallery") {return Err("Unsupported tool".into());}
     tauri::async_runtime::spawn_blocking(move||{
         let mut cmd=mdm_ipc::Command::default();
         if action=="queues" {cmd.query=Some("glass-queues".into());}
@@ -215,8 +215,6 @@ pub async fn glass_tool(action:String,payload:Option<serde_json::Value>) -> ApiR
         else if action=="helpers-install" {cmd.action=Some("glass-helpers".into());cmd.queue=payload.map(|p|p.to_string());}
         else if action=="fork-status" {cmd.query=Some("glass-fork-check".into());}
         else if action=="fork-check" {cmd.action=Some("glass-fork-check".into());cmd.queue=Some(env!("CARGO_PKG_VERSION").to_owned());}
-        else if action=="upstream-status" {cmd.query=Some("glass-upstream-check".into());}
-        else if action=="upstream-check" {cmd.action=Some("glass-upstream-check".into());}
         else if action=="power-state" {cmd.query=Some("glass-power".into());}
         else if action=="original-settings" {cmd.query=Some("glass-original-settings".into());}
         else {cmd.action=Some(format!("glass-{action}"));cmd.queue=payload.map(|p|p.to_string());}

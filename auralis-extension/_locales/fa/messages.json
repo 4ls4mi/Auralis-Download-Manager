@@ -114,7 +114,7 @@
     "message": "راهنما"
   },
   "popup_support": {
-    "message": "پشتیبانی از MDM"
+    "message": "پشتیبانی از Auralis"
   },
   "popup_fix": {
     "message": "چگونه آن را رفع کنیم"
@@ -297,19 +297,19 @@
     "message": "بارگیری بهترین کیفیت"
   },
   "video_sending": {
-    "message": "در حال ارسال به MDM..."
+    "message": "در حال ارسال به Auralis..."
   },
   "video_added": {
-    "message": "به MDM اضافه شد"
+    "message": "به Auralis اضافه شد"
   },
   "video_show": {
     "message": "نمایش"
   },
   "video_no_answer": {
-    "message": "MDM پاسخ نداد"
+    "message": "Auralis پاسخ نداد"
   },
   "video_get_mdm": {
-    "message": "دریافت MDM"
+    "message": "دریافت Auralis"
   },
   "video_retry": {
     "message": "تلاش مجدد"

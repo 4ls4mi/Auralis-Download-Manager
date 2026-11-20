@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
 import {restorePreferences} from "./preferencesBackup";
 import {connectReleasePush} from "./releasePush";
-import {isPermissionGranted, requestPermission, sendNotification} from "@tauri-apps/plugin-notification";
+import {isPermissionGranted, sendNotification} from "@tauri-apps/plugin-notification";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import {
@@ -146,9 +146,9 @@ export default function CrystalApp(){
         if(lastShown===update.version&&!reminder)return;
         if(applies&&snooze>0&&snooze<=Date.now()){localStorage.removeItem("auralis-update-snooze");localStorage.removeItem("auralis-update-snooze-version")}
         lastShown=update.version;
-        if(localStorage.getItem("auralis-update-presentation")==="dialog") openWindow("tool-update-notice","/?tool=update-notice",680,520);
-        else openWindow("tool-update-toast","/?tool=update-toast",420,200);
-        void (async()=>{try{let granted=await isPermissionGranted();if(!granted)granted=(await requestPermission())==="granted";if(granted)sendNotification({title:"Auralis update available",body:`Version ${update.version} is available. Open the update window to review the changes.`})}catch{/* The in-app notice remains available if Windows notifications are disabled. */}})();
+        const presentation=localStorage.getItem("auralis-update-presentation")||"quiet";
+        if(presentation==="dialog") openWindow("tool-update-notice","/?tool=update-notice",680,520);
+        else if(presentation==="notify"||presentation==="toast") void (async()=>{try{if(await isPermissionGranted())sendNotification({title:"Auralis update available",body:`Version ${update.version} is ready to review in Auralis.`})}catch{/* The in-app notice remains available. */}})();
       }catch{/* A later reconnect, signal or manual check can retry. */}
       finally{inFlight=false;if(queued&&mounted){queued=false;void check()}}
     };
@@ -257,6 +257,7 @@ export default function CrystalApp(){
     if(action==="appearance")return settings("Appearance");
     if(action==="limit")return settings("Connection");
     if(action==="about")return settings("Advanced", "Updates");
+    if(action==="shortcuts")return openWindow("tool-shortcuts","/?tool=shortcuts",620,600);
     if(action==="refresh")return void refresh();
     if(action==="search"){searchRef.current?.focus();return}
     if(action==="toggle-categories"){setShowCategories(v=>!v);return}
@@ -329,7 +330,7 @@ export default function CrystalApp(){
       case "Help":return [
         {label:"Browser integration and repair",action:"browser"},
         {label:"About Auralis Download Manager",action:"about"},
-        {label:"Keyboard shortcuts",action:"about"}];
+        {label:"Keyboard shortcuts",action:"shortcuts"}];
     }
   }
   useEffect(()=>{
@@ -450,7 +451,7 @@ export default function CrystalApp(){
             <span>{d.status==="Downloading"?rate(d.speed):"—"}</span>
             <span>{timeLeft(d)}</span>
           </div>)}
-          {!shown.length&&<div className="cg-empty"><FolderOpen size={35}/><strong>{online?"No downloads in this view":"Connecting to MDM"}</strong>
+          {!shown.length&&<div className="cg-empty"><FolderOpen size={35}/><strong>{online?"No downloads in this view":"Connecting to Auralis"}</strong>
             <p>{online?"Add a URL or torrent to begin.":message}</p>
             {online&&<button className="cg-btn cg-btn-primary" onClick={()=>add()}><Plus size={15}/> Add URL</button>}
           </div>}

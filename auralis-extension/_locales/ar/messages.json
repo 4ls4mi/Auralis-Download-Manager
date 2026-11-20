@@ -114,7 +114,7 @@
     "message": "تعليمات"
   },
   "popup_support": {
-    "message": "ادعم MDM"
+    "message": "ادعم Auralis"
   },
   "popup_fix": {
     "message": "كيفية إصلاحها"
@@ -297,19 +297,19 @@
     "message": "نزل أفضل جودة"
   },
   "video_sending": {
-    "message": "قيد الإرسال إلى MDM..."
+    "message": "قيد الإرسال إلى Auralis..."
   },
   "video_added": {
-    "message": "أضيف إلى MDM"
+    "message": "أضيف إلى Auralis"
   },
   "video_show": {
     "message": "إظهار"
   },
   "video_no_answer": {
-    "message": "لم يستجب MDM"
+    "message": "لم يستجب Auralis"
   },
   "video_get_mdm": {
-    "message": "احصل على MDM"
+    "message": "احصل على Auralis"
   },
   "video_retry": {
     "message": "أعد المحاولة"

@@ -114,7 +114,7 @@
     "message": "วิธีใช้"
   },
   "popup_support": {
-    "message": "สนับสนุน MDM"
+    "message": "สนับสนุน Auralis"
   },
   "popup_fix": {
     "message": "วิธีแก้ไข"
@@ -297,19 +297,19 @@
     "message": "ดาวน์โหลดคุณภาพดีที่สุด"
   },
   "video_sending": {
-    "message": "กำลังส่งไปยัง MDM..."
+    "message": "กำลังส่งไปยัง Auralis..."
   },
   "video_added": {
-    "message": "เพิ่มไปยัง MDM แล้ว"
+    "message": "เพิ่มไปยัง Auralis แล้ว"
   },
   "video_show": {
     "message": "แสดง"
   },
   "video_no_answer": {
-    "message": "MDM ไม่ตอบสนอง"
+    "message": "Auralis ไม่ตอบสนอง"
   },
   "video_get_mdm": {
-    "message": "รับ MDM"
+    "message": "รับ Auralis"
   },
   "video_retry": {
     "message": "ลองใหม่"

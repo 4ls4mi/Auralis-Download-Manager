@@ -114,7 +114,7 @@
     "message": "സഹായം"
   },
   "popup_support": {
-    "message": "MDM-നെ പിന്തുണയ്ക്കുക"
+    "message": "Auralis-നെ പിന്തുണയ്ക്കുക"
   },
   "popup_fix": {
     "message": "ഇത് എങ്ങനെ പരിഹരിക്കാം"
@@ -297,19 +297,19 @@
     "message": "മികച്ച ഗുണനിലവാരം ഡൗൺലോഡ് ചെയ്യുക"
   },
   "video_sending": {
-    "message": "MDM-ലേക്ക് അയക്കുന്നു..."
+    "message": "Auralis-ലേക്ക് അയക്കുന്നു..."
   },
   "video_added": {
-    "message": "MDM-ലേക്ക് ചേർത്തു"
+    "message": "Auralis-ലേക്ക് ചേർത്തു"
   },
   "video_show": {
     "message": "കാണിക്കുക"
   },
   "video_no_answer": {
-    "message": "MDM പ്രതികരിച്ചില്ല"
+    "message": "Auralis പ്രതികരിച്ചില്ല"
   },
   "video_get_mdm": {
-    "message": "MDM നേടുക"
+    "message": "Auralis നേടുക"
   },
   "video_retry": {
     "message": "വീണ്ടും ശ്രമിക്കുക"

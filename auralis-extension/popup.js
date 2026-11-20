@@ -3,9 +3,7 @@
 // site to the browser, opening the app or its Options, and the media the tab loaded (#38), each
 // to download. background.js does the work.
 const ext = globalThis.browser ?? globalThis.chrome;
-const HELP = "https://misterdownloadmanager.com/help/browser-help.html";
-// The creator's GitHub Sponsors page (the app's Help → Support MDM): a plain link, in a new tab.
-const SPONSORS = "https://github.com/sponsors/anefzaoui";
+const HELP = "https://github.com/4ls4mi/Auralis-Download-Manager#installation";
 const t = (key, ...subs) => ext.i18n.getMessage(key, subs) || key;
 const $ = (id) => document.getElementById(id);
 const ask = (m) => ext.runtime.sendMessage(m).catch(() => ({ ok: false }));
@@ -16,7 +14,6 @@ document.documentElement.dir = t("@@bidi_dir") === "rtl" ? "rtl" : "ltr";
 for (const el of document.querySelectorAll("[data-i18n]")) el.textContent = t(el.dataset.i18n);
 for (const el of document.querySelectorAll("[data-i18n-placeholder]")) el.placeholder = t(el.dataset.i18nPlaceholder);
 $("help").href = HELP;
-$("support").href = SPONSORS;
 
 // The tab it is about: the window's active tab; with `?page=ADDRESS` (this page opened in a tab of
 // its own, for the tests and the pictures), the tab showing that address.
@@ -315,7 +312,6 @@ if ((manifest.optional_permissions || []).includes("proxy")) {
 }
 
 $("youtube-cookie-export").addEventListener("click",()=>void ext.tabs.create({url:ext.runtime.getURL("cookie-export.html")}));
-$("youtube-sign-in").addEventListener("click",async()=>{const result=await ask({type:"youtube-sign-in"});const said=$("action-said");said.hidden=false;said.textContent=result.ok?(result.signedIn?"YouTube sign-in cookies found in this browser. Fetch qualities again using Browser session.":"Sign in on the Google page, then return and fetch qualities using Browser session."):(result.error||"Could not check YouTube sign-in.");});
 $("take").addEventListener("change", async (e) => {
   await ask({ type: "pause", paused: !e.target.checked });
   show();

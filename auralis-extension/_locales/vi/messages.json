@@ -114,7 +114,7 @@
     "message": "Trợ giúp"
   },
   "popup_support": {
-    "message": "Hỗ trợ MDM"
+    "message": "Hỗ trợ Auralis"
   },
   "popup_fix": {
     "message": "Cách khắc phục"
@@ -297,19 +297,19 @@
     "message": "Tải xuống chất lượng tốt nhất"
   },
   "video_sending": {
-    "message": "Đang gửi đến MDM..."
+    "message": "Đang gửi đến Auralis..."
   },
   "video_added": {
-    "message": "Đã thêm vào MDM"
+    "message": "Đã thêm vào Auralis"
   },
   "video_show": {
     "message": "Hiển thị"
   },
   "video_no_answer": {
-    "message": "MDM không phản hồi"
+    "message": "Auralis không phản hồi"
   },
   "video_get_mdm": {
-    "message": "Tải MDM"
+    "message": "Tải Auralis"
   },
   "video_retry": {
     "message": "Thử lại"

@@ -1,4 +1,5 @@
 import CrystalBrowserGuide from "./CrystalBrowserGuide";
+import CrystalShortcuts from "./CrystalShortcuts";
 import CrystalUpdateNotice from "./CrystalUpdateNotice";
 import CrystalUpdateToast from "./CrystalUpdateToast";
 import CrystalProgressTray from "./CrystalProgressTray";
@@ -33,6 +34,7 @@ function Main() {
   const properties = Number(query.get("properties")) || 0;
   const torrent = query.get("add") === "torrent";
   const url = query.get("add") === "url";
+  if(query.get("tool")==="shortcuts") return <CrystalShortcuts/>;
   if(query.get("tool")==="progress-tray") return <CrystalProgressTray/>;
   if(query.get("tool")==="browser-guide") return <CrystalBrowserGuide/>;
   if(query.get("tool")==="update-notice") return <CrystalUpdateNotice/>;

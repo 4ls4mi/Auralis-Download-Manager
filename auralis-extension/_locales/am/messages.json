@@ -114,7 +114,7 @@
     "message": "እርዳታ"
   },
   "popup_support": {
-    "message": "MDMን ይደግፉ"
+    "message": "Auralisን ይደግፉ"
   },
   "popup_fix": {
     "message": "እንዴት ማስተካከል ይቻላል"
@@ -297,19 +297,19 @@
     "message": "ምርጡን ጥራት ያውርዱ"
   },
   "video_sending": {
-    "message": "ወደ MDM በመላክ ላይ..."
+    "message": "ወደ Auralis በመላክ ላይ..."
   },
   "video_added": {
-    "message": "ወደ MDM ታክሏል"
+    "message": "ወደ Auralis ታክሏል"
   },
   "video_show": {
     "message": "አሳይ"
   },
   "video_no_answer": {
-    "message": "MDM ምላሽ አልሰጠም"
+    "message": "Auralis ምላሽ አልሰጠም"
   },
   "video_get_mdm": {
-    "message": "MDM ያግኙ"
+    "message": "Auralis ያግኙ"
   },
   "video_retry": {
     "message": "እንደገና ይሞክሩ"

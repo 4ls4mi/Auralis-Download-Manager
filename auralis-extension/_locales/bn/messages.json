@@ -114,7 +114,7 @@
     "message": "সহায়তা"
   },
   "popup_support": {
-    "message": "MDM-কে সহায়তা করুন"
+    "message": "Auralis-কে সহায়তা করুন"
   },
   "popup_fix": {
     "message": "কীভাবে ঠিক করবেন"
@@ -297,19 +297,19 @@
     "message": "সেরা মান ডাউনলোড করুন"
   },
   "video_sending": {
-    "message": "MDM-এ পাঠানো হচ্ছে..."
+    "message": "Auralis-এ পাঠানো হচ্ছে..."
   },
   "video_added": {
-    "message": "MDM-এ যোগ করা হয়েছে"
+    "message": "Auralis-এ যোগ করা হয়েছে"
   },
   "video_show": {
     "message": "দেখান"
   },
   "video_no_answer": {
-    "message": "MDM সাড়া দেয়নি"
+    "message": "Auralis সাড়া দেয়নি"
   },
   "video_get_mdm": {
-    "message": "MDM পান"
+    "message": "Auralis পান"
   },
   "video_retry": {
     "message": "পুনরায় চেষ্টা করুন"

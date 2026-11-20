@@ -114,7 +114,7 @@
     "message": "Abi"
   },
   "popup_support": {
-    "message": "Toeta MDM-i"
+    "message": "Toeta Auralis-i"
   },
   "popup_fix": {
     "message": "Kuidas seda parandada"
@@ -297,19 +297,19 @@
     "message": "Laadi alla parim kvaliteet"
   },
   "video_sending": {
-    "message": "Saadan MDM-i..."
+    "message": "Saadan Auralis-i..."
   },
   "video_added": {
-    "message": "MDM-i lisatud"
+    "message": "Auralis-i lisatud"
   },
   "video_show": {
     "message": "Näita"
   },
   "video_no_answer": {
-    "message": "MDM ei vastanud"
+    "message": "Auralis ei vastanud"
   },
   "video_get_mdm": {
-    "message": "Hangi MDM"
+    "message": "Hangi Auralis"
   },
   "video_retry": {
     "message": "Proovi uuesti"

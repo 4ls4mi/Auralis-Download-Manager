@@ -7,7 +7,7 @@
 
 /* Brushed metal: grouped, angular keys with a fine directional grain. */
 .cg-window.cg-material-brushed-glass .cg-toolbar{gap:2px;padding:6px 8px;border-radius:5px!important;background:linear-gradient(180deg,#e3f3ff24,#0b1c2c8c)!important;box-shadow:inset 0 1px #fff7,0 3px 9px #0007!important}
-.cg-window.cg-material-brushed-glass .cg-toolbar>button{flex:1 1 48px;min-width:32px;border-radius:3px!important;background:repeating-linear-gradient(105deg,#ffffff10 0 1px,transparent 1px 4px),linear-gradient(180deg,rgba(var(--tone-rgb),.24),rgba(7,19,30,.7))!important;border-color:rgba(var(--tone-rgb),.52)!important;box-shadow:inset 0 1px #fff6,inset 0 -2px #0008!important}
+.cg-window.cg-material-brushed-glass .cg-toolbar>button{flex:1 1 48px;min-width:32px;border-radius:3px!important;background:repeating-linear-gradient(105deg,#ffffff10 0 1px,transparent 1px 4px),linear-gradient(180deg,rgba(var(--tone-rgb),.24),rgba(var(--glass),.78))!important;border-color:rgba(var(--tone-rgb),.52)!important;box-shadow:inset 0 1px #fff6,inset 0 -2px #0008!important}
 .cg-window.cg-material-brushed-glass .cg-toolbar>button:is([data-action=start],[data-action=remove],[data-action=settings],[data-action=queue-start]){margin-left:5px}
 .cg-window.cg-material-brushed-glass .cg-sidebar button.selected{background:linear-gradient(90deg,rgba(var(--accent-rgb),.48),rgba(var(--accent-rgb),.08))!important;border-radius:3px;box-shadow:inset 4px 0 var(--accent),inset 0 1px #fff4!important;color:#fff!important}
 
@@ -18,7 +18,7 @@
 
 /* Window glass: separate clear keys suspended inside a polished glass rail. */
 .cg-window.cg-material-window-glass .cg-toolbar{gap:5px;padding:7px 10px;border-radius:8px!important;background:linear-gradient(180deg,#ffffff42,#c3eeff10 48%,#00152366)!important;border-color:#d7f8ff88!important;box-shadow:inset 0 1px #ffffffe0,0 4px 12px #0006!important}
-.cg-window.cg-material-window-glass .cg-toolbar>button{flex:1 1 48px;min-width:32px;border-radius:6px!important;background:linear-gradient(180deg,#ffffff50,rgba(var(--tone-rgb),.19) 48%,#07182666)!important;border-color:rgba(var(--tone-rgb),.60)!important;box-shadow:inset 0 1px #fffc,inset 0 -1px #98e4ff55,0 2px 5px #00111b8a!important}
+.cg-window.cg-material-window-glass .cg-toolbar>button{flex:1 1 48px;min-width:32px;border-radius:6px!important;background:linear-gradient(180deg,#ffffff50,rgba(var(--tone-rgb),.19) 48%,rgba(var(--glass),.50))!important;border-color:rgba(var(--tone-rgb),.60)!important;box-shadow:inset 0 1px #fffc,inset 0 -1px #98e4ff55,0 2px 5px #00111b8a!important}
 .cg-window.cg-material-window-glass .cg-sidebar button.selected{background:linear-gradient(180deg,#ffffff50,rgba(var(--accent-rgb),.38) 50%,rgba(var(--accent-rgb),.14))!important;border:1px solid rgba(var(--accent-rgb),.8)!important;box-shadow:inset 0 1px #fff9,0 2px 8px #0005!important;color:#fff!important}
 
 /* Oversimplified: a quiet surface and concentrated highlights on actions. */
@@ -29,17 +29,17 @@
 .cg-window.cg-material-oversimplified .cg-sidebar button.selected{background:rgba(var(--accent-rgb),.30)!important;border-color:transparent!important;box-shadow:inset 3px 0 var(--accent)!important;color:#fff!important}
 
 /* The shaped frosted material retains its pane, with illuminated glass keys. */
-.cg-window.cg-material-frosted-water-351 .cg-toolbar{gap:6px;padding:6px 8px;border-radius:12px!important;background:linear-gradient(180deg,#ffffff32,#c3efff0d 48%,#06203744)!important;box-shadow:inset 0 1px #ffffff8c,0 3px 12px #00152b50!important}
+.cg-window.cg-material-frosted-water-351 .cg-toolbar{gap:6px;padding:6px 8px;border-radius:12px!important;background:linear-gradient(180deg,#ffffff32,#c3efff0d 48%,rgba(var(--glass),.40))!important;box-shadow:inset 0 1px #ffffff8c,0 3px 12px #00152b50!important}
 .cg-window.cg-material-frosted-water-351 .cg-toolbar>button{border-radius:9px!important;background:linear-gradient(180deg,#ffffff42,rgba(var(--tone-rgb),.30) 48%,rgba(var(--tone-rgb),.16))!important;border-color:rgba(var(--tone-rgb),.68)!important;box-shadow:inset 0 1px #fffc,inset 0 -1px #ffffff35,0 2px 8px #00101b55!important}
 .cg-window.cg-material-frosted-water-351 .cg-sidebar button.selected{color:#fff!important;background:linear-gradient(135deg,#ffffff55,rgba(var(--accent-rgb),.50) 52%,rgba(var(--accent-rgb),.18))!important;border-color:rgba(var(--accent-rgb),.85)!important;box-shadow:inset 0 1px #fff9,0 0 12px rgba(var(--accent-rgb),.30)!important}
 
 /* Neutral glass finishes have their own button silhouettes and selected states. */
-.cg-window.cg-material-builtin-obsidian-matte .cg-toolbar{gap:3px;padding:6px;border-radius:4px!important;background:#080c12d9!important;box-shadow:inset 0 1px #ffffff22!important}
-.cg-window.cg-material-builtin-obsidian-matte .cg-toolbar>button{flex:1 1 45px;min-width:32px;border-radius:3px!important;background:linear-gradient(180deg,rgba(var(--tone-rgb),.18),#0a0e14)!important;border-color:rgba(var(--tone-rgb),.44)!important;box-shadow:inset 0 1px #ffffff1f!important}
-.cg-window.cg-material-builtin-smoked-glass .cg-toolbar{gap:5px;padding:7px 10px;border-radius:16px!important;background:linear-gradient(180deg,#ffffff2a,#060f1ab8)!important;box-shadow:inset 0 1px #ffffff80,0 4px 12px #0008!important}
-.cg-window.cg-material-builtin-smoked-glass .cg-toolbar>button{flex:1 1 48px;min-width:32px;border-radius:14px!important;background:linear-gradient(180deg,#ffffff34,rgba(var(--tone-rgb),.22) 50%,#030b10a8)!important;border-color:rgba(var(--tone-rgb),.60)!important;box-shadow:inset 0 1px #ffffff8c,0 2px 5px #0008!important}
-.cg-window.cg-material-builtin-pearl-frost .cg-toolbar{gap:8px;padding:9px 12px;border-radius:14px!important;background:linear-gradient(180deg,#f6ffff80,#d5efff24 48%,#24445e66)!important;border-color:#efffffaa!important;box-shadow:inset 0 1px #ffffffe0,0 4px 14px #00101d66!important}
-.cg-window.cg-material-builtin-pearl-frost .cg-toolbar>button{flex:1 1 48px;min-width:32px;border-radius:10px!important;background:linear-gradient(180deg,#f6ffff85,rgba(var(--tone-rgb),.35) 55%,#102e4777)!important;border-color:rgba(var(--tone-rgb),.75)!important;box-shadow:inset 0 1px #fff,inset 0 -1px #fff4,0 3px 8px #00172866!important}
+.cg-window.cg-material-builtin-obsidian-matte .cg-toolbar{gap:3px;padding:6px;border-radius:4px!important;background:rgba(var(--glass),.85)!important;box-shadow:inset 0 1px #ffffff22!important}
+.cg-window.cg-material-builtin-obsidian-matte .cg-toolbar>button{flex:1 1 45px;min-width:32px;border-radius:3px!important;background:linear-gradient(180deg,rgba(var(--tone-rgb),.18),rgba(var(--glass),.90))!important;border-color:rgba(var(--tone-rgb),.44)!important;box-shadow:inset 0 1px #ffffff1f!important}
+.cg-window.cg-material-builtin-smoked-glass .cg-toolbar{gap:5px;padding:7px 10px;border-radius:16px!important;background:linear-gradient(180deg,#ffffff2a,rgba(var(--glass),.75))!important;box-shadow:inset 0 1px #ffffff80,0 4px 12px #0008!important}
+.cg-window.cg-material-builtin-smoked-glass .cg-toolbar>button{flex:1 1 48px;min-width:32px;border-radius:14px!important;background:linear-gradient(180deg,#ffffff34,rgba(var(--tone-rgb),.22) 50%,rgba(var(--glass),.70))!important;border-color:rgba(var(--tone-rgb),.60)!important;box-shadow:inset 0 1px #ffffff8c,0 2px 5px #0008!important}
+.cg-window.cg-material-builtin-pearl-frost .cg-toolbar{gap:8px;padding:9px 12px;border-radius:14px!important;background:linear-gradient(180deg,#f6ffff80,#d5efff24 48%,rgba(var(--glass),.45))!important;border-color:#efffffaa!important;box-shadow:inset 0 1px #ffffffe0,0 4px 14px #00101d66!important}
+.cg-window.cg-material-builtin-pearl-frost .cg-toolbar>button{flex:1 1 48px;min-width:32px;border-radius:10px!important;background:linear-gradient(180deg,#f6ffff85,rgba(var(--tone-rgb),.35) 55%,rgba(var(--glass),.50))!important;border-color:rgba(var(--tone-rgb),.75)!important;box-shadow:inset 0 1px #fff,inset 0 -1px #fff4,0 3px 8px #00172866!important}
 .cg-window:is(.cg-material-builtin-obsidian-matte,.cg-material-builtin-smoked-glass,.cg-material-builtin-pearl-frost) .cg-sidebar button.selected{background:linear-gradient(110deg,rgba(var(--accent-rgb),.52),rgba(var(--accent-rgb),.12))!important;border-color:rgba(var(--accent-rgb),.85)!important;color:#fff!important;box-shadow:inset 0 1px #ffffff80,0 2px 9px #0005!important}
 
 /* All materials retain obvious hover and keyboard states, including custom ones. */
@@ -47,16 +47,8 @@
 @media(max-width:600px){.cg-window .cg-toolbar>button{min-width:32px}.cg-window .cg-toolbar>button:is([data-action=start],[data-action=remove],[data-action=settings],[data-action=queue-start]){margin-left:2px}}
 @media(prefers-reduced-motion:reduce){.cg-window :is(.cg-toolbar>button,.cg-btn):hover{filter:none}}
 
-/* Each material supplies its own action palette; the theme still tints the glass. */
-.cg-window{--material-action:92,213,230;--material-primary:69,235,142;--material-warn:255,189,74;--material-danger:255,109,98;--material-tool:200,136,255}
-.cg-material-brushed-glass{--material-action:110,190,255;--material-primary:66,220,205;--material-warn:255,193,92;--material-danger:255,111,105;--material-tool:173,174,255}
-.cg-material-rose-pine{--material-action:191,174,255;--material-primary:147,229,190;--material-warn:246,205,140;--material-danger:255,144,177;--material-tool:232,170,244}
-.cg-material-window-glass{--material-action:103,221,255;--material-primary:111,255,205;--material-warn:255,215,122;--material-danger:255,131,147;--material-tool:190,169,255}
-.cg-material-oversimplified{--material-action:111,189,255;--material-primary:68,232,153;--material-warn:255,192,80;--material-danger:255,102,116;--material-tool:200,142,255}
-.cg-material-frosted-water-351{--material-action:105,223,255;--material-primary:105,255,188;--material-warn:255,215,114;--material-danger:255,124,153;--material-tool:225,158,255}
-.cg-material-builtin-obsidian-matte{--material-action:124,178,255;--material-primary:139,222,126;--material-warn:245,169,92;--material-danger:255,104,110;--material-tool:191,142,235}
-.cg-material-builtin-smoked-glass{--material-action:95,217,223;--material-primary:120,238,189;--material-warn:244,207,128;--material-danger:251,126,146;--material-tool:158,165,255}
-.cg-material-builtin-pearl-frost{--material-action:106,194,255;--material-primary:106,236,188;--material-warn:255,199,124;--material-danger:255,132,170;--material-tool:207,159,255}
+/* The selected theme owns action colors; material rules above only shape and shade them. */
+.cg-window{--material-action:var(--theme-action-rgb);--material-primary:var(--theme-primary-rgb);--material-warn:var(--theme-warn-rgb);--material-danger:var(--theme-danger-rgb);--material-tool:var(--theme-tool-rgb)}
 .cg-window .cg-toolbar>button,.cg-window .cg-btn{--tone-rgb:var(--material-action)!important;--tone:rgb(var(--tone-rgb))!important}
 .cg-window .cg-toolbar>button:is([data-action=add],[data-action=torrent],[data-action=start],[data-action=queue-start]),.cg-window .cg-btn.cg-btn-primary{--tone-rgb:var(--material-primary)!important}
 .cg-window .cg-toolbar>button:is([data-action=stop],[data-action=stop-all],[data-action=queue-stop]){--tone-rgb:var(--material-warn)!important}
@@ -65,8 +57,11 @@
 .cg-window .cg-btn:not(:disabled){color:#fff!important;background:linear-gradient(155deg,rgba(var(--tone-rgb),.48),rgba(var(--tone-rgb),.16))!important;border-color:rgba(var(--tone-rgb),.78)!important;text-shadow:0 1px 3px #00101f!important}
 .cg-window .cg-btn:not(:disabled) svg{color:rgb(var(--tone-rgb))!important;filter:drop-shadow(0 1px 2px #00101f)}
 .cg-window :is(.cg-toolbar>button,.cg-btn):hover:not(:disabled){background-color:rgba(var(--tone-rgb),.48)!important;box-shadow:inset 0 1px #ffffffaa,0 0 14px rgba(var(--tone-rgb),.5)!important}
-.cg-window[class*="cg-material-custom-"].cg-finish-matte{--material-action:124,178,255;--material-primary:139,222,126;--material-warn:245,169,92;--material-danger:255,104,110;--material-tool:191,142,235}
-.cg-window[class*="cg-material-custom-"].cg-finish-satin{--material-action:110,190,255;--material-primary:66,220,205;--material-warn:255,193,92;--material-danger:255,111,105;--material-tool:173,174,255}
-.cg-window[class*="cg-material-custom-"].cg-finish-gloss{--material-action:174,160,255;--material-primary:105,255,188;--material-warn:255,193,108;--material-danger:255,115,160;--material-tool:218,143,255}
-.cg-window[class*="cg-material-custom-"].cg-finish-frosted{--material-action:106,194,255;--material-primary:106,236,188;--material-warn:255,199,124;--material-danger:255,132,170;--material-tool:207,159,255}
-.cg-window[class*="cg-material-custom-"].cg-finish-clear{--material-action:95,217,223;--material-primary:120,238,189;--material-warn:244,207,128;--material-danger:251,126,146;--material-tool:158,165,255}
+/* Theme colors, rather than the material, determine controls and highlights. */
+.cg-window.cg-dark .cg-fit-content .cg-sidebar button svg{color:var(--accent)!important}
+.cg-window.cg-dark .cg-fit-content :is(.cg-sidebar button.selected,.cg-settings-nav button.selected,.cg-page-tabs button.active,.cg-indicator-tabs button.selected,.cg-appearance-tabs button.selected){color:#fff!important;background:linear-gradient(120deg,rgba(var(--theme-primary-rgb),.52),rgba(var(--theme-tool-rgb),.24))!important;border-color:rgba(var(--theme-primary-rgb),.80)!important;box-shadow:inset 0 1px #ffffff80,0 2px 9px #0005!important}
+.cg-window.cg-dark .cg-fit-content :is(.cg-menu-trigger.active,.cg-context button:hover,.cg-dropdown button:hover){background:rgba(var(--theme-action-rgb),.32)!important;color:#fff!important}
+/* Theme tint also reaches fields and navigation on the frosted material. */
+.cg-window.cg-material-frosted-water-351 .cg-fit-content :is(input:not([type=range]):not([type=checkbox]),select,textarea){background:linear-gradient(180deg,rgba(var(--accent-rgb),.24),rgba(var(--glass),.96))!important;color:#fff!important;border-color:rgba(var(--accent-rgb),.55)!important;text-shadow:0 1px 2px #000!important}
+.cg-window.cg-material-frosted-water-351 .cg-fit-content select option{background:rgb(var(--glass))!important;color:#fff!important}
+.cg-window.cg-dark .cg-fit-content .cg-settings-nav button:nth-of-type(n) svg,.cg-window.cg-dark .cg-fit-content .cg-winbuttons button svg{color:var(--accent)!important}

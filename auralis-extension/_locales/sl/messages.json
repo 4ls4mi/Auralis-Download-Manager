@@ -114,7 +114,7 @@
     "message": "Pomoč"
   },
   "popup_support": {
-    "message": "Podprite MDM"
+    "message": "Podprite Auralis"
   },
   "popup_fix": {
     "message": "Kako odpraviti težavo"
@@ -297,19 +297,19 @@
     "message": "Prenesi najboljšo kakovost"
   },
   "video_sending": {
-    "message": "Pošiljanje v MDM..."
+    "message": "Pošiljanje v Auralis..."
   },
   "video_added": {
-    "message": "Dodano v MDM"
+    "message": "Dodano v Auralis"
   },
   "video_show": {
     "message": "Pokaži"
   },
   "video_no_answer": {
-    "message": "MDM se ni odzval"
+    "message": "Auralis se ni odzval"
   },
   "video_get_mdm": {
-    "message": "Pridobi MDM"
+    "message": "Pridobi Auralis"
   },
   "video_retry": {
     "message": "Poskusi znova"

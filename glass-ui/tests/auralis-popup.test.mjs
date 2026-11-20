@@ -19,9 +19,7 @@ test('popup restores hidden video controls and reports failed actions',{skip:!ch
   assert.equal(await page.locator('#video-panel-site').isChecked(),false);
   await page.locator('#video-panel-site').check();
   assert.ok((await page.evaluate(()=>window.calls)).some(m=>m.type==='video-panel-set'&&m.on===true&&m.url.includes('youtube.com')));
-  await page.locator('#youtube-sign-in').click();
-  assert.ok((await page.evaluate(()=>window.calls)).some(m=>m.type==='youtube-sign-in'));
-  assert.match(await page.locator('#action-said').textContent(),/Sign in on the Google page/);
+  assert.equal(await page.locator('#youtube-sign-in').count(),0);
   await page.locator('#options').click();
   assert.match(await page.locator('#action-said').textContent(),/Could not reach Auralis/);
   assert.equal(await page.evaluate(()=>window.closedByPopup),false);

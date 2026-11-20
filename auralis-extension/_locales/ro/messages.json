@@ -114,7 +114,7 @@
     "message": "Ajutor"
   },
   "popup_support": {
-    "message": "Susține MDM"
+    "message": "Susține Auralis"
   },
   "popup_fix": {
     "message": "Cum se remediază"
@@ -297,19 +297,19 @@
     "message": "Descărcați cea mai bună calitate"
   },
   "video_sending": {
-    "message": "Se trimite către MDM..."
+    "message": "Se trimite către Auralis..."
   },
   "video_added": {
-    "message": "Adăugat la MDM"
+    "message": "Adăugat la Auralis"
   },
   "video_show": {
     "message": "Afișați"
   },
   "video_no_answer": {
-    "message": "MDM nu a răspuns"
+    "message": "Auralis nu a răspuns"
   },
   "video_get_mdm": {
-    "message": "Obțineți MDM"
+    "message": "Obțineți Auralis"
   },
   "video_retry": {
     "message": "Reîncercați"

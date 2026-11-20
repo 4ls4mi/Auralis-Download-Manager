@@ -114,7 +114,7 @@
     "message": "Hjälp"
   },
   "popup_support": {
-    "message": "Stöd MDM"
+    "message": "Stöd Auralis"
   },
   "popup_fix": {
     "message": "Så här åtgärdar du det"
@@ -297,19 +297,19 @@
     "message": "Ladda ned bästa kvalitet"
   },
   "video_sending": {
-    "message": "Skickar till MDM..."
+    "message": "Skickar till Auralis..."
   },
   "video_added": {
-    "message": "Tillagd i MDM"
+    "message": "Tillagd i Auralis"
   },
   "video_show": {
     "message": "Visa"
   },
   "video_no_answer": {
-    "message": "MDM svarade inte"
+    "message": "Auralis svarade inte"
   },
   "video_get_mdm": {
-    "message": "Skaffa MDM"
+    "message": "Skaffa Auralis"
   },
   "video_retry": {
     "message": "Försök igen"

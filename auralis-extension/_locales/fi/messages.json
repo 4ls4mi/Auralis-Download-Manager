@@ -114,7 +114,7 @@
     "message": "Ohje"
   },
   "popup_support": {
-    "message": "Tue MDM:ää"
+    "message": "Tue Auralis:ää"
   },
   "popup_fix": {
     "message": "Miten korjata"
@@ -297,19 +297,19 @@
     "message": "Lataa paras laatu"
   },
   "video_sending": {
-    "message": "Lähetetään MDM:ään..."
+    "message": "Lähetetään Auralis:ään..."
   },
   "video_added": {
-    "message": "Lisätty MDM:ään"
+    "message": "Lisätty Auralis:ään"
   },
   "video_show": {
     "message": "Näytä"
   },
   "video_no_answer": {
-    "message": "MDM ei vastannut"
+    "message": "Auralis ei vastannut"
   },
   "video_get_mdm": {
-    "message": "Hanki MDM"
+    "message": "Hanki Auralis"
   },
   "video_retry": {
     "message": "Yritä uudelleen"

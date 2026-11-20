@@ -114,7 +114,7 @@
     "message": "Palīdzība"
   },
   "popup_support": {
-    "message": "Atbalstīt MDM"
+    "message": "Atbalstīt Auralis"
   },
   "popup_fix": {
     "message": "Kā to labot"
@@ -297,19 +297,19 @@
     "message": "Lejupielādēt labāko kvalitāti"
   },
   "video_sending": {
-    "message": "Sūta uz MDM..."
+    "message": "Sūta uz Auralis..."
   },
   "video_added": {
-    "message": "Pievienots MDM"
+    "message": "Pievienots Auralis"
   },
   "video_show": {
     "message": "Rādīt"
   },
   "video_no_answer": {
-    "message": "MDM neatbildēja"
+    "message": "Auralis neatbildēja"
   },
   "video_get_mdm": {
-    "message": "Iegūt MDM"
+    "message": "Iegūt Auralis"
   },
   "video_retry": {
     "message": "Mēģināt vēlreiz"

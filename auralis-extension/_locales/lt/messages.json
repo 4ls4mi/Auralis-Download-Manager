@@ -114,7 +114,7 @@
     "message": "Žinynas"
   },
   "popup_support": {
-    "message": "Palaikykite MDM"
+    "message": "Palaikykite Auralis"
   },
   "popup_fix": {
     "message": "Kaip tai ištaisyti"
@@ -297,19 +297,19 @@
     "message": "Atsisiųsti geriausią kokybę"
   },
   "video_sending": {
-    "message": "Siunčiama į MDM..."
+    "message": "Siunčiama į Auralis..."
   },
   "video_added": {
-    "message": "Pridėta į MDM"
+    "message": "Pridėta į Auralis"
   },
   "video_show": {
     "message": "Rodyti"
   },
   "video_no_answer": {
-    "message": "MDM neatsakė"
+    "message": "Auralis neatsakė"
   },
   "video_get_mdm": {
-    "message": "Gauti MDM"
+    "message": "Gauti Auralis"
   },
   "video_retry": {
     "message": "Bandyti dar kartą"

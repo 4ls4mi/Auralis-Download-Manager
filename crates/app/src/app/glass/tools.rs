@@ -8,8 +8,6 @@ static GLASS_HELPER_JOB: OnceLock<Mutex<Option<(String,String)>>> = OnceLock::ne
 fn helper_job() -> &'static Mutex<Option<(String,String)>> { GLASS_HELPER_JOB.get_or_init(|| Mutex::new(None)) }
 static GLASS_FORK_CHECK: OnceLock<Mutex<Option<crate::help::Slot>>> = OnceLock::new();
 fn fork_check() -> &'static Mutex<Option<crate::help::Slot>> { GLASS_FORK_CHECK.get_or_init(|| Mutex::new(None)) }
-static GLASS_UPSTREAM_CHECK: OnceLock<Mutex<Option<crate::help::Slot>>> = OnceLock::new();
-fn upstream_check() -> &'static Mutex<Option<crate::help::Slot>> { GLASS_UPSTREAM_CHECK.get_or_init(|| Mutex::new(None)) }
 
 impl App {
     /// Check already-installed, MDM-managed FFmpeg and gallery-dl once per Glass session.
@@ -54,26 +52,6 @@ impl App {
             let current=cmd.queue.as_deref().unwrap_or("");
             if current.len()>32 || current.is_empty() || !current.chars().all(|c|c.is_ascii_digit()||c=='.'||c=='-') {return Some(json!({"error":"Invalid app version"}).to_string());}
             *fork_check().lock().unwrap_or_else(|e|e.into_inner())=Some(crate::help::check_glass(&self.rt,current.to_owned()));
-            return Some(json!({"ok":true}).to_string());
-        }
-        if cmd.query.as_deref()==Some("glass-upstream-check") {
-            let slot=upstream_check().lock().unwrap_or_else(|e|e.into_inner()).clone();
-            let value=match slot {
-                None=>json!({"state":"not-checked"}),
-                Some(slot)=>{
-                    let result=slot.lock().unwrap_or_else(|e|e.into_inner()).clone();
-                    match result {
-                        None=>json!({"state":"checking"}),
-                        Some(Ok(crate::help::Found::Latest))=>json!({"state":"latest"}),
-                        Some(Ok(crate::help::Found::Newer(release)))=>json!({"state":"newer","version":release.version,"date":release.date}),
-                        Some(Err(error))=>json!({"state":"error","message":error}),
-                    }
-                }
-            };
-            return Some(value.to_string());
-        }
-        if cmd.action.as_deref()==Some("glass-upstream-check") {
-            *upstream_check().lock().unwrap_or_else(|e|e.into_inner())=Some(crate::help::check(&self.rt,&self.ui_ctx));
             return Some(json!({"ok":true}).to_string());
         }
         if cmd.query.as_deref()==Some("glass-helpers") {

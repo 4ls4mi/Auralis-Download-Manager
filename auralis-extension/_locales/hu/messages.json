@@ -114,7 +114,7 @@
     "message": "Súgó"
   },
   "popup_support": {
-    "message": "MDM támogatása"
+    "message": "Auralis támogatása"
   },
   "popup_fix": {
     "message": "Hogyan javítható"
@@ -297,19 +297,19 @@
     "message": "A legjobb minőség letöltése"
   },
   "video_sending": {
-    "message": "Küldés az MDM-nek..."
+    "message": "Küldés az Auralis-nek..."
   },
   "video_added": {
-    "message": "Hozzáadva az MDM-hez"
+    "message": "Hozzáadva az Auralis-hez"
   },
   "video_show": {
     "message": "Megjelenítés"
   },
   "video_no_answer": {
-    "message": "Az MDM nem válaszolt"
+    "message": "Az Auralis nem válaszolt"
   },
   "video_get_mdm": {
-    "message": "MDM beszerzése"
+    "message": "Auralis beszerzése"
   },
   "video_retry": {
     "message": "Újra"

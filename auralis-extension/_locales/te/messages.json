@@ -114,7 +114,7 @@
     "message": "సహాయం"
   },
   "popup_support": {
-    "message": "MDMకి మద్దతు ఇవ్వండి"
+    "message": "Auralisకి మద్దతు ఇవ్వండి"
   },
   "popup_fix": {
     "message": "దీన్ని ఎలా పరిష్కరించాలి"
@@ -297,19 +297,19 @@
     "message": "ఉత్తమ నాణ్యతను డౌన్‌లోడ్ చేయండి"
   },
   "video_sending": {
-    "message": "MDMకు పంపుతోంది..."
+    "message": "Auralisకు పంపుతోంది..."
   },
   "video_added": {
-    "message": "MDMకి జోడించబడింది"
+    "message": "Auralisకి జోడించబడింది"
   },
   "video_show": {
     "message": "చూపించు"
   },
   "video_no_answer": {
-    "message": "MDM స్పందించలేదు"
+    "message": "Auralis స్పందించలేదు"
   },
   "video_get_mdm": {
-    "message": "MDMని పొందండి"
+    "message": "Auralisని పొందండి"
   },
   "video_retry": {
     "message": "మళ్ళీ ప్రయత్నించండి"

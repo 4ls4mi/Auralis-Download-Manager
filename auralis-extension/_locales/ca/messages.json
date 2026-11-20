@@ -114,7 +114,7 @@
     "message": "Ajuda"
   },
   "popup_support": {
-    "message": "Dona suport a MDM"
+    "message": "Dona suport a Auralis"
   },
   "popup_fix": {
     "message": "Com solucionar-ho"
@@ -297,19 +297,19 @@
     "message": "Baixa la millor qualitat"
   },
   "video_sending": {
-    "message": "S’està enviant a MDM..."
+    "message": "S’està enviant a Auralis..."
   },
   "video_added": {
-    "message": "Afegit a MDM"
+    "message": "Afegit a Auralis"
   },
   "video_show": {
     "message": "Mostra"
   },
   "video_no_answer": {
-    "message": "MDM no ha respost"
+    "message": "Auralis no ha respost"
   },
   "video_get_mdm": {
-    "message": "Obtén MDM"
+    "message": "Obtén Auralis"
   },
   "video_retry": {
     "message": "Torna-ho a provar"

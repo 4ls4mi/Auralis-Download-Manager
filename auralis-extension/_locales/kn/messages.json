@@ -114,7 +114,7 @@
     "message": "ಸಹಾಯ"
   },
   "popup_support": {
-    "message": "MDM ಅನ್ನು ಬೆಂಬಲಿಸಿ"
+    "message": "Auralis ಅನ್ನು ಬೆಂಬಲಿಸಿ"
   },
   "popup_fix": {
     "message": "ಅದನ್ನು ಹೇಗೆ ಸರಿಪಡಿಸುವುದು"
@@ -297,19 +297,19 @@
     "message": "ಉತ್ತಮ ಗುಣಮಟ್ಟವನ್ನು ಡೌನ್‌ಲೋಡ್ ಮಾಡಿ"
   },
   "video_sending": {
-    "message": "MDM ಗೆ ಕಳುಹಿಸಲಾಗುತ್ತಿದೆ..."
+    "message": "Auralis ಗೆ ಕಳುಹಿಸಲಾಗುತ್ತಿದೆ..."
   },
   "video_added": {
-    "message": "MDM ಗೆ ಸೇರಿಸಲಾಗಿದೆ"
+    "message": "Auralis ಗೆ ಸೇರಿಸಲಾಗಿದೆ"
   },
   "video_show": {
     "message": "ತೋರಿಸಿ"
   },
   "video_no_answer": {
-    "message": "MDM ಪ್ರತಿಕ್ರಿಯಿಸಲಿಲ್ಲ"
+    "message": "Auralis ಪ್ರತಿಕ್ರಿಯಿಸಲಿಲ್ಲ"
   },
   "video_get_mdm": {
-    "message": "MDM ಪಡೆಯಿರಿ"
+    "message": "Auralis ಪಡೆಯಿರಿ"
   },
   "video_retry": {
     "message": "ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ"

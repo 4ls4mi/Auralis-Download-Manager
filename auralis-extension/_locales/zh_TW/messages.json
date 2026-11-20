@@ -114,7 +114,7 @@
     "message": "說明"
   },
   "popup_support": {
-    "message": "支援 MDM"
+    "message": "支援 Auralis"
   },
   "popup_fix": {
     "message": "如何修正"
@@ -297,19 +297,19 @@
     "message": "下載最佳品質"
   },
   "video_sending": {
-    "message": "正在傳送至 MDM..."
+    "message": "正在傳送至 Auralis..."
   },
   "video_added": {
-    "message": "已新增至 MDM"
+    "message": "已新增至 Auralis"
   },
   "video_show": {
     "message": "顯示"
   },
   "video_no_answer": {
-    "message": "MDM 沒有回應"
+    "message": "Auralis 沒有回應"
   },
   "video_get_mdm": {
-    "message": "取得 MDM"
+    "message": "取得 Auralis"
   },
   "video_retry": {
     "message": "重試"

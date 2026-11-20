@@ -114,7 +114,7 @@
     "message": "ヘルプ"
   },
   "popup_support": {
-    "message": "MDM をサポート"
+    "message": "Auralis をサポート"
   },
   "popup_fix": {
     "message": "修正方法"
@@ -297,19 +297,19 @@
     "message": "最高品質をダウンロード"
   },
   "video_sending": {
-    "message": "MDM に送信しています..."
+    "message": "Auralis に送信しています..."
   },
   "video_added": {
-    "message": "MDM に追加済み"
+    "message": "Auralis に追加済み"
   },
   "video_show": {
     "message": "表示"
   },
   "video_no_answer": {
-    "message": "MDM が応答しません"
+    "message": "Auralis が応答しません"
   },
   "video_get_mdm": {
-    "message": "MDM を入手"
+    "message": "Auralis を入手"
   },
   "video_retry": {
     "message": "再試行"

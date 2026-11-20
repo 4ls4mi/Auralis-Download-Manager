@@ -114,7 +114,7 @@
     "message": "Hjelp"
   },
   "popup_support": {
-    "message": "Støtt MDM"
+    "message": "Støtt Auralis"
   },
   "popup_fix": {
     "message": "Hvordan fikse det"
@@ -297,19 +297,19 @@
     "message": "Last ned den beste kvaliteten"
   },
   "video_sending": {
-    "message": "Sender til MDM..."
+    "message": "Sender til Auralis..."
   },
   "video_added": {
-    "message": "Lagt til i MDM"
+    "message": "Lagt til i Auralis"
   },
   "video_show": {
     "message": "Vis"
   },
   "video_no_answer": {
-    "message": "MDM svarte ikke"
+    "message": "Auralis svarte ikke"
   },
   "video_get_mdm": {
-    "message": "Skaff MDM"
+    "message": "Skaff Auralis"
   },
   "video_retry": {
     "message": "Prøv på nytt"

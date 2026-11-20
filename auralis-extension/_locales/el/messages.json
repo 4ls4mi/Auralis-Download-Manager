@@ -114,7 +114,7 @@
     "message": "Βοήθεια"
   },
   "popup_support": {
-    "message": "Υποστηρίξτε το MDM"
+    "message": "Υποστηρίξτε το Auralis"
   },
   "popup_fix": {
     "message": "Πώς να το διορθώσετε"
@@ -297,19 +297,19 @@
     "message": "Λήψη της καλύτερης ποιότητας"
   },
   "video_sending": {
-    "message": "Αποστολή στο MDM..."
+    "message": "Αποστολή στο Auralis..."
   },
   "video_added": {
-    "message": "Προστέθηκε στο MDM"
+    "message": "Προστέθηκε στο Auralis"
   },
   "video_show": {
     "message": "Εμφάνιση"
   },
   "video_no_answer": {
-    "message": "Το MDM δεν απάντησε"
+    "message": "Το Auralis δεν απάντησε"
   },
   "video_get_mdm": {
-    "message": "Λήψη MDM"
+    "message": "Λήψη Auralis"
   },
   "video_retry": {
     "message": "Επανάληψη"

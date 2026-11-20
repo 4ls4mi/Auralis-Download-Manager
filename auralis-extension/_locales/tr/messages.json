@@ -114,7 +114,7 @@
     "message": "Yardım"
   },
   "popup_support": {
-    "message": "MDM'yi Destekleyin"
+    "message": "Auralis'yi Destekleyin"
   },
   "popup_fix": {
     "message": "Nasıl düzeltilir"
@@ -297,19 +297,19 @@
     "message": "En iyi kaliteyi indir"
   },
   "video_sending": {
-    "message": "MDM'ye gönderiliyor..."
+    "message": "Auralis'ye gönderiliyor..."
   },
   "video_added": {
-    "message": "MDM'ye eklendi"
+    "message": "Auralis'ye eklendi"
   },
   "video_show": {
     "message": "Göster"
   },
   "video_no_answer": {
-    "message": "MDM yanıt vermedi"
+    "message": "Auralis yanıt vermedi"
   },
   "video_get_mdm": {
-    "message": "MDM'yi yükle"
+    "message": "Auralis'yi yükle"
   },
   "video_retry": {
     "message": "Tekrar dene"

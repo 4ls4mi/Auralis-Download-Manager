@@ -29,6 +29,12 @@ test('thumbnail control targets its own video and sends selected subtitle', {ski
     assert.ok(sections.some(text=>text.includes('100 MB')&&text.includes('Size unavailable')));
     assert.ok(sections.some(text=>text.includes('~10 MB')));
     assert.ok(sections.some(text=>text.includes('English')&&text.includes('Size unavailable')));
+    const anchorBefore=await host.boundingBox(), drag=await panel.locator('.dragbar').boundingBox(), before=await panel.locator('.menu').boundingBox();
+    await page.mouse.move(drag.x+40,drag.y+10);await page.mouse.down();await page.mouse.move(drag.x+120,drag.y+50,{steps:4});await page.mouse.up();
+    const moved=await panel.locator('.menu').boundingBox(), anchorAfter=await host.boundingBox();
+    assert.ok(moved.x>before.x+40&&moved.y>before.y+20,'panel moves independently');assert.equal(anchorAfter.x,anchorBefore.x);assert.equal(anchorAfter.y,anchorBefore.y);
+    await page.mouse.move(moved.x+moved.width-2,moved.y+moved.height/2);await page.mouse.down();await page.mouse.move(moved.x+moved.width+75,moved.y+moved.height/2,{steps:4});await page.mouse.up();
+    assert.ok((await panel.locator('.menu').boundingBox()).width>moved.width+40,'panel grows by dragging its edge');
     // Reopening and reinjecting must never leave an interactive old menu behind.
     await page.keyboard.press('Escape');
     assert.equal(await panel.count(),0);
@@ -41,9 +47,9 @@ test('thumbnail control targets its own video and sends selected subtitle', {ski
     assert.equal(await panel.count(),1);
     await page.waitForFunction(()=>document.querySelector('[data-auralis-thumbnail-menu]')?.shadowRoot?.querySelector('select[aria-label="Subtitles"]'));
     await panel.evaluate(e=>{const root=e.shadowRoot;root.querySelector('select[aria-label="Subtitles"]').value='manual:en';[...root.querySelectorAll('.menu button')].find(b=>b.textContent.includes('1080p')).click()});
-    await panel.evaluate(e=>e.shadowRoot.querySelector('.sign-in').click());
     const sent=await page.evaluate(()=>globalThis.sentMessages);
-    assert.ok(sent.some(m=>m.type==='youtube-sign-in'));
+    assert.equal(sent.some(m=>m.type==='youtube-sign-in'),false);
+    assert.equal(await panel.locator('.sign-in').count(),0);
     assert.equal(sent[0].url,'https://www.youtube.com/watch?v=abcdef12345');
     assert.deepEqual(sent.find(m=>m.type==='video-pick').subs.langs,['en']);
     await panel.evaluate(e=>{const root=e.shadowRoot;const select=root.querySelector('select[aria-label="Cookies"]');select.value='file';select.dispatchEvent(new Event('change'))});

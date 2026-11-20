@@ -114,7 +114,7 @@
     "message": "帮助"
   },
   "popup_support": {
-    "message": "支持 MDM"
+    "message": "支持 Auralis"
   },
   "popup_fix": {
     "message": "如何修复"
@@ -297,19 +297,19 @@
     "message": "下载最佳画质"
   },
   "video_sending": {
-    "message": "正在发送到 MDM..."
+    "message": "正在发送到 Auralis..."
   },
   "video_added": {
-    "message": "已添加到 MDM"
+    "message": "已添加到 Auralis"
   },
   "video_show": {
     "message": "显示"
   },
   "video_no_answer": {
-    "message": "MDM 未响应"
+    "message": "Auralis 未响应"
   },
   "video_get_mdm": {
-    "message": "获取 MDM"
+    "message": "获取 Auralis"
   },
   "video_retry": {
     "message": "重试"

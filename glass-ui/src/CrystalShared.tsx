@@ -7,7 +7,7 @@ import FrostedLayers from "./FrostedLayers";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { getCurrentWindow, Effect, EffectState } from "@tauri-apps/api/window";
 type ResizeDirection = Parameters<ReturnType<typeof getCurrentWindow>["startResizeDragging"]>[0];
-import { useEffect, useState, useLayoutEffect, useRef, useId, createContext, useContext } from "react";
+import { useEffect, useState, useLayoutEffect, useRef, useId, useMemo, createContext, useContext } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { Maximize2, Minus, X, PanelBottomClose } from "lucide-react";
 
@@ -59,6 +59,8 @@ export const themes: Theme[] = [
   { id:"white-frost",name:"Frost White",accent:"#e8f4ff",secondary:"#b7c6d4",rgb:"232,244,255",neutralTint:[245,250,255] },
   { id:"white-pearl",name:"Pearl White",accent:"#fff3df",secondary:"#d8d0c5",rgb:"255,243,223",neutralTint:[245,239,230] }
 ];
+function mixColor(a:number[],b:number[],amount:number){return a.map((v,i)=>Math.round(v*(1-amount)+b[i]*amount)).join(",")}
+function secondaryRgb(theme:Theme){return [1,3,5].map(i=>parseInt(theme.secondary.slice(i,i+2),16))}
 export function themeHue(theme:Theme){
  const [r,g,b]=theme.rgb.split(',').map(v=>Number(v)/255),max=Math.max(r,g,b),min=Math.min(r,g,b),delta=max-min;
  if(!delta)return 0;const hue=max===r?((g-b)/delta)%6:max===g?(b-r)/delta+2:(r-g)/delta+4;
@@ -328,6 +330,7 @@ export function CrystalWindow({ children, target = "main" }: {
   },[appearance.material]);
   const main = target === "main", mode = main ? appearance.mainMode : appearance.detailMode;
   const customMaterial=extraMaterials[appearance.material]??loadMaterials().find(m=>materialId(m)===appearance.material);
+  const themeTintRgb=useMemo(()=>(theme.neutralTint??theme.rgb.split(",").map(Number)) as [number,number,number],[theme]);
   const path = main ? appearance.wallMain : (appearance.wallDetail || appearance.wallMain);
   const src = path ? convertFileSrc(path) : "/alpine.svg";
   const video = /\.(mp4|webm|mov|m4v)$/i.test(path);
@@ -343,9 +346,14 @@ export function CrystalWindow({ children, target = "main" }: {
   const style = {
     "--accent": effectiveLight ? (({plexo:"#086e84",ocean:"#146c9b",purple:"#7050b5",pink:"#b73962",gold:"#8a5b05",green:"#19765b",silver:"#4c6680",navy:"#394ea2",orange:"#ad4700",rose:"#a42b70"} as Record<string,string>)[theme.id]??"#086e84") : theme.accent,
     "--accent-secondary": theme.secondary,
+    "--theme-action-rgb": mixColor(theme.rgb.split(",").map(Number),[255,255,255],.20),
+    "--theme-primary-rgb": mixColor(theme.rgb.split(",").map(Number),[255,255,255],.10),
+    "--theme-warn-rgb": mixColor(theme.rgb.split(",").map(Number),secondaryRgb(theme),.55),
+    "--theme-danger-rgb": mixColor(theme.rgb.split(",").map(Number),secondaryRgb(theme),.80),
+    "--theme-tool-rgb": mixColor(secondaryRgb(theme),[255,255,255],.18),
     "--accent-rgb": effectiveLight ? (({plexo:"8,110,132",ocean:"20,108,155",purple:"112,80,181",pink:"183,57,98",gold:"138,91,5",green:"25,118,91",silver:"76,102,128",navy:"57,78,162",orange:"173,71,0",rose:"164,43,112"} as Record<string,string>)[theme.id]??"8,110,132") : theme.rgb,
-    "--glass": theme.rgb.split(",").map(n=>Math.round(Number(n)*.14)).join(","),
-    "--glass-tint": theme.neutralTint ? `rgba(${theme.neutralTint.join(',')},${Math.max(0,Math.min(65,appearance.tintStrength))/100})` : `hsl(${Math.max(0,Math.min(360,appearance.tintHue))} 85% 64% / ${Math.max(0,Math.min(65,appearance.tintStrength))/100})`,
+    "--glass": (theme.neutralTint??theme.rgb.split(",").map(Number)).map(n=>Math.round(n*.14)).join(","),
+    "--glass-tint": `rgba(${(theme.neutralTint??theme.rgb.split(",").map(Number)).join(",")},${Math.max(0,Math.min(65,appearance.tintStrength))/100})`,
     "--panel-opacity": Math.min(1, Math.max(.45, appearance.opacity / 100)),
     "--material-opacity": customMaterial ? Math.max(.12,(1-customMaterial.translucency/125)*appearance.opacity/100) : undefined,
     "--material-shading": customMaterial ? customMaterial.shading/100 : undefined,
@@ -365,7 +373,7 @@ export function CrystalWindow({ children, target = "main" }: {
       <span style={{ background: `rgba(3,9,19,${appearance.dim / 100})` }} />
     </div>}
     {mode === "solid" && <div className="cg-solid" />}
-    <div className="cg-content" ref={frame}>{appearance.material === "frosted-water-351" && !maximized && <FrostedLayers maskBackdrop={mode!=="desktop"} tintHue={appearance.tintHue} tintRgb={theme.neutralTint} tintStrength={appearance.tintStrength} opacity={appearance.opacity}/>}<div className="cg-fit-content">{children}</div></div>
+    <div className="cg-content" ref={frame}>{appearance.material === "frosted-water-351" && !maximized && <FrostedLayers maskBackdrop={mode!=="desktop"} tintHue={appearance.tintHue} tintRgb={themeTintRgb} tintStrength={appearance.tintStrength} opacity={appearance.opacity}/>}<div className="cg-fit-content">{children}</div></div>
     {windowError&&<aside className="cg-window-notice cg-error" role="alert"><span>{windowError}</span><button title="Dismiss" onClick={()=>setWindowError("")}><X size={15}/></button></aside>}
     <ResizeGrips />
   </div>;

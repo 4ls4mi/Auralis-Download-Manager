@@ -114,7 +114,7 @@
     "message": "Tulong"
   },
   "popup_support": {
-    "message": "Suportahan ang MDM"
+    "message": "Suportahan ang Auralis"
   },
   "popup_fix": {
     "message": "Paano ito ayusin"
@@ -297,19 +297,19 @@
     "message": "I-download ang pinakamahusay na kalidad"
   },
   "video_sending": {
-    "message": "Ipinapadala sa MDM..."
+    "message": "Ipinapadala sa Auralis..."
   },
   "video_added": {
-    "message": "Idinagdag sa MDM"
+    "message": "Idinagdag sa Auralis"
   },
   "video_show": {
     "message": "Ipakita"
   },
   "video_no_answer": {
-    "message": "Hindi sumagot ang MDM"
+    "message": "Hindi sumagot ang Auralis"
   },
   "video_get_mdm": {
-    "message": "Kunin ang MDM"
+    "message": "Kunin ang Auralis"
   },
   "video_retry": {
     "message": "Subukang muli"

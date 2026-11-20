@@ -114,7 +114,7 @@
     "message": "Справка"
   },
   "popup_support": {
-    "message": "Поддержать MDM"
+    "message": "Поддержать Auralis"
   },
   "popup_fix": {
     "message": "Как исправить"
@@ -297,19 +297,19 @@
     "message": "Скачать в лучшем качестве"
   },
   "video_sending": {
-    "message": "Отправка в MDM..."
+    "message": "Отправка в Auralis..."
   },
   "video_added": {
-    "message": "Добавлено в MDM"
+    "message": "Добавлено в Auralis"
   },
   "video_show": {
     "message": "Показать"
   },
   "video_no_answer": {
-    "message": "MDM не отвечает"
+    "message": "Auralis не отвечает"
   },
   "video_get_mdm": {
-    "message": "Получить MDM"
+    "message": "Получить Auralis"
   },
   "video_retry": {
     "message": "Повторить"

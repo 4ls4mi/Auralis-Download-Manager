@@ -113,3 +113,9 @@ button.accent{background:linear-gradient(135deg,#57d6c0,#8bb9ff);color:#112438;b
 @media(prefers-reduced-motion:reduce){button{transition:none}button:hover:not(:disabled),button:active:not(:disabled){transform:none}}
 
 footer{flex-wrap:wrap;gap:4px 10px}
+/* Auralis tinted glass, with opaque-enough panels for reliable contrast. */
+:root{color-scheme:dark;--bg:#102036;--text:#f4f8ff;--muted:#c8d7e8;--edge:#c3e7ff55;--field:#17314cdd;--accent:#8deaff;--accent-text:#071c2b;--ok:#74f6bf;--bad:#ffacb9;--warn:#ffe19c}
+body{width:340px;padding:16px;background:radial-gradient(ellipse at 10% 0%,#65caff55,transparent 50%),radial-gradient(ellipse at 95% 20%,#9f75ff44,transparent 47%),linear-gradient(160deg,#294d6ced,#101e32fa);font-family:'Segoe UI',system-ui,sans-serif;backdrop-filter:blur(24px) saturate(130%)}
+header{gap:10px;font-size:15px;letter-spacing:.02em}header img{width:28px;height:28px;filter:drop-shadow(0 2px 6px #75caff88)}header small{display:block;color:var(--muted);font-size:11px;font-weight:400}
+.status,.panel-card,.send,.excluded{border-radius:12px;background:linear-gradient(150deg,#c9edff18,#0b2036bd);border:1px solid var(--edge);box-shadow:inset 0 1px #fff5,0 5px 16px #0003}
+.status{padding:10px 12px}.switch{padding:4px 2px}button,input:not([type=checkbox]):not([type=radio]){border-radius:9px}button{background:linear-gradient(160deg,#8ad4fa3a,#173350d9);border-color:#9bc8ec70;box-shadow:inset 0 1px #fff5;color:var(--text)}button:hover{filter:brightness(1.2)}button.accent{background:linear-gradient(145deg,#83f4dc,#60bdf1);border-color:#c1fff0;color:#071c2b;font-weight:650}.link{color:#9fe9ff}footer{border-color:#c6edff33}

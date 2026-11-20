@@ -114,7 +114,7 @@
     "message": "עזרה"
   },
   "popup_support": {
-    "message": "תמוך ב-MDM"
+    "message": "תמוך ב-Auralis"
   },
   "popup_fix": {
     "message": "איך לתקן זאת"
@@ -297,19 +297,19 @@
     "message": "הורד את האיכות הטובה ביותר"
   },
   "video_sending": {
-    "message": "שולח ל-MDM..."
+    "message": "שולח ל-Auralis..."
   },
   "video_added": {
-    "message": "נוסף ל-MDM"
+    "message": "נוסף ל-Auralis"
   },
   "video_show": {
     "message": "הצג"
   },
   "video_no_answer": {
-    "message": "MDM לא הגיב"
+    "message": "Auralis לא הגיב"
   },
   "video_get_mdm": {
-    "message": "קבל את MDM"
+    "message": "קבל את Auralis"
   },
   "video_retry": {
     "message": "נסה שוב"

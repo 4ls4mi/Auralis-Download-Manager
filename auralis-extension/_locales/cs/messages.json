@@ -114,7 +114,7 @@
     "message": "Nápověda"
   },
   "popup_support": {
-    "message": "Podpořte MDM"
+    "message": "Podpořte Auralis"
   },
   "popup_fix": {
     "message": "Jak to opravit"
@@ -297,19 +297,19 @@
     "message": "Stáhnout nejlepší kvalitu"
   },
   "video_sending": {
-    "message": "Odesílání do MDM..."
+    "message": "Odesílání do Auralis..."
   },
   "video_added": {
-    "message": "Přidáno do MDM"
+    "message": "Přidáno do Auralis"
   },
   "video_show": {
     "message": "Zobrazit"
   },
   "video_no_answer": {
-    "message": "MDM neodpověděl"
+    "message": "Auralis neodpověděl"
   },
   "video_get_mdm": {
-    "message": "Získat MDM"
+    "message": "Získat Auralis"
   },
   "video_retry": {
     "message": "Zkusit znovu"
