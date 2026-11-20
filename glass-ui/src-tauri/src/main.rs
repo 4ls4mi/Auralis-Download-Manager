@@ -27,6 +27,10 @@ use std::sync::Mutex;
 
 type ApiResult<T> = Result<T, String>;
 
+fn is_isolated_test() -> bool {
+    cfg!(feature = "embedded-downloader") && std::env::var_os("AURALIS_TEST_SKIP_HOST").is_some()
+}
+
 #[derive(Default)]
 struct HiddenDownloadWindows(Mutex<HashSet<u64>>);
 
@@ -273,8 +277,7 @@ fn show_main(app: &AppHandle) {
 async fn boot_engine(app: AppHandle) -> ApiResult<String> {
     tauri::async_runtime::spawn_blocking(move || {
         let boot = boot_existing_engine(&app)?;
-        #[cfg(feature = "embedded-downloader")]
-        if std::env::var_os("AURALIS_TEST_SKIP_HOST").is_some() { return Ok(boot); }
+        if is_isolated_test() { return Ok(boot); }
         let browser = register_browser_host(&app);
         match browser {
             Ok(_) => Ok(format!("{boot} • browser extension host registered")),
@@ -466,6 +469,7 @@ async fn prepare_auralis_extension(app: AppHandle, browser: String) -> ApiResult
 
 #[tauri::command]
 fn browser_connection_status() -> serde_json::Value {
+    if is_isolated_test() { return serde_json::json!({"recently_connected":true,"previously_connected":false,"browsers":[]}); }
     serde_json::json!({"recently_connected":mdm_ipc::extension::recently_connected(),"previously_connected":mdm_ipc::extension::seen(),"browsers":mdm_ipc::extension::seen_browsers()})
 }
 

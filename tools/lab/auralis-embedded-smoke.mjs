@@ -38,7 +38,7 @@ async function browserCapture(url) {
 }
 let app,browser,output='';
 const spawnApp=()=>{
- const child=spawn(exe,[],{env:{...process.env,MDM_DATA_DIR:data,AURALIS_TEST_SKIP_HOST:'1',AURALIS_TEST_PANIC_LOG:path.join(root,'panic.txt'),RUST_BACKTRACE:'1',GLASS_TEST_CDP_PORT:String(port),WEBVIEW2_USER_DATA_FOLDER:path.join(root,'webview')},stdio:['ignore','pipe','pipe']});
+ const child=spawn(exe,[],{env:{...process.env,MDM_DATA_DIR:data,MDM_DOWNLOADS:root,AURALIS_TEST_SKIP_HOST:'1',AURALIS_TEST_PANIC_LOG:path.join(root,'panic.txt'),RUST_BACKTRACE:'1',GLASS_TEST_CDP_PORT:String(port),WEBVIEW2_USER_DATA_FOLDER:path.join(root,'webview')},stdio:['ignore','pipe','pipe']});
  for(const stream of [child.stdout,child.stderr])stream.on('data',chunk=>{output=(output+chunk.toString()).slice(-12000)});
  return child;
 };
@@ -49,8 +49,10 @@ try {
  const page=await until(()=>browser.contexts().flatMap(c=>c.pages()).find(p=>!p.isClosed()&&!p.url().includes('?')),'Main window missing');
  const identity=await until(async()=>JSON.parse(await ipc({query:'glass-backend'})),'Downloader did not start');assert.equal(identity.headless,true);assert.equal(identity.glass,true);
  const ps=spawnSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',`Get-CimInstance Win32_Process -Filter 'ParentProcessId=${app.pid}' | Select-Object -ExpandProperty Name`],{encoding:'utf8',timeout:15000});assert.equal(ps.status,0,'Could not inspect child processes');assert.doesNotMatch(ps.stdout,/^mdm-legacy\.exe\s*$/im,'A legacy downloader process was launched');
- addResponse=await ipc({url:`http://127.0.0.1:${server.address().port}/embedded-smoke.bin`,dir:root,name:'embedded-smoke.bin',silent:true});
- const completed=await until(async()=>{lastStatus=JSON.parse(await ipc({query:'list'})).downloads.map(({file,status,downloaded,error})=>({file,status,downloaded,error}));const item=lastStatus.find(d=>d.file==='embedded-smoke.bin');if(item?.status==='Error')throw exited(`Fixture download failed: ${item.error||'unknown error'}`);if(item?.status==='Complete')return JSON.parse(await ipc({query:'list'})).downloads.find(d=>d.file==='embedded-smoke.bin');return null},'Fixture download did not finish',120000);
+ const downloadUrl=`http://127.0.0.1:${server.address().port}/embedded-smoke-${Date.now()}.bin`;
+ addResponse=await ipc({url:downloadUrl,silent:true});
+ const completed=await until(async()=>{lastStatus=JSON.parse(await ipc({query:'list'})).downloads.map(({file,url,status,downloaded,error})=>({file,url,status,downloaded,error}));const item=lastStatus.find(d=>d.url===downloadUrl);if(item?.status==='Error')throw exited(`Fixture download failed: ${item.error||'unknown error'}`);if(item?.status==='Complete')return JSON.parse(await ipc({query:'list'})).downloads.find(d=>d.url===downloadUrl);return null},'Fixture download did not finish',120000);
+ assert.ok(!path.relative(root,completed.path).startsWith('..')&&!path.isAbsolute(path.relative(root,completed.path)),'Test download escaped its isolated folder');
  assert.equal(createHash('sha256').update(await readFile(completed.path)).digest('hex'),hash,'Downloaded file does not match');
  const browserUrl=`http://127.0.0.1:${server.address().port}/from-browser.bin`;
  const reply=await browserCapture(browserUrl);assert.equal(reply.ok,true,'Browser helper did not accept capture');
@@ -61,7 +63,7 @@ try {
  app=spawnApp();
  browser=await until(async()=>{if(app.exitCode!==null)throw exited(`Auralis exited after restart: ${app.exitCode}`);try{return await chromium.connectOverCDP(`http://127.0.0.1:${port}`,{timeout:2000})}catch{return null}},'WebView did not restart');
  const restarted=await until(()=>browser.contexts().flatMap(c=>c.pages()).find(p=>!p.isClosed()&&!p.url().includes('?')),'Restarted main window missing');
- await until(async()=>JSON.parse(await ipc({query:'list'})).downloads.find(d=>d.file==='embedded-smoke.bin'&&d.status==='Complete'),'Download was not restored after restart');
+ await until(async()=>JSON.parse(await ipc({query:'list'})).downloads.find(d=>d.url===downloadUrl&&d.status==='Complete'),'Download was not restored after restart');
  await restarted.evaluate(()=>window.__TAURI_INTERNALS__.invoke('quit_glass')).catch(()=>{});
  await until(()=>app.exitCode!==null,'Restarted Auralis did not stop',45000);assert.equal(app.exitCode,0);
  console.log('PASS: integrated downloader ran without a legacy child, downloaded a verified file, saved, and restored it after restart.');

@@ -50,7 +50,7 @@ pub fn start(app: AppHandle) {
     thread::spawn(move || {
         let mut previous: Option<HashMap<u64, String>> = None;
         let mut tray_items: Vec<(u64, MenuItem<tauri::Wry>)> = Vec::new();
-        let mut helpers_checked = false;
+        let mut helpers_checked = super::is_isolated_test();
         let mut last_info = 0;
         let mut last_power = 0;
         let mut last_import = 0;
@@ -109,8 +109,8 @@ pub fn start(app: AppHandle) {
 
             let config = send_ipc(&mdm_ipc::Command {query:Some("glass-settings".into()),..Default::default()})
                 .ok().and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok());
-            let complete = config.as_ref().and_then(|c| c["show_complete"].as_bool()).unwrap_or(false);
-            let progress = AUTO_PROGRESS.load(Ordering::Relaxed)
+            let complete = !super::is_isolated_test() && config.as_ref().and_then(|c| c["show_complete"].as_bool()).unwrap_or(false);
+            let progress = !super::is_isolated_test() && AUTO_PROGRESS.load(Ordering::Relaxed)
                 && config.as_ref().and_then(|c| c["show_progress"].as_bool()).unwrap_or(true);
             let mut transitions = Vec::new();
             if let Some(old) = &previous {
@@ -158,7 +158,7 @@ pub fn start(app: AppHandle) {
                 if let Some(id)=queue{let _=open(&owner,&format!("tool-queue-{id}"),&format!("tool=queue&lease={id}"),600.0,340.0);}
                 if import.is_some(){let _=open(&owner,"tool-grabber","tool=grabber",900.0,680.0);}
                 if let Some(id)=power_id {let _=open(&owner,&format!("power-{id}"),&format!("power={id}"),590.0,330.0);}
-                if let Some(id) = request { let _ = open(&owner,&format!("info-{id}"),&format!("request={id}"),780.0,560.0); }
+                if let Some(id) = request.filter(|_| !super::is_isolated_test()) { let _ = open(&owner,&format!("info-{id}"),&format!("request={id}"),780.0,560.0); }
             }
         }
     });
