@@ -1946,13 +1946,13 @@ async fn run_fresh(
             // once, as the link was (the browser's User-Agent first). The link's refusal is
             // the one told if that fails too.
             if let Err(e) = &first
-                && link_refused(e)
+                && (link_refused(e) || refused_as_a_program(e))
                 && unlocked.is_none()
                 && opts.post.is_none()
-                && let Some(other) = opts.browser_final.clone().filter(|o| *o != target)
+                && let Some(other) = opts.browser_final.clone().filter(|o| *o != target).or_else(|| sourceforge_fresh_link(&target))
             {
                 shared.event(format!(
-                    "{}: {e}; asking where the browser's download ended ({})",
+                    "{}: {e}; trying a recovery address ({})",
                     target.host_str().unwrap_or("?"),
                     other.host_str().unwrap_or("?"),
                 ));
@@ -1960,6 +1960,7 @@ async fn run_fresh(
                 let headers = scoped_headers(&asked, &target, &other);
                 match ask.at(&mut again, &other, &headers).await {
                     Ok((client1, Ok(answer), as_mdm)) => {
+                        first_at = other.clone();
                         (opts, client0, first, asked_as_mdm) = (again, client1, Ok(answer), as_mdm);
                     }
                     Ok((_, Err(Error::Cancelled), _)) | Err(Error::Cancelled) => {
@@ -2914,6 +2915,25 @@ fn link_refused(e: &Error) -> bool {
         // The site's page where the browser got the file (#701): its link spent, or bound to
         // the browser's visit.
         || matches!(e, Error::GotWebPage)
+}
+
+/// An expired SourceForge mirror address can be exchanged for a fresh mirror
+/// by requesting the same public file from SourceForge's download redirector.
+fn sourceforge_fresh_link(url: &Url) -> Option<Url> {
+    if url.scheme() != "https" || !url.username().is_empty() || url.password().is_some() || url.port().is_some() {
+        return None;
+    }
+    let host = url.host_str()?;
+    if host != "downloads.sourceforge.net" && !host.ends_with(".dl.sourceforge.net") {
+        return None;
+    }
+    let rest = url.path().strip_prefix("/project/")?;
+    let (project, file) = rest.split_once('/')?;
+    if project.is_empty() || !project.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_')) || file.is_empty() || file.ends_with('/') || file.split('/').any(|part| part.is_empty() || part == "." || part == "..") {
+        return None;
+    }
+    let fresh = Url::parse(&format!("https://downloads.sourceforge.net/project/{project}/{file}")).ok()?;
+    (fresh != *url).then_some(fresh)
 }
 
 /// What a download's first request needs besides its address, headers and options.
@@ -5139,6 +5159,18 @@ pub(crate) async fn cancellable<T>(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn sourceforge_expired_mirrors_recover_through_public_redirector() {
+        use super::sourceforge_fresh_link;
+        use url::Url;
+        for host in ["downloads.sourceforge.net", "cfhcable.dl.sourceforge.net"] {
+            let old = Url::parse(&format!("https://{host}/project/crdroid/davinci/12.x/example%20file.zip?ts=expired")).unwrap();
+            assert_eq!(sourceforge_fresh_link(&old).unwrap().as_str(), "https://downloads.sourceforge.net/project/crdroid/davinci/12.x/example%20file.zip");
+        }
+        for value in ["https://downloads.sourceforge.net.evil.test/project/p/a.zip?ts=x", "https://user@downloads.sourceforge.net/project/p/a.zip?ts=x", "http://downloads.sourceforge.net/project/p/a.zip?ts=x", "https://downloads.sourceforge.net/project/onlyproject?ts=x"] {
+            assert!(sourceforge_fresh_link(&Url::parse(value).unwrap()).is_none(), "{value}");
+        }
+    }
     use super::*;
 
     #[test]

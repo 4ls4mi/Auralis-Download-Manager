@@ -34,6 +34,16 @@ fn is_isolated_test() -> bool {
 #[tauri::command]
 fn backup_prompt_enabled() -> bool { !is_isolated_test() }
 
+#[tauri::command]
+async fn export_material_file(contents: String) -> ApiResult<Option<String>> {
+    if contents.len() > 16_384 { return Err("Material file is too large".into()); }
+    tauri::async_runtime::spawn_blocking(move || {
+        let Some(path)=rfd::FileDialog::new().set_title("Export Auralis material").set_file_name("auralis-material.json").add_filter("Auralis material", &["json"]).save_file() else { return Ok(None) };
+        fs::write(&path, contents).map_err(|e|format!("Could not save material: {e}"))?;
+        Ok(Some(path.to_string_lossy().into_owned()))
+    }).await.map_err(|e|e.to_string())?
+}
+
 #[derive(Default)]
 struct HiddenDownloadWindows(Mutex<HashSet<u64>>);
 
@@ -799,7 +809,7 @@ fn main() {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            hidden_progress_window_ids, restore_hidden_progress_window, backup_prompt_enabled, backup::export_preferences, backup::import_preferences, startup::startup_settings, startup::set_startup_settings, material_window::set_material_window_shape, pending_file_info, file_info_action, choose_download_path, window_preferences, glass_tool, choose_folder, choose_setting_file, list_network_adapters, open_glass_window, close_progress_windows, hide_download_to_tray, drag_download, drag_state, choose_move, clipboard_text, video_tool, open_youtube_sign_in, youtube_session_status, browser_video,
+            hidden_progress_window_ids, restore_hidden_progress_window, backup_prompt_enabled, export_material_file, backup::export_preferences, backup::import_preferences, startup::startup_settings, startup::set_startup_settings, material_window::set_material_window_shape, pending_file_info, file_info_action, choose_download_path, window_preferences, glass_tool, choose_folder, choose_setting_file, list_network_adapters, open_glass_window, close_progress_windows, hide_download_to_tray, drag_download, drag_state, choose_move, clipboard_text, video_tool, open_youtube_sign_in, youtube_session_status, browser_video,
             boot_engine, dashboard_snapshot, dashboard_visuals, download_action,
             add_download, select_wallpaper, queue_action, glass_settings, update_glass_setting,
             browser_integration, browser_connection_status, prepare_auralis_extension, extension_store_link, open_extension_store, bulk_action, file_operation, add_torrent_file, quit_glass, open_upstream_releases, fork_update::glass_update_check, fork_update::glass_update_download, fork_update::glass_update_install

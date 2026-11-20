@@ -1,6 +1,7 @@
 import {LiquidProgress, LiquidChunk, isLiquidMaterial} from "./LiquidIndicators";
 import {ConnectionTubes} from "./ConnectionTubes";
 import {receivingTubeSlots} from "./tubeNetwork";
+import {loadMaterials,materialId,extraMaterials} from "./customMaterials";
 import FrostedRibbon from "./FrostedRibbon";
 import FrostedLayers from "./FrostedLayers";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
@@ -74,7 +75,7 @@ const stored = (name: string, fallback: string) => {
 const supportedShape=(shape:string)=>shape==="wave"?"droplet":["rounded","square","faceted","droplet"].includes(shape)?shape:"rounded";
 export function loadAppearance(): Appearance {
   return {
-    theme: stored("theme", "silver"), material: ["brushed-glass","frosted-water-351","rose-pine","window-glass","oversimplified"].includes(stored("material", "frosted-water-351")) ? stored("material", "frosted-water-351") : "frosted-water-351", tintHue: Number(stored("tint-hue", "209")), tintStrength: Number(stored("tint-strength", "50")), indicator: stored("indicator", "blue-purple"), progressMaterial: stored("progress-material", "gradient"), connectionMaterial: stored("connection-material", "gradient"), graphMaterial: stored("graph-material", "gradient"), trackFinish: stored("track-finish", "recessed"), trackColor: stored("track-color", "ice"), progressShape: supportedShape(stored("progress-shape", "rounded")), graphIndicator: stored("graph-indicator", stored("indicator", "blue-purple")), graphShape: stored("graph-shape", "area"), connectionTrackFinish: stored("connection-track-finish", "recessed"), connectionTrackColor: stored("connection-track-color", "ice"), connectionIndicator: stored("connection-indicator", stored("indicator", "blue-purple")), connectionShape: supportedShape(stored("connection-shape", stored("progress-shape", "rounded"))), clipboardMode: stored("clipboard-mode", "paste"),
+    theme: stored("theme", "silver"), material: [...["brushed-glass","frosted-water-351","rose-pine","window-glass","oversimplified"],...Object.keys(extraMaterials),...loadMaterials().map(materialId)].includes(stored("material", "frosted-water-351")) ? stored("material", "frosted-water-351") : "frosted-water-351", tintHue: Number(stored("tint-hue", "209")), tintStrength: Number(stored("tint-strength", "50")), indicator: stored("indicator", "blue-purple"), progressMaterial: stored("progress-material", "gradient"), connectionMaterial: stored("connection-material", "gradient"), graphMaterial: stored("graph-material", "gradient"), trackFinish: stored("track-finish", "recessed"), trackColor: stored("track-color", "ice"), progressShape: supportedShape(stored("progress-shape", "rounded")), graphIndicator: stored("graph-indicator", stored("indicator", "blue-purple")), graphShape: stored("graph-shape", "area"), connectionTrackFinish: stored("connection-track-finish", "recessed"), connectionTrackColor: stored("connection-track-color", "ice"), connectionIndicator: stored("connection-indicator", stored("indicator", "blue-purple")), connectionShape: supportedShape(stored("connection-shape", stored("progress-shape", "rounded"))), clipboardMode: stored("clipboard-mode", "paste"),
     wallMain: stored("wall-main", ""), wallDetail: stored("wall-detail", ""),
     mainMode: stored("back-main", "desktop") as BackgroundMode,
     detailMode: stored("back-details", "desktop") as BackgroundMode,
@@ -322,6 +323,7 @@ export function CrystalWindow({ children, target = "main" }: {
     return()=>{disposed=true;window.clearTimeout(timer);window.removeEventListener("resize",resize);window.removeEventListener("glass-frost-outline",onOutline)};
   },[appearance.material]);
   const main = target === "main", mode = main ? appearance.mainMode : appearance.detailMode;
+  const customMaterial=extraMaterials[appearance.material]??loadMaterials().find(m=>materialId(m)===appearance.material);
   const path = main ? appearance.wallMain : (appearance.wallDetail || appearance.wallMain);
   const src = path ? convertFileSrc(path) : "/alpine.svg";
   const video = /\.(mp4|webm|mov|m4v)$/i.test(path);
@@ -341,6 +343,8 @@ export function CrystalWindow({ children, target = "main" }: {
     "--glass": theme.rgb.split(",").map(n=>Math.round(Number(n)*.14)).join(","),
     "--glass-tint": `hsl(${Math.max(0,Math.min(360,appearance.tintHue))} 85% 64% / ${Math.max(0,Math.min(65,appearance.tintStrength))/100})`,
     "--panel-opacity": Math.min(1, Math.max(.45, appearance.opacity / 100)),
+    "--material-opacity": customMaterial ? Math.max(.35,1-customMaterial.translucency/125) : undefined,
+    "--material-shading": customMaterial ? customMaterial.shading/100 : undefined,
     "--crystal-blur": appearance.blur + "px",
     "--ui-scale": 1,
     "--fit-scale": Math.max(.7,fit),
@@ -350,7 +354,7 @@ export function CrystalWindow({ children, target = "main" }: {
     "--min-window-button": (30/Math.min(1,Math.max(.4,fit)))+"px",
     "--font-size": Math.max(Math.min(20,Math.max(12,appearance.fontSize)),12/Math.max(.4,fit))+"px"
   } as CSSProperties;
-  return <div className={`cg-window cg-mode-${mode} cg-material-${appearance.material} cg-progress-shape-${appearance.progressShape} cg-connection-shape-${appearance.connectionShape} ${maximized?"cg-maximized":""} ${effectiveLight?"cg-light":"cg-dark"} ${appearance.highContrast?"cg-high-contrast":""}`} style={style}>
+  return <div className={`cg-window cg-mode-${mode} cg-material-${appearance.material} ${customMaterial?`cg-custom-material cg-finish-${customMaterial.finish} cg-controls-${customMaterial.controls} cg-layout-${customMaterial.layout??'standard'} cg-text-${customMaterial.text??'crisp'}`:""} cg-progress-shape-${appearance.progressShape} cg-connection-shape-${appearance.connectionShape} ${maximized?"cg-maximized":""} ${effectiveLight?"cg-light":"cg-dark"} ${appearance.highContrast?"cg-high-contrast":""}`} style={style}>
     {mode === "wallpaper" && <div className="cg-wallpaper">
       {video ? <video key={src} autoPlay loop muted playsInline src={src} /> :
         <div style={{ backgroundImage: `url("${src}")` }} />}
