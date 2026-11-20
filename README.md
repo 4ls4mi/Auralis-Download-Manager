@@ -6,7 +6,27 @@ Auralis is a free Windows x64 download manager with a glass-inspired interface, 
 
 ## Screenshots
 
-New screenshots are being captured from the running Windows application.
+These captures show Auralis 0.3.26 running on Windows with sample downloads. The transfer graph reflects measured speeds during a local sample transfer. The local save path in the completion screenshot has been redacted.
+
+### Download manager
+
+![Auralis download list with transfer progress, connections, and speed](docs/images/auralis/main.png)
+
+### Live transfer and liquid indicators
+
+![Auralis current download window showing liquid progress, connection blocks, and the transfer speed graph](docs/images/auralis/download.png)
+
+![Animation of the current download window and liquid indicators](docs/images/auralis/liquid-flow.gif)
+
+### Customize the appearance
+
+![Auralis indicator settings and live progress preview](docs/images/auralis/settings.png)
+
+### Start and complete a download
+
+![Auralis download file information dialog](docs/images/auralis/file-info.png)
+
+![Auralis download complete dialog with the local path redacted](docs/images/auralis/complete.png)
 
 ## Features
 
