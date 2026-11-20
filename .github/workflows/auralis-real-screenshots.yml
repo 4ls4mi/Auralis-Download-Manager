@@ -18,13 +18,6 @@ jobs:
           path: docs-source
           persist-credentials: false
           clean: false
-      - name: Check out Auralis UI dependencies
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          ref: feature/auralis-frosted-candidate
-          path: app-source
-          persist-credentials: false
-          clean: false
       - name: Set up Node.js 22
         shell: pwsh
         run: |
@@ -43,8 +36,15 @@ jobs:
       - name: Prepare screenshot tools
         shell: pwsh
         run: |
-          npm install --prefix app-source/glass-ui
+          $ErrorActionPreference = 'Stop'
+          $toolsDir = Join-Path $env:LOCALAPPDATA 'AuralisRunner/capture-tools'
+          New-Item -ItemType Directory -Force $toolsDir | Out-Null
+          Set-Content -Path (Join-Path $toolsDir 'package.json') -Value '{"private":true}' -Encoding utf8
+          Push-Location $toolsDir
+          try { npm install --no-save --no-audit --no-fund playwright-core@1.56.0 }
+          finally { Pop-Location }
           if ($LASTEXITCODE) { throw 'Could not prepare screenshot tools.' }
+          "AURALIS_CAPTURE_TOOLS=$toolsDir" >> $env:GITHUB_ENV
       - name: Capture running Windows app
         shell: pwsh
         run: |

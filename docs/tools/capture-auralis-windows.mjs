@@ -5,7 +5,7 @@ import {createServer} from 'node:http';
 import {createRequire} from 'node:module';
 import {mkdir,mkdtemp,readFile,rm} from 'node:fs/promises';
 import net from 'node:net';import os from 'node:os';import path from 'node:path';
-const require=createRequire(path.join(process.cwd(),'app-source','glass-ui','package.json'));
+const require=createRequire(path.join(process.env.AURALIS_CAPTURE_TOOLS,'package.json'));
 const {chromium}=require('playwright-core');
 assert.equal(process.platform,'win32');
 const exe=process.env.AURALIS_CAPTURE_EXE,output=process.env.AURALIS_CAPTURE_OUTPUT;assert.ok(exe&&output);
