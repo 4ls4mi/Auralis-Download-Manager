@@ -5,6 +5,9 @@ use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Emitter, Manager};
 
 const FEED: &str = "https://api.github.com/repos/4ls4mi/Auralis-Download-Manager/releases?per_page=30";
+// The notification service caches metadata from authenticated GitHub release
+// webhooks. The installer still comes from GitHub and must match its digest.
+const FALLBACK_FEED: &str = "https://auralis-release-push.auralis-updates.workers.dev/latest";
 const ASSET_PREFIX: &str = "https://github.com/4ls4mi/Auralis-Download-Manager/releases/download/";
 const MAX_BYTES: u64 = 256 * 1024 * 1024;
 #[derive(Clone)]
@@ -43,12 +46,22 @@ fn candidate_from_release(value: &serde_json::Value, current: &str) -> Result<Op
     let size=asset["size"].as_u64().filter(|n|*n>0 && *n<=MAX_BYTES).ok_or("The installer size is invalid")?;
     Ok(Some(Candidate{version:version.to_string(),notes:value["body"].as_str().unwrap_or("").to_owned(),url:url.to_owned(),sha256:digest.to_ascii_lowercase(),size,staged:None}))
 }
+fn release_feed(client: &reqwest::blocking::Client, primary: &str, fallback: &str) -> Result<serde_json::Value,String> {
+    let fetch=|url:&str| -> Result<serde_json::Value,String> {
+        let response=client.get(url).header("Accept","application/json").send().map_err(|e|e.to_string())?;
+        let value:serde_json::Value=response.error_for_status().map_err(|e|e.to_string())?.json().map_err(|e|e.to_string())?;
+        if !value.is_array(){return Err("The release feed is invalid".into())}
+        Ok(value)
+    };
+    match fetch(primary) {
+        Ok(value)=>Ok(value),
+        Err(error)=>fetch(fallback).map_err(|_|format!("Update check unavailable (GitHub: {error}); try again later or download the latest release from GitHub.")),
+    }
+}
 #[tauri::command]
 pub async fn glass_update_check() -> Result<UpdateStatus,String> {
     tauri::async_runtime::spawn_blocking(|| {
-        let response=client()?.get(FEED).header("Accept","application/vnd.github+json").send().map_err(|e|e.to_string())?;
-        if response.status()==reqwest::StatusCode::NOT_FOUND { return Err("Auralis release feed not found on GitHub".into()); }
-        let value:serde_json::Value=response.error_for_status().map_err(|e|e.to_string())?.json().map_err(|e|e.to_string())?;
+        let value=release_feed(&client()?, FEED, FALLBACK_FEED)?;
         let releases=value.as_array().ok_or("The GitHub release feed is invalid")?;
         let mut next:Option<Candidate>=None;
         for release in releases {
@@ -127,5 +140,12 @@ mod tests {
         let mut wrong=good.clone();wrong["assets"][0]["name"]=serde_json::json!("MisterDownloadManager-0.9.0-setup.exe");assert!(candidate_from_release(&wrong,"0.3.1").unwrap().is_none());
         let bad=release("https://evil.example/setup.exe",&format!("sha256:{}","a".repeat(64)));assert!(candidate_from_release(&bad,"0.3.1").is_err());
         let bad=release("https://github.com/4ls4mi/Auralis-Download-Manager/releases/download/v0.3.2/setup.exe","sha256:bad");assert!(candidate_from_release(&bad,"0.3.1").is_err());
+    }
+    #[test] fn uses_fallback_when_primary_is_rate_limited(){
+        use std::{io::{Read,Write},net::TcpListener,thread};
+        let listener=TcpListener::bind("127.0.0.1:0").unwrap();let address=listener.local_addr().unwrap();
+        let server=thread::spawn(move||{for index in 0..2{let (mut socket,_)=listener.accept().unwrap();let mut buffer=[0;2048];let _=socket.read(&mut buffer);let (status,body)=if index==0 {("403 Forbidden","rate limited")} else {("200 OK","[]")};write!(socket,"HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).unwrap();}});
+        let client=reqwest::blocking::Client::builder().timeout(Duration::from_secs(5)).build().unwrap();let url=format!("http://{address}/");
+        assert_eq!(release_feed(&client,&url,&url).unwrap(),serde_json::json!([]));server.join().unwrap();
     }
 }
