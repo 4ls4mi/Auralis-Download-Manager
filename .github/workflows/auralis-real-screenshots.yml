@@ -50,9 +50,9 @@ jobs:
         run: |
           $env:AURALIS_CAPTURE_EXE = Join-Path $env:LOCALAPPDATA 'AuralisRunner/target/release/auralis-download-manager.exe'
           $env:AURALIS_CAPTURE_OUTPUT = Join-Path $env:LOCALAPPDATA 'AuralisRunner/screenshot-output'
-          if (!(Test-Path $env:AURALIS_CAPTURE_EXE)) { throw 'The cached Auralis executable is missing; build 0.3.26 first.' }
+          if (!(Test-Path $env:AURALIS_CAPTURE_EXE)) { throw 'The cached Auralis executable is missing; build 0.3.27 first.' }
           $version = (Get-Item $env:AURALIS_CAPTURE_EXE).VersionInfo.ProductVersion
-          if ($version -notlike '0.3.26*') { throw "Expected the Auralis 0.3.26 executable, found $version." }
+          if ($version -notlike '0.3.27*') { throw "Expected the Auralis 0.3.27 executable, found $version." }
           "AURALIS_CAPTURE_OUTPUT=$env:AURALIS_CAPTURE_OUTPUT" >> $env:GITHUB_ENV
           Remove-Item $env:AURALIS_CAPTURE_OUTPUT -Recurse -Force -ErrorAction SilentlyContinue
           node docs-source/docs/tools/capture-auralis-windows.mjs
