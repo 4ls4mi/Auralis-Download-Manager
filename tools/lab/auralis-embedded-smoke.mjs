@@ -55,6 +55,21 @@ const spawnApp=()=>{
  return child;
 };
 const exited=message=>Object.assign(Error(message),{fatal:true});
+// A WebView can be recreated while Windows restores it. Retry only if the
+// target disappeared; real shutdown errors still fail the integration test.
+async function quitApp(preferred,label){
+ let page=preferred,lastError='';
+ for(let attempt=0;attempt<3&&app.exitCode===null;attempt++){
+  if(!page||page.isClosed()){
+   const next=await until(()=>app.exitCode!==null?'exited':browser.contexts().flatMap(c=>c.pages()).find(p=>!p.isClosed()&&!p.url().includes('?')),`${label}: no main window for shutdown`,10000);
+   if(next==='exited')break;page=next;
+  }
+  try{await page.evaluate(()=>window.__TAURI_INTERNALS__.invoke('quit_glass'));break}
+  catch(error){lastError=String(error);if(app.exitCode!==null)break;if(!/closed|destroyed|navigation|context/i.test(lastError))throw Error(`${label}: shutdown command failed: ${lastError}`);page=null;await wait(500)}
+ }
+ await until(()=>app.exitCode!==null,`${label} did not stop${lastError?`: ${lastError}`:''}`,45000);
+ assert.equal(app.exitCode,0,`${label} exited unsuccessfully`);
+}
 try {
  app=spawnApp();
  browser=await until(async()=>{if(app.exitCode!==null)throw exited(`Auralis exited: ${app.exitCode}`);try{return await chromium.connectOverCDP(`http://127.0.0.1:${port}`,{timeout:2000})}catch{return null}},'WebView did not start');
@@ -82,8 +97,7 @@ try {
  await ipc({action:'pause',ids:[partial.id]});
  const paused=await until(async()=>JSON.parse(await ipc({query:'list'})).downloads.find(d=>d.id===partial.id&&d.status==='Stopped'&&d.downloaded>0),'Resume fixture did not pause');
  assert.ok(paused.downloaded<slowContents.length,'Resume fixture finished before it could be paused');
- await page.evaluate(()=>window.__TAURI_INTERNALS__.invoke('quit_glass')).catch(()=>{});
- await until(()=>app.exitCode!==null,'Auralis did not stop and save',45000);assert.equal(app.exitCode,0);
+ await quitApp(page,'Auralis');
  await browser.close();browser=null;
  app=spawnApp();
  browser=await until(async()=>{if(app.exitCode!==null)throw exited(`Auralis exited after restart: ${app.exitCode}`);try{return await chromium.connectOverCDP(`http://127.0.0.1:${port}`,{timeout:2000})}catch{return null}},'WebView did not restart');
@@ -94,8 +108,7 @@ try {
  const resumed=await until(async()=>{const d=JSON.parse(await ipc({query:'list'})).downloads.find(d=>d.id===restored.id);if(d?.status==='Error')throw exited(`Resumed download failed: ${d.error||'unknown error'}`);return d?.status==='Complete'?d:null},'Partial download did not resume and finish',180000);
  assert.ok(!path.relative(root,resumed.path).startsWith('..')&&!path.isAbsolute(path.relative(root,resumed.path)),'Resumed download escaped its isolated folder');
  assert.equal(createHash('sha256').update(await readFile(resumed.path)).digest('hex'),slowHash,'Resumed file does not match');
- await restarted.evaluate(()=>window.__TAURI_INTERNALS__.invoke('quit_glass')).catch(()=>{});
- await until(()=>app.exitCode!==null,'Restarted Auralis did not stop',45000);assert.equal(app.exitCode,0);
+ await quitApp(restarted,'Restarted Auralis');
  console.log('PASS: integrated downloader ran without a legacy child, downloaded a verified file, handled a browser capture, and resumed a partial download after restart.');
 } catch(error) {
  console.error('Fixture diagnostics:',JSON.stringify({requestCount,lastStatus,gotAddResponse:Boolean(addResponse),appExit:app?.exitCode}));
