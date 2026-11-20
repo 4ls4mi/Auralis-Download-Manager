@@ -43,6 +43,9 @@ try{
  const infoUrl=`http://127.0.0.1:${server.address().port}/new-file.bin`;await ipc({url:infoUrl,silent:false});const pending=await until(async()=>{const p=JSON.parse(await ipc({query:'glass-file-info'}));return p.info&&p.info.url===infoUrl?p:null},'File information unavailable');await invoke('open_glass_window',{label:`info-${pending.id}`,url:`/?request=${pending.id}`,width:850,height:580});const info=await pageFor(`request=${pending.id}`);await info.waitForSelector('.cg-file-info');await pause(500);await info.screenshot({path:path.join(output,'file-info.png')});
  const doneUrl=`http://127.0.0.1:${server.address().port}/completed-example.bin`;await ipc({url:doneUrl,silent:true});const done=await until(async()=>JSON.parse(await ipc({query:'list'})).downloads.find(d=>d.url===doneUrl&&d.status==='Complete'),'Completed fixture did not finish');await invoke('open_glass_window',{label:`complete-${done.id}`,url:`/?complete=${done.id}`,width:780,height:500});const complete=await pageFor(`complete=${done.id}`);await complete.waitForSelector('.cg-complete-page');await pause(300);await complete.screenshot({path:path.join(output,'complete.png')});
  await main.screenshot({path:path.join(output,'main.png')});
+ await invoke('plugin:window|maximize',{label:'main'});
+ await until(async()=>main.evaluate(()=>document.querySelector('.cg-window')?.classList.contains('cg-maximized')),'Main window did not enter the maximized layout');
+ await pause(1000);await main.screenshot({path:path.join(output,'main-maximized.png')});
  console.log('Captured the real Windows app with local downloads and measured speed samples.');
  await invoke('quit_glass').catch(()=>{});await until(()=>app.exitCode!==null,'Auralis did not exit',45000);
 }catch(error){if(outputLog)console.error('Auralis output:',outputLog);throw error}
