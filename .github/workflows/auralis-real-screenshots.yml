@@ -25,6 +25,21 @@ jobs:
           path: app-source
           persist-credentials: false
           clean: false
+      - name: Set up Node.js 22
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $cacheDir = Join-Path $env:RUNNER_WORKSPACE 'auralis-cache'
+          New-Item -ItemType Directory -Force $cacheDir | Out-Null
+          $archive = Join-Path $cacheDir 'node-v22.23.5-win-x64.zip'
+          $nodeDir = Join-Path $cacheDir 'node-v22.23.5-win-x64'
+          if (!(Test-Path (Join-Path $nodeDir 'node.exe'))) {
+            if (!(Test-Path $archive)) { Invoke-WebRequest 'https://nodejs.org/dist/v22.23.5/node-v22.23.5-win-x64.zip' -OutFile $archive }
+            if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne '4a191082e9706866830379d577d2cc8a50c776fcd9436a8d061b063ed0d9a0e3') { Remove-Item $archive -Force; throw 'Node archive checksum mismatch.' }
+            Expand-Archive -Path $archive -DestinationPath $cacheDir -Force
+          }
+          $nodeDir >> $env:GITHUB_PATH
+
       - name: Prepare screenshot tools
         shell: pwsh
         run: |
