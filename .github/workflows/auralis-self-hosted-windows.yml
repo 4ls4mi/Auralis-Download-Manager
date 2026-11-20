@@ -214,9 +214,6 @@ jobs:
             }
             $resources[$extension.Replace('\','/') + '/'] = 'auralis-extension/'
             $config.bundle.resources = $resources
-            if ($env:GITHUB_REF -eq 'refs/heads/feature/auralis-embedded-engine') {
-              $config.identifier = 'com.auralis.embedded-test'
-            }
             $config.bundle.icon = @((Join-Path $staging 'auralis.ico').Replace('\','/'), (Join-Path $staging 'auralis.png').Replace('\','/'))
             [IO.File]::WriteAllText($configPath, ($config | ConvertTo-Json -Depth 100), [Text.UTF8Encoding]::new($false))
             if ($env:GITHUB_REF -eq 'refs/heads/feature/auralis-embedded-engine') {

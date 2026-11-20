@@ -655,6 +655,9 @@ fn main() {
         }));
     }
     let mut context=tauri::generate_context!();
+    // Keep the shipped identifier unchanged. Only the isolated test process
+    // gets a separate single-instance namespace and WebView data directory.
+    if is_isolated_test() { context.config_mut().identifier = "com.auralis.embedded-test".into(); }
     if startup::is_minimized_startup(){if let Some(window)=context.config_mut().app.windows.first_mut(){window.visible=false;}}
     if let Some(args)=test_browser_args(){if let Some(window)=context.config_mut().app.windows.first_mut(){window.additional_browser_args=Some(args);}}
     tauri::Builder::default()
