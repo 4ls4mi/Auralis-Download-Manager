@@ -273,6 +273,8 @@ fn show_main(app: &AppHandle) {
 async fn boot_engine(app: AppHandle) -> ApiResult<String> {
     tauri::async_runtime::spawn_blocking(move || {
         let boot = boot_existing_engine(&app)?;
+        #[cfg(feature = "embedded-downloader")]
+        if std::env::var_os("AURALIS_TEST_SKIP_HOST").is_some() { return Ok(boot); }
         let browser = register_browser_host(&app);
         match browser {
             Ok(_) => Ok(format!("{boot} • browser extension host registered")),

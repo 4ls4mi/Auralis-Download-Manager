@@ -206,6 +206,9 @@ jobs:
             }
             $resources[$extension.Replace('\','/') + '/'] = 'auralis-extension/'
             $config.bundle.resources = $resources
+            if ($env:GITHUB_REF -eq 'refs/heads/feature/auralis-embedded-engine') {
+              $config.identifier = 'com.auralis.embedded-test'
+            }
             $config.bundle.icon = @((Join-Path $staging 'auralis.ico').Replace('\','/'), (Join-Path $staging 'auralis.png').Replace('\','/'))
             [IO.File]::WriteAllText($configPath, ($config | ConvertTo-Json -Depth 100), [Text.UTF8Encoding]::new($false))
             if ($env:GITHUB_REF -eq 'refs/heads/feature/auralis-embedded-engine') {
@@ -217,6 +220,14 @@ jobs:
           } finally {
             [IO.File]::WriteAllText($configPath, $original, [Text.UTF8Encoding]::new($false))
           }
+
+      - name: Test integrated Windows application
+        if: github.ref == 'refs/heads/feature/auralis-embedded-engine'
+        shell: pwsh
+        run: |
+          $env:AURALIS_EMBEDDED_EXE = Join-Path $env:CARGO_TARGET_DIR 'release/auralis-download-manager.exe'
+          node tools/lab/auralis-embedded-smoke.mjs
+          if ($LASTEXITCODE) { throw 'Integrated application smoke test failed.' }
 
       - name: Upload Auralis installer
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
