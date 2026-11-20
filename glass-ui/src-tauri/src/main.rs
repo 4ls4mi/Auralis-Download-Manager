@@ -643,6 +643,13 @@ fn test_browser_args()->Option<String>{
 }
 
 fn main() {
+    #[cfg(feature = "embedded-downloader")]
+    if let Some(path) = std::env::var_os("AURALIS_TEST_PANIC_LOG") {
+        std::panic::set_hook(Box::new(move |info| {
+            let report = format!("{info}\n{}\n", std::backtrace::Backtrace::force_capture());
+            let _ = std::fs::write(&path, report);
+        }));
+    }
     let mut context=tauri::generate_context!();
     if startup::is_minimized_startup(){if let Some(window)=context.config_mut().app.windows.first_mut(){window.visible=false;}}
     if let Some(args)=test_browser_args(){if let Some(window)=context.config_mut().app.windows.first_mut(){window.additional_browser_args=Some(args);}}
