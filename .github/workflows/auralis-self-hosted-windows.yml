@@ -208,7 +208,11 @@ jobs:
             $config.bundle.resources = $resources
             $config.bundle.icon = @((Join-Path $staging 'auralis.ico').Replace('\','/'), (Join-Path $staging 'auralis.png').Replace('\','/'))
             [IO.File]::WriteAllText($configPath, ($config | ConvertTo-Json -Depth 100), [Text.UTF8Encoding]::new($false))
-            npm run tauri -- build --bundles nsis
+            if ($env:GITHUB_REF -eq 'refs/heads/feature/auralis-embedded-engine') {
+              npm run tauri -- build --bundles nsis --features embedded-downloader
+            } else {
+              npm run tauri -- build --bundles nsis
+            }
             if ($LASTEXITCODE) { throw 'Installer build failed.' }
           } finally {
             [IO.File]::WriteAllText($configPath, $original, [Text.UTF8Encoding]::new($false))

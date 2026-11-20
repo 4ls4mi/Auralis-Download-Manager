@@ -984,6 +984,13 @@ fn runtime_dirs() -> Vec<PathBuf> {
     #[cfg(windows)]
     {
         let mut dirs = crate::system::extra_dirs();
+        // Bundled runtimes also live beside Auralis when the downloader is embedded.
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(parent) = exe.parent() {
+                dirs.push(parent.to_path_buf());
+                dirs.push(parent.join("resources"));
+            }
+        }
         if let Some(programs) = std::env::var_os("ProgramFiles") {
             dirs.push(Path::new(&programs).join("nodejs"));
         }

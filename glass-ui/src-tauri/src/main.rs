@@ -73,6 +73,7 @@ fn current_backend() -> ApiResult<BackendIdentity> {
         .map_err(|_| "Another original Mister Download Manager instance is running. It still owns the original tray icon. Finish active downloads, then exit original MDM before starting Auralis. Your download data and settings will be preserved.".into())
 }
 
+#[cfg(not(feature = "embedded-downloader"))]
 fn boot_existing_engine(app: &AppHandle) -> ApiResult<String> {
     // NEVER attach the Glass UI to a legacy GUI instance: that previously
     // resulted in two tray icons and opening the old window by accident.
@@ -121,6 +122,68 @@ fn boot_existing_engine(app: &AppHandle) -> ApiResult<String> {
         }
     }
     Err("Headless downloader did not initialize. See its crash logs in the original MDM data directory.".into())
+}
+
+// The experimental build owns the backend thread. Serializing startup prevents
+// duplicate boot requests from starting two services against the same data.
+#[cfg(feature = "embedded-downloader")]
+static EMBEDDED_ENGINE: Mutex<Option<thread::JoinHandle<Result<(), String>>>> = Mutex::new(None);
+
+#[cfg(feature = "embedded-downloader")]
+fn boot_existing_engine(_app: &AppHandle) -> ApiResult<String> {
+    let mut slot = EMBEDDED_ENGINE.lock().map_err(|_| "Downloader state is unavailable")?;
+    if let Some(worker) = slot.as_ref() {
+        if !worker.is_finished() {
+            return if current_backend().is_ok_and(|b| b.headless && b.glass) {
+                Ok("Auralis downloader is running".into())
+            } else { Err("Auralis downloader is still starting".into()) };
+        }
+        if let Some(worker) = slot.take() { let _ = worker.join(); }
+    }
+    match current_backend() {
+        Ok(_) => return Err("Another downloader is using this data. Finish its downloads and exit it before starting Auralis.".into()),
+        Err(e) if e.contains("Another original Mister") => return Err(e),
+        Err(_) => {}
+    }
+    *slot = Some(thread::Builder::new().name("auralis-downloader".into())
+        .spawn(mdm_app::run_embedded_downloader).map_err(|e| format!("Could not start Auralis downloader: {e}"))?);
+    for _ in 0..80 {
+        thread::sleep(Duration::from_millis(250));
+        if current_backend().is_ok_and(|b| b.headless && b.glass) {
+            request_snapshot()?;
+            return Ok("Auralis integrated downloader is running".into());
+        }
+        if slot.as_ref().is_some_and(|worker| worker.is_finished()) {
+            let worker=slot.take().expect("worker exists");
+            return match worker.join() {
+                Ok(Err(e)) => Err(e),
+                Ok(Ok(())) => Err("Auralis downloader stopped during startup".into()),
+                Err(_) => Err("Auralis downloader failed during startup".into()),
+            };
+        }
+    }
+    Err("Auralis downloader is still starting; check the application log".into())
+}
+
+/// Stop the downloader and allow it to save before the containing process exits.
+fn stop_engine() -> ApiResult<()> {
+    if current_backend().is_ok_and(|state| state.glass && state.headless) {
+        mdm_ipc::send(&mdm_ipc::Command { exit: true, ..Default::default() })
+            .map_err(|e| format!("Could not stop the downloader: {e}"))?;
+    }
+    #[cfg(feature = "embedded-downloader")]
+    {
+        let mut slot=EMBEDDED_ENGINE.lock().map_err(|_| "Downloader state is unavailable")?;
+        let deadline=std::time::Instant::now()+Duration::from_secs(30);
+        while slot.as_ref().is_some_and(|worker| !worker.is_finished()) {
+            if std::time::Instant::now() >= deadline { return Err("The downloader is still saving. Try again shortly.".into()); }
+            thread::sleep(Duration::from_millis(100));
+        }
+        if let Some(worker)=slot.take() {
+            worker.join().map_err(|_| "The downloader stopped unexpectedly")??;
+        }
+    }
+    Ok(())
 }
 
 fn build_tray_menu(app: &AppHandle) -> ApiResult<Menu<tauri::Wry>> {
@@ -350,14 +413,7 @@ fn register_browser_host(app: &AppHandle) -> ApiResult<String> {
 
 #[tauri::command]
 async fn quit_glass(app: AppHandle) -> ApiResult<()> {
-    tauri::async_runtime::spawn_blocking(|| {
-        if current_backend().is_ok_and(|state| state.glass && state.headless) {
-            let _ = mdm_ipc::send(&mdm_ipc::Command {
-                exit: true,
-                ..Default::default()
-            });
-        }
-    }).await.map_err(|e| e.to_string())?;
+    tauri::async_runtime::spawn_blocking(stop_engine).await.map_err(|e| e.to_string())??;
     app.exit(0);
     Ok(())
 }
@@ -637,13 +693,9 @@ fn main() {
                         if let Ok(download_id) = id.trim_start_matches("restore-download-").parse::<u64>() { restore_download_window(app, download_id); }
                     }
                     "quit" => {
-                        // This is an explicit EXIT, not closing/minimizing.
-                        // The headless service persists its state on exit.
-                        if current_backend().is_ok_and(|b| b.headless && b.glass) {
-                            let _ = mdm_ipc::send(&mdm_ipc::Command {
-                                exit: true,
-                                ..Default::default()
-                            });
+                        if let Err(error) = stop_engine() {
+                            eprintln!("Could not exit Auralis: {error}");
+                            return;
                         }
                         app.exit(0);
                     }

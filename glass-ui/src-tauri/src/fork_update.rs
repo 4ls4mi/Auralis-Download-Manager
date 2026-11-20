@@ -112,7 +112,7 @@ pub async fn glass_update_install(app:AppHandle) -> Result<(),String> {
         std::process::Command::new("powershell.exe").args(["-NoProfile","-NonInteractive","-WindowStyle","Hidden","-Command",script])
             .env("MHG_UPDATE_PID",std::process::id().to_string()).env("MHG_UPDATE_INSTALLER",&installer).env("MHG_UPDATE_OLD",&exe)
             .creation_flags(0x08000000).spawn().map_err(|e|format!("Could not start the installer: {e}"))?;
-        if super::current_backend().is_ok_and(|s|s.glass&&s.headless) {let _=mdm_ipc::send(&mdm_ipc::Command{exit:true,..Default::default()});}
+        super::stop_engine()?;
         app.exit(0);Ok(())
     }).await.map_err(|e|e.to_string())?
 }
