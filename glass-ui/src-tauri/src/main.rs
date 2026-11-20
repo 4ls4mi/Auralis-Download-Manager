@@ -2,6 +2,7 @@
 // Windows-only Auralis shell. The downloader runs inside this process;
 // the frontend never accesses its token or loopback socket directly.
 mod lifecycle;
+mod backup;
 mod startup;
 #[cfg(windows)] mod fork_update;
 mod material_window;
@@ -29,6 +30,9 @@ type ApiResult<T> = Result<T, String>;
 fn is_isolated_test() -> bool {
     cfg!(feature = "embedded-downloader") && std::env::var_os("AURALIS_TEST_SKIP_HOST").is_some()
 }
+
+#[tauri::command]
+fn backup_prompt_enabled() -> bool { !is_isolated_test() }
 
 #[derive(Default)]
 struct HiddenDownloadWindows(Mutex<HashSet<u64>>);
@@ -235,9 +239,10 @@ fn build_tray_menu(app: &AppHandle) -> ApiResult<Menu<tauri::Wry>> {
     menu.append(&downloads).map_err(|e| e.to_string())?;
     menu.append(&PredefinedMenuItem::separator(app).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
     menu.append(&speed).map_err(|e| e.to_string())?;
-    for item in [&scheduler, &start, &stop, &options] {
-        menu.append(item).map_err(|e| e.to_string())?;
-    }
+    menu.append(&scheduler).map_err(|e| e.to_string())?;
+    let running=snapshot.as_ref().and_then(|s|s.queues.first()).is_some_and(|q|q.running);
+    menu.append(if running { &stop } else { &start }).map_err(|e|e.to_string())?;
+    menu.append(&options).map_err(|e|e.to_string())?;
     menu.append(&PredefinedMenuItem::separator(app).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
     menu.append(&exit).map_err(|e| e.to_string())?;
     Ok(menu)
@@ -262,6 +267,20 @@ fn restore_download_window(app: &AppHandle, id: u64) {
         }
     }
     refresh_tray_menu(app);
+}
+
+#[tauri::command]
+fn hidden_progress_window_ids(app: AppHandle) -> ApiResult<Vec<u64>> {
+    let ids=app.state::<HiddenDownloadWindows>().0.lock().map_err(|_|"Could not read hidden download windows")?.iter().copied().collect();
+    Ok(ids)
+}
+
+#[tauri::command]
+fn restore_hidden_progress_window(app: AppHandle, id: u64) -> ApiResult<()> {
+    if !app.state::<HiddenDownloadWindows>().0.lock().map_err(|_|"Could not read hidden download windows")?.contains(&id) { return Err("This download window is no longer hidden".into()); }
+    if app.get_webview_window(&format!("download-{id}")).is_none() { return Err("This download window is no longer open".into()); }
+    restore_download_window(&app,id);
+    Ok(())
 }
 
 fn show_main(app: &AppHandle) {
@@ -469,7 +488,7 @@ async fn prepare_auralis_extension(app: AppHandle, browser: String) -> ApiResult
 #[tauri::command]
 fn browser_connection_status() -> serde_json::Value {
     if is_isolated_test() { return serde_json::json!({"recently_connected":true,"previously_connected":false,"browsers":[]}); }
-    serde_json::json!({"recently_connected":mdm_ipc::extension::recently_connected(),"previously_connected":mdm_ipc::extension::seen(),"browsers":mdm_ipc::extension::seen_browsers()})
+    serde_json::json!({"recently_connected":mdm_ipc::extension::recently_connected(),"recent_browser":mdm_ipc::extension::recently_connected_browser(),"previously_connected":mdm_ipc::extension::seen(),"browsers":mdm_ipc::extension::seen_browsers()})
 }
 
 #[tauri::command]
@@ -732,10 +751,20 @@ fn main() {
                 .icon(app.default_window_icon().cloned().ok_or("No packaged Auralis icon")?)
                 .tooltip("Auralis — download progress windows")
                 .menu(&progress_menu)
-                .show_menu_on_left_click(true)
+                .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| {
                     if let Some(id) = event.id.as_ref().strip_prefix("progress-").and_then(|id| id.parse::<u64>().ok()) {
-                        let _ = lifecycle::open(app, &format!("download-{id}"), &format!("detail={id}"), 880.0, 440.0);
+                        restore_download_window(app, id);
+                    }
+                })
+                .on_tray_icon_event(|tray,event| {
+                    if let TrayIconEvent::Click {button:MouseButton::Left,button_state:MouseButtonState::Up,position,..}=event {
+                        let ids=tray.app_handle().state::<HiddenDownloadWindows>().0.lock().map(|ids|ids.iter().copied().collect::<Vec<_>>()).unwrap_or_default();
+                        if ids.len()==1 {restore_download_window(tray.app_handle(),ids[0]);}
+                        else if ids.len()>1 {
+                            let route=format!("tool=progress-tray&x={}&y={}",position.x.round() as i32,position.y.round() as i32);
+                            let _=lifecycle::open(tray.app_handle(),"tool-progress-tray",&route,500.0,360.0);
+                        }
                     }
                 })
                 .build(app)?;
@@ -770,7 +799,7 @@ fn main() {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            startup::startup_settings, startup::set_startup_settings, material_window::set_material_window_shape, pending_file_info, file_info_action, choose_download_path, window_preferences, glass_tool, choose_folder, choose_setting_file, list_network_adapters, open_glass_window, close_progress_windows, hide_download_to_tray, drag_download, drag_state, choose_move, clipboard_text, video_tool, open_youtube_sign_in, youtube_session_status, browser_video,
+            hidden_progress_window_ids, restore_hidden_progress_window, backup_prompt_enabled, backup::export_preferences, backup::import_preferences, startup::startup_settings, startup::set_startup_settings, material_window::set_material_window_shape, pending_file_info, file_info_action, choose_download_path, window_preferences, glass_tool, choose_folder, choose_setting_file, list_network_adapters, open_glass_window, close_progress_windows, hide_download_to_tray, drag_download, drag_state, choose_move, clipboard_text, video_tool, open_youtube_sign_in, youtube_session_status, browser_video,
             boot_engine, dashboard_snapshot, dashboard_visuals, download_action,
             add_download, select_wallpaper, queue_action, glass_settings, update_glass_setting,
             browser_integration, browser_connection_status, prepare_auralis_extension, extension_store_link, open_extension_store, bulk_action, file_operation, add_torrent_file, quit_glass, open_upstream_releases, fork_update::glass_update_check, fork_update::glass_update_download, fork_update::glass_update_install

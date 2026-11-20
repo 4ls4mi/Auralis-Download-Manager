@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
+import {restorePreferences} from "./preferencesBackup";
 import {connectReleasePush} from "./releasePush";
 import {isPermissionGranted, requestPermission, sendNotification} from "@tauri-apps/plugin-notification";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -102,9 +103,17 @@ export default function CrystalApp(){
   },[]);
   useEffect(()=>{
     let mounted=true;
-    void invoke<string>("boot_engine").then(text=>{
+    void invoke<string>("boot_engine").then(async text=>{
       if(!mounted)return;
       setMessage(text);void refresh();
+      if(!localStorage.getItem("auralis-backup-asked")) {
+        const firstInstall=!localStorage.getItem("auralis-browser-guide-seen")&&!localStorage.getItem("mh-glass-theme");
+        localStorage.setItem("auralis-backup-asked","1");
+        const shouldOffer=firstInstall&&(await invoke<boolean>("backup_prompt_enabled").catch(()=>true))!==false;
+        if(shouldOffer&&window.confirm("Do you have an Auralis preferences backup to restore?")) {
+          try{if(await restorePreferences()){location.reload();return}}catch(e){setMessage("Could not restore preferences: "+String(e))}
+        }
+      }
       if(!localStorage.getItem("auralis-browser-guide-seen")){
         void invoke<{recently_connected:boolean}>("browser_connection_status").then(status=>{
           if(mounted&&!status.recently_connected){localStorage.setItem("auralis-browser-guide-seen","1");openWindow("tool-browser-guide","/?tool=browser-guide",680,530)}
@@ -137,7 +146,8 @@ export default function CrystalApp(){
         if(lastShown===update.version&&!reminder)return;
         if(applies&&snooze>0&&snooze<=Date.now()){localStorage.removeItem("auralis-update-snooze");localStorage.removeItem("auralis-update-snooze-version")}
         lastShown=update.version;
-        openWindow("tool-update-toast","/?tool=update-toast",420,200);
+        if(localStorage.getItem("auralis-update-presentation")==="dialog") openWindow("tool-update-notice","/?tool=update-notice",680,520);
+        else openWindow("tool-update-toast","/?tool=update-toast",420,200);
         void (async()=>{try{let granted=await isPermissionGranted();if(!granted)granted=(await requestPermission())==="granted";if(granted)sendNotification({title:"Auralis update available",body:`Version ${update.version} is available. Open the update window to review the changes.`})}catch{/* The in-app notice remains available if Windows notifications are disabled. */}})();
       }catch{/* A later reconnect, signal or manual check can retry. */}
       finally{inFlight=false;if(queued&&mounted){queued=false;void check()}}

@@ -1,3 +1,4 @@
+import {savePreferences,restorePreferences} from "./preferencesBackup";
 import { liquidMaterials } from "./LiquidIndicators";
 import { listen } from "@tauri-apps/api/event";
 import CrystalAccounts from "./CrystalAccounts";
@@ -43,6 +44,7 @@ export default function CrystalSettings(){
   const [browser,setBrowser]=useState("");
   const [extensionBrowser,setExtensionBrowser]=useState("edge");
   const [appVersion,setAppVersion]=useState("");
+  const [updatePresentation,setUpdatePresentation]=useState(()=>localStorage.getItem("auralis-update-presentation")||"toast");
   const [startup,setStartup]=useState<{enabled:boolean;mode:string}|null>(null);
   const [adapters,setAdapters]=useState<{name:string;address:string|null}[]>([]);
   const [adapterError,setAdapterError]=useState("");
@@ -113,6 +115,7 @@ export default function CrystalSettings(){
   const body=()=>{
     switch(tab){
       case "General":return <>
+        <section className="cg-glass cg-progress-section"><h3>Preferences backup</h3><p>Save your appearance and download preferences for a new Windows installation. Passwords, account credentials and browser cookies are not included; file paths may need updating.</p><div className="cg-bottom-actions"><button className="cg-btn" onClick={async()=>{setError("");try{const file=await savePreferences();if(file)setNotice("Preferences backup saved.")}catch(e){setError(String(e))}}}>Save backup…</button><button className="cg-btn" onClick={async()=>{setError("");try{if(await restorePreferences()){setNotice("Preferences restored. Reopen Auralis windows to apply the appearance.");location.reload()}}catch(e){setError(String(e))}}}>Restore backup…</button></div></section>
         <label className="cg-toggle"><span><strong>Start Auralis with Windows</strong><small>Launch Auralis automatically when you sign in to Windows.</small></span><input type="checkbox" disabled={!startup||busy} checked={startup?.enabled??false} onChange={e=>void changeStartup(e.target.checked,startup?.mode??"minimized")}/></label>
         <label className="cg-field">When Windows starts<select value={startup?.mode??"minimized"} disabled={!startup||busy} onChange={e=>void changeStartup(startup?.enabled??false,e.target.value)}><option value="minimized">Start minimized in the system tray</option><option value="window">Open the main window</option></select><small>Applies to Windows startup. Open Auralis normally from its shortcut whenever you want the main window.</small></label>
         <p>Browser captures wait for Download File Info so you can confirm the destination and download options.</p>
@@ -238,7 +241,7 @@ export default function CrystalSettings(){
       {error&&<p className="cg-error">{error}</p>}
       {notice&&<p className="cg-success"><CheckCircle2 size={14}/> {notice}</p>}
       {tab!=="Appearance"&&tab!=="Accounts"&&<nav className="cg-appearance-tabs"><button className={settingsPanel==="Main options"?"selected":""} onClick={()=>setSettingsPanel("Main options")}>Common settings</button><button className={settingsPanel==="More options"?"selected":""} onClick={()=>setSettingsPanel("More options")}>All original settings</button>{tab==="Advanced"&&<button className={settingsPanel==="Updates"?"selected":""} onClick={()=>setSettingsPanel("Updates")}>Updates</button>}</nav>}
-      <div>{tab==="Advanced"&&settingsPanel==="Updates"?<><CrystalUpstream/>{adapterPicker()}</>:tab==="Appearance"||tab==="Accounts"||settingsPanel==="Main options"?body():<CrystalOriginalSettings section={tab}/>}</div>
+      <div>{tab==="Advanced"&&settingsPanel==="Updates"?<><label className="cg-field">Update notification<select value={updatePresentation} onChange={e=>{setUpdatePresentation(e.target.value);localStorage.setItem("auralis-update-presentation",e.target.value)}}><option value="toast">Small notification in the bottom-right corner</option><option value="dialog">Open the update window in the center</option></select></label><CrystalUpstream/>{adapterPicker()}</>:tab==="Appearance"||tab==="Accounts"||settingsPanel==="Main options"?body():<CrystalOriginalSettings section={tab}/>}</div>
     </div></div>
     <footer className="cg-bottom-actions" style={{padding:"9px 18px"}}><span className="cg-muted" style={{marginRight:"auto",fontSize:"var(--min-text-size)"}}>Auralis {appVersion||"…"} • Windows x64 • Changes are saved automatically</span>
       <button className="cg-btn cg-btn-primary" onClick={()=>void import("@tauri-apps/api/window").then(m=>m.getCurrentWindow().close())}>Done</button>

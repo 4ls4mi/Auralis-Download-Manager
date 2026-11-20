@@ -14,7 +14,7 @@ pub fn fit_size(app:&AppHandle,width:f64,height:f64)->(f64,f64) {
 }
 
 pub fn open(app: &AppHandle, label: &str, route: &str, width: f64, height: f64) -> ApiResult<()> {
-    let priority = label.starts_with("info-") || label.starts_with("download-") || label.starts_with("tool-video-") || label == "tool-update-notice";
+    let priority = label.starts_with("info-") || label.starts_with("download-") || label.starts_with("tool-video-") || label == "tool-update-notice" || label == "tool-progress-tray";
     if let Some(w) = app.get_webview_window(label) {
         if priority { let _ = w.set_always_on_top(true); }
         let _ = w.emit("glass-navigate", route);
@@ -51,6 +51,7 @@ pub fn start(app: AppHandle) {
         let mut previous: Option<HashMap<u64, String>> = None;
         let mut tray_items: Vec<(u64, MenuItem<tauri::Wry>)> = Vec::new();
         let mut helpers_checked = super::is_isolated_test();
+        let mut last_queue_running: Option<bool> = None;
         let mut last_info = 0;
         let mut last_power = 0;
         let mut last_import = 0;
@@ -61,6 +62,8 @@ pub fn start(app: AppHandle) {
             thread::sleep(Duration::from_millis(650));
             if !current_backend().is_ok_and(|b|b.headless&&b.glass) {continue;}
             let Ok(snapshot) = request_snapshot() else { continue; };
+            let queue_running=snapshot.queues.first().is_some_and(|q|q.running);
+            if last_queue_running!=Some(queue_running){last_queue_running=Some(queue_running);super::refresh_tray_menu(&app);}
             let hidden=app.state::<HiddenDownloadWindows>().0.lock().map(|v|v.clone()).unwrap_or_default();
             let visuals = if hidden.is_empty() { None } else { send_ipc(&mdm_ipc::Command{query:Some("glass-visuals".into()),..Default::default()}).ok().and_then(|s|serde_json::from_str::<serde_json::Value>(&s).ok()) };
             let entries: Vec<_> = snapshot.downloads.iter().filter(|d| hidden.contains(&d.id)).map(|d| {
@@ -71,6 +74,11 @@ pub fn start(app: AppHandle) {
                 let resume=match detail.and_then(|v|v["resumable"].as_bool()) {Some(true)=>"resumable",Some(false)=>"not resumable",None=>"resume unknown"};
                 (d.id,format!("{} — {} · {} · {:.1} MB/s · {} · {} · {}",d.file,d.status,percent,d.speed as f64/1048576.0,eta,active,resume))
             }).collect();
+            if let Some(tray) = app.tray_by_id("progress-tray") {
+                let _=tray.set_show_menu_on_left_click(false);
+                let tip=if entries.len()==1 {entries[0].1.chars().take(120).collect::<String>()} else {format!("Auralis — {} download windows",entries.len())};
+                let _=tray.set_tooltip(Some(tip));
+            }
             let membership_changed = entries.len()!=tray_items.len() || entries.iter().any(|(id,_)|!tray_items.iter().any(|(old,_)|old==id));
             if membership_changed {
                 if let Some(tray) = app.tray_by_id("progress-tray") {

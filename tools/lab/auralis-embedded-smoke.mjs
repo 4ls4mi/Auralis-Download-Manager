@@ -60,6 +60,12 @@ try {
  browser=await until(async()=>{if(app.exitCode!==null)throw exited(`Auralis exited: ${app.exitCode}`);try{return await chromium.connectOverCDP(`http://127.0.0.1:${port}`,{timeout:2000})}catch{return null}},'WebView did not start');
  const page=await until(()=>browser.contexts().flatMap(c=>c.pages()).find(p=>!p.isClosed()&&!p.url().includes('?')),'Main window missing');
  const identity=await until(async()=>JSON.parse(await ipc({query:'glass-backend'})),'Downloader did not start');assert.equal(identity.headless,true);assert.equal(identity.glass,true);
+ // Verify the actual Windows title-bar control, not just the WebView rendering.
+ const maximize=page.getByRole('button',{name:'Maximize or restore'});
+ await maximize.click();
+ await until(()=>page.evaluate(()=>window.__TAURI_INTERNALS__.invoke('plugin:window|is_maximized',{label:'main'})),'Maximize button did not maximize the window');
+ await maximize.click();
+ await until(async()=>!(await page.evaluate(()=>window.__TAURI_INTERNALS__.invoke('plugin:window|is_maximized',{label:'main'}))),'Maximize button did not restore the window');
  const ps=spawnSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',`Get-CimInstance Win32_Process -Filter 'ParentProcessId=${app.pid}' | Select-Object -ExpandProperty Name`],{encoding:'utf8',timeout:15000});assert.equal(ps.status,0,'Could not inspect child processes');assert.doesNotMatch(ps.stdout,/^mdm-legacy\.exe\s*$/im,'A legacy downloader process was launched');
  const downloadUrl=`http://127.0.0.1:${server.address().port}/embedded-smoke-${Date.now()}.bin`;
  addResponse=await ipc({url:downloadUrl,silent:true});

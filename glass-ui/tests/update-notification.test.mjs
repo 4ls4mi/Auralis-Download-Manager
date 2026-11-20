@@ -10,16 +10,17 @@ test('background update appears even when engine startup fails, respects reminde
  const browser=await chromium.launch({headless:true,executablePath:browserPath,args:['--no-sandbox']});
  try{
   const url=server.resolvedUrls.local[0];
-  async function pageFor(snoozeVersion){
+  async function pageFor(snoozeVersion,presentation){
    const page=await browser.newPage();
-   await page.addInitScript(({snoozeVersion})=>{
+   await page.addInitScript(({snoozeVersion,presentation})=>{
     window.calls=[];window.notices=[];window.intervals=[];window.callbacks={};window.eventHandlers={};window.callbackId=0;window.socketUrls=[];window.WebSocket=class {constructor(url){window.socketUrls.push(url)} close(){}};const originalSetInterval=window.setInterval;window.setInterval=(fn,delay,...args)=>{window.intervals.push(delay);return originalSetInterval(fn,delay,...args)};localStorage.setItem('auralis-browser-guide-seen','1');
+    if(presentation)localStorage.setItem('auralis-update-presentation',presentation);
     if(snoozeVersion){localStorage.setItem('auralis-update-snooze',String(Date.now()+3600000));localStorage.setItem('auralis-update-snooze-version',snoozeVersion)}
     class FakeNotification {static permission='granted';constructor(title,options){window.notices.push({title,body:options.body})}}
     window.Notification=FakeNotification;
     window.__TAURI_EVENT_PLUGIN_INTERNALS__={unregisterListener:()=>{}};
     window.__TAURI_INTERNALS__={metadata:{currentWindow:{label:'main'},currentWebview:{label:'main'}},transformCallback:fn=>{const id=++window.callbackId;window.callbacks[id]=fn;return id},unregisterCallback:()=>{},invoke:async(cmd,args)=>{window.calls.push({cmd,args});if(cmd==='plugin:event|listen'){window.eventHandlers[args.event]=window.callbacks[args.handler];return 1}if(cmd==='glass_update_download'){if(window.failUpdate)throw Error('Download failed');return new Promise(resolve=>{window.resolveDownload=resolve})}if(cmd==='boot_engine')throw Error('Engine unavailable');if(cmd==='glass_update_check')return {state:'available',version:'1.2.3',notes:'Changes in the new release'};if(cmd==='dashboard_snapshot')return {downloads:[],speed:0,queues:[],categories:[]};return null}};
-   },{snoozeVersion});
+   },{snoozeVersion,presentation});
    await page.goto(url);await page.waitForFunction(()=>window.calls.some(c=>c.cmd==='glass_update_check'));await page.waitForTimeout(250);return page;
   }
   const fresh=await pageFor(null);
@@ -29,6 +30,10 @@ test('background update appears even when engine startup fails, respects reminde
   assert.ok(await fresh.evaluate(()=>window.socketUrls.includes('wss://auralis-release-push.auralis-updates.workers.dev/events')),'connect to the release signal');
   assert.match(await fresh.locator('.cg-update-notice').innerText(),/1\.2\.3/);
   await fresh.close();
+  const dialog=await pageFor(null,'dialog');
+  assert.ok(await dialog.evaluate(()=>window.calls.some(c=>c.cmd==='open_glass_window'&&c.args.label==='tool-update-notice')),'dialog preference should open the update window');
+  assert.equal(await dialog.evaluate(()=>window.calls.some(c=>c.cmd==='open_glass_window'&&c.args.label==='tool-update-toast')),false);
+  await dialog.close();
   const snoozed=await pageFor('1.2.3');
   assert.equal(await snoozed.evaluate(()=>window.calls.some(c=>c.cmd==='open_glass_window'&&c.args.label==='tool-update-toast')),false,'same version reminder should stay snoozed');
   await snoozed.close();

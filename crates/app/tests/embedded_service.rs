@@ -30,6 +30,38 @@ fn embedded_service_uses_existing_ipc_and_shuts_down_cleanly() {
         mdm_ipc::instance_lock().is_none(),
         "data lock must remain held"
     );
+    // Preferences export must omit device-bound credentials, and restoration
+    // must apply supported preferences without requiring a second process.
+    let reply = mdm_ipc::request_checked(&mdm_ipc::Command {
+        query: Some("glass-backup-settings".into()),
+        ..Default::default()
+    })
+    .expect("export preferences");
+    let mut backup: serde_json::Value = serde_json::from_str(&reply).expect("backup json");
+    let settings = backup["settings"].as_object_mut().expect("settings object");
+    for key in ["proxy_pass", "site_logins", "debrid_accounts"] {
+        assert!(!settings.contains_key(key), "credential leaked: {key}");
+    }
+    settings.insert("show_complete".into(), serde_json::json!(true));
+    let reply = mdm_ipc::request_checked(&mdm_ipc::Command {
+        action: Some("glass-restore-settings".into()),
+        queue: Some(backup["settings"].to_string()),
+        ..Default::default()
+    })
+    .expect("restore preferences");
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&reply).expect("restore json")["ok"],
+        true
+    );
+    let current = mdm_ipc::request_checked(&mdm_ipc::Command {
+        query: Some("glass-settings".into()),
+        ..Default::default()
+    })
+    .expect("current preferences");
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&current).expect("settings json")["show_complete"],
+        true
+    );
     mdm_ipc::send(&mdm_ipc::Command {
         exit: true,
         ..Default::default()

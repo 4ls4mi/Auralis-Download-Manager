@@ -34,6 +34,23 @@ impl App {
         if let Some(answer)=self.glass_prompts(cmd){return Some(answer);}
         if let Some(answer)=self.glass_accounts(cmd){return Some(answer);}
         if let Some(answer)=self.glass_tools(cmd){return Some(answer);}
+        if cmd.query.as_deref()==Some("glass-backup-settings") {
+            let mut value=match serde_json::to_value(&self.settings) { Ok(v)=>v, Err(e)=>return Some(json!({"error":e.to_string()}).to_string()) };
+            if let Some(map)=value.as_object_mut() { for key in ["proxy_pass","site_logins","debrid_accounts"] { map.remove(key); } }
+            return Some(json!({"settings":value}).to_string());
+        }
+        if cmd.action.as_deref()==Some("glass-restore-settings") {
+            let incoming=serde_json::from_str::<Value>(cmd.queue.as_deref().unwrap_or(""));
+            let Ok(mut value)=incoming else {return Some(json!({"error":"Invalid backup settings"}).to_string())};
+            let Ok(current)=serde_json::to_value(&self.settings) else {return Some(json!({"error":"Could not read current settings"}).to_string())};
+            let Some(map)=value.as_object_mut() else {return Some(json!({"error":"Invalid backup settings"}).to_string())};
+            if !map.get("max_connections").and_then(Value::as_u64).is_some_and(|n|(1..=128).contains(&n)) || !map.get("show_complete").is_some_and(Value::is_boolean) {return Some(json!({"error":"Backup is missing valid download preferences"}).to_string())}
+            for key in ["proxy_pass","site_logins","debrid_accounts","launch_on_startup"] {if let Some(v)=current.get(key){map.insert(key.into(),v.clone());}}
+            map.insert("remote_on".into(),json!(false)); map.insert("automation_api".into(),json!(true));
+            let next=match serde_json::from_value::<crate::settings::Settings>(value) {Ok(v)=>v,Err(e)=>return Some(json!({"error":format!("Invalid backup settings: {e}")}).to_string())};
+            self.apply_options(next);
+            return Some(json!({"ok":true}).to_string());
+        }
         if cmd.query.as_deref()==Some("glass-original-settings"){return Some(self.glass_original_settings().to_string());}
         if cmd.action.as_deref()==Some("glass-original-setting"){
             let payload=serde_json::from_str(cmd.queue.as_deref().unwrap_or("")).unwrap_or(Value::Null);
