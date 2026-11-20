@@ -36,7 +36,7 @@ export type Dashboard = {
   downloads: Download[]; speed: number; queues: Queue[];
   categories: { name: string; key: string }[]; free?: number | null
 };
-export type Theme = { id: string; name: string; accent: string; secondary: string; rgb: string };
+export type Theme = { id: string; name: string; accent: string; secondary: string; rgb: string; neutralTint?: [number,number,number] };
 export const themes: Theme[] = [
   { id: "plexo", name: "Crystal Teal", accent: "#0fe6d5", secondary: "#4b9cfc", rgb: "15,230,213" },
   { id: "ocean", name: "Glacier Blue", accent: "#4bb8fa", secondary: "#7c83f8", rgb: "75,184,250" },
@@ -53,7 +53,11 @@ export const themes: Theme[] = [
   { id:"emerald-frost",name:"Emerald Frost",accent:"#50edc4",secondary:"#05a676",rgb:"80,237,196" },
   { id:"rose-crystal",name:"Rose Quartz Ice",accent:"#ff8bc6",secondary:"#d74c9c",rgb:"255,139,198" },
   { id:"amber-crystal",name:"Amber Crystal",accent:"#ffc15d",secondary:"#ef8421",rgb:"255,193,93" },
-  { id:"obsidian-aurora",name:"Obsidian Aurora",accent:"#58e8dd",secondary:"#a36bff",rgb:"88,232,221" }
+  { id:"obsidian-aurora",name:"Obsidian Aurora",accent:"#58e8dd",secondary:"#a36bff",rgb:"88,232,221" },
+  { id:"black-onyx",name:"Black Onyx",accent:"#c5d4e0",secondary:"#4c5660",rgb:"197,212,224",neutralTint:[8,10,14] },
+  { id:"black-smoke",name:"Smoke Black",accent:"#d0d9e0",secondary:"#727e88",rgb:"208,217,224",neutralTint:[48,52,58] },
+  { id:"white-frost",name:"Frost White",accent:"#e8f4ff",secondary:"#b7c6d4",rgb:"232,244,255",neutralTint:[245,250,255] },
+  { id:"white-pearl",name:"Pearl White",accent:"#fff3df",secondary:"#d8d0c5",rgb:"255,243,223",neutralTint:[245,239,230] }
 ];
 export function themeHue(theme:Theme){
  const [r,g,b]=theme.rgb.split(',').map(v=>Number(v)/255),max=Math.max(r,g,b),min=Math.min(r,g,b),delta=max-min;
@@ -341,9 +345,9 @@ export function CrystalWindow({ children, target = "main" }: {
     "--accent-secondary": theme.secondary,
     "--accent-rgb": effectiveLight ? (({plexo:"8,110,132",ocean:"20,108,155",purple:"112,80,181",pink:"183,57,98",gold:"138,91,5",green:"25,118,91",silver:"76,102,128",navy:"57,78,162",orange:"173,71,0",rose:"164,43,112"} as Record<string,string>)[theme.id]??"8,110,132") : theme.rgb,
     "--glass": theme.rgb.split(",").map(n=>Math.round(Number(n)*.14)).join(","),
-    "--glass-tint": `hsl(${Math.max(0,Math.min(360,appearance.tintHue))} 85% 64% / ${Math.max(0,Math.min(65,appearance.tintStrength))/100})`,
+    "--glass-tint": theme.neutralTint ? `rgba(${theme.neutralTint.join(',')},${Math.max(0,Math.min(65,appearance.tintStrength))/100})` : `hsl(${Math.max(0,Math.min(360,appearance.tintHue))} 85% 64% / ${Math.max(0,Math.min(65,appearance.tintStrength))/100})`,
     "--panel-opacity": Math.min(1, Math.max(.45, appearance.opacity / 100)),
-    "--material-opacity": customMaterial ? Math.max(.35,1-customMaterial.translucency/125) : undefined,
+    "--material-opacity": customMaterial ? Math.max(.12,(1-customMaterial.translucency/125)*appearance.opacity/100) : undefined,
     "--material-shading": customMaterial ? customMaterial.shading/100 : undefined,
     "--crystal-blur": appearance.blur + "px",
     "--ui-scale": 1,
@@ -354,14 +358,14 @@ export function CrystalWindow({ children, target = "main" }: {
     "--min-window-button": (30/Math.min(1,Math.max(.4,fit)))+"px",
     "--font-size": Math.max(Math.min(20,Math.max(12,appearance.fontSize)),12/Math.max(.4,fit))+"px"
   } as CSSProperties;
-  return <div className={`cg-window cg-mode-${mode} cg-material-${appearance.material} ${customMaterial?`cg-custom-material cg-finish-${customMaterial.finish} cg-controls-${customMaterial.controls} cg-layout-${customMaterial.layout??'standard'} cg-text-${customMaterial.text??'crisp'}`:""} cg-progress-shape-${appearance.progressShape} cg-connection-shape-${appearance.connectionShape} ${maximized?"cg-maximized":""} ${effectiveLight?"cg-light":"cg-dark"} ${appearance.highContrast?"cg-high-contrast":""}`} style={style}>
+  return <div className={`cg-window cg-mode-${mode} cg-material-${appearance.material} cg-theme-${theme.id} ${customMaterial?`cg-custom-material cg-finish-${customMaterial.finish} cg-controls-${customMaterial.controls} cg-layout-${customMaterial.layout??'standard'} cg-text-${customMaterial.text??'crisp'}`:""} cg-progress-shape-${appearance.progressShape} cg-connection-shape-${appearance.connectionShape} ${maximized?"cg-maximized":""} ${effectiveLight?"cg-light":"cg-dark"} ${appearance.highContrast?"cg-high-contrast":""}`} style={style}>
     {mode === "wallpaper" && <div className="cg-wallpaper">
       {video ? <video key={src} autoPlay loop muted playsInline src={src} /> :
         <div style={{ backgroundImage: `url("${src}")` }} />}
       <span style={{ background: `rgba(3,9,19,${appearance.dim / 100})` }} />
     </div>}
     {mode === "solid" && <div className="cg-solid" />}
-    <div className="cg-content" ref={frame}>{appearance.material === "frosted-water-351" && !maximized && <FrostedLayers maskBackdrop={mode!=="desktop"} tintHue={appearance.tintHue} tintStrength={appearance.tintStrength} opacity={appearance.opacity}/>}<div className="cg-fit-content">{children}</div></div>
+    <div className="cg-content" ref={frame}>{appearance.material === "frosted-water-351" && !maximized && <FrostedLayers maskBackdrop={mode!=="desktop"} tintHue={appearance.tintHue} tintRgb={theme.neutralTint} tintStrength={appearance.tintStrength} opacity={appearance.opacity}/>}<div className="cg-fit-content">{children}</div></div>
     {windowError&&<aside className="cg-window-notice cg-error" role="alert"><span>{windowError}</span><button title="Dismiss" onClick={()=>setWindowError("")}><X size={15}/></button></aside>}
     <ResizeGrips />
   </div>;
