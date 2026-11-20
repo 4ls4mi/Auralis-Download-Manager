@@ -30,6 +30,9 @@ try{
  await until(async()=>JSON.parse(await ipc({query:'glass-backend'})).glass,'Downloader not ready');
  await main.evaluate(()=>{localStorage.setItem('mh-glass-material','frosted-water-351');localStorage.setItem('mh-glass-indicator','blue-purple');localStorage.setItem('mh-glass-connection-indicator','blue-purple');localStorage.setItem('mh-glass-graph-indicator','blue-purple');for(const k of ['progress-material','connection-material','graph-material'])localStorage.setItem('mh-glass-'+k,'liquid-glass');localStorage.setItem('auralis-browser-guide-seen','1')});await main.reload();await main.waitForSelector('.cg-toolbar');
  const invoke=(cmd,args={})=>main.evaluate(([c,a])=>window.__TAURI_INTERNALS__.invoke(c,a),[cmd,args]);
+ // Use a wider real window so the download table fits without cropping columns.
+ await invoke('plugin:window|set_size',{label:'main',value:{Logical:{width:1300,height:720}}});
+ await until(async()=>main.evaluate(()=>{const table=document.querySelector('.cg-table-viewport');return table&&table.scrollWidth<=table.clientWidth+2}),'Main download columns do not fit in the capture window');
  const downloadUrl=`http://127.0.0.1:${server.address().port}/sample-archive.bin`;await ipc({url:downloadUrl,silent:true});
  const item=await until(async()=>JSON.parse(await ipc({query:'list'})).downloads.find(d=>d.url===downloadUrl&&d.status==='Downloading'),'Download did not start');
  await invoke('open_glass_window',{label:`download-${item.id}`,url:`/?detail=${item.id}`,width:880,height:600});const progress=await pageFor(`detail=${item.id}`);await progress.waitForSelector('.cg-mdm-details');
