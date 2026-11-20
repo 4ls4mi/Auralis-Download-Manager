@@ -5,6 +5,7 @@ on:
     branches: [feature/auralis-frosted-candidate]
     paths:
       - .github/workflows/auralis-release-push-deploy.yml
+      - release-push/**
 permissions:
   contents: read
 jobs:

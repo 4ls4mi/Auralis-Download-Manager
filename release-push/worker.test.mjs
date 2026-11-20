@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHmac} from 'node:crypto';
-import worker,{releaseSignal,validSignature,ReleaseHub} from './worker.mjs';
+import worker,{releaseSignal,releaseMetadata,validSignature,ReleaseHub} from './worker.mjs';
 const secret='test-secret';
 const payload={action:'published',repository:{full_name:'4ls4mi/Auralis-Download-Manager'},release:{tag_name:'v0.3.10',draft:false,prerelease:false,assets:[{name:'Auralis.Download.Manager_0.3.10_x64-setup.exe'}]}};
 const body=JSON.stringify(payload),signed='sha256='+createHmac('sha256',secret).update(body).digest('hex');
@@ -21,4 +21,18 @@ test('broadcast deduplicates repeated GitHub delivery IDs',async()=>{
  const store=new Map(),messages=[];const ctx={storage:{get:async k=>store.get(k),put:async(k,v)=>store.set(k,v)},getWebSockets:()=>[{send:m=>messages.push(JSON.parse(m))}]};
  const hub=new ReleaseHub(ctx),publish=()=>hub.fetch(new Request('https://hub.internal/publish',{method:'POST',body:JSON.stringify({delivery:'same',signal:{type:'release',version:'0.3.10'}})}));
  await publish();await publish();assert.equal(messages.length,1);
+});
+test('only valid public release metadata can populate the fallback feed',()=>{
+ const enriched=structuredClone(payload);Object.assign(enriched.release.assets[0],{browser_download_url:'https://github.com/4ls4mi/Auralis-Download-Manager/releases/download/v0.3.10/Auralis.Download.Manager_0.3.10_x64-setup.exe',digest:'sha256:'+'a'.repeat(64),size:123});enriched.release.body='Changes';
+ const signal=releaseSignal('release',enriched),metadata=releaseMetadata(enriched,signal);
+ assert.equal(metadata.assets[0].size,123);assert.equal(metadata.body,'Changes');
+ for(const changed of [{digest:'sha256:bad'},{browser_download_url:'https://evil.example/a.exe'},{size:0},{size:300*1024*1024}]){const copy=structuredClone(enriched);Object.assign(copy.release.assets[0],changed);assert.equal(releaseMetadata(copy,signal),null)}
+ assert.equal(releaseMetadata(enriched,null),null);
+});
+test('fallback stores the newest release and ignores an older redelivery',async()=>{
+ const store=new Map(),ctx={storage:{get:async k=>store.get(k),put:async(k,v)=>store.set(k,v)},getWebSockets:()=>[]};const hub=new ReleaseHub(ctx);
+ const publish=(tag,delivery)=>hub.fetch(new Request('https://hub.internal/publish',{method:'POST',body:JSON.stringify({delivery,signal:{type:'release',version:tag.slice(1)},metadata:{tag_name:tag}})}));
+ assert.equal((await hub.fetch(new Request('https://hub.internal/latest'))).status,503);
+ await publish('v0.3.30','new');await publish('v0.3.29','old');
+ const response=await hub.fetch(new Request('https://hub.internal/latest'));assert.equal((await response.json())[0].tag_name,'v0.3.30');assert.equal(response.headers.get('Cache-Control'),'no-store');
 });
