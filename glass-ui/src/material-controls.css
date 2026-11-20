@@ -1,0 +1,48 @@
+/* Control geometry and lighting belong to the material, while --tone keeps the
+   action colors and --accent follows the selected color theme. */
+.cg-window .cg-toolbar{overflow-x:auto;overflow-y:hidden}
+.cg-window :is(.cg-toolbar>button,.cg-btn){isolation:isolate}
+.cg-window :is(.cg-toolbar>button,.cg-btn):focus-visible{outline:2px solid #fff!important;outline-offset:2px}
+.cg-window .cg-toolbar>button:disabled{opacity:.48}
+
+/* Brushed metal: grouped, angular keys with a fine directional grain. */
+.cg-window.cg-material-brushed-glass .cg-toolbar{gap:2px;padding:6px 8px;border-radius:5px!important;background:linear-gradient(180deg,#e3f3ff24,#0b1c2c8c)!important;box-shadow:inset 0 1px #fff7,0 3px 9px #0007!important}
+.cg-window.cg-material-brushed-glass .cg-toolbar>button{flex:1 1 48px;min-width:32px;border-radius:3px!important;background:repeating-linear-gradient(105deg,#ffffff10 0 1px,transparent 1px 4px),linear-gradient(180deg,rgba(var(--tone-rgb),.24),rgba(7,19,30,.7))!important;border-color:rgba(var(--tone-rgb),.52)!important;box-shadow:inset 0 1px #fff6,inset 0 -2px #0008!important}
+.cg-window.cg-material-brushed-glass .cg-toolbar>button:is([data-action=start],[data-action=remove],[data-action=settings],[data-action=queue-start]){margin-left:5px}
+.cg-window.cg-material-brushed-glass .cg-sidebar button.selected{background:linear-gradient(90deg,rgba(var(--accent-rgb),.48),rgba(var(--accent-rgb),.08))!important;border-radius:3px;box-shadow:inset 4px 0 var(--accent),inset 0 1px #fff4!important;color:#fff!important}
+
+/* Rose Pine: generous, soft pill controls with a velvet finish. */
+.cg-window.cg-material-rose-pine .cg-toolbar{gap:8px;padding:9px 12px;border-radius:20px!important;background:linear-gradient(140deg,var(--glass-tint),transparent 70%),rgba(var(--glass),.72)!important;box-shadow:0 5px 15px #0005,inset 0 1px #fff4!important}
+.cg-window.cg-material-rose-pine .cg-toolbar>button{flex:1 1 48px;min-width:32px;border-radius:18px!important;background:linear-gradient(155deg,rgba(var(--tone-rgb),.30),rgba(var(--tone-rgb),.11))!important;border-color:rgba(var(--tone-rgb),.42)!important;box-shadow:inset 0 1px #fff3,0 3px 7px #0004!important}
+.cg-window.cg-material-rose-pine .cg-sidebar button.selected{border-radius:16px!important;color:#fff!important;background:linear-gradient(100deg,rgba(var(--accent-rgb),.46),rgba(var(--accent-rgb),.12))!important;box-shadow:0 3px 10px #0005,inset 0 1px #fff5!important}
+
+/* Window glass: separate clear keys suspended inside a polished glass rail. */
+.cg-window.cg-material-window-glass .cg-toolbar{gap:5px;padding:7px 10px;border-radius:8px!important;background:linear-gradient(180deg,#ffffff42,#c3eeff10 48%,#00152366)!important;border-color:#d7f8ff88!important;box-shadow:inset 0 1px #ffffffe0,0 4px 12px #0006!important}
+.cg-window.cg-material-window-glass .cg-toolbar>button{flex:1 1 48px;min-width:32px;border-radius:6px!important;background:linear-gradient(180deg,#ffffff50,rgba(var(--tone-rgb),.19) 48%,#07182666)!important;border-color:rgba(var(--tone-rgb),.60)!important;box-shadow:inset 0 1px #fffc,inset 0 -1px #98e4ff55,0 2px 5px #00111b8a!important}
+.cg-window.cg-material-window-glass .cg-sidebar button.selected{background:linear-gradient(180deg,#ffffff50,rgba(var(--accent-rgb),.38) 50%,rgba(var(--accent-rgb),.14))!important;border:1px solid rgba(var(--accent-rgb),.8)!important;box-shadow:inset 0 1px #fff9,0 2px 8px #0005!important;color:#fff!important}
+
+/* Oversimplified: a quiet surface and concentrated highlights on actions. */
+.cg-window.cg-material-oversimplified .cg-toolbar{justify-content:flex-start;gap:4px;padding:5px;background:transparent!important;border-color:transparent!important;box-shadow:none!important}
+.cg-window.cg-material-oversimplified .cg-toolbar>button{flex:0 1 58px;min-width:32px;background:transparent!important;border-color:transparent!important;border-radius:7px!important;box-shadow:none!important}
+.cg-window.cg-material-oversimplified .cg-toolbar>button.primary{background:rgba(var(--tone-rgb),.32)!important;border-color:rgba(var(--tone-rgb),.75)!important}
+.cg-window.cg-material-oversimplified .cg-toolbar>button:is([data-action=start],[data-action=remove],[data-action=settings],[data-action=queue-start]){margin-left:10px}
+.cg-window.cg-material-oversimplified .cg-sidebar button.selected{background:rgba(var(--accent-rgb),.30)!important;border-color:transparent!important;box-shadow:inset 3px 0 var(--accent)!important;color:#fff!important}
+
+/* The shaped frosted material retains its pane, with illuminated glass keys. */
+.cg-window.cg-material-frosted-water-351 .cg-toolbar{gap:6px;padding:6px 8px;border-radius:12px!important;background:linear-gradient(180deg,#ffffff32,#c3efff0d 48%,#06203744)!important;box-shadow:inset 0 1px #ffffff8c,0 3px 12px #00152b50!important}
+.cg-window.cg-material-frosted-water-351 .cg-toolbar>button{border-radius:9px!important;background:linear-gradient(180deg,#ffffff42,rgba(var(--tone-rgb),.30) 48%,rgba(var(--tone-rgb),.16))!important;border-color:rgba(var(--tone-rgb),.68)!important;box-shadow:inset 0 1px #fffc,inset 0 -1px #ffffff35,0 2px 8px #00101b55!important}
+.cg-window.cg-material-frosted-water-351 .cg-sidebar button.selected{color:#fff!important;background:linear-gradient(135deg,#ffffff55,rgba(var(--accent-rgb),.50) 52%,rgba(var(--accent-rgb),.18))!important;border-color:rgba(var(--accent-rgb),.85)!important;box-shadow:inset 0 1px #fff9,0 0 12px rgba(var(--accent-rgb),.30)!important}
+
+/* Neutral glass finishes have their own button silhouettes and selected states. */
+.cg-window.cg-material-builtin-obsidian-matte .cg-toolbar{gap:3px;padding:6px;border-radius:4px!important;background:#080c12d9!important;box-shadow:inset 0 1px #ffffff22!important}
+.cg-window.cg-material-builtin-obsidian-matte .cg-toolbar>button{flex:1 1 45px;min-width:32px;border-radius:3px!important;background:linear-gradient(180deg,rgba(var(--tone-rgb),.18),#0a0e14)!important;border-color:rgba(var(--tone-rgb),.44)!important;box-shadow:inset 0 1px #ffffff1f!important}
+.cg-window.cg-material-builtin-smoked-glass .cg-toolbar{gap:5px;padding:7px 10px;border-radius:16px!important;background:linear-gradient(180deg,#ffffff2a,#060f1ab8)!important;box-shadow:inset 0 1px #ffffff80,0 4px 12px #0008!important}
+.cg-window.cg-material-builtin-smoked-glass .cg-toolbar>button{flex:1 1 48px;min-width:32px;border-radius:14px!important;background:linear-gradient(180deg,#ffffff34,rgba(var(--tone-rgb),.22) 50%,#030b10a8)!important;border-color:rgba(var(--tone-rgb),.60)!important;box-shadow:inset 0 1px #ffffff8c,0 2px 5px #0008!important}
+.cg-window.cg-material-builtin-pearl-frost .cg-toolbar{gap:8px;padding:9px 12px;border-radius:14px!important;background:linear-gradient(180deg,#f6ffff80,#d5efff24 48%,#24445e66)!important;border-color:#efffffaa!important;box-shadow:inset 0 1px #ffffffe0,0 4px 14px #00101d66!important}
+.cg-window.cg-material-builtin-pearl-frost .cg-toolbar>button{flex:1 1 48px;min-width:32px;border-radius:10px!important;background:linear-gradient(180deg,#f6ffff85,rgba(var(--tone-rgb),.35) 55%,#102e4777)!important;border-color:rgba(var(--tone-rgb),.75)!important;box-shadow:inset 0 1px #fff,inset 0 -1px #fff4,0 3px 8px #00172866!important}
+.cg-window:is(.cg-material-builtin-obsidian-matte,.cg-material-builtin-smoked-glass,.cg-material-builtin-pearl-frost) .cg-sidebar button.selected{background:linear-gradient(110deg,rgba(var(--accent-rgb),.52),rgba(var(--accent-rgb),.12))!important;border-color:rgba(var(--accent-rgb),.85)!important;color:#fff!important;box-shadow:inset 0 1px #ffffff80,0 2px 9px #0005!important}
+
+/* All materials retain obvious hover and keyboard states, including custom ones. */
+.cg-window :is(.cg-toolbar>button,.cg-btn):hover:not(:disabled){filter:brightness(1.15);border-color:var(--tone,var(--accent))!important}
+@media(max-width:600px){.cg-window .cg-toolbar>button{min-width:32px}.cg-window .cg-toolbar>button:is([data-action=start],[data-action=remove],[data-action=settings],[data-action=queue-start]){margin-left:2px}}
+@media(prefers-reduced-motion:reduce){.cg-window :is(.cg-toolbar>button,.cg-btn):hover{filter:none}}

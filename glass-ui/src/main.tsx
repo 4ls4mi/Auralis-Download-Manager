@@ -25,6 +25,7 @@ import { CrystalProvider } from "./CrystalShared";
 import "./crystal.css";
 import "./crystal-overrides.css";
 import "./ice-crystal.css";
+import "./material-controls.css";
 
 function Main() {
   const query = new URLSearchParams(window.location.search);
