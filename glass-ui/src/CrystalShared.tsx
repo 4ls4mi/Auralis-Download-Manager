@@ -277,7 +277,13 @@ export function CrystalWindow({ children, target = "main" }: {
 }) {
   const { appearance, theme } = useCrystal();
   const frame=useRef<HTMLDivElement>(null);
-  const [fit,setFit]=useState(1),[windowError,setWindowError]=useState("");
+  const [fit,setFit]=useState(1),[windowError,setWindowError]=useState(""),[maximized,setMaximized]=useState(false);
+  useEffect(()=>{
+    let active=true, sequence=0;
+    const update=()=>{const request=++sequence;void getCurrentWindow().isMaximized().then(value=>{if(active&&request===sequence)setMaximized(value)}).catch(()=>undefined)};
+    update();window.addEventListener('resize',update);
+    return()=>{active=false;window.removeEventListener('resize',update)};
+  },[]);
   useEffect(()=>{const report=(event:Event)=>setWindowError(String((event as CustomEvent).detail));window.addEventListener("glass-window-error",report);return()=>window.removeEventListener("glass-window-error",report)},[]);
   useLayoutEffect(()=>{
     const el=frame.current;if(!el)return;
@@ -344,14 +350,14 @@ export function CrystalWindow({ children, target = "main" }: {
     "--min-window-button": (30/Math.min(1,Math.max(.4,fit)))+"px",
     "--font-size": Math.max(Math.min(20,Math.max(12,appearance.fontSize)),12/Math.max(.4,fit))+"px"
   } as CSSProperties;
-  return <div className={`cg-window cg-mode-${mode} cg-material-${appearance.material} cg-progress-shape-${appearance.progressShape} cg-connection-shape-${appearance.connectionShape} ${effectiveLight?"cg-light":"cg-dark"} ${appearance.highContrast?"cg-high-contrast":""}`} style={style}>
+  return <div className={`cg-window cg-mode-${mode} cg-material-${appearance.material} cg-progress-shape-${appearance.progressShape} cg-connection-shape-${appearance.connectionShape} ${maximized?"cg-maximized":""} ${effectiveLight?"cg-light":"cg-dark"} ${appearance.highContrast?"cg-high-contrast":""}`} style={style}>
     {mode === "wallpaper" && <div className="cg-wallpaper">
       {video ? <video key={src} autoPlay loop muted playsInline src={src} /> :
         <div style={{ backgroundImage: `url("${src}")` }} />}
       <span style={{ background: `rgba(3,9,19,${appearance.dim / 100})` }} />
     </div>}
     {mode === "solid" && <div className="cg-solid" />}
-    <div className="cg-content" ref={frame}>{appearance.material === "frosted-water-351" && <FrostedLayers maskBackdrop={mode!=="desktop"} tintHue={appearance.tintHue} tintStrength={appearance.tintStrength} opacity={appearance.opacity}/>}<div className="cg-fit-content">{children}</div></div>
+    <div className="cg-content" ref={frame}>{appearance.material === "frosted-water-351" && !maximized && <FrostedLayers maskBackdrop={mode!=="desktop"} tintHue={appearance.tintHue} tintStrength={appearance.tintStrength} opacity={appearance.opacity}/>}<div className="cg-fit-content">{children}</div></div>
     {windowError&&<aside className="cg-window-notice cg-error" role="alert"><span>{windowError}</span><button title="Dismiss" onClick={()=>setWindowError("")}><X size={15}/></button></aside>}
     <ResizeGrips />
   </div>;
