@@ -1,51 +1,45 @@
 # Auralis Download Manager
 
-**A modern Windows download manager with a customizable glass-style interface and its own browser extension.**
+Auralis is a free Windows x64 download manager with a glass-inspired interface, detailed transfer controls and its own browser extension. It is an independent GPL-3.0 fork of [Mister Download Manager](https://github.com/anefzaoui/misterdownloadmanager); it is not an official upstream release.
 
-[Download for Windows](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest) · [All releases and changelogs](https://github.com/4ls4mi/Auralis-Download-Manager/releases) · [Fork changelog](CHANGELOG.md) · [Original Mister Download Manager](https://github.com/anefzaoui/misterdownloadmanager)
+[Download Auralis for Windows](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest) · [Download the Auralis browser extension](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest) · [Release notes](https://github.com/4ls4mi/Auralis-Download-Manager/releases)
 
-Auralis is an independent fork of [Mister Download Manager](https://github.com/anefzaoui/misterdownloadmanager), developed by Ahmed Nefzaoui and contributors. It retains the upstream download engine and adds its own Tauri/WebView2 interface, appearance controls, windows and browser companion. Auralis is not an official MDM release.
+## Screenshots
 
-## See Auralis
+These images show the Auralis interface with sample downloads. Appearance, indicator materials and colors are configurable.
 
-These images show the actual interface rendered with **sample download data**. They are browser-rendered previews rather than Windows desktop captures; native transparency, backdrop effects and scaling can look different on a real system. The extension image shows the 0.3.6 popup using a simulated browser connection.
-
-| Download library | Download progress |
+| Download library | Current download |
 | --- | --- |
-| ![Auralis download library with sample files](docs/images/auralis/main-preview.png) | ![Auralis progress window with sample connection data](docs/images/auralis/progress-preview.png) |
+| ![Auralis download library](docs/images/auralis/main.png) | ![Download progress, connections and speed graph](docs/images/auralis/download.png) |
 
-<details>
-<summary>Preview the Auralis extension popup</summary>
+| Appearance and indicator settings | Download details |
+| --- | --- |
+| ![Appearance and indicator settings](docs/images/auralis/settings.png) | ![Download file information window](docs/images/auralis/file-info.png) |
 
-![Development preview of the Auralis browser extension popup](docs/images/auralis/extension-preview.png)
+![Download completion window](docs/images/auralis/complete.png)
 
-</details>
+### Liquid indicators
 
-## What Auralis adds
+Choose progress, connection and graph materials independently, then choose their colors and shapes. Liquid styles add animated flowing fills, droplets and waves; the underlying progress and connection states come from the downloader.
 
-- **Personal appearance:** dark and light modes, accent and glass tint controls, opacity, material choices, wallpaper, typography and scaling. Progress, connection and graph styles can be adjusted independently, with solid colors as well as gradients. Some materials are experimental and do not yet reproduce the reference designs.
-- **Download information:** movable file-information, progress, completion and confirmation windows. The progress view shows the reported connection state, speed history, file size, remaining time and resume capability when available. Its 32 connection slots adapt to the window, and each occupied slot has details on hover.
-- **Download management:** search and sorting, Ctrl/Shift multi-selection, bulk actions, optional deletion from disk, queues, scheduling and the upstream download engine's operations.
-- **Independent Auralis extension:** a dedicated browser companion based on the original MDM integration. It sends downloads to Auralis and offers browser-side video, audio and subtitle choices and per-video cookie controls. Auralis includes a guided setup for its bundled extension.
-- **Media helpers:** access to yt-dlp, ffmpeg and gallery-dl, a manual video-link helper and available subtitles. Cookie options include a browser session and manual cookies. The in-app YouTube sign-in option is experimental when present in the installed release.
-- **Updates:** the app can check this fork's GitHub releases, show the changelog, download and verify the installer, and ask to restart. The upstream MDM release check is separate.
+![Animated liquid progress, connection indicators and transfer graph](docs/images/auralis/liquid-flow.gif)
 
-## Install Auralis and its extension
+## Features
 
-1. Download and run the **Auralis Download Manager Windows x64 setup** from [the latest release](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest). Windows WebView2 is required.
-2. Open Auralis. If offered, follow the browser setup guide. You can also open **Settings → Browser Integration → Prepare extension and repair connection** to open the bundled extension folder and see the installation steps.
-3. In Edge, open `edge://extensions`; in Chrome or a compatible Chromium browser, open `chrome://extensions`. Enable **Developer mode**, choose **Load unpacked**, and select the prepared Chromium folder. You can instead download the Chromium ZIP from the release page and extract it to a permanent folder.
-4. In Firefox, open `about:debugging` → **This Firefox → Load Temporary Add-on**, then select `manifest.json` in the prepared Firefox folder. Firefox removes a temporary add-on when it closes; a permanent installation requires signing.
-5. Reload the extension or browser after replacing an unpacked extension. Auralis must be running for it to connect. Safari needs separate packaging and signing and is not included in the release ZIPs.
+- Multi-connection downloads with pause and resume, queues, bandwidth controls and a live transfer graph.
+- A dedicated browser extension for sending downloads and supported media links to Auralis. See the release assets for Chromium-based browsers and Firefox; browser-specific installation and permissions are required.
+- Separate download, file information, completion and settings windows, with independently configurable materials, colors and indicator previews.
+- System-tray controls, optional Windows startup, and a separate tray icon for hidden download windows.
+- Video and audio quality lookup using yt-dlp, with browser-session and manual cookie options where supported.
+- In-app release notifications and updates, plus preferences backup and restore.
+- The downloader runs inside Auralis. A small native messaging helper is used when a browser communicates with the application.
 
-## Current limitations
+Credentials and browser cookies are excluded from preferences backups; you may need to sign in again on a new Windows installation. Browser and site restrictions can still affect video lookup.
 
-- Auralis releases target **Windows x64**. The original MDM project maintains its own platforms and releases.
-- The extension packages are development builds. Browser integration, tray restoration, desktop transparency and scaling need continued real-Windows testing.
-- Browser security can prevent direct cookie access. Manual cookies and extension-provided sessions may help, but Google or YouTube can still block embedded sign-in, request verification, or refuse a lookup. Keep cookie files private.
-- The published Windows build and automated checks do not establish complete feature parity or exact visual matches to the material concepts. See each release's changelog for what has and has not been verified.
-- Some older Mister Hybrid Glass installations may need a one-time manual upgrade to an Auralis installer because their updater expects the earlier installer name.
+## Installation
 
-## Credits and license
+Download the Windows x64 installer from the [latest release](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest) and run it. To connect a browser, install the matching Auralis extension from the release assets and follow the instructions in **Settings → Browser Integration**.
 
-Original Mister Download Manager is developed by [Ahmed Nefzaoui and contributors](https://github.com/anefzaoui/misterdownloadmanager). Auralis retains the original project's [GPL-3.0 license](LICENSE) and [third-party attribution](ATTRIBUTION.md).
+## License and attribution
+
+Auralis is distributed under the [GNU GPL v3](LICENSE). It is a fork of Mister Download Manager by Ahmed Nefzaoui and contributors; see [ATTRIBUTION.md](ATTRIBUTION.md) and the [upstream project](https://github.com/anefzaoui/misterdownloadmanager).
