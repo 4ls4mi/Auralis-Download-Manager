@@ -45,16 +45,66 @@ fn setting(args: &[String], name: &str, var: &str) -> Option<String> {
         .filter(|v| !v.trim().is_empty())
 }
 
+/// Owns the downloader, its runtime and its exclusive data-directory lock.
+/// Dropping the app before the runtime and lock preserves the existing save-on-exit behavior.
+struct HeadlessService {
+    app: crate::app::App,
+    ctx: egui::Context,
+    stop: Arc<AtomicBool>,
+    wake_rx: std::sync::mpsc::Receiver<()>,
+    _runtime: tokio::runtime::Runtime,
+    _instance: std::fs::File,
+}
+
+impl HeadlessService {
+    fn run(mut self) {
+        let mut told = false;
+        crate::headless_loop::run(
+            || {
+                let out = self
+                    .ctx
+                    .run_pass(egui::RawInput::default(), |ctx| self.app.tick(ctx));
+                let delay = out
+                    .viewport_output
+                    .get(&egui::ViewportId::ROOT)
+                    .map_or(Duration::from_secs(1), |v| v.repaint_delay);
+                let mut out = out;
+                out.textures_delta.clear();
+                if !told {
+                    told = tell(&mut self.app);
+                }
+                (delay, self.app.wants_exit())
+            },
+            &self.stop,
+            &self.wake_rx,
+        );
+        tracing::info!("stopping: the list is saved");
+        println!("Stopping: the list is saved.");
+    }
+}
+
 pub fn main(args: Vec<String>) -> ExitCode {
     // A Windows server has no console for a windowed program: the one it was started from.
     #[cfg(windows)]
     crate::win32::cli_console(None);
+    match initialize(args) {
+        Ok(service) => {
+            service.run();
+            ExitCode::SUCCESS
+        }
+        Err(code) => code,
+    }
+}
+
+/// Initialize the service separately from the process entry point. This keeps
+/// all existing persistence and IPC setup while making its lifetime explicit.
+fn initialize(args: Vec<String>) -> Result<HeadlessService, ExitCode> {
     if let Some(dir) = setting(&args, "data", "MDM_DATA_DIR") {
         mdm_ipc::set_data_dir(PathBuf::from(dir));
     }
     let Some(data) = mdm_ipc::data_dir() else {
         eprintln!("No data folder: give one with --data <folder>.");
-        return ExitCode::FAILURE;
+        return Err(ExitCode::FAILURE);
     };
     if let Err(e) = mdm_ipc::private_dir(&data) {
         eprintln!(
@@ -62,14 +112,14 @@ pub fn main(args: Vec<String>) -> ExitCode {
             data.display(),
             not_ours(&e)
         );
-        return ExitCode::FAILURE;
+        return Err(ExitCode::FAILURE);
     }
-    let Some(_instance) = mdm_ipc::instance_lock() else {
+    let Some(instance) = mdm_ipc::instance_lock() else {
         eprintln!(
             "Another Mister Download Manager uses the data folder {}.",
             data.display()
         );
-        return ExitCode::FAILURE;
+        return Err(ExitCode::FAILURE);
     };
     mdm_crash::logs::init(&data, mdm_crash::logs::APP);
     // The default browser, looked for once on a thread of its own (logged): its User-Agent is
@@ -99,10 +149,9 @@ pub fn main(args: Vec<String>) -> ExitCode {
     let s = &mut loaded.settings;
     // Glass owns all visible windows and the only tray icon. The backend
     // must never expose the NAS/remote-control server on the network.
-    let glass_owned = std::env::var_os("MDM_GLASS_HEADLESS")
-        .is_some_and(|value| value == "1");
-    s.remote_on = !glass_owned
-        && !std::env::var("MDM_REMOTE").is_ok_and(|v| v.eq_ignore_ascii_case("off"));
+    let glass_owned = std::env::var_os("MDM_GLASS_HEADLESS").is_some_and(|value| value == "1");
+    s.remote_on =
+        !glass_owned && !std::env::var("MDM_REMOTE").is_ok_and(|v| v.eq_ignore_ascii_case("off"));
     if glass_owned {
         // Authenticated IPC is confined to loopback and requires the per-session
         // token. Only our Rust Tauri bridge sees the token, not the WebView.
@@ -113,7 +162,7 @@ pub fn main(args: Vec<String>) -> ExitCode {
             Ok(p) if p > 0 => s.remote_port = p,
             _ => {
                 eprintln!("Not a port: {p}");
-                return ExitCode::FAILURE;
+                return Err(ExitCode::FAILURE);
             }
         }
     }
@@ -125,7 +174,9 @@ pub fn main(args: Vec<String>) -> ExitCode {
     s.show_start_dialog = false;
     // Glass owns the completion window and must receive the user's saved setting.
     // Standalone headless mode has no window to show.
-    if !glass_owned { s.show_complete = false; }
+    if !glass_owned {
+        s.show_complete = false;
+    }
     let hosts = setting(&args, "hosts", "MDM_REMOTE_HOSTS");
     crate::remote::set_hosts(hosts.as_deref());
     let downloads = setting(&args, "downloads", "MDM_DOWNLOADS").map(PathBuf::from);
@@ -137,7 +188,7 @@ pub fn main(args: Vec<String>) -> ExitCode {
             d.display(),
             not_ours(&e)
         );
-        return ExitCode::FAILURE;
+        return Err(ExitCode::FAILURE);
     }
 
     // Stopped by the system (docker stop, systemctl stop, Ctrl+C): the list is saved first.
@@ -155,7 +206,7 @@ pub fn main(args: Vec<String>) -> ExitCode {
     }
 
     let ctx = egui::Context::default();
-    let mut app = crate::app::App::new(
+    let app = crate::app::App::new(
         &ctx,
         rt.handle().clone(),
         commands,
@@ -164,29 +215,14 @@ pub fn main(args: Vec<String>) -> ExitCode {
         crate::Start::Shown,
     )
     .headless(downloads);
-    let mut told = false;
-    loop {
-        let out = ctx.run_pass(egui::RawInput::default(), |ctx| app.tick(ctx));
-        let delay = out
-            .viewport_output
-            .get(&egui::ViewportId::ROOT)
-            .map_or(Duration::from_secs(1), |v| v.repaint_delay);
-        // A pass draws nothing: its textures are dropped, not uploaded anywhere.
-        let mut out = out;
-        out.textures_delta.clear();
-        if !told {
-            told = tell(&mut app);
-        }
-        if stop.load(Ordering::SeqCst) || app.wants_exit() {
-            break;
-        }
-        let _ =
-            wake_rx.recv_timeout(delay.clamp(Duration::from_millis(100), Duration::from_secs(1)));
-    }
-    tracing::info!("stopping: the list is saved");
-    println!("Stopping: the list is saved.");
-    drop(app);
-    ExitCode::SUCCESS
+    Ok(HeadlessService {
+        app,
+        ctx,
+        stop,
+        wake_rx,
+        _runtime: rt,
+        _instance: instance,
+    })
 }
 
 /// The folder, made if it isn't there, and a file written in it: a folder MDM can't write fails

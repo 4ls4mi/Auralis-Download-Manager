@@ -27,6 +27,7 @@ mod finish;
 mod gallerydlg;
 mod grabber;
 mod headless;
+mod headless_loop;
 mod help;
 mod helpers;
 mod hotkey;

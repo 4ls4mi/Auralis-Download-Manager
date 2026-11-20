@@ -27,7 +27,7 @@ jobs:
     permissions:
       contents: read
     # Only the owner's trusted release branch may execute on a personal computer.
-    if: github.ref == 'refs/heads/feature/auralis-frosted-candidate'
+    if: github.ref == 'refs/heads/feature/auralis-frosted-candidate' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/feature/auralis-embedded-engine')
     runs-on: [self-hosted, Windows, X64, auralis]
     timeout-minutes: 180
     steps:
