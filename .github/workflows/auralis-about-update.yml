@@ -1,0 +1,23 @@
+name: Update Auralis repository description
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  update-description:
+    if: github.repository == '4ls4mi/Auralis-Download-Manager'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update About description
+        env:
+          GH_TOKEN: ${{ secrets.AURALIS_REPO_ADMIN_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo 'The repository secret AURALIS_REPO_ADMIN_TOKEN is not configured.' >&2
+            exit 1
+          fi
+          gh api --method PATCH "repos/$GH_REPO" -f 'description=A free Windows download manager with a modern glass interface, animated liquid indicators, browser integration, and pause/resume.' --silent
+          gh api "repos/$GH_REPO" --jq .description
