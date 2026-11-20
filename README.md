@@ -6,23 +6,7 @@ Auralis is a free Windows x64 download manager with a glass-inspired interface, 
 
 ## Screenshots
 
-These images show the Auralis interface with sample downloads. Appearance, indicator materials and colors are configurable.
-
-| Download library | Current download |
-| --- | --- |
-| ![Auralis download library](docs/images/auralis/main.png) | ![Download progress, connections and speed graph](docs/images/auralis/download.png) |
-
-| Appearance and indicator settings | Download details |
-| --- | --- |
-| ![Appearance and indicator settings](docs/images/auralis/settings.png) | ![Download file information window](docs/images/auralis/file-info.png) |
-
-![Download completion window](docs/images/auralis/complete.png)
-
-### Liquid indicators
-
-Choose progress, connection and graph materials independently, then choose their colors and shapes. Liquid styles add animated flowing fills, droplets and waves; the underlying progress and connection states come from the downloader.
-
-![Animated liquid progress, connection indicators and transfer graph](docs/images/auralis/liquid-flow.gif)
+New screenshots are being captured from the running Windows application.
 
 ## Features
 
