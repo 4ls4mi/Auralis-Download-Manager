@@ -25,6 +25,28 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
+// The embedded host must not mutate process-wide environment variables after
+// Tauri has started threads. Existing standalone launches still use their env flag.
+static EMBEDDED_GLASS: AtomicBool = AtomicBool::new(false);
+pub(crate) fn glass_owned() -> bool {
+    EMBEDDED_GLASS.load(Ordering::SeqCst)
+        || std::env::var_os("MDM_GLASS_HEADLESS").is_some_and(|value| value == "1")
+}
+
+/// Blocks until the service exits. Only one service can own the data lock.
+pub(crate) fn run_embedded() -> Result<(), String> {
+    if EMBEDDED_GLASS.swap(true, Ordering::SeqCst) {
+        return Err("The embedded downloader is already running".into());
+    }
+    let result = initialize(vec!["--headless".into()])
+        .map_err(|_| {
+            "The embedded downloader could not initialize; check the downloader log".to_owned()
+        })
+        .map(HeadlessService::run);
+    EMBEDDED_GLASS.store(false, Ordering::SeqCst);
+    result
+}
+
 /// Is this run headless (`--headless` among the arguments)?
 pub fn asked(args: &[String]) -> bool {
     args.iter().any(|a| a == "--headless")
@@ -149,7 +171,7 @@ fn initialize(args: Vec<String>) -> Result<HeadlessService, ExitCode> {
     let s = &mut loaded.settings;
     // Glass owns all visible windows and the only tray icon. The backend
     // must never expose the NAS/remote-control server on the network.
-    let glass_owned = std::env::var_os("MDM_GLASS_HEADLESS").is_some_and(|value| value == "1");
+    let glass_owned = glass_owned();
     s.remote_on =
         !glass_owned && !std::env::var("MDM_REMOTE").is_ok_and(|v| v.eq_ignore_ascii_case("off"));
     if glass_owned {
@@ -193,7 +215,7 @@ fn initialize(args: Vec<String>) -> Result<HeadlessService, ExitCode> {
 
     // Stopped by the system (docker stop, systemctl stop, Ctrl+C): the list is saved first.
     let stop = Arc::new(AtomicBool::new(false));
-    {
+    if !EMBEDDED_GLASS.load(Ordering::SeqCst) {
         let (stop, wake) = (stop.clone(), wake.clone());
         rt.spawn(async move {
             #[cfg(unix)]

@@ -11,7 +11,7 @@ pub(super) type CheckSlots = HashMap<u64, std::sync::Arc<std::sync::Mutex<Option
 
 impl App {
     pub(super) fn glass_owned(&self) -> bool {
-        self.headless && std::env::var_os("MDM_GLASS_HEADLESS").is_some_and(|v| v == "1")
+        self.headless && crate::headless::glass_owned()
     }
 
     fn glass_next_info(&mut self) {

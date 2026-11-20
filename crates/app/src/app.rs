@@ -5989,7 +5989,7 @@ impl App {
         // automation API. Never expose configuration or backend identity to
         // paired remote clients, nor accept writes from the legacy GUI process.
         let glass_owned = self.headless
-            && std::env::var_os("MDM_GLASS_HEADLESS").is_some_and(|v| v == "1");
+            && crate::headless::glass_owned();
         if !cmd.remote && cmd.query.as_deref() == Some("glass-backend") {
             return serde_json::json!({
                 "headless": self.headless,
