@@ -19,7 +19,9 @@ The **Isolated downloader** button starts the Rust engine in a fresh temporary
 folder and shows its empty download list and settings through a restricted bridge. Display and selected connection preferences can be changed in the
 temporary profile. HTTP and HTTPS test downloads use its temporary downloads
 folder; the test interface supports adding URLs, start, pause, queue actions,
-removing list entries and per-file speed limits. Removing a list entry keeps the file. Closing the window stops the test engine; this
+removing list entries, per-file speed limits, and opening test files or their folder.
+Removing a list entry keeps the file; file-opening requests are restricted to the
+isolated downloads directory. Closing the window stops the test engine; this
 mode does not use the installed app's data. Windows validation is still needed.
 
 Test files remain in the temporary profile; this preview does not import or alter
