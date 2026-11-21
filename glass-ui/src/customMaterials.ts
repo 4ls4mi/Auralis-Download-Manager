@@ -29,3 +29,14 @@ export const extraMaterials:Record<string,MaterialFile>={
  'builtin-smoked-glass':{format:'auralis-material',version:1,name:'Smoked Glass',finish:'clear',controls:'soft',translucency:65,shading:65},
  'builtin-pearl-frost':{format:'auralis-material',version:1,name:'Pearl Frost',finish:'frosted',controls:'rounded',translucency:35,shading:60}
 };
+
+/** Backdrop behavior belongs to the chosen material, not a separate toggle. */
+export function materialBackdrop(id:string, material:MaterialFile): 'material'|'clear'|'soft'|'frosted'|'tinted' {
+ if(id==='builtin-smoked-glass')return 'tinted';
+ switch(material.finish){
+  case 'frosted': return 'frosted';
+  case 'satin': case 'gloss': return 'soft';
+  case 'clear': return 'clear';
+  case 'matte': return 'material';
+ }
+}

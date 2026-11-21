@@ -29,7 +29,7 @@ export default function CrystalProgress({id}:{id:number}){
  const server=visual?.server;
  const statusText=item?.status==='Downloading'?(visual?.connections.some(c=>c.state==='Receiving')?'Receiving data…':'Connecting…'):item?.status==='Stopped'?'Paused':item?.status??'Waiting…';
  const metadata=item?[
-  ['Status',statusText],['File size',units(item.size)],['Downloaded',`${units(item.downloaded)} (${pct(item).toFixed(2)}%)`],
+  ['Status',statusText],['Transfer method',!visual?'Unknown':visual.is_torrent?'Torrent':'Direct download'],['File size',units(item.size)],['Downloaded',`${units(item.downloaded)} (${pct(item).toFixed(2)}%)`],
   ['Transfer rate',item.status==='Downloading'?rate(item.speed):'—'],['Time left',timeLeft(item)],
   ['Resume capability',visual?.resumable===true?'Yes':visual?.resumable===false?'No':'Unknown'],
   ['Server',`${server?.place?.name??country(server?.country_code)}${server?.rtt_ms!=null?` · about ${server.rtt_ms} ms${server.place?.reach?` (${server.place.reach})`:""}`:''}`]
