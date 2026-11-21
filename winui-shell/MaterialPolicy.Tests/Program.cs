@@ -32,3 +32,23 @@ foreach (var pair in new[] {
     catch (InvalidOperationException error) when (error.Message != "Unsafe bridge request was accepted.") { }
 }
 Console.WriteLine("Web interface request validation checks passed.");
+
+var lifecycleCalls = new List<DownloaderBridge.Operation>();
+var lifetime = new DownloaderLifetime(operation => { lifecycleCalls.Add(operation); return Task.FromResult(default(System.Text.Json.JsonElement)); });
+await Task.WhenAll(lifetime.StartAsync(), lifetime.StartAsync());
+await Task.WhenAll(lifetime.StopAsync(), lifetime.StopAsync());
+if (!lifecycleCalls.SequenceEqual(new[] { DownloaderBridge.Operation.Start, DownloaderBridge.Operation.Stop }))
+    throw new Exception("Downloader lifecycle must serialize and deduplicate start and stop.");
+lifecycleCalls.Clear();
+var failedStart = new DownloaderLifetime(operation => {
+    lifecycleCalls.Add(operation);
+    return operation == DownloaderBridge.Operation.Start
+        ? Task.FromException<System.Text.Json.JsonElement>(new InvalidOperationException("start timed out"))
+        : Task.FromResult(default(System.Text.Json.JsonElement));
+});
+try { await failedStart.StartAsync(); throw new Exception("Expected startup failure."); }
+catch (InvalidOperationException error) when (error.Message == "start timed out") { }
+await failedStart.StopAsync();
+if (!lifecycleCalls.SequenceEqual(new[] { DownloaderBridge.Operation.Start, DownloaderBridge.Operation.Stop }))
+    throw new Exception("A failed start must still be followed by a stop attempt.");
+Console.WriteLine("Downloader lifecycle checks passed.");
