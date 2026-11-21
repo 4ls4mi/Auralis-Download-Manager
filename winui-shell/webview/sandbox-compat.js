@@ -1,4 +1,4 @@
-/* Isolated read-only downloader: no installed user data or download actions. */
+/* Isolated downloader: no installed user data or download actions. */
 (() => {
   // Keep the WebView layers translucent enough to reveal the native backdrop,
   // while leaving individual panels readable. This is preview-only CSS.
@@ -16,9 +16,10 @@
   const appearance=value=>request('set_native_appearance',{appearance:value});
   // The preview deliberately cannot contact the release push service.
   globalThis.WebSocket=class {constructor(){throw new Error('Network is disabled in visual preview.')}};
-  const invoke=async(command)=>{
+  const invoke=async(command,args={})=>{
     if(command==='boot_engine')return 'Isolated test downloader — read only';
     if(command==='dashboard_snapshot'||command==='dashboard_visuals'||command==='glass_settings')return request(command);
+    if(command==='update_glass_setting' && ['show_complete','show_progress','confirm_delete','double_click_open'].includes(args.key) && typeof args.value==='string') return request(command,{key:args.key,value:args.value});
     if(command==='glass_update_check')return {state:'unavailable'};
     if(command==='backup_prompt_enabled')return false;
     if(command==='browser_connection_status')return {recently_connected:false};

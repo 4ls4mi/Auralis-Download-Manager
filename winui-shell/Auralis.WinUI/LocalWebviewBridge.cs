@@ -41,9 +41,9 @@ internal static class LocalWebviewBridge
                 var message=BridgeMessage.Parse(args.Source,args.WebMessageAsJson);id=message.Id;
                 var value=message.Appearance is not null
                     ? ApplyAppearance(message.Appearance,applyAppearance)
-                    : sandbox && (message.Command is "dashboard_snapshot" or "dashboard_visuals" or "glass_settings")
+                    : sandbox && (message.Command is "dashboard_snapshot" or "dashboard_visuals" or "glass_settings" or "update_glass_setting")
                         ? await BridgeDispatcher.DispatchAsync(message)
-                        : throw new InvalidOperationException("This isolated host accepts only read-only commands.");
+                        : throw new InvalidOperationException("This isolated host does not support that command.");
                 core.PostWebMessageAsJson(JsonSerializer.Serialize(new {id,ok=true,value}));
             } catch(Exception) {
                 if(id is not null)core.PostWebMessageAsJson(JsonSerializer.Serialize(new {id,ok=false,error="The isolated request failed."}));

@@ -15,8 +15,8 @@ not modify the installed app. Build the interface assets first with
 `cd glass-ui; npm install; npm run build`.
 
 The **Isolated downloader** button starts the Rust engine in a fresh temporary
-folder and shows its empty download list and settings through a read-only bridge.
-Download actions are disabled. Closing the window stops the test engine; this
+folder and shows its empty download list and settings through a restricted bridge. A few display preferences can be changed in the
+temporary profile. Download actions are disabled. Closing the window stops the test engine; this
 mode does not use the installed app's data. Windows validation is still needed.
 
 The existing Auralis app, Rust downloader, browser integration and release

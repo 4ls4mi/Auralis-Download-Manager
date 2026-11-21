@@ -101,6 +101,11 @@ fn update_setting(key: &str, value: &str) -> Result<serde_json::Value, String> {
         "show_progress", "advanced_integration", "double_click_open",
     ];
     if !ALLOWED.contains(&key) || value.len() > 256 { return Err("Unsupported settings change.".into()); }
+    // Keep development settings changes limited to harmless UI preferences.
+    // In particular, never enable integration, networking or startup behavior.
+    if ISOLATED_DATA.get().is_some() && !["show_complete", "show_progress", "confirm_delete", "double_click_open"].contains(&key) {
+        return Err("This setting is disabled in the development sandbox.".into());
+    }
     if !owned_backend() { return Err("The embedded downloader is not running in this process.".into()); }
     let command = mdm_ipc::Command { action: Some("glass-setting".into()), category: Some(key.into()), queue: Some(value.into()), ..Default::default() };
     let raw = mdm_ipc::request_checked(&command).map_err(|e| e.to_string())?;
@@ -187,6 +192,7 @@ mod tests {
         assert!(visual["downloads"].is_array());
         let settings = dispatch(5).expect("read downloader settings");
         assert!(settings["max_connections"].is_number());
+        assert!(update_setting("advanced_integration", "true").unwrap_err().contains("disabled"));
         update_setting("show_complete", "false").expect("update isolated setting");
         assert_eq!(dispatch(5).unwrap()["show_complete"], false);
         assert!(download_action(1, 1).unwrap_err().contains("disabled"));
