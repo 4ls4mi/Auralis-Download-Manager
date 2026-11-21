@@ -119,6 +119,8 @@ if (!badResizeRejected) throw new Exception("Invalid resize request accepted.");
 var exportRequest=BridgeMessage.Parse("https://auralis.local/index.html", """{"id":6,"command":"export_theme_file","contents":"{\"format\":\"auralis-theme\"}"}""");
 if (exportRequest.Value is null || !exportRequest.Value.Contains("auralis-theme")) throw new Exception("Theme export was not preserved.");
 var queueRequest=BridgeMessage.Parse("https://auralis.local/index.html", """{"id":7,"command":"queue_action","name":"Main download queue","action":"stop_queue"}""");
+var queueItem=BridgeMessage.Parse("https://auralis.local/index.html", """{"id":7,"command":"queue_item_add","name":"Main download queue","downloadId":5}""");
+if (queueItem.DownloadId!=5 || queueItem.Key!="Main download queue") throw new Exception("Queue item request was not preserved.");
 var corner=WindowPlacementPolicy.BottomRight(new(-1920,0,1920,1040),400,150,16);
 if (corner!=new WindowBounds(-416,874,400,150)) throw new Exception("Update notice is not positioned in the monitor work area.");
 var smallCorner=WindowPlacementPolicy.BottomRight(new(0,0,300,100),400,150,16);

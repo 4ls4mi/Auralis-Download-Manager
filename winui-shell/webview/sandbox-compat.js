@@ -58,6 +58,8 @@
     if(command==='file_operation' && args.operation==='checksum-result' && Number.isSafeInteger(args.id) && args.id>0) return request('checksum_result',{downloadId:args.id});
     if(command==='file_operation' && args.operation==='checksum' && Number.isSafeInteger(args.id) && args.id>0 && typeof args.value==='string' && /^[\x20-\x7e]{1,256}$/.test(args.value)) return request('checksum',{downloadId:args.id,value:args.value});
     if(command==='file_operation' && args.operation==='refresh-address' && Number.isSafeInteger(args.id) && args.id>0 && typeof args.value==='string' && /^https?:\/\//i.test(args.value) && args.value.length<=8192) return request('refresh_address',{downloadId:args.id,value:args.value});
+    if(command==='file_operation' && args.operation==='queue-add' && Number.isSafeInteger(args.id) && args.id>0 && typeof args.value==='string' && args.value.length>0 && args.value.length<=256) return request('queue_item_add',{downloadId:args.id,name:args.value});
+    if(command==='file_operation' && args.operation==='queue-remove' && Number.isSafeInteger(args.id) && args.id>0) return request('queue_item_remove',{downloadId:args.id});
     if(command==='download_action' && ['start','pause','remove'].includes(args.action) && Array.isArray(args.ids) && args.ids.length>0 && args.ids.length<=100 && args.ids.every(id=>Number.isSafeInteger(id) && id>0)) {
       const results=await Promise.all([...new Set(args.ids)].map(downloadId=>request(args.action==='start'?'start_download':args.action==='pause'?'pause_download':'remove_download',{downloadId})));
       return {done:results.flatMap(result=>result.done??[]),skipped:results.flatMap(result=>result.skipped??[])};

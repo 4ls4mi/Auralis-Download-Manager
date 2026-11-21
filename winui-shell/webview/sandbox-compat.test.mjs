@@ -119,6 +119,18 @@ test('queue controls are limited to start and stop in the isolated engine',async
  await assert.rejects(context.__TAURI_INTERNALS__.invoke('queue_action',{name:'Main download queue',action:'delete_queue'}),/unavailable/);
 });
 
+test('a test download can be added to or removed from an existing queue',async()=>{
+ let listener;const sent=[];
+ const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);
+ const add=context.__TAURI_INTERNALS__.invoke('file_operation',{id:7,operation:'queue-add',value:'Main download queue'});
+ assert.equal(sent[0].command,'queue_item_add');assert.equal(sent[0].downloadId,7);assert.equal(sent[0].name,'Main download queue');
+ listener({data:{id:sent[0].id,ok:true,value:{ok:true}}});await add;
+ const remove=context.__TAURI_INTERNALS__.invoke('file_operation',{id:7,operation:'queue-remove',value:'/outside'});
+ assert.equal(sent[1].command,'queue_item_remove');assert.equal('value' in sent[1],false);
+ listener({data:{id:sent[1].id,ok:true,value:{ok:true}}});await remove;
+ await assert.rejects(context.__TAURI_INTERNALS__.invoke('file_operation',{id:7,operation:'queue-add',value:''}),/unavailable/);
+});
+
 test('add URL dialog forwards only HTTP test downloads and receives the existing UI response shape',async()=>{
  let listener;const sent=[];
  const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);

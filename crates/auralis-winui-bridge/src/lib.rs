@@ -217,6 +217,32 @@ fn queue_action(name: &str, action: u8) -> Result<serde_json::Value, String> {
     let result:mdm_ipc::api::ActAnswer=serde_json::from_str(&raw).map_err(|_|"Queue action failed.")?;
     serde_json::to_value(result).map_err(|e|e.to_string())
 }
+fn item_queue_action(id: u64, name: Option<&str>) -> Result<serde_json::Value, String> {
+    if id==0 || !owned_backend() || ISOLATED_DATA.get().is_none() { return Err("The test download is unavailable.".into()); }
+    if name.is_some_and(|name|name.is_empty() || name.len()>256) { return Err("Invalid queue name.".into()); }
+    let root=test_output_dir()?;
+    let command=mdm_ipc::Command { query:Some("list".into()), ..Default::default() };
+    let raw=mdm_ipc::request_checked(&command).map_err(|e|e.to_string())?;
+    let list:mdm_ipc::api::ListAnswer=serde_json::from_str(&raw).map_err(|_|"Invalid download list.")?;
+    let item=list.downloads.iter().find(|item|item.id==id).ok_or("The test download no longer exists.")?;
+    if std::path::Path::new(&item.path).parent().is_none_or(|parent|!same_path(parent,&root)) { return Err("The download is outside the test folder.".into()); }
+    if name.is_some_and(|name|!list.queues.iter().any(|queue|queue.name==name)) { return Err("The selected queue is unavailable.".into()); }
+    let command=mdm_ipc::Command { action:Some("glass-item".into()), category:Some(if name.is_some(){"queue-add"}else{"queue-remove"}.into()), ids:vec![id], queue:name.map(str::to_owned), ..Default::default() };
+    let raw=mdm_ipc::request_checked(&command).map_err(|e|e.to_string())?;
+    let data:serde_json::Value=serde_json::from_str(&raw).map_err(|_|"Invalid queue response.")?;
+    if data.get("error").is_some() { return Err("The download queue could not be changed.".into()); }
+    Ok(data)
+}
+/// # Safety
+/// When `len` is nonzero, `name` must point to `len` readable UTF-8 bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn auralis_bridge_item_queue_action(id: u64, name: *const u8, len: usize) -> *mut c_char {
+    encode(std::panic::catch_unwind(|| {
+        if len>256 || (len>0 && name.is_null()) { return Err("Invalid queue request.".into()); }
+        let name=if len==0 { None } else { Some(std::str::from_utf8(unsafe { std::slice::from_raw_parts(name,len) }).map_err(|_|"Invalid queue name.")?) };
+        item_queue_action(id,name)
+    }))
+}
 /// # Safety
 /// `name` must point to `len` readable UTF-8 bytes for this call.
 #[unsafe(no_mangle)]
@@ -573,6 +599,10 @@ mod tests {
         assert!(destination.starts_with(data.join("downloads")), "test download escaped sandbox");
         assert!(safe_test_path(0,false).is_err());
         let id=queued["id"].as_u64().expect("download id");
+        assert!(item_queue_action(id,Some("__missing_queue__")).is_err());
+        assert_eq!(item_queue_action(id,Some(main_queue)).expect("add test download to queue")["ok"],true);
+        assert!(dispatch(3).unwrap()["queues"].as_array().unwrap().iter().any(|queue|queue["name"]==main_queue && queue["ids"].as_array().is_some_and(|ids|ids.contains(&serde_json::json!(id)))));
+        assert_eq!(item_queue_action(id,None).expect("remove test download from queue")["ok"],true);
         assert!(file_details(id).expect("read isolated download details").is_object());
         set_speed_limit(id,512).expect("set isolated speed limit");
         assert_eq!(file_details(id).unwrap()["own_limit_kb"],512);

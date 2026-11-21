@@ -19,6 +19,9 @@ internal static class DownloaderBridge
     private static extern IntPtr auralis_bridge_queue_action(byte[] name, nuint length, byte action);
 
     [DllImport("auralis_winui_bridge", CallingConvention = CallingConvention.Cdecl)]
+    private static extern IntPtr auralis_bridge_item_queue_action(ulong id, byte[] name, nuint length);
+
+    [DllImport("auralis_winui_bridge", CallingConvention = CallingConvention.Cdecl)]
     private static extern IntPtr auralis_bridge_file_details(ulong id);
 
     [DllImport("auralis_winui_bridge", CallingConvention = CallingConvention.Cdecl)]
@@ -53,6 +56,11 @@ internal static class DownloaderBridge
     {
         byte[] bytes = System.Text.Encoding.UTF8.GetBytes(name);
         return ReadResponse(auralis_bridge_queue_action(bytes, (nuint)bytes.Length, start ? (byte)1 : (byte)2));
+    });
+    internal static Task<JsonElement> ItemQueueActionAsync(ulong id, string? name) => Task.Run(() =>
+    {
+        byte[] bytes=System.Text.Encoding.UTF8.GetBytes(name ?? "");
+        return ReadResponse(auralis_bridge_item_queue_action(id,bytes,(nuint)bytes.Length));
     });
     internal static Task<JsonElement> FileDetailsAsync(ulong id) => Task.Run(() => ReadResponse(auralis_bridge_file_details(id)));
     internal static Task<JsonElement> CheckSavedAsync(ulong id, bool result) => Task.Run(() => ReadResponse(auralis_bridge_check_saved(id,result ? (byte)1 : (byte)0)));
