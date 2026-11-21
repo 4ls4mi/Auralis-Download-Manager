@@ -67,9 +67,14 @@ fn download_action(action: u32, id: u64) -> Result<serde_json::Value, String> {
 }
 fn add_download(url: &str, later: bool) -> Result<serde_json::Value, String> {
     let url = url.trim();
-    if url.is_empty() || url.len() > 8192 || !["http://", "https://", "ftp://", "magnet:"].iter().any(|prefix| url.starts_with(prefix)) {
-        return Err("Enter a supported HTTP, HTTPS, FTP or magnet link.".into());
-    }
+    if url.is_empty() || url.len() > 8192 { return Err("Enter a supported HTTP, HTTPS, FTP or magnet link.".into()); }
+    let parsed = url::Url::parse(url).map_err(|_| "Enter a valid download link.")?;
+    let supported = match parsed.scheme() {
+        "http" | "https" | "ftp" => parsed.host_str().is_some(),
+        "magnet" => parsed.query().is_some_and(|q| !q.is_empty()),
+        _ => false,
+    };
+    if !supported { return Err("Enter a supported HTTP, HTTPS, FTP or magnet link.".into()); }
     if !owned_backend() { return Err("The embedded downloader is not running in this process.".into()); }
     mdm_ipc::send(&mdm_ipc::Command { url: Some(url.to_owned()), later, silent: false, ..Default::default() }).map_err(|e| e.to_string())?;
     Ok(serde_json::json!({"pending":true}))
@@ -131,6 +136,8 @@ mod tests {
     #[test]
     fn unsupported_operations_are_rejected_and_ffi_returns_json() {
         assert!(add_download("file:///local/private", false).is_err());
+        assert!(add_download("http://", false).is_err());
+        assert!(add_download("magnet:", false).is_err());
         assert!(add_download(&"x".repeat(8193), false).is_err());
         assert_eq!(download_action(999, 1).unwrap_err(), "Unsupported download action");
         assert_eq!(download_action(1, 0).unwrap_err(), "Invalid download ID");

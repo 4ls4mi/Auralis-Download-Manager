@@ -639,6 +639,7 @@ dependencies = [
  "mdm-app",
  "mdm-ipc",
  "serde_json",
+ "url",
 ]
 
 [[package]]
