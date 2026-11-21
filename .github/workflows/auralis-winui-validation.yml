@@ -22,6 +22,8 @@ jobs:
       - name: Build WinUI development shell
         shell: pwsh
         run: |
-          dotnet --info
-          dotnet build winui-shell/Auralis.WinUI/Auralis.WinUI.csproj -c Debug -p:Platform=x64
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $msbuild = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -find 'MSBuild/**/Bin/MSBuild.exe' | Select-Object -First 1
+          if (-not $msbuild) { throw 'Visual Studio MSBuild was not found.' }
+          & $msbuild winui-shell/Auralis.WinUI/Auralis.WinUI.csproj /restore /m /p:Configuration=Debug /p:Platform=x64
           if ($LASTEXITCODE) { throw 'WinUI shell build failed.' }
