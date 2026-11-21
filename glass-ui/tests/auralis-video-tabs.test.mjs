@@ -14,7 +14,8 @@ test('in-player panel tabs preserve subtitle selection and stay anchored',{skip:
   const host=page.locator('mdm-video-button');await host.waitFor();
   const more=host.locator('.more');await more.waitFor({state:'visible'});await more.click();
   const tabs=host.locator('[role="tab"]');await tabs.first().waitFor();
-  assert.equal(await tabs.count(),3);
+  assert.equal(await tabs.count(),2);
+  const cookie=await host.locator('.cookie-controls label').boundingBox(),fetch=await host.locator('.cookie-fetch').boundingBox();assert.ok(fetch.y>=cookie.y+cookie.height-1,'Fetch qualities appears below cookies');
   assert.equal(await host.locator('.menu').evaluate(e=>e.scrollWidth<=e.clientWidth),true);
   assert.equal(await host.locator('.mh .t').evaluate(e=>getComputedStyle(e).textOverflow),'ellipsis');
   assert.equal(await host.locator('.rows').evaluate(e=>getComputedStyle(e).overflowY),'auto');
@@ -23,7 +24,7 @@ test('in-player panel tabs preserve subtitle selection and stay anchored',{skip:
   const after=await menu.boundingBox();assert.equal(after.x,before.x);assert.equal(after.y,before.y);
   await host.locator('[role="tab"]',{hasText:'Video'}).focus();await page.keyboard.press('ArrowRight');
   assert.equal(await host.locator('[role="tab"][aria-selected="true"]').innerText(),'Audio');
-  await page.keyboard.press('ArrowRight');assert.equal(await host.locator('[role="tab"][aria-selected="true"]').innerText(),'Subtitles');
+  await page.keyboard.press('ArrowRight');assert.equal(await host.locator('[role="tab"][aria-selected="true"]').innerText(),'Video');
   assert.equal(await host.getByLabel('Subtitle language').locator('option[value="manual:all"]').count(),1);
   await host.getByLabel('Subtitle language').selectOption('manual:en');
   await host.getByLabel('Selectable track').check();

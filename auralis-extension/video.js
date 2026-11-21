@@ -1038,7 +1038,7 @@ button:focus-visible { outline: none; }
 .pill,.menu {--accent:#d0b4ff;--tx:#f5f8ff;--tx2:#c4cee4;--hov:rgba(176,143,255,.24);--bd:rgba(213,228,255,.30);--go:#65e4d0;--warn:#ffce79;--err:#ff9ba8}
 .pill {background:linear-gradient(145deg,rgba(73,56,112,.94),rgba(15,28,45,.96));border:1px solid #dfd2ff77;box-shadow:inset 0 1px #ffffff55,0 6px 18px #0009}
 .pill:not(.bare) .go:hover,.pill .more:hover {background:#b48dff55}
-.menu {width:min(310px,calc(100vw - 16px));height:min(320px,calc(100vh - 16px));min-width:min(260px,calc(100vw - 16px));min-height:180px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);resize:both;overflow:auto;overscroll-behavior:contain;padding:8px;border-radius:16px;background:linear-gradient(145deg,rgba(55,80,114,.87),rgba(18,28,49,.94));border-color:#c8e8ff80;backdrop-filter:blur(22px) saturate(135%);box-shadow:inset 0 1px #fff8,0 18px 42px #000b}
+.menu {width:min(310px,calc(100vw - 16px));height:min(300px,calc(100vh - 16px));min-width:min(260px,calc(100vw - 16px));min-height:180px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);resize:both;overflow:auto;overscroll-behavior:contain;padding:8px;border-radius:16px;background:linear-gradient(145deg,rgba(55,80,114,.87),rgba(18,28,49,.94));border-color:#c8e8ff80;backdrop-filter:blur(22px) saturate(135%);box-shadow:inset 0 1px #fff8,0 18px 42px #000b}
 .menu .mh{cursor:default;user-select:none;border-radius:10px;background:linear-gradient(110deg,#a9e4ff35,#bd9cff20)}.menu .rows{max-height:none;overflow:visible}
 .menu button {height:32px;border-radius:8px;cursor:pointer}.menu button:hover {background:#b99aff3d}.menu .cap{color:#d9c6ff}.menu .rows{scrollbar-width:thin;scrollbar-color:#a98ee2 transparent}
 .menu .quality-tabs{display:flex;gap:4px;margin:4px 0}.menu .quality-tabs button{flex:1;justify-content:center;padding:4px;font-size:12px}.menu .quality-tabs button[aria-selected="true"]{background:#8467d96b;box-shadow:inset 0 -2px #d6c1ff}
@@ -1059,7 +1059,10 @@ button:focus-visible { outline: none; }
 .menu button.quality-row{height:auto;min-height:42px;display:flex;flex-direction:column;align-items:stretch;gap:2px;padding:5px 8px;text-align:left;border-bottom:1px solid #ffffff18}
 .menu .quality-primary{display:flex;align-items:center;gap:4px;min-width:0;white-space:nowrap}.menu .quality-name{font-weight:650;overflow:hidden;text-overflow:ellipsis}.menu .quality-badge,.menu .quality-codec{flex:none;font-size:9px;padding:1px 3px;border:1px solid var(--accent);border-radius:3px;color:var(--accent)}
 .menu .quality-details{font-size:10px;font-weight:400;color:var(--tx2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.menu .cookie-controls{padding:4px;gap:4px;font-size:11px}
+.menu .cookie-controls{display:grid;grid-template-columns:minmax(0,1fr);padding:3px;gap:3px;font-size:11px}
+.menu .cookie-controls>label{display:flex;align-items:center;gap:6px;min-width:0}.menu .cookie-controls>label select{flex:1;min-width:0}.menu .cookie-controls .cookie-fetch{justify-self:start;min-height:24px;padding:3px 7px}
+.menu .quality-tabs{margin:2px 0;gap:3px}.menu .quality-tabs button{height:27px}
+.menu .subtitle-controls{gap:3px;padding:3px}.menu button.quality-row{min-height:38px;padding:4px 7px}
 .menu .cookie-controls select{max-width:135px}
 .menu [data-act="hide"],.menu [data-act="never"],.menu [data-act="settings"]{height:25px;font-size:11px}
 .cookie-controls {padding:6px;display:flex;gap:5px;align-items:center;flex-wrap:wrap}.cookie-controls button {width:auto;height:auto;background:#355983;padding:5px 7px}.cookie-controls input {max-width:150px}.cookie-controls select,.cookie-controls input,.rows select {background:#20334f;color:#fff;border:1px solid #8ab3d788;border-radius:5px;padding:4px}
@@ -2046,9 +2049,9 @@ button:focus-visible { outline: none; }
     } else if (look && look.state === "ready" && Array.isArray(look.choices) && look.choices.length) {
       const groups = groupChoices(look.choices, 100);
       const tabs=document.createElement("div");tabs.className="quality-tabs";tabs.setAttribute("role","tablist");tabs.setAttribute("aria-label","Quality categories");
-      for(const [kind,title] of [["video",t("video_tab_video")],["audio",t("video_tab_audio")],["subtitles","Subtitles"]]){const button=document.createElement("button");button.type="button";button.textContent=title;button.setAttribute("role","tab");button.setAttribute("aria-selected",String(qualityTab===kind));button.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();qualityTab=kind;fillMenu()});tabs.append(button)}
+      for(const [kind,title] of [["video",t("video_tab_video")],["audio",t("video_tab_audio")]]){const button=document.createElement("button");button.type="button";button.textContent=title;button.setAttribute("role","tab");button.setAttribute("aria-selected",String(qualityTab===kind));button.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();qualityTab=kind;fillMenu()});tabs.append(button)}
       rows.append(tabs);
-      if(qualityTab!=="audio") {
+      if(qualityTab==="video") {
         const section=document.createElement("section");section.className="subtitle-controls";
         const label=document.createElement("label");label.textContent="Subtitle language ";
         const select=document.createElement("select");select.setAttribute("aria-label","Subtitle language");
@@ -2061,9 +2064,9 @@ button:focus-visible { outline: none; }
         select.value=subtitleChoice;select.addEventListener("change",()=>{subtitleChoice=select.value});label.append(select);section.append(label);
         const modes=document.createElement("div");modes.className="subtitle-modes";modes.setAttribute("role","group");modes.setAttribute("aria-label","Subtitle output");
         for(const [value,text] of [[false,"Separate file"],[true,"Selectable track"]]){const item=document.createElement("label");const radio=document.createElement("input");radio.type="radio";radio.name="subtitle-output";radio.checked=subtitleEmbed===value;radio.addEventListener("change",()=>{if(radio.checked)subtitleEmbed=value});item.append(radio,document.createTextNode(text));modes.append(item)}
-        const burn=document.createElement("label"),burnRadio=document.createElement("input");burnRadio.type="radio";burnRadio.name="subtitle-output";burnRadio.disabled=true;burn.append(burnRadio,document.createTextNode("Burn into picture (not available yet)"));modes.append(burn);const note=document.createElement("small");note.textContent="Selectable tracks require FFmpeg and MP4, MKV or MOV; otherwise subtitles save separately.";modes.append(note);section.append(modes);rows.append(section);
+        const burn=document.createElement("label"),burnRadio=document.createElement("input");burnRadio.type="radio";burnRadio.name="subtitle-output";burnRadio.disabled=true;burn.append(burnRadio,document.createTextNode("Burn into picture (not available yet)"));modes.append(burn);const note=document.createElement("small");note.textContent="Selectable tracks need FFmpeg and MP4/MKV/MOV; otherwise saved separately.";modes.append(note);section.append(modes);rows.append(section);
       }
-      if(qualityTab!=="subtitles") {
+      {
         if(qualityTab==="video")rows.append(topRow(best, { choice: look.choices.indexOf(best) }));
         const choices=groups[qualityTab]||[];
         if(!choices.length){const empty=document.createElement("div");empty.className="note";empty.textContent="No qualities available";rows.append(empty)}
