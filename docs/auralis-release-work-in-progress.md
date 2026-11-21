@@ -16,6 +16,11 @@ This is a working checklist, not release notes. Do not describe a feature as shi
 - [ ] Clearly show recovery status, torrent details and direct/torrent provenance in the download window and list.
 - [ ] Verify interruption, corrupted data, resume, changes of source, and candidate mismatch paths end to end.
 
+## WinUI 3 shell migration
+- [ ] Replace the Tauri shell with WinUI 3 while retaining the downloader, browser integration, tray, updates, settings, all windows and existing user data. The isolated development shell in `winui-shell/` builds on Windows and maps material names to native Acrylic, Mica and Mica Alt; it is a backdrop preview, not a working downloader.
+- [ ] Connect the real interface and migrate the native command/event/window bridge securely. The new `auralis-winui-bridge` has only start, stop, list and visual-state operations; its isolated local start/read/stop test passes with browser-compatibility disabled. Production browser compatibility, Windows bridge verification and all remaining operations are outstanding. The preview deliberately does not start the bridge or touch user data.
+- [ ] Verify native backdrop appearance, readability, themes, resizing and multiple windows on the user's Windows configuration. Windows can vary or suppress system backdrops; Mica samples wallpaper while Acrylic can blur content behind the window. Do not describe a successful compilation as visual verification.
+
 ## Backup and appearance
 - [ ] Complete full backup/export and restore UI, including preferences, download history, actual completed files and resumable partial files. Safely coordinate active downloads, queues, moves and extraction; preserve existing files. Include video, torrent, gallery and other multi-file cases; never silently omit data.
   - Restore name validation also rejects Windows console devices and superscript-numbered COM/LPT devices. The underlying filename check passed a local isolated test; the complete backup UI and Windows restore still need verification.

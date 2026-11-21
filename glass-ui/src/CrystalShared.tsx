@@ -336,21 +336,33 @@ export function CrystalWindow({ children, target = "main" }: {
   const customMaterial=extraMaterials[appearance.material]??loadMaterials().find(m=>materialId(m)===appearance.material);
   const selectedMaterial=customMaterial??materialPresets[appearance.material]??materialPresets["frosted-water-351"];
   const surfaceStyle=materialBackdrop(appearance.material,selectedMaterial);
-  const surfaceOpacity=Math.min(1,Math.max(.2,1-selectedMaterial.translucency/125));
+  // Translucent desktop materials must leave room for the native Windows
+  // backdrop to show through. The foreground controls keep their own surfaces
+  // so text remains legible; wallpaper and solid backgrounds are unaffected.
+  const desktopGlass=mode==="desktop" && surfaceStyle!=="material";
+  const surfaceOpacity=Math.min(1,Math.max(.2,1-selectedMaterial.translucency/125))*(desktopGlass?.65:1);
   const themeTintRgb=useMemo(()=>(theme.neutralTint??theme.rgb.split(",").map(Number)) as [number,number,number],[theme]);
   const path = main ? appearance.wallMain : (appearance.wallDetail || appearance.wallMain);
   const src = path ? convertFileSrc(path) : "/alpine.svg";
   const video = /\.(mp4|webm|mov|m4v)$/i.test(path);
+  const effectQueue=useRef<Promise<void>>(Promise.resolve());
   useEffect(() => {
     const w = getCurrentWindow();let active=true;
-    // Explicit backdrop choices override the legacy material-default switch.
-    const effect = mode !== "desktop" ? null : surfaceStyle === "clear" ? null
-      : surfaceStyle === "soft" ? Effect.Blur
-      : ["frosted", "tinted"].includes(surfaceStyle) ? Effect.Acrylic
-      : null;
-    if (effect)
-      void w.setEffects({ effects: [effect], state: EffectState.Active }).catch(()=>{if(active)setWindowError("Windows backdrop blur is unavailable; transparent glass is being used.");return w.clearEffects().catch(()=>undefined)});
-    else void w.clearEffects().catch(() => undefined);
+    // Try the material's preferred native backdrop first, then the other
+    // Windows blur when it is unavailable. Serialize requests: a slow native
+    // call for an old selection must never overwrite the latest material.
+    const effects = mode !== "desktop" ? [] : surfaceStyle === "soft" ? [Effect.Blur,Effect.Acrylic]
+      : ["frosted", "tinted"].includes(surfaceStyle) ? [Effect.Acrylic,Effect.Blur] : [];
+    effectQueue.current=effectQueue.current.catch(()=>undefined).then(async()=>{
+      if(!active)return;
+      if(!effects.length){await w.clearEffects().catch(()=>undefined);return}
+      for(const effect of effects){
+        if(!active)return;
+        try{await w.setEffects({effects:[effect],state:EffectState.Active});return}
+        catch{/* Try the next supported Windows backdrop. */}
+      }
+      if(active){setWindowError("Windows backdrop blur is unavailable; transparent glass is being used.");await w.clearEffects().catch(()=>undefined)}
+    });
     return()=>{active=false};
   }, [mode, appearance.material, surfaceStyle]);
   // White palettes need light surfaces and dark foregrounds in every material.
@@ -368,7 +380,7 @@ export function CrystalWindow({ children, target = "main" }: {
     "--theme-tool-rgb": effectiveLight ? lightAccentRgb : mixColor(secondaryRgb(theme),[255,255,255],.18),
     "--accent-rgb": effectiveLight ? lightAccentRgb : theme.rgb,
     "--glass": effectiveLight ? themeTintRgb.join(",") : themeTintRgb.map(n=>Math.round(n*(theme.neutralTint ? .65 : .20))).join(","),
-    "--glass-tint": `rgba(${(theme.neutralTint??theme.rgb.split(",").map(Number)).join(",")},${Math.max(0,Math.min(65,appearance.tintStrength))/100})`,
+    "--glass-tint": `rgba(${(theme.neutralTint??theme.rgb.split(",").map(Number)).join(",")},${Math.max(0,Math.min(65,appearance.tintStrength))/100*(desktopGlass?.55:1)})`,
     "--surface": effectiveLight ? `rgba(${themeTintRgb.join(",")},.75)` : `rgba(${themeTintRgb.join(",")},.13)`,
     "--field": effectiveLight ? `rgba(${themeTintRgb.join(",")},.92)` : `rgba(${themeTintRgb.map(n=>Math.round(n*.12)).join(",")},.82)`,
     "--popover": effectiveLight ? `rgb(${themeTintRgb.join(",")})` : `rgb(${themeTintRgb.map(n=>Math.round(n*(theme.neutralTint ? .65 : .18))).join(",")})`,

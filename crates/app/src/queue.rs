@@ -190,6 +190,16 @@ pub fn finished(q: &Queue, member: impl Fn(u64) -> Member) -> bool {
     })
 }
 
+/// Whether any running queue can still retry this failed download. Automatic
+/// recovery must leave it alone while a retry is pending, including queues
+/// configured to retry forever. A stopped queue does not schedule retries.
+pub fn retry_pending_for(queues: &[Queue], id: u64, tries: u32) -> bool {
+    queues.iter().any(|q| {
+        q.running && q.items.contains(&id)
+            && q.schedule.retries.is_none_or(|max| tries < max)
+    })
+}
+
 /// A failed file goes to the end of the queue.
 pub fn requeue_failed(q: &mut Queue, id: u64) {
     if let Some(i) = q.items.iter().position(|x| *x == id) {
@@ -268,6 +278,23 @@ mod tests {
             !finished(&q(1, &[7]), failed(9)),
             "no limit: keeps retrying"
         );
+    }
+
+    #[test]
+    fn automatic_recovery_waits_for_every_running_queue_to_exhaust_retries() {
+        let mut first = q(1, &[7]);
+        first.running = true;
+        assert!(retry_pending_for(&[first.clone()], 7, 100), "unlimited retries never exhaust");
+        first.schedule.retries = Some(2);
+        assert!(retry_pending_for(&[first.clone()], 7, 1));
+        assert!(!retry_pending_for(&[first.clone()], 7, 2));
+        let mut second = q(1, &[7]);
+        second.running = true;
+        second.schedule.retries = Some(3);
+        assert!(retry_pending_for(&[first.clone(), second.clone()], 7, 2));
+        second.running = false;
+        assert!(!retry_pending_for(&[first, second], 7, 2));
+        assert!(!retry_pending_for(&[q(1, &[8])], 7, 0));
     }
 
     #[test]
