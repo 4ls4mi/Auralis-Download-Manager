@@ -25,5 +25,9 @@ test('WinUI visual preview loads the real interface without enabling downloads',
   await page.goto(server.resolvedUrls.local[0]+'?settings=1&tab=Appearance');
   await page.getByRole('button',{name:'Window Glass',exact:true}).click();
   await page.waitForFunction(()=>window.previewMessages.some(message=>message.appearance?.material==='window-glass'));
+  assert.equal(await page.locator('.cg-window').evaluate(el=>getComputedStyle(el).getPropertyValue('--native-content-opacity').trim()),'.16');
+  await page.getByRole('button',{name:'Frosted Layers',exact:true}).click();
+  await page.waitForFunction(()=>window.previewMessages.some(message=>message.appearance?.material==='frosted-water-351'));
+  assert.equal(await page.locator('.cg-window').evaluate(el=>getComputedStyle(el).getPropertyValue('--native-content-opacity').trim()),'.35');
  }finally{await browser.close();await server.close()}
 });

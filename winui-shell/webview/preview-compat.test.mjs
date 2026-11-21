@@ -25,7 +25,7 @@ test('native backdrop preview installs translucent desktop layers for every mate
  assert.match(added.textContent,/cg-material-window-glass[^}]+--native-content-opacity:\.16/);
  assert.match(added.textContent,/cg-material-frosted-water-351[^}]+--native-content-opacity:\.35/);
  assert.match(added.textContent,/cg-material-rose-pine[^}]+--native-content-opacity:\.46/);
- assert.match(added.textContent,/cg-high-contrast[^}]+--native-content-opacity:\.96/);
+ assert.match(added.textContent,/cg-high-contrast[^}]+--native-panel-opacity:\.88/);
  assert.doesNotMatch(added.textContent,/:not\(\.cg-material-frosted-water-351\)/);
 });
 

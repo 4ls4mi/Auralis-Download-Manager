@@ -11,7 +11,7 @@
       html[data-auralis-winui-preview] .cg-window.cg-mode-desktop:is(.cg-material-frosted-water-351,.cg-material-builtin-pearl-frost,.cg-finish-frosted) {--native-content-opacity:.35;--native-panel-opacity:.72}
       html[data-auralis-winui-preview] .cg-window.cg-mode-desktop:is(.cg-material-builtin-smoked-glass) {--native-content-opacity:.42;--native-panel-opacity:.76}
       html[data-auralis-winui-preview] .cg-window.cg-mode-desktop:is(.cg-material-rose-pine,.cg-material-oversimplified,.cg-material-builtin-obsidian-matte,.cg-finish-matte) {--native-content-opacity:.46;--native-panel-opacity:.82}
-      html[data-auralis-winui-preview] .cg-window.cg-mode-desktop.cg-high-contrast {--native-content-opacity:.96;--native-panel-opacity:.98}
+      html[data-auralis-winui-preview] .cg-window.cg-mode-desktop.cg-high-contrast {--native-panel-opacity:.88}
       html[data-auralis-winui-preview] .cg-window.cg-mode-desktop .cg-content{background:linear-gradient(145deg,var(--glass-tint),transparent 70%),rgba(var(--glass),var(--native-content-opacity))!important;backdrop-filter:none!important}
       html[data-auralis-winui-preview] .cg-window.cg-mode-desktop .cg-glass{background:rgba(var(--glass),var(--native-panel-opacity))!important;backdrop-filter:none!important}
       html[data-auralis-winui-preview] .cg-window.cg-mode-desktop :is(.cg-frost-canvas,.cg-frost-fallback){display:none!important}`;
