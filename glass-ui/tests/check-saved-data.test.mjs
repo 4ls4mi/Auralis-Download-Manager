@@ -243,7 +243,6 @@ test('reopening a progress window restores an existing recovery search',{skip:!e
    if(cmd==='file_operation'&&args.operation==='find-recovery-torrents-result')return {complete:true,searched:1,failed:0,matches:[{candidate:0,file_index:0,info_hash:'0123456789012345678901234567890123456789',title:'Restored candidate',path:'file.zip',matching_pieces:1,unavailable_pieces:2}]};return null;
   }};
  });await page.goto(server.resolvedUrls.local[0]+'?detail=7');
- await page.getByText('Find a torrent for recovery').click();
  await page.getByText(/Restored candidate/).waitFor();
  assert.equal(await page.getByRole('button',{name:'Continue with this torrent'}).isDisabled(),true);
  assert.equal(await page.evaluate(()=>window.calls.some(c=>c.args?.operation==='start-recovery-torrent')),false);

@@ -1418,6 +1418,45 @@ fn category_icon(c: Category) -> IconKey {
     IconKey::Themed(need, silk)
 }
 
+fn automatic_torrent_choice(report: &mdm_torrent::candidate_search::SearchReport) -> Option<(usize, String)> {
+    if report.failed != 0 || report.matches.len() != 1 { return None; }
+    let candidate=&report.matches[0];
+    if candidate.files.len()!=1 { return None; }
+    let file=&candidate.files[0];
+    if file.evidence.matching.len()<2 || !file.evidence.mismatching.is_empty() { return None; }
+    Some((file.file_index,candidate.info_hash.clone()))
+}
+
+#[cfg(test)]
+mod automatic_torrent_choice_tests {
+    use super::automatic_torrent_choice;
+    use mdm_torrent::candidate_search::{Candidate, MatchedCandidate, MatchingFile, SearchReport};
+
+    fn report() -> SearchReport {
+        SearchReport { searched:1, failed:0, matches:vec![MatchedCandidate {
+            candidate:Candidate { identifier:"sample".into(), title:"Sample".into(), torrent_url:url::Url::parse("https://archive.org/download/sample/sample.torrent").unwrap() },
+            info_hash:"example".into(), torrent:vec![], files:vec![MatchingFile {
+                file_index:2, path:"file.bin".into(), evidence:mdm_engine::recovery::PieceComparison { matching:vec![0,1], mismatching:vec![], unavailable:vec![2] }
+            }],
+        }] }
+    }
+    #[test]
+    fn automatic_recovery_requires_complete_candidate_checks_and_unique_evidence() {
+        let mut sample=report();
+        assert_eq!(automatic_torrent_choice(&sample),Some((2,"example".into())));
+        sample.failed=1;
+        assert_eq!(automatic_torrent_choice(&sample),None);
+        sample.failed=0;
+        sample.matches[0].files[0].evidence.mismatching.push(3);
+        assert_eq!(automatic_torrent_choice(&sample),None);
+        sample.matches[0].files[0].evidence.mismatching.clear();
+        sample.matches[0].files[0].evidence.matching.pop();
+        assert_eq!(automatic_torrent_choice(&sample),None);
+        sample.matches.clear();
+        assert_eq!(automatic_torrent_choice(&sample),None);
+    }
+}
+
 impl App {
     /// For a run without a window (#157): downloads go to `downloads` when given (a server's
     /// share), and nothing waits for an answer from someone at the computer.
@@ -7606,15 +7645,12 @@ impl App {
         if !self.glass_owned() { return; }
         let ids: Vec<u64> = self.auto_recovery_pending.iter().copied().collect();
         for id in ids {
-            let result = self.glass_torrent_recovery.get(&id).and_then(|slot|slot.lock().ok().and_then(|guard|guard.as_ref().map(|report| match report {
-                Ok(report) if report.matches.len()==1 && report.matches[0].files.len()==1 && report.matches[0].files[0].evidence.matching.len()>=2 => {
-                    let candidate=&report.matches[0];Some((candidate.files[0].file_index,candidate.info_hash.clone()))
-                }
-                _ => None,
-            })));
+            let result = self.glass_torrent_recovery.get(&id).and_then(|slot|slot.lock().ok().and_then(|guard|guard.as_ref().map(|report| report.as_ref().ok().and_then(automatic_torrent_choice))));
             let Some(selection)=result else {continue};
             self.auto_recovery_pending.remove(&id);
-            let still_eligible=self.items.iter().any(|item|item.id==id && item.status==Status::Error && item.live.is_none() && !item.context.private)
+            let still_eligible=self.items.iter().any(|item|item.id==id && item.status==Status::Error && item.live.is_none() && item.resumable==Some(false)
+                && item.torrent.is_none() && item.direct_recovery.is_none() && item.video.is_none() && item.gallery.is_none() && item.remote.is_none()
+                && item.checksum.is_none() && !item.context.private)
                 && !self.stopped_by_hand.contains(&id)
                 && !queue::retry_pending_for(&self.queues,id,self.failures.get(&id).map_or(0,|(_,n)|*n));
             if self.settings.torrent_recovery_mode=="auto" && still_eligible {
