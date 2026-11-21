@@ -28,17 +28,32 @@ These captures show Auralis 0.3.26 running on Windows with sample downloads. The
 
 ![Auralis download complete dialog with the local path redacted](docs/images/auralis/complete.png)
 
-## Features
+## What you can do with Auralis
 
-- Multi-connection downloads with pause and resume, queues, bandwidth controls and a live transfer graph.
-- A dedicated browser extension for sending downloads and supported media links to Auralis. See the release assets for Chromium-based browsers and Firefox; browser-specific installation and permissions are required.
-- Separate download, file information, completion and settings windows, with independently configurable materials, colors and indicator previews.
-- System-tray controls, optional Windows startup, and a separate tray icon for hidden download windows.
-- Video and audio quality lookup using yt-dlp, with browser-session and manual cookie options where supported.
-- In-app release notifications and updates, plus preferences backup and restore.
-- The downloader runs inside Auralis. A small native messaging helper is used when a browser communicates with the application.
+### Downloads, queues and speed
 
-Credentials and browser cookies are excluded from preferences backups; you may need to sign in again on a new Windows installation. Browser and site restrictions can still affect video lookup.
+- Add an HTTP, HTTPS or FTP link, or send a supported download from your browser. See the file's progress, speed, connection activity and remaining time in its download window.
+- Pause and resume where the source supports it, group downloads into queues, schedule them and set speed limits. The system tray keeps controls available while a window is hidden.
+- Multi-connection downloads write received bytes to their positions in one temporary file as they arrive. Ordinary segmented files therefore do not normally need separate chunk files joined at the end; disk flushing and verification can still take time.
+
+### Check and recover an interrupted download
+
+- **Check saved data** compares downloaded blocks with recorded local hashes. It can identify later changes to those blocks; local hashes do not prove the server originally sent the correct data, and older data without hashes cannot be checked this way.
+- **Check source and repair** can prepare changed ranges for re-download when a compatible HTTP source supports the required ranges and validation. A server that does not provide ranges cannot be forced to resume from an arbitrary position. Expired or changed links can also prevent a resume.
+- Under **Find a torrent for recovery**, you can request a search of Internet Archive, choose a `.torrent` file or compare a magnet link. Matching complete pieces can be copied into a separate recovery folder and the download continued from torrent peers; the original partial file is kept. Matching some pieces does not prove the rest of the file is identical. Searches disclose filename terms to Internet Archive, and magnet checks contact peers. Private downloads and downloads with an expected whole-file checksum are currently excluded from this fallback.
+- Supported whole-file checksums supplied by a server can be used to verify a completed download. Automatic torrent fallback and full-file backup are still in development.
+
+### Video, audio and torrents
+
+- With the browser extension and yt-dlp set up, look up available video and audio qualities on supported pages and choose subtitles where offered. Some sources need FFmpeg for final audio/video processing; availability depends on the site.
+- Add a `.torrent` file or magnet, review the files and destination, and download from available peers. Torrent pieces can be rechecked using the torrent's hashes.
+
+### Appearance, settings and backup
+
+- Choose themes, surface materials, progress bars, connection indicators and graphs independently. Liquid styles animate the progress, connections and graph using the downloader's actual values; colors can be adjusted in Appearance settings.
+- Export the current theme to an editable JSON file and import it again. The export includes the palette, surface material, typography and independent indicator choices. Wallpaper files are not embedded. See the [theme format](docs/auralis-theme-format.md) if you or an assistant want to edit it.
+- Save and restore appearance and download **preferences**. The current preferences backup does **not** include downloaded files, partial files or download history, and excludes passwords, account credentials and browser cookies. A full-file backup is in development.
+- Choose whether Auralis starts with Windows and use update notices and the system tray to keep downloads accessible.
 
 ## Guides and recovery
 
@@ -50,7 +65,10 @@ Appearance settings can export and import an editable theme JSON; indicator choi
 
 ## Installation
 
-Download the Windows x64 installer from the [latest release](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest) and run it. To connect a browser, install the matching Auralis extension from the release assets and follow the instructions in **Settings → Browser Integration**.
+1. Download and run the Windows x64 installer from the [latest release](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest).
+2. Open **Settings → Browser Integration** to prepare the connection and media helpers, and install the matching browser extension. Approve the browser's installation prompt when required.
+3. Choose a destination in **Settings → Downloads**, then use **Add URL** or send a supported link from the browser. Double-click a download to open its progress window.
+4. Open **Settings → Appearance** to choose themes, materials and indicator styles; use **Export current theme…** and **Import theme…** to save and load an editable theme.
 
 ## License and attribution
 
