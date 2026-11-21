@@ -3274,6 +3274,13 @@ impl App {
     }
 
     fn start(&mut self, id: u64, show: bool) {
+        let damaged = self.glass_recovery_checks.get(&id).is_some_and(|slot| {
+            slot.lock().ok().and_then(|result| result.as_ref().and_then(|r| r.as_ref().ok()).and_then(|report| report.get("damaged_ranges")).and_then(serde_json::Value::as_array).map(|ranges| !ranges.is_empty())).unwrap_or(false)
+        });
+        if damaged {
+            self.notice = Some("Saved data changed. Resume is blocked to protect the file; redownload it or wait for a repair option.".into());
+            return;
+        }
         if self.recovery_check_running(id) {
             self.notice = Some("Wait for the saved-data check to finish before resuming.".into());
             return;
@@ -10209,6 +10216,7 @@ impl App {
         if !self.can_redownload(id) {
             return;
         }
+        self.glass_recovery_checks.remove(&id);
         let Some(item) = self.item(id) else { return };
         let _ = std::fs::remove_file(state_path(&item.dest));
         let _ = std::fs::remove_file(mdm_engine::naming::part_path(&item.dest));

@@ -22,9 +22,10 @@ test('saved-data check reports changed and unhashed bytes without claiming repai
  });
  await page.goto(server.resolvedUrls.local[0]+'?detail=7');
  await page.getByRole('button',{name:'Check saved data'}).click();
- await page.getByText(/1 changed range found; saved data was kept/).waitFor();
+ await page.getByText(/1 changed range found; saved data was kept and resume is blocked/).waitFor();
  assert.match(await page.locator('main').innerText(),/has no saved hash and could not be checked/);
  assert.match(await page.locator('main').innerText(),/Local hashes do not prove/);
+ assert.equal(await page.getByRole('button',{name:'Resume'}).isDisabled(),true);
  assert.ok(await page.evaluate(()=>window.calls.some(c=>c.cmd==='file_operation'&&c.args.operation==='check-saved')));
  }finally{await browser.close();await server.close()}
 });
