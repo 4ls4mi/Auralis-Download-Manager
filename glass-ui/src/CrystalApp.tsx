@@ -26,8 +26,8 @@ type Menu = "Tasks" | "File" | "Downloads" | "View" | "Help";
 type MenuEntry = { label: string; action: string; disabled?: boolean; shortcut?: string; children?:MenuEntry[] };
 const menus: Menu[]=["Tasks","File","Downloads","View","Help"];
 const blank:Dashboard={downloads:[],speed:0,queues:[],categories:[]};
-const columnLabels=["FILE NAME","STATUS / SPEED","PROGRESS","TIME LEFT"];
-const visibleColumns=[0,2,3,5];
+const columnLabels=["FILE NAME","PROGRESS","TIME LEFT"];
+const visibleColumns=[0,3,5];
 const defaultColumns=[220,76,100,220,85,75];
 function loadColumns(){try{const v=JSON.parse(localStorage.getItem("auralis-download-columns")||"null");if(Array.isArray(v)&&v.length===6&&v.every(n=>typeof n==="number"&&Number.isFinite(n)))return v.map(n=>Math.max(60,Math.min(600,n)))}catch{}return [...defaultColumns]}
 const pop = (id:number)=>openWindow("download-"+id,"/?detail="+id,760,560);
@@ -149,7 +149,10 @@ export default function CrystalApp(){
         lastShown=update.version;
         const presentation=localStorage.getItem("auralis-update-presentation")||"quiet";
         if(presentation==="dialog") openWindow("tool-update-notice","/?tool=update-notice",680,520);
-        else if(presentation==="notify"||presentation==="toast") void (async()=>{try{if(await isPermissionGranted())sendNotification({title:"Auralis update available",body:`Version ${update.version} is ready to review in Auralis.`})}catch{/* The in-app notice remains available. */}})();
+        else if(presentation==="notify"||presentation==="toast") {
+          openWindow("tool-update-toast","/?tool=update-toast",400,150);
+          if(presentation==="notify")void (async()=>{try{if(await isPermissionGranted())sendNotification({title:"Auralis update available",body:`Version ${update.version} is ready to review in Auralis.`})}catch{/* The in-app and corner notices remain available. */}})();
+        }
       }catch{/* A later reconnect, signal or manual check can retry. */}
       finally{inFlight=false;if(queued&&mounted){queued=false;void check()}}
     };
@@ -442,8 +445,7 @@ export default function CrystalApp(){
             }}>
             <label className="cg-select-cell" onClick={e=>e.stopPropagation()} onDoubleClick={e=>e.stopPropagation()}><input type="checkbox" aria-label={`Select ${d.file}`} checked={selected.includes(d.id)} onChange={e=>{const next=e.target.checked?[...selected,d.id]:selected.filter(id=>id!==d.id);setSelected(next);setChosen(e.target.checked?d.id:next.at(-1)??null);anchor.current=d.id;setContext(null)}}/></label>
             <span className="cg-file" role="button" tabIndex={0} aria-pressed={selected.includes(d.id)} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();setSelected([d.id]);setChosen(d.id);anchor.current=d.id}}}><FileSymbol name={d.file}/><span className="cg-file-info">
-              <strong title={d.file}>{d.file}</strong><small>{units(d.downloaded)} / {units(d.size)} {visuals[d.id]?.is_torrent&&<span className="cg-transfer-kind" title={visuals[d.id]?.direct_recovery?"Started as a direct download and continued using BitTorrent":"This download uses BitTorrent"} aria-label={visuals[d.id]?.direct_recovery?"Direct download continued as torrent":"Torrent download"}>{visuals[d.id]?.direct_recovery?"◈ Direct → Torrent":"◆ Torrent"}</span>}</small></span></span>
-            <span className="cg-row-status"><StatusBadge item={d}/><small>{d.status==="Downloading"?rate(d.speed):"—"}</small></span>
+              <strong title={d.file}>{d.file}</strong><small>{units(d.downloaded)} / {units(d.size)} {visuals[d.id]?.is_torrent&&<span className="cg-transfer-kind" title={visuals[d.id]?.direct_recovery?"Started as a direct download and continued using BitTorrent":"This download uses BitTorrent"} aria-label={visuals[d.id]?.direct_recovery?"Direct download continued as torrent":"Torrent download"}>{visuals[d.id]?.direct_recovery?"◈ Direct → Torrent":"◆ Torrent"}</span>}</small><span className="cg-row-status"><StatusBadge item={d}/><small>{d.status==="Downloading"?rate(d.speed):"—"}</small></span></span></span>
             <span className="cg-row-progress">
               <GradientBar percent={pct(d)} size={d.size} active={d.status==="Downloading"} showLabel/>
               <ConnectionMap segments={visuals[d.id]?.segments} connections={visuals[d.id]?.connections} downloading={d.status==="Downloading"} compact/>

@@ -8,7 +8,7 @@ preview is not yet the application and must not be packaged as a release.
 - The preview selects a Windows system backdrop for each built-in material and
   applies a translucent theme-coloured overlay. One window has one system
   backdrop at a time; Mica and Acrylic are different Windows effects.
-- A validated development bridge now forwards built-in/custom material choices and theme tint from the interface to a native appearance callback. The WebView host is not yet wired into the preview; verify this connection on Windows before using it.
+- The isolated visual preview hosts the real local interface with sample data and forwards validated material and theme changes to a native appearance callback. It blocks external resources and cannot access the downloader. Verify the visual result on Windows; the production WebView host and downloader remain unconnected.
 - Connect material and theme selection to the saved Auralis appearance,
   including custom material JSON. Preserve per-window background choices,
   focus states, readability, keyboard navigation, resizing, tiling and high DPI.

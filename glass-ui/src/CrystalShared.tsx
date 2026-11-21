@@ -1,4 +1,5 @@
 import {isTiledWindow} from "./windowTiling";
+import {nativeBackdrop} from "./nativeBackdrop";
 import {LiquidProgress, LiquidChunk, InletDroplet, isLiquidMaterial} from "./LiquidIndicators";
 import {ConnectionTubes} from "./ConnectionTubes";
 import {receivingTubeSlots} from "./tubeNetwork";
@@ -80,18 +81,32 @@ const stored = (name: string, fallback: string) => {
   try { return localStorage.getItem(key + name) ?? fallback }
   catch { return fallback }
 };
+// Record which defaults an installation started with. Existing profiles keep
+// their prior missing-value defaults; new profiles can adopt the new style.
+function appearanceDefaults(){
+ try {
+  const marker="auralis-appearance-defaults-version";
+  let version=localStorage.getItem(marker);
+  if(version!=="1"&&version!=="2"){
+   const existing=Object.keys(localStorage).some(k=>k.startsWith(key))||localStorage.getItem("auralis-browser-guide-seen")!==null;
+   version=existing?"1":"2";localStorage.setItem(marker,version);
+  }
+  return version==="1";
+ } catch { return false }
+}
 const supportedShape=(shape:string)=>shape==="wave"?"droplet":["rounded","square","faceted","droplet"].includes(shape)?shape:"rounded";
 export function loadAppearance(): Appearance {
+  const legacy=appearanceDefaults();
   return {
-    theme: stored("theme", "silver"), material: [...["brushed-glass","frosted-water-351","rose-pine","window-glass","oversimplified"],...Object.keys(extraMaterials),...loadMaterials().map(materialId)].includes(stored("material", "frosted-water-351")) ? stored("material", "frosted-water-351") : "frosted-water-351", tintHue: Number(stored("tint-hue", "209")), tintStrength: Number(stored("tint-strength", "50")), indicator: stored("indicator", "blue-purple"), progressMaterial: stored("progress-material", "gradient"), connectionMaterial: stored("connection-material", "gradient"), graphMaterial: stored("graph-material", "gradient"), trackFinish: stored("track-finish", "recessed"), trackColor: stored("track-color", "ice"), progressShape: supportedShape(stored("progress-shape", "rounded")), graphIndicator: stored("graph-indicator", stored("indicator", "blue-purple")), graphShape: stored("graph-shape", "area"), connectionTrackFinish: stored("connection-track-finish", "recessed"), connectionTrackColor: stored("connection-track-color", "ice"), connectionIndicator: stored("connection-indicator", stored("indicator", "blue-purple")), connectionShape: supportedShape(stored("connection-shape", stored("progress-shape", "rounded"))), clipboardMode: stored("clipboard-mode", "paste"),
+    theme: stored("theme", legacy?"silver":"ocean"), material: [...["brushed-glass","frosted-water-351","rose-pine","window-glass","oversimplified"],...Object.keys(extraMaterials),...loadMaterials().map(materialId)].includes(stored("material", legacy?"frosted-water-351":"rose-pine")) ? stored("material", legacy?"frosted-water-351":"rose-pine") : (legacy?"frosted-water-351":"rose-pine"), tintHue: Number(stored("tint-hue", legacy?"209":"203")), tintStrength: Number(stored("tint-strength", legacy?"50":"0")), indicator: stored("indicator", legacy?"blue-purple":"aurora"), progressMaterial: stored("progress-material", legacy?"gradient":"liquid-aero"), connectionMaterial: stored("connection-material", legacy?"gradient":"liquid-aero"), graphMaterial: stored("graph-material", "gradient"), trackFinish: stored("track-finish", "recessed"), trackColor: stored("track-color", "ice"), progressShape: supportedShape(stored("progress-shape", "rounded")), graphIndicator: stored("graph-indicator", stored("indicator", legacy?"blue-purple":"aurora")), graphShape: stored("graph-shape", "area"), connectionTrackFinish: stored("connection-track-finish", "recessed"), connectionTrackColor: stored("connection-track-color", "ice"), connectionIndicator: stored("connection-indicator", stored("indicator", legacy?"blue-purple":"aurora")), connectionShape: supportedShape(stored("connection-shape", stored("progress-shape", "rounded"))), clipboardMode: stored("clipboard-mode", "paste"),
     surfaceStyle: ["material","clear","soft","frosted","tinted"].includes(stored("surface-style","material")) ? stored("surface-style","material") : "material",
     wallMain: stored("wall-main", ""), wallDetail: stored("wall-detail", ""),
     mainMode: stored("back-main", "desktop") as BackgroundMode,
     detailMode: stored("back-details", "desktop") as BackgroundMode,
     dim: Number(stored("dim", "26")), opacity: Number(stored("opacity", "100")),
-    blur: Number(stored("blur", "3")), acrylic: stored("acrylic", "false") === "true",
+    blur: Number(stored("blur", legacy?"3":"6")), acrylic: stored("acrylic", "false") === "true",
     autoPopups: stored("auto-popups", "true") === "true", highContrast: stored("high-contrast", "true") === "true",
-    uiScale: Number(stored("ui-scale", "90")),
+    uiScale: Number(stored("ui-scale", legacy?"90":"97")),
     lightMode: stored("light-mode", "false") === "true",
     fontFamily: stored("font-family","Trebuchet MS"),fontSize:Number(stored("font-size","14"))
   };
@@ -336,39 +351,29 @@ export function CrystalWindow({ children, target = "main" }: {
   const customMaterial=extraMaterials[appearance.material]??loadMaterials().find(m=>materialId(m)===appearance.material);
   const selectedMaterial=customMaterial??materialPresets[appearance.material]??materialPresets["frosted-water-351"];
   const surfaceStyle=materialBackdrop(appearance.material,selectedMaterial);
-  // Translucent desktop materials must leave room for the native Windows
-  // backdrop to show through. The foreground controls keep their own surfaces
-  // so text remains legible; wallpaper and solid backgrounds are unaffected.
-  const desktopGlass=mode==="desktop" && surfaceStyle!=="material";
-  const surfaceOpacity=Math.min(1,Math.max(.2,1-selectedMaterial.translucency/125))*(desktopGlass?.65:1);
+  const surfaceOpacity=Math.min(1,Math.max(.2,1-selectedMaterial.translucency/125));
   const themeTintRgb=useMemo(()=>(theme.neutralTint??theme.rgb.split(",").map(Number)) as [number,number,number],[theme]);
   const path = main ? appearance.wallMain : (appearance.wallDetail || appearance.wallMain);
   const src = path ? convertFileSrc(path) : "/alpine.svg";
   const video = /\.(mp4|webm|mov|m4v)$/i.test(path);
   const effectQueue=useRef<Promise<void>>(Promise.resolve());
   useEffect(() => {
-    const w = getCurrentWindow();let active=true;
-    // Try the material's preferred native backdrop first, then the other
-    // Windows blur when it is unavailable. Serialize requests: a slow native
-    // call for an old selection must never overwrite the latest material.
-    const effects = mode !== "desktop" ? [] : surfaceStyle === "soft" ? [Effect.Blur,Effect.Acrylic]
-      : ["frosted", "tinted"].includes(surfaceStyle) ? [Effect.Acrylic,Effect.Blur] : [];
+    // The WinUI host applies its own system backdrop.
+    if((globalThis as typeof globalThis & {__AURALIS_WINUI__?:unknown}).__AURALIS_WINUI__)return;
+    const w=getCurrentWindow();let active=true;
+    const selected=nativeBackdrop(mode,appearance.material,surfaceStyle,maximized||tiled);
+    // Serialize native requests so an old material cannot restore a rectangular
+    // backdrop after the user has switched to the shaped frosted window.
     effectQueue.current=effectQueue.current.catch(()=>undefined).then(async()=>{
       if(!active)return;
-      if(!effects.length){await w.clearEffects().catch(()=>undefined);return}
-      for(const effect of effects){
-        if(!active)return;
-        try{await w.setEffects({effects:[effect],state:EffectState.Active});return}
-        catch{/* Try the next supported Windows backdrop. */}
-      }
-      if(active){setWindowError("Windows backdrop blur is unavailable; transparent glass is being used.");await w.clearEffects().catch(()=>undefined)}
+      if(selected===null){await w.clearEffects().catch(()=>undefined);return}
+      try{await w.setEffects({effects:[selected==='blur'?Effect.Blur:Effect.Acrylic],state:EffectState.Active})}
+      catch{if(active){setWindowError("Windows backdrop blur is unavailable; transparent glass is being used.");await w.clearEffects().catch(()=>undefined)}}
     });
     return()=>{active=false};
-  }, [mode, appearance.material, surfaceStyle]);
+  }, [mode, appearance.material, surfaceStyle,maximized,tiled]);
   // White palettes need light surfaces and dark foregrounds in every material.
   const effectiveLight = theme.light === true || theme.id === "white-frost" || theme.id === "white-pearl";
-  // The WinUI host owns the system backdrop. The current Tauri shell does not
-  // expose this adapter and retains its existing behavior.
   useEffect(()=>{
     const host=(globalThis as typeof globalThis & {__AURALIS_WINUI__?:{setAppearance:(value:unknown)=>Promise<unknown>}}).__AURALIS_WINUI__;
     if(!host||mode!=="desktop")return;
@@ -387,7 +392,7 @@ export function CrystalWindow({ children, target = "main" }: {
     "--theme-tool-rgb": effectiveLight ? lightAccentRgb : mixColor(secondaryRgb(theme),[255,255,255],.18),
     "--accent-rgb": effectiveLight ? lightAccentRgb : theme.rgb,
     "--glass": effectiveLight ? themeTintRgb.join(",") : themeTintRgb.map(n=>Math.round(n*(theme.neutralTint ? .65 : .20))).join(","),
-    "--glass-tint": `rgba(${(theme.neutralTint??theme.rgb.split(",").map(Number)).join(",")},${Math.max(0,Math.min(65,appearance.tintStrength))/100*(desktopGlass?.55:1)})`,
+    "--glass-tint": `rgba(${(theme.neutralTint??theme.rgb.split(",").map(Number)).join(",")},${Math.max(0,Math.min(65,appearance.tintStrength))/100})`,
     "--surface": effectiveLight ? `rgba(${themeTintRgb.join(",")},.75)` : `rgba(${themeTintRgb.join(",")},.13)`,
     "--field": effectiveLight ? `rgba(${themeTintRgb.join(",")},.92)` : `rgba(${themeTintRgb.map(n=>Math.round(n*.12)).join(",")},.82)`,
     "--popover": effectiveLight ? `rgb(${themeTintRgb.join(",")})` : `rgb(${themeTintRgb.map(n=>Math.round(n*(theme.neutralTint ? .65 : .18))).join(",")})`,

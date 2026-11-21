@@ -7,11 +7,18 @@ preview overlays, so they can be evaluated over real Windows content. Mica and A
 controls their supported versions and may reduce effects according to system
 settings. The preview has no connection to saved settings or download data.
 
+The **Preview interface** and **Appearance settings** buttons display the real
+local interface inside an isolated WebView profile, using sample empty data.
+The preview disables downloader operations and blocks external navigation and
+network resources. Material and theme changes request native backdrops; they do
+not modify the installed app. Build the interface assets first with
+`cd glass-ui; npm install; npm run build`.
+
 The existing Auralis app, Rust downloader, browser integration and release
 installer are unchanged by this prototype. A narrow Rust bridge for the embedded downloader, its list and visual state,
 single-download start/pause, add-link and a restricted set of settings controls is under development in `crates/auralis-winui-bridge`.
-The preview does not load it or touch the user’s data. The replacement still needs the
-real interface, the remaining secure bridge operations, the tray and
+The preview does not load it or touch the user’s data. The replacement still needs a
+production connection to the real interface, the remaining secure bridge operations, the tray and
 multi-window lifecycle, settings and theme migration, window controls, update
 and installer integration, accessibility, and end-to-end Windows tests before
 it can replace the current shell.

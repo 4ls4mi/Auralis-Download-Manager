@@ -11,6 +11,10 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
+  <ItemGroup Condition="Exists('..\..\glass-ui\dist\index.html')">
+    <Content Include="..\..\glass-ui\dist\**\*" Link="interface\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\webview\preview-compat.js" Link="interface\winui-preview-compat.js" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.250205002" />
   </ItemGroup>

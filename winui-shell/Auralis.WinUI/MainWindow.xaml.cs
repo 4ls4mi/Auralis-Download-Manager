@@ -16,6 +16,32 @@ public sealed partial class MainWindow : Window
         MaterialSelector.SelectedIndex = 1;
     }
 
+    private bool _previewReady;
+
+    private async void OnPreviewInterface(object sender, RoutedEventArgs args) => await OpenPreviewAsync(false);
+    private async void OnPreviewSettings(object sender, RoutedEventArgs args) => await OpenPreviewAsync(true);
+
+    private async Task OpenPreviewAsync(bool settings)
+    {
+        try
+        {
+            if (!_previewReady)
+            {
+                await LocalWebviewBridge.AttachPreviewAsync(InterfaceView,Path.Combine(AppContext.BaseDirectory,"interface"),ApplyNativeAppearance);
+                _previewReady=true;
+            }
+            PreviewIntro.Visibility=Visibility.Collapsed;
+            InterfaceView.Visibility=Visibility.Visible;
+            InterfaceView.CoreWebView2.Navigate(settings ? "https://auralis.local/index.html?settings=1&tab=Appearance" : "https://auralis.local/index.html");
+        }
+        catch (Exception error)
+        {
+            PreviewIntro.Visibility=Visibility.Visible;
+            InterfaceView.Visibility=Visibility.Collapsed;
+            BackdropStatus.Text=$"Interface preview unavailable: {error.Message}";
+        }
+    }
+
     private void OnThemeChanged(object sender, SelectionChangedEventArgs args) => ApplyMaterial();
 
     private void OnMaterialChanged(object sender, SelectionChangedEventArgs args) => ApplyMaterial();

@@ -32,8 +32,9 @@ test('background update appears even when engine startup fails, respects reminde
   await fresh.close();
   const notify=await pageFor(null,'notify');
   assert.equal(await notify.evaluate(()=>window.notices.length),1,'notification preference sends one Windows notification');
-  assert.equal(await notify.evaluate(()=>window.calls.some(c=>c.cmd==='open_glass_window'&&c.args.label.startsWith('tool-update-'))),false,'notification preference must not open a duplicate update window');
+  assert.equal(await notify.evaluate(()=>window.calls.some(c=>c.cmd==='open_glass_window'&&c.args.label==='tool-update-toast')),true,'notification preference also opens the clickable corner popup');assert.match(await notify.locator('.cg-update-notice').innerText(),/1\.2\.3/);
   await notify.close();
+  const toast=await pageFor(null,'toast');assert.equal(await toast.evaluate(()=>window.notices.length),0);assert.ok(await toast.evaluate(()=>window.calls.some(c=>c.cmd==='open_glass_window'&&c.args.label==='tool-update-toast')));await toast.close();
   const dialog=await pageFor(null,'dialog');
   assert.ok(await dialog.evaluate(()=>window.calls.some(c=>c.cmd==='open_glass_window'&&c.args.label==='tool-update-notice')),'dialog preference should open the update window');
   assert.equal(await dialog.evaluate(()=>window.calls.some(c=>c.cmd==='open_glass_window'&&c.args.label==='tool-update-toast')),false);

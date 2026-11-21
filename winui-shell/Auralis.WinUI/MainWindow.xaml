@@ -11,18 +11,23 @@
         </Grid.RowDefinitions>
         <StackPanel Spacing="6">
             <TextBlock Text="WinUI shell development" FontSize="24" FontWeight="SemiBold" />
-            <TextBlock Text="Native backdrop test — downloader and existing interface are not connected yet." TextWrapping="Wrap" />
+            <TextBlock Text="Isolated visual preview — downloads, accounts and external network access are disabled." TextWrapping="Wrap" />
         </StackPanel>
         <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="12">
             <ComboBox x:Name="MaterialSelector" Header="Surface material" DisplayMemberPath="Label" SelectionChanged="OnMaterialChanged" />
             <ComboBox x:Name="ThemeSelector" Header="Preview theme" SelectionChanged="OnThemeChanged" />
+            <Button Content="Preview interface" Click="OnPreviewInterface" VerticalAlignment="Bottom" />
+            <Button Content="Appearance settings" Click="OnPreviewSettings" VerticalAlignment="Bottom" />
         </StackPanel>
-        <Border Grid.Row="2" Padding="20" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
-            <StackPanel Spacing="12">
-                <TextBlock Text="Backdrop preview" FontSize="18" FontWeight="SemiBold" />
-                <TextBlock x:Name="BackdropStatus" TextWrapping="Wrap" />
-                <TextBlock Text="Move this window over different content to inspect the native effect. Windows and accessibility settings can affect the result." TextWrapping="Wrap" />
-            </StackPanel>
-        </Border>
+        <Grid Grid.Row="2">
+            <Border x:Name="PreviewIntro" Padding="20" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="Backdrop preview" FontSize="18" FontWeight="SemiBold" />
+                    <TextBlock x:Name="BackdropStatus" TextWrapping="Wrap" />
+                    <TextBlock Text="The interface preview uses empty sample data. Downloads and account actions are disabled." TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+            <WebView2 x:Name="InterfaceView" Visibility="Collapsed" />
+        </Grid>
     </Grid>
 </Window>

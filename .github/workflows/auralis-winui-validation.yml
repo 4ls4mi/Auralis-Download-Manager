@@ -6,6 +6,7 @@ on:
     branches: [feature/auralis-winui-shell]
     paths:
       - 'winui-shell/**'
+      - 'glass-ui/**'
       - '.github/workflows/auralis-winui-validation.yml'
 
 permissions:
@@ -22,8 +23,19 @@ jobs:
       - name: Test local interface adapter
         shell: pwsh
         run: |
-          node --test winui-shell/webview/compat.test.mjs
+          node --test winui-shell/webview/compat.test.mjs winui-shell/webview/preview-compat.test.mjs
           if ($LASTEXITCODE) { throw 'WinUI interface adapter test failed.' }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Build interface preview assets
+        shell: pwsh
+        working-directory: glass-ui
+        run: |
+          npm install
+          if ($LASTEXITCODE) { throw 'Interface dependencies failed to install.' }
+          npm run build
+          if ($LASTEXITCODE) { throw 'Interface preview assets failed to build.' }
       - name: Test material mapping
         shell: pwsh
         run: |
@@ -37,6 +49,8 @@ jobs:
           if (-not $msbuild) { throw 'Visual Studio MSBuild was not found.' }
           & $msbuild winui-shell/Auralis.WinUI/Auralis.WinUI.csproj /restore /m /p:Configuration=Debug /p:Platform=x64
           if ($LASTEXITCODE) { throw 'WinUI shell build failed.' }
+          $adapter = Get-ChildItem winui-shell/Auralis.WinUI/bin -Recurse -Filter winui-preview-compat.js | Select-Object -First 1
+          if (!$adapter -or !(Test-Path (Join-Path $adapter.DirectoryName 'index.html'))) { throw 'WinUI interface preview assets were not bundled.' }
       - name: Test embedded downloader bridge
         shell: pwsh
         env:

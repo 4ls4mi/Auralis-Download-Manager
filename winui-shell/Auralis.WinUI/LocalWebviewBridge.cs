@@ -14,6 +14,43 @@ internal static class LocalWebviewBridge
         return JsonSerializer.SerializeToElement(new { applied = true });
     }
 
+    /// A separate WebView profile and read-only adapter keep the preview away
+    /// from the installed app, the user's data and the downloader bridge.
+    internal static async Task AttachPreviewAsync(WebView2 view, string assetDirectory, Action<NativeAppearance> applyAppearance)
+    {
+        if (!Directory.Exists(assetDirectory)) throw new DirectoryNotFoundException("Build the local interface preview assets first.");
+        var adapterPath=Path.Combine(assetDirectory,"winui-preview-compat.js");
+        if (!File.Exists(adapterPath) || !File.Exists(Path.Combine(assetDirectory,"index.html"))) throw new FileNotFoundException("Interface preview assets are missing.");
+        var profile=Path.Combine(Path.GetTempPath(),"auralis-winui-preview-"+Guid.NewGuid().ToString("N"));
+        var environment=await CoreWebView2Environment.CreateAsync(userDataFolder:profile);
+        await view.EnsureCoreWebView2Async(environment);
+        view.DefaultBackgroundColor=Windows.UI.Color.FromArgb(0,0,0,0);
+        var core=view.CoreWebView2 ?? throw new InvalidOperationException("WebView2 is unavailable.");
+        core.Settings.AreDevToolsEnabled=false;
+        core.Settings.AreHostObjectsAllowed=false;
+        core.Settings.AreDefaultScriptDialogsEnabled=false;
+        core.SetVirtualHostNameToFolderMapping("auralis.local",Path.GetFullPath(assetDirectory),CoreWebView2HostResourceAccessKind.DenyCors);
+        core.NavigationStarting+=(_,args)=>{if(!IsLocal(args.Uri))args.Cancel=true;};
+        core.NewWindowRequested+=(_,args)=>args.Handled=true;
+        core.AddWebResourceRequestedFilter("*",CoreWebView2WebResourceContext.All);
+        core.WebResourceRequested+=(_,args)=>{if(!IsLocal(args.Request.Uri))args.Response=environment.CreateWebResourceResponse(Stream.Null,403,"Blocked","Content-Type: text/plain");};
+        await core.AddScriptToExecuteOnDocumentCreatedAsync(await File.ReadAllTextAsync(adapterPath));
+        core.WebMessageReceived+=(_,args)=>{
+            long? id=null;
+            try {
+                var message=BridgeMessage.Parse(args.Source,args.WebMessageAsJson);id=message.Id;
+                if(message.Appearance is null)throw new InvalidOperationException("Preview accepts only appearance changes.");
+                var value=ApplyAppearance(message.Appearance,applyAppearance);
+                core.PostWebMessageAsJson(JsonSerializer.Serialize(new {id,ok=true,value}));
+            } catch(Exception) {
+                if(id is not null)core.PostWebMessageAsJson(JsonSerializer.Serialize(new {id,ok=false,error="Appearance unavailable."}));
+            }
+        };
+    }
+
+    private static bool IsLocal(string address) => Uri.TryCreate(address,UriKind.Absolute,out var uri) &&
+        uri.Scheme==Uri.UriSchemeHttps && uri.Host=="auralis.local" && uri.IsDefaultPort && uri.UserInfo.Length==0;
+
     internal static async Task AttachAsync(WebView2 view, string assetDirectory, Action<NativeAppearance> applyAppearance)
     {
         if (!Directory.Exists(assetDirectory)) throw new DirectoryNotFoundException("Packaged interface assets are missing.");
