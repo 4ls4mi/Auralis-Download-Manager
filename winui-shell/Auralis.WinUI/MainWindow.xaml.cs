@@ -736,12 +736,23 @@ public sealed partial class MainWindow : Window
             root.Background=new SolidColorBrush(Windows.UI.Color.FromArgb(255,appearance.Red,appearance.Green,appearance.Blue));
             return false;
         }
-        window.SystemBackdrop = appearance.Backdrop switch
+        try
         {
-            NativeBackdrop.Mica => new MicaBackdrop { Kind = MicaKind.Base },
-            NativeBackdrop.MicaAlt => new MicaBackdrop { Kind = MicaKind.BaseAlt },
-            _ => new DesktopAcrylicBackdrop()
-        };
+            window.SystemBackdrop = appearance.Backdrop switch
+            {
+                NativeBackdrop.Mica => new MicaBackdrop { Kind = MicaKind.Base },
+                NativeBackdrop.MicaAlt => new MicaBackdrop { Kind = MicaKind.BaseAlt },
+                _ => new DesktopAcrylicBackdrop()
+            };
+        }
+        catch (Exception error) when (error is System.Runtime.InteropServices.COMException or InvalidOperationException or NotSupportedException)
+        {
+            // Windows can report support but reject a backdrop when its
+            // compositor or accessibility configuration changes at runtime.
+            window.SystemBackdrop=null;
+            root.Background=new SolidColorBrush(Windows.UI.Color.FromArgb(255,appearance.Red,appearance.Green,appearance.Blue));
+            return false;
+        }
         root.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(appearance.OverlayOpacity, appearance.Red, appearance.Green, appearance.Blue));
         return true;
     }
