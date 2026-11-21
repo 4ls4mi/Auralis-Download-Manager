@@ -19,10 +19,12 @@ public sealed partial class MainWindow : Window
 
     private bool _previewReady, _sandboxReady, _sandboxRequested, _closing, _allowClose, _openingSandbox, _openingPreview;
     private readonly DownloaderLifetime _sandbox = new();
+    private int _viewRequest;
 
     private async void OnWindowClosing(Microsoft.UI.Windowing.AppWindow sender, Microsoft.UI.Windowing.AppWindowClosingEventArgs args)
     {
-        if (_allowClose || !_sandboxRequested) return;
+        if (_allowClose) return;
+        if (!_sandboxRequested) { _closing=true; return; }
         args.Cancel=true;
         if (_closing) return;
         _closing=true;
@@ -46,17 +48,18 @@ public sealed partial class MainWindow : Window
     {
         if (_openingSandbox || _closing) return;
         _openingSandbox=true;
+        var request=++_viewRequest;
         _sandboxRequested=true;
         try
         {
             await _sandbox.StartAsync();
-            if (_closing) return;
+            if (_closing || request != _viewRequest) return;
             if (!_sandboxReady)
             {
                 await LocalWebviewBridge.AttachPreviewAsync(SandboxView,Path.Combine(AppContext.BaseDirectory,"interface"),ApplyNativeAppearance,sandbox:true);
                 _sandboxReady=true;
             }
-            if (_closing) return;
+            if (_closing || request != _viewRequest) return;
             PreviewIntro.Visibility=Visibility.Collapsed;
             InterfaceView.Visibility=Visibility.Collapsed;
             SandboxView.Visibility=Visibility.Visible;
@@ -64,6 +67,7 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception error)
         {
+            if (_closing || request != _viewRequest) return;
             PreviewIntro.Visibility=Visibility.Visible;
             InterfaceView.Visibility=Visibility.Collapsed;
             SandboxView.Visibility=Visibility.Collapsed;
@@ -79,6 +83,7 @@ public sealed partial class MainWindow : Window
     {
         if (_openingPreview || _closing) return;
         _openingPreview=true;
+        var request=++_viewRequest;
         try
         {
             if (!_previewReady)
@@ -86,7 +91,7 @@ public sealed partial class MainWindow : Window
                 await LocalWebviewBridge.AttachPreviewAsync(InterfaceView,Path.Combine(AppContext.BaseDirectory,"interface"),ApplyNativeAppearance);
                 _previewReady=true;
             }
-            if (_closing) return;
+            if (_closing || request != _viewRequest) return;
             PreviewIntro.Visibility=Visibility.Collapsed;
             SandboxView.Visibility=Visibility.Collapsed;
             InterfaceView.Visibility=Visibility.Visible;
@@ -94,6 +99,7 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception error)
         {
+            if (_closing || request != _viewRequest) return;
             PreviewIntro.Visibility=Visibility.Visible;
             InterfaceView.Visibility=Visibility.Collapsed;
             SandboxView.Visibility=Visibility.Collapsed;
