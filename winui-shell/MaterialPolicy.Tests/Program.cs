@@ -119,6 +119,12 @@ if (!badResizeRejected) throw new Exception("Invalid resize request accepted.");
 var exportRequest=BridgeMessage.Parse("https://auralis.local/index.html", """{"id":6,"command":"export_theme_file","contents":"{\"format\":\"auralis-theme\"}"}""");
 if (exportRequest.Value is null || !exportRequest.Value.Contains("auralis-theme")) throw new Exception("Theme export was not preserved.");
 var queueRequest=BridgeMessage.Parse("https://auralis.local/index.html", """{"id":7,"command":"queue_action","name":"Main download queue","action":"stop_queue"}""");
+var preference=BridgeMessage.Parse("https://auralis.local/index.html", """{"id":8,"command":"update_preference","key":"many_connections","value":true}""");
+if (preference.Key!="many_connections" || preference.Value!="true") throw new Exception("Preference was not preserved.");
+bool rejectedSecret=false;
+try { BridgeMessage.Parse("https://auralis.local/index.html", """{"id":8,"command":"update_preference","key":"proxy_pass","value":"secret"}"""); }
+catch (InvalidOperationException) { rejectedSecret=true; }
+if (!rejectedSecret) throw new Exception("Sensitive preference accepted.");
 if (queueRequest.Key != "Main download queue" || queueRequest.Value != "stop_queue") throw new Exception("Queue request was not preserved.");
 var limitRequest = BridgeMessage.Parse("https://auralis.local/index.html", """{"id":5,"command":"file_speed_limit","downloadId":7,"value":512}""");
 if (limitRequest.DownloadId != 7 || limitRequest.Value != "512") throw new Exception("Speed limit request was not preserved.");

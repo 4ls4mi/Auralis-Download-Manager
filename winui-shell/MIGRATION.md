@@ -20,6 +20,10 @@ preview is not yet the application and must not be packaged as a release.
 - The Rust bridge currently has only start, stop, download-list, visual-state,
   single-download start/pause and add-link operations, and a restricted subset of settings reads and writes. The development host now starts the engine in a new separate development directory and exposes list, visuals, settings reads, isolated display and connection preferences, queue controls and HTTP/HTTPS test downloads in its development folder. Its isolated test must pass on Windows before production integration.
   Do not expose an arbitrary IPC command or credentials to a web view.
+- A limited set of scalar download preferences is available in the isolated
+  development profile. Remaining preferences, credentials and integration
+  controls require separate production-safe handling; empty sections in the
+  preview are not evidence of feature parity.
 - Preserve the existing instance lock, data directory, authenticated local IPC,
   downloader shutdown and in-progress download state. Starting a second shell
   must not take over or stop a running instance.

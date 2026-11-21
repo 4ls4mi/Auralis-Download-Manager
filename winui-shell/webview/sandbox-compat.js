@@ -30,6 +30,12 @@
     if(command==='plugin:window|available_monitors'){const monitor=await request('window_current_monitor');return monitor?[monitor]:[];}
     if(command==='boot_engine')return 'Isolated test downloader';
     if(command==='dashboard_snapshot'||command==='dashboard_visuals'||command==='glass_settings')return request(command);
+    if(command==='glass_tool' && args.action==='original-settings')return request('preferences');
+    if(command==='glass_tool' && args.action==='original-setting') {
+      const {key,value}=args.payload??{};
+      if((['limiter_on_startup','global_only_active','set_creation_date','mark_downloads','ignore_mtime','many_connections'].includes(key) && typeof value==='boolean') ||
+         (key==='duplicate_action' && Number.isInteger(value) && value>=0 && value<=3)) return request('update_preference',{key,value});
+    }
     if(command==='add_download' && typeof args.url==='string' && /^https?:\/\//i.test(args.url.trim()) && typeof args.later==='boolean') return JSON.stringify(await request(command,{url:args.url.trim(),later:args.later}));
     if(command==='queue_action' && typeof args.name==='string' && args.name.length>0 && args.name.length<=256 && ['start_queue','stop_queue'].includes(args.action)) return request(command,{name:args.name,action:args.action});
     if(command==='file_operation' && ['open','folder'].includes(args.operation) && Number.isSafeInteger(args.id) && args.id>0) return request(args.operation==='open'?'file_open':'file_folder',{downloadId:args.id});

@@ -11,6 +11,8 @@ internal static class BridgeDispatcher
         "dashboard_snapshot" => DownloaderBridge.CallAsync(DownloaderBridge.Operation.DownloadList),
         "dashboard_visuals" => DownloaderBridge.CallAsync(DownloaderBridge.Operation.Visuals),
         "glass_settings" => DownloaderBridge.CallAsync(DownloaderBridge.Operation.Settings),
+        "preferences" => DownloaderBridge.CallAsync(DownloaderBridge.Operation.Preferences),
+        "update_preference" when message.Key is not null && message.Value is not null => DownloaderBridge.UpdatePreferenceAsync(message.Key,message.Value),
         "update_glass_setting" when message.Key is not null && message.Value is not null => DownloaderBridge.UpdateSettingAsync(message.Key, message.Value),
         "queue_action" when message.Key is not null && message.Value is not null => DownloaderBridge.QueueActionAsync(message.Key, message.Value == "start_queue"),
         "file_speed_limit" when message.Value is not null => DownloaderBridge.SpeedLimitAsync(message.DownloadId, ulong.Parse(message.Value, System.Globalization.CultureInfo.InvariantCulture)),

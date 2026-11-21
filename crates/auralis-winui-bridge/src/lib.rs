@@ -143,8 +143,39 @@ fn dispatch(operation: u32) -> Result<serde_json::Value, String> {
         3..=5 => Err("The embedded downloader is not running in this process.".into()),
         6 => initialize_sandbox(),
         7 => initialize_development_profile(),
+        8 if owned_backend() => {
+            let mut settings = request("glass-original-settings")?;
+            let fields = settings["fields"].as_array_mut().ok_or("Invalid preferences response")?;
+            fields.retain(|field| field["key"].as_str().is_some_and(safe_preference_key));
+            Ok(settings)
+        },
         _ => Err("Unsupported bridge operation".into()),
     }
+}
+fn safe_preference_key(key: &str) -> bool {
+    matches!(key, "limiter_on_startup" | "global_only_active" | "set_creation_date" | "mark_downloads" | "ignore_mtime" | "many_connections" | "duplicate_action")
+}
+fn update_preference(key: &str, value: &serde_json::Value) -> Result<serde_json::Value, String> {
+    if !safe_preference_key(key) || if key == "duplicate_action" { !value.as_u64().is_some_and(|n| n <= 3) } else { !value.is_boolean() } {
+        return Err("Unsupported preference change.".into());
+    }
+    if ISOLATED_DATA.get().is_none() || !owned_backend() { return Err("The isolated downloader is not running.".into()); }
+    let payload=serde_json::json!({"key":key,"value":value}).to_string();
+    let command=mdm_ipc::Command { action:Some("glass-original-setting".into()), queue:Some(payload), ..Default::default() };
+    let raw=mdm_ipc::request_checked(&command).map_err(|e|e.to_string())?;
+    let result:serde_json::Value=serde_json::from_str(&raw).map_err(|_|"Invalid preferences response")?;
+    if result["ok"] != true { return Err("The downloader rejected the preference.".into()); }
+    Ok(result)
+}
+/// # Safety
+/// `input` must point to `len` readable bytes for the duration of the call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn auralis_bridge_update_preference(input: *const u8, len: usize) -> *mut c_char {
+    encode(std::panic::catch_unwind(|| {
+        if input.is_null() || len == 0 || len > 1024 { return Err("Invalid preference request.".into()); }
+        let data:serde_json::Value=serde_json::from_slice(unsafe { std::slice::from_raw_parts(input,len) }).map_err(|_|"Invalid preference request.")?;
+        update_preference(data["key"].as_str().ok_or("Invalid preference name.")?, &data["value"])
+    }))
 }
 fn download_action(action: u32, id: u64) -> Result<serde_json::Value, String> {
     let action = match action { 1 => "start", 2 => "pause", 3 => "remove", _ => return Err("Unsupported download action".into()) };
@@ -312,6 +343,13 @@ pub unsafe extern "C" fn auralis_bridge_free(value: *mut c_char) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn preferences_reject_secrets_and_invalid_values_before_backend_access() {
+        assert!(!safe_preference_key("proxy_pass"));
+        assert!(update_preference("proxy_pass", &serde_json::json!("secret")).is_err());
+        assert!(update_preference("many_connections", &serde_json::json!("true")).is_err());
+        assert!(update_preference("duplicate_action", &serde_json::json!(4)).is_err());
+    }
     #[cfg(unix)]
     #[test]
     fn development_output_rejects_redirected_downloads_folder() {

@@ -3,6 +3,17 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
 const source=readFileSync(new URL('./sandbox-compat.js',import.meta.url),'utf8');
+test('isolated preferences expose only validated scalar updates',async()=>{
+ let listener;const sent=[];
+ const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);
+ const read=context.__TAURI_INTERNALS__.invoke('glass_tool',{action:'original-settings'});assert.equal(sent[0].command,'preferences');
+ listener({data:{id:sent[0].id,ok:true,value:{fields:[]}}});await read;
+ const save=context.__TAURI_INTERNALS__.invoke('glass_tool',{action:'original-setting',payload:{key:'many_connections',value:true}});
+ assert.equal(sent[1].command,'update_preference');assert.equal(sent[1].value,true);
+ listener({data:{id:sent[1].id,ok:true,value:{ok:true}}});await save;
+ await assert.rejects(context.__TAURI_INTERNALS__.invoke('glass_tool',{action:'original-setting',payload:{key:'proxy_pass',value:'secret'}}),/unavailable/);
+ await assert.rejects(context.__TAURI_INTERNALS__.invoke('glass_tool',{action:'original-setting',payload:{key:'duplicate_action',value:4}}),/unavailable/);
+});
 test('release fallback and file pickers have time to complete',async()=>{
  let listener;const sent=[],timeouts=[];
  const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout:(_fn,delay)=>{timeouts.push(delay);return timeouts.length},clearTimeout(){}};runInNewContext(source,context);

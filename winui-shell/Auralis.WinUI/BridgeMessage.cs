@@ -80,6 +80,18 @@ internal sealed record BridgeMessage(long Id, string Command, ulong DownloadId, 
         if (command == "window_start_drag") return new(id,command,0,null,false);
         if (command is "window_hide" or "window_minimize" or "window_toggle_maximize" or "window_close" or "window_is_maximized" or "window_outer_position" or "window_outer_size" or "window_current_monitor") return new(id, command, 0, null, false);
         if (command is "dashboard_snapshot" or "dashboard_visuals" or "glass_settings") return new(id, command, 0, null, false);
+        if (command == "preferences") return new(id,command,0,null,false);
+        if (command == "update_preference")
+        {
+            if (!root.TryGetProperty("key",out var key) || key.ValueKind!=JsonValueKind.String ||
+                !root.TryGetProperty("value",out var value)) throw new InvalidOperationException("Invalid preference.");
+            string name=key.GetString()!;
+            string[] booleans={"limiter_on_startup","global_only_active","set_creation_date","mark_downloads","ignore_mtime","many_connections"};
+            if (!(booleans.Contains(name) && value.ValueKind is (JsonValueKind.True or JsonValueKind.False)) &&
+                !(name=="duplicate_action" && value.ValueKind==JsonValueKind.Number && value.TryGetInt32(out int choice) && choice is >= 0 and <= 3))
+                throw new InvalidOperationException("Unsupported preference.");
+            return new(id,command,0,null,false,Key:name,Value:value.GetRawText());
+        }
         if (command == "queue_action")
         {
             if (!root.TryGetProperty("name", out var nameValue) || nameValue.ValueKind != JsonValueKind.String ||
