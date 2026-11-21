@@ -12,3 +12,15 @@ test('visual preview is isolated and forwards only appearance to the host',async
  const pending=context.__AURALIS_WINUI__.setAppearance({material:'window-glass',tint:[1,2,3],light:false});
  assert.equal(messages[0].command,'set_native_appearance');listener({data:{id:messages[0].id,ok:true,value:{applied:true}}});assert.equal((await pending).applied,true);
 });
+
+test('native backdrop preview installs translucent desktop layers for every material',()=>{
+ let ready; let added;
+ const document={documentElement:{dataset:{}},addEventListener:(_name,fn)=>{ready=fn},createElement:()=>({}),head:{append:node=>{added=node}}};
+ const context={document,chrome:{webview:{addEventListener(){},postMessage(){}}},setTimeout,clearTimeout};
+ runInNewContext(source,context);
+ ready();
+ assert.equal(document.documentElement.dataset.auralisWinuiPreview,'true');
+ assert.match(added.textContent,/\.cg-window\.cg-mode-desktop \.cg-content/);
+ assert.match(added.textContent,/\.cg-frost-canvas/);
+ assert.doesNotMatch(added.textContent,/:not\(\.cg-material-frosted-water-351\)/);
+});

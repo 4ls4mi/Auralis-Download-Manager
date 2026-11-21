@@ -5,7 +5,7 @@
   if(typeof document!=="undefined")document.addEventListener('DOMContentLoaded',()=>{
     document.documentElement.dataset.auralisWinuiPreview='true';
     const style=document.createElement('style');
-    style.textContent=`html[data-auralis-winui-preview] .cg-window.cg-mode-desktop:not(.cg-material-frosted-water-351) .cg-content{background:linear-gradient(145deg,var(--glass-tint),transparent 70%),rgba(var(--glass),.30)!important;backdrop-filter:none!important}html[data-auralis-winui-preview] .cg-window.cg-mode-desktop .cg-glass{background:rgba(var(--glass),.66)!important;backdrop-filter:none!important}`;
+    style.textContent=`html[data-auralis-winui-preview] .cg-window.cg-mode-desktop .cg-content{background:linear-gradient(145deg,var(--glass-tint),transparent 70%),rgba(var(--glass),.30)!important;backdrop-filter:none!important}html[data-auralis-winui-preview] .cg-window.cg-mode-desktop .cg-glass{background:rgba(var(--glass),.66)!important;backdrop-filter:none!important}html[data-auralis-winui-preview] .cg-window.cg-mode-desktop :is(.cg-frost-canvas,.cg-frost-fallback){display:none!important}`;
     document.head.append(style);
   });
   const webview=globalThis.chrome?.webview;
@@ -23,7 +23,7 @@
     if(command==='glass_update_check')return {state:'unavailable'};
     if(command==='glass_settings')return {double_click_open:false,confirm_delete:true,delete_files_too:false};
     if(command==='backup_prompt_enabled')return false;
-    if(command==='browser_connection_status')return {recently_connected:true};
+    if(command==='browser_connection_status')return {recently_connected:false};
     if(command==='plugin:app|version')return 'visual preview';
     if(command==='plugin:event|listen')return 1;
     if(command==='plugin:event|unlisten'||command==='window_preferences'||command==='set_material_window_shape'||command==='plugin:window|set_effects')return null;

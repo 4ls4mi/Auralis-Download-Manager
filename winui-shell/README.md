@@ -34,5 +34,7 @@ To build on Windows x64 with .NET 8, Visual Studio MSBuild and the Windows App S
 MSBuild winui-shell/Auralis.WinUI/Auralis.WinUI.csproj /restore /p:Configuration=Debug /p:Platform=x64
 ```
 
+The desktop preview reduces the old WebView surface layers, including the
+Frosted Layers canvas, to give the Windows backdrop room to show through.
 Native backdrop visibility must be checked on Windows; a successful build alone
 does not establish that the material looks right or works on every system.
