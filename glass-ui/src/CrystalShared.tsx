@@ -1,4 +1,5 @@
 import {isTiledWindow} from "./windowTiling";
+import {nativeBackdrop} from "./nativeBackdrop";
 import {LiquidProgress, LiquidChunk, InletDroplet, isLiquidMaterial} from "./LiquidIndicators";
 import {ConnectionTubes} from "./ConnectionTubes";
 import {receivingTubeSlots} from "./tubeNetwork";
@@ -341,18 +342,20 @@ export function CrystalWindow({ children, target = "main" }: {
   const path = main ? appearance.wallMain : (appearance.wallDetail || appearance.wallMain);
   const src = path ? convertFileSrc(path) : "/alpine.svg";
   const video = /\.(mp4|webm|mov|m4v)$/i.test(path);
+  const effectQueue=useRef<Promise<void>>(Promise.resolve());
   useEffect(() => {
-    const w = getCurrentWindow();let active=true;
-    // Explicit backdrop choices override the legacy material-default switch.
-    const effect = mode !== "desktop" ? null : surfaceStyle === "clear" ? null
-      : surfaceStyle === "soft" ? Effect.Blur
-      : ["frosted", "tinted"].includes(surfaceStyle) ? Effect.Acrylic
-      : null;
-    if (effect)
-      void w.setEffects({ effects: [effect], state: EffectState.Active }).catch(()=>{if(active)setWindowError("Windows backdrop blur is unavailable; transparent glass is being used.");return w.clearEffects().catch(()=>undefined)});
-    else void w.clearEffects().catch(() => undefined);
+    const w=getCurrentWindow();let active=true;
+    const selected=nativeBackdrop(mode,appearance.material,surfaceStyle,maximized||tiled);
+    // Serialize native requests so an old material cannot restore a rectangular
+    // backdrop after the user has switched to the shaped frosted window.
+    effectQueue.current=effectQueue.current.catch(()=>undefined).then(async()=>{
+      if(!active)return;
+      if(selected===null){await w.clearEffects().catch(()=>undefined);return}
+      try{await w.setEffects({effects:[selected==='blur'?Effect.Blur:Effect.Acrylic],state:EffectState.Active})}
+      catch{if(active){setWindowError("Windows backdrop blur is unavailable; transparent glass is being used.");await w.clearEffects().catch(()=>undefined)}}
+    });
     return()=>{active=false};
-  }, [mode, appearance.material, surfaceStyle]);
+  }, [mode, appearance.material, surfaceStyle,maximized,tiled]);
   // White palettes need light surfaces and dark foregrounds in every material.
   const effectiveLight = theme.light === true || theme.id === "white-frost" || theme.id === "white-pearl";
   const lightAccentRgb = theme.light ? theme.rgb.split(",").map(v=>Math.round(Number(v)*.36)).join(",") : theme.id === "white-pearl" ? "101,86,67" : "64,91,112";
