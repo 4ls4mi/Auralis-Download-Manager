@@ -16,6 +16,8 @@ pub fn fit_size(app:&AppHandle,width:f64,height:f64)->(f64,f64) {
 pub fn open(app: &AppHandle, label: &str, route: &str, width: f64, height: f64) -> ApiResult<()> {
     let priority = label.starts_with("info-") || label.starts_with("download-") || label.starts_with("tool-video-") || label == "tool-update-notice" || label == "tool-progress-tray";
     if let Some(w) = app.get_webview_window(label) {
+        // A corner notice must never take focus when another update check runs.
+        if label == "tool-update-toast" { return show_update_toast(w); }
         if priority { let _ = w.set_always_on_top(true); }
         let _ = w.emit("glass-navigate", route);
         w.show().map_err(|e| e.to_string())?;
@@ -34,6 +36,12 @@ pub fn open(app: &AppHandle, label: &str, route: &str, width: f64, height: f64) 
     // opaque/white backing around secondary glass windows on some systems.
     let mut config=app.config().app.windows.first().cloned().ok_or("Main window configuration is missing")?;
     config.label=label.to_owned();
+    if label == "tool-update-toast" {
+        // The WebView positions itself before showing, avoiding a centered flash.
+        config.visible=false;
+        config.focus=false;
+        config.skip_taskbar=true;
+    }
     config.url=WebviewUrl::App(format!("index.html?{route}").into());
     let mut builder=WebviewWindowBuilder::from_config(app, &config).map_err(|e|e.to_string())?;
     if let Some(args)=test_browser_args(){builder=builder.additional_browser_args(&args);}
@@ -252,7 +260,36 @@ pub async fn choose_folder()->ApiResult<Option<String>> {
 #[tauri::command]
 pub async fn open_glass_window(app:AppHandle,label:String,url:String,width:f64,height:f64)->ApiResult<()> {
     if label.is_empty()||label.len()>100||!label.chars().all(|c|c.is_ascii_alphanumeric()||c=='-'||c=='_')||!url.starts_with("/?")||url.len()>1024||url.contains(['\\',':'])||!width.is_finite()||!height.is_finite(){return Err("Invalid download window".into());}
-    tauri::async_runtime::spawn_blocking(move||open(&app,&label,&url[2..],width.clamp(360.0,1800.0),height.clamp(280.0,1200.0))).await.map_err(|e|e.to_string())?
+    let (width,height)=if label=="tool-update-toast" {(width.clamp(320.0,500.0),height.clamp(120.0,240.0))} else {(width.clamp(360.0,1800.0),height.clamp(280.0,1200.0))};
+    tauri::async_runtime::spawn_blocking(move||open(&app,&label,&url[2..],width,height)).await.map_err(|e|e.to_string())?
+}
+
+/// Show only the update popup without stealing the active window's focus.
+#[tauri::command]
+pub fn show_update_toast(window:tauri::WebviewWindow)->ApiResult<()> {
+    if window.label()!="tool-update-toast" { return Err("Only the update popup can use this action".into()); }
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{SetWindowPos, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_SHOWWINDOW};
+        // Respect Windows' presentation/full-screen/quiet states. The persistent
+        // in-app update notice remains available after the user returns.
+        #[link(name="shell32")]
+        unsafe extern "system" { fn SHQueryUserNotificationState(state:*mut i32)->i32; }
+        let mut notification_state=0;
+        // SAFETY: the pointer is valid for the duration of the synchronous call.
+        let status=unsafe { SHQueryUserNotificationState(&mut notification_state) };
+        if status>=0 && matches!(notification_state,1|2|3|4|6) {
+            return window.close().map_err(|e|e.to_string());
+        }
+        let hwnd=window.hwnd().map_err(|e|e.to_string())?.0 as windows_sys::Win32::Foundation::HWND;
+        // SAFETY: hwnd belongs to this live Tauri window; no size or position is changed.
+        if unsafe { SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOACTIVATE|SWP_NOMOVE|SWP_NOSIZE|SWP_SHOWWINDOW) } == 0 {
+            return Err("Could not show update popup".into());
+        }
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    { window.show().map_err(|e|e.to_string()) }
 }
 
 #[tauri::command]

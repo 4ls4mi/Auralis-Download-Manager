@@ -81,18 +81,32 @@ const stored = (name: string, fallback: string) => {
   try { return localStorage.getItem(key + name) ?? fallback }
   catch { return fallback }
 };
+// Record which defaults an installation started with. Existing profiles keep
+// their prior missing-value defaults; new profiles can adopt the new style.
+function appearanceDefaults(){
+ try {
+  const marker="auralis-appearance-defaults-version";
+  let version=localStorage.getItem(marker);
+  if(version!=="1"&&version!=="2"){
+   const existing=Object.keys(localStorage).some(k=>k.startsWith(key))||localStorage.getItem("auralis-browser-guide-seen")!==null;
+   version=existing?"1":"2";localStorage.setItem(marker,version);
+  }
+  return version==="1";
+ } catch { return false }
+}
 const supportedShape=(shape:string)=>shape==="wave"?"droplet":["rounded","square","faceted","droplet"].includes(shape)?shape:"rounded";
 export function loadAppearance(): Appearance {
+  const legacy=appearanceDefaults();
   return {
-    theme: stored("theme", "silver"), material: [...["brushed-glass","frosted-water-351","rose-pine","window-glass","oversimplified"],...Object.keys(extraMaterials),...loadMaterials().map(materialId)].includes(stored("material", "frosted-water-351")) ? stored("material", "frosted-water-351") : "frosted-water-351", tintHue: Number(stored("tint-hue", "209")), tintStrength: Number(stored("tint-strength", "50")), indicator: stored("indicator", "blue-purple"), progressMaterial: stored("progress-material", "gradient"), connectionMaterial: stored("connection-material", "gradient"), graphMaterial: stored("graph-material", "gradient"), trackFinish: stored("track-finish", "recessed"), trackColor: stored("track-color", "ice"), progressShape: supportedShape(stored("progress-shape", "rounded")), graphIndicator: stored("graph-indicator", stored("indicator", "blue-purple")), graphShape: stored("graph-shape", "area"), connectionTrackFinish: stored("connection-track-finish", "recessed"), connectionTrackColor: stored("connection-track-color", "ice"), connectionIndicator: stored("connection-indicator", stored("indicator", "blue-purple")), connectionShape: supportedShape(stored("connection-shape", stored("progress-shape", "rounded"))), clipboardMode: stored("clipboard-mode", "paste"),
+    theme: stored("theme", legacy?"silver":"ocean"), material: [...["brushed-glass","frosted-water-351","rose-pine","window-glass","oversimplified"],...Object.keys(extraMaterials),...loadMaterials().map(materialId)].includes(stored("material", legacy?"frosted-water-351":"rose-pine")) ? stored("material", legacy?"frosted-water-351":"rose-pine") : (legacy?"frosted-water-351":"rose-pine"), tintHue: Number(stored("tint-hue", legacy?"209":"203")), tintStrength: Number(stored("tint-strength", legacy?"50":"0")), indicator: stored("indicator", legacy?"blue-purple":"aurora"), progressMaterial: stored("progress-material", legacy?"gradient":"liquid-aero"), connectionMaterial: stored("connection-material", legacy?"gradient":"liquid-aero"), graphMaterial: stored("graph-material", "gradient"), trackFinish: stored("track-finish", "recessed"), trackColor: stored("track-color", "ice"), progressShape: supportedShape(stored("progress-shape", "rounded")), graphIndicator: stored("graph-indicator", stored("indicator", legacy?"blue-purple":"aurora")), graphShape: stored("graph-shape", "area"), connectionTrackFinish: stored("connection-track-finish", "recessed"), connectionTrackColor: stored("connection-track-color", "ice"), connectionIndicator: stored("connection-indicator", stored("indicator", legacy?"blue-purple":"aurora")), connectionShape: supportedShape(stored("connection-shape", stored("progress-shape", "rounded"))), clipboardMode: stored("clipboard-mode", "paste"),
     surfaceStyle: ["material","clear","soft","frosted","tinted"].includes(stored("surface-style","material")) ? stored("surface-style","material") : "material",
     wallMain: stored("wall-main", ""), wallDetail: stored("wall-detail", ""),
     mainMode: stored("back-main", "desktop") as BackgroundMode,
     detailMode: stored("back-details", "desktop") as BackgroundMode,
     dim: Number(stored("dim", "26")), opacity: Number(stored("opacity", "100")),
-    blur: Number(stored("blur", "3")), acrylic: stored("acrylic", "false") === "true",
+    blur: Number(stored("blur", legacy?"3":"6")), acrylic: stored("acrylic", "false") === "true",
     autoPopups: stored("auto-popups", "true") === "true", highContrast: stored("high-contrast", "true") === "true",
-    uiScale: Number(stored("ui-scale", "90")),
+    uiScale: Number(stored("ui-scale", legacy?"90":"97")),
     lightMode: stored("light-mode", "false") === "true",
     fontFamily: stored("font-family","Trebuchet MS"),fontSize:Number(stored("font-size","14"))
   };

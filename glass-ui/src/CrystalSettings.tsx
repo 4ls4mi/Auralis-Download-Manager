@@ -49,7 +49,7 @@ export default function CrystalSettings(){
   const [busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
   const [browser,setBrowser]=useState("");
   const [appVersion,setAppVersion]=useState("");
-  const [updatePresentation,setUpdatePresentation]=useState(()=>(localStorage.getItem("auralis-update-presentation")==="toast"?"notify":localStorage.getItem("auralis-update-presentation"))||"quiet");
+  const [updatePresentation,setUpdatePresentation]=useState(()=>localStorage.getItem("auralis-update-presentation")||"quiet");
   const [startup,setStartup]=useState<{enabled:boolean;mode:string}|null>(null);
   const [adapters,setAdapters]=useState<{name:string;address:string|null}[]>([]);
   const [adapterError,setAdapterError]=useState("");
@@ -239,9 +239,9 @@ export default function CrystalSettings(){
           <input type="checkbox" checked={appearance.autoPopups} onChange={e=>set("autoPopups",e.target.checked)}/></label>
         <button className="cg-btn" style={{marginTop:15}} onClick={()=>{
           set("mainMode","desktop");set("detailMode","desktop");
-          set("acrylic",false);set("surfaceStyle","material");set("dim",26);set("opacity",77);set("blur",3);
-          set("uiScale",90);set("lightMode",false);set("fontFamily","Trebuchet MS");
-          set("fontSize",14);set("highContrast",true);set("theme","silver");set("material","frosted-water-351");set("tintHue",209);set("tintStrength",22);set("indicator","blue-purple");set("connectionIndicator","blue-purple");set("graphIndicator","blue-purple");set("progressMaterial","gradient");set("connectionMaterial","gradient");set("graphMaterial","gradient");set("progressShape","rounded");set("connectionShape","rounded");set("trackFinish","recessed");set("connectionTrackFinish","recessed");set("trackColor","ice");set("connectionTrackColor","ice");
+          set("acrylic",false);set("surfaceStyle","material");set("dim",26);set("opacity",100);set("blur",6);
+          set("uiScale",97);set("lightMode",false);set("fontFamily","Trebuchet MS");
+          set("fontSize",14);set("highContrast",true);set("theme","ocean");set("material","rose-pine");set("tintHue",203);set("tintStrength",0);set("indicator","aurora");set("connectionIndicator","aurora");set("graphIndicator","aurora");set("progressMaterial","liquid-aero");set("connectionMaterial","liquid-aero");set("graphMaterial","gradient");set("progressShape","rounded");set("connectionShape","rounded");set("trackFinish","recessed");set("connectionTrackFinish","recessed");set("trackColor","ice");set("connectionTrackColor","ice");
         }}><RotateCcw size={15}/> Restore default appearance</button>
       </>;
       case "Advanced":return <CrystalOriginalSettings section="Advanced"/>;
@@ -258,7 +258,7 @@ export default function CrystalSettings(){
       {error&&<p className="cg-error">{error}</p>}
       {notice&&<p className="cg-success"><CheckCircle2 size={14}/> {notice}</p>}
       {tab!=="Appearance"&&tab!=="Accounts"&&<nav className="cg-appearance-tabs"><button className={settingsPanel==="Main options"?"selected":""} onClick={()=>setSettingsPanel("Main options")}>Common settings</button><button className={settingsPanel==="More options"?"selected":""} onClick={()=>setSettingsPanel("More options")}>All settings</button>{tab==="Advanced"&&<button className={settingsPanel==="Updates"?"selected":""} onClick={()=>setSettingsPanel("Updates")}>Updates</button>}</nav>}
-      <div>{tab==="Advanced"&&settingsPanel==="Updates"?<><label className="cg-field">Update notification<select value={updatePresentation} onChange={e=>{setUpdatePresentation(e.target.value);localStorage.setItem("auralis-update-presentation",e.target.value)}}><option value="quiet">Quiet — show in Auralis only</option><option value="notify">Windows notification and in-app notice</option><option value="dialog">Open update details immediately</option></select></label><CrystalUpstream/>{adapterPicker()}</>:tab==="Appearance"||tab==="Accounts"||settingsPanel==="Main options"?body():<CrystalOriginalSettings section={tab}/>}</div>
+      <div>{tab==="Advanced"&&settingsPanel==="Updates"?<><label className="cg-field">Update notification<select value={updatePresentation} onChange={e=>{setUpdatePresentation(e.target.value);localStorage.setItem("auralis-update-presentation",e.target.value)}}><option value="quiet">Quiet — show in Auralis only</option><option value="notify">Windows notification and Auralis corner popup</option><option value="toast">Auralis corner popup only</option><option value="dialog">Open update details immediately</option></select></label><CrystalUpstream/>{adapterPicker()}</>:tab==="Appearance"||tab==="Accounts"||settingsPanel==="Main options"?body():<CrystalOriginalSettings section={tab}/>}</div>
     </div></div>
     <footer className="cg-bottom-actions" style={{padding:"9px 18px"}}><span className="cg-muted" style={{marginRight:"auto",fontSize:"var(--min-text-size)"}}>Auralis {appVersion||"…"} • Windows x64 • Changes are saved automatically</span>
       <button className="cg-btn cg-btn-primary" onClick={()=>void import("@tauri-apps/api/window").then(m=>m.getCurrentWindow().close())}>Done</button>

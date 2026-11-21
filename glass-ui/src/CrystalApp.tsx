@@ -149,7 +149,10 @@ export default function CrystalApp(){
         lastShown=update.version;
         const presentation=localStorage.getItem("auralis-update-presentation")||"quiet";
         if(presentation==="dialog") openWindow("tool-update-notice","/?tool=update-notice",680,520);
-        else if(presentation==="notify"||presentation==="toast") void (async()=>{try{if(await isPermissionGranted())sendNotification({title:"Auralis update available",body:`Version ${update.version} is ready to review in Auralis.`})}catch{/* The in-app notice remains available. */}})();
+        else if(presentation==="notify"||presentation==="toast") {
+          openWindow("tool-update-toast","/?tool=update-toast",400,150);
+          if(presentation==="notify")void (async()=>{try{if(await isPermissionGranted())sendNotification({title:"Auralis update available",body:`Version ${update.version} is ready to review in Auralis.`})}catch{/* The in-app and corner notices remain available. */}})();
+        }
       }catch{/* A later reconnect, signal or manual check can retry. */}
       finally{inFlight=false;if(queued&&mounted){queued=false;void check()}}
     };
