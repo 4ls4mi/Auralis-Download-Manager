@@ -26,7 +26,14 @@ public sealed partial class MainWindow : Window
     private readonly DownloaderLifetime _sandbox = new();
     private int _viewRequest;
     private CoreWebView2Environment? _previewEnvironment, _sandboxEnvironment;
-    private readonly Dictionary<string, Window> _auxiliaryWindows = new();
+    private sealed class AuxiliaryWindowState
+    {
+        internal required Window Window { get; init; }
+        internal required WebView2 View { get; init; }
+        internal required string Route { get; set; }
+        internal bool Ready { get; set; }
+    }
+    private readonly Dictionary<string, AuxiliaryWindowState> _auxiliaryWindows = new();
 
     private void UpdatePreviewLayout()
     {
@@ -74,7 +81,7 @@ public sealed partial class MainWindow : Window
             if (_closing || request != _viewRequest) return;
             if (!_sandboxReady)
             {
-                _sandboxEnvironment=await LocalWebviewBridge.AttachPreviewAsync(SandboxView,Path.Combine(AppContext.BaseDirectory,"interface"),ApplyNativeAppearance,ApplyWindowCommand, message => OpenAuxiliaryAsync(message, true), message => ExportAppearanceAsync(this,message),OpenTestFileAsync,sandbox:true);
+                _sandboxEnvironment=await LocalWebviewBridge.AttachPreviewAsync(SandboxView,this,Path.Combine(AppContext.BaseDirectory,"interface"),ApplyNativeAppearance,ApplyWindowCommand, message => OpenAuxiliaryAsync(message, true), message => ExportAppearanceAsync(this,message),OpenTestFileAsync,sandbox:true);
                 _sandboxReady=true;
             }
             if (_closing || request != _viewRequest) return;
@@ -122,7 +129,7 @@ public sealed partial class MainWindow : Window
         {
             if (!_previewReady)
             {
-                _previewEnvironment=await LocalWebviewBridge.AttachPreviewAsync(InterfaceView,Path.Combine(AppContext.BaseDirectory,"interface"),ApplyNativeAppearance,ApplyWindowCommand, message => OpenAuxiliaryAsync(message, false), message => ExportAppearanceAsync(this,message),OpenTestFileAsync);
+                _previewEnvironment=await LocalWebviewBridge.AttachPreviewAsync(InterfaceView,this,Path.Combine(AppContext.BaseDirectory,"interface"),ApplyNativeAppearance,ApplyWindowCommand, message => OpenAuxiliaryAsync(message, false), message => ExportAppearanceAsync(this,message),OpenTestFileAsync);
                 _previewReady=true;
             }
             if (_closing || request != _viewRequest) return;
@@ -180,7 +187,7 @@ public sealed partial class MainWindow : Window
 
     private void CloseAuxiliaryWindows()
     {
-        foreach (var window in _auxiliaryWindows.Values.ToArray()) window.Close();
+        foreach (var state in _auxiliaryWindows.Values.ToArray()) state.Window.Close();
         _auxiliaryWindows.Clear();
     }
 
@@ -193,7 +200,11 @@ public sealed partial class MainWindow : Window
         string key=(sandbox ? "test:" : "sample:") + message.Label;
         if (_auxiliaryWindows.TryGetValue(key, out var existing))
         {
-            existing.Activate();
+            bool routeChanged=existing.Route!=message.Url;
+            existing.Route=message.Url;
+            if (routeChanged && existing.Ready) existing.View.CoreWebView2.Navigate(BridgeMessage.TrustedOrigin + existing.Route);
+            if (existing.Window.AppWindow.Presenter is OverlappedPresenter presenter && presenter.State==OverlappedPresenterState.Minimized) presenter.Restore();
+            existing.Window.Activate();
             return JsonSerializer.SerializeToElement(new { opened=true });
         }
         var child=new Window { Title="Auralis — development preview" };
@@ -201,22 +212,32 @@ public sealed partial class MainWindow : Window
         var view=new WebView2();
         root.Children.Add(view);
         child.Content=root;
-        child.AppWindow.Resize(new Windows.Graphics.SizeInt32(message.Width,message.Height));
-        _auxiliaryWindows.Add(key,child);
-        child.Closed += (_,_) => _auxiliaryWindows.Remove(key);
+        var area=DisplayArea.GetFromWindowId(AppWindow.Id,DisplayAreaFallback.Nearest);
+        double scale=(Content as FrameworkElement)?.XamlRoot?.RasterizationScale ?? 1;
+        int width=(int)Math.Round(message.Width*scale), height=(int)Math.Round(message.Height*scale);
+        if (area is not null)
+        {
+            width=Math.Min(width,Math.Max(320,area.WorkArea.Width-32));
+            height=Math.Min(height,Math.Max(120,area.WorkArea.Height-32));
+        }
+        child.AppWindow.Resize(new Windows.Graphics.SizeInt32(width,height));
+        var state=new AuxiliaryWindowState { Window=child, View=view, Route=message.Url };
+        _auxiliaryWindows.Add(key,state);
+        child.Closed += (_,_) => { if (_auxiliaryWindows.TryGetValue(key,out var current) && ReferenceEquals(current,state)) _auxiliaryWindows.Remove(key); };
         child.Activate();
         try
         {
-            await LocalWebviewBridge.AttachPreviewAsync(view,Path.Combine(AppContext.BaseDirectory,"interface"),
-                appearance => { ApplyAppearance(child,root,appearance); }, command => ApplyWindowCommand(child,command),
+            await LocalWebviewBridge.AttachPreviewAsync(view,child,Path.Combine(AppContext.BaseDirectory,"interface"),
+                appearance => { ApplyAppearance(child,root,appearance); }, message => ApplyWindowCommand(child,message),
                 next => OpenAuxiliaryAsync(next,sandbox), message => ExportAppearanceAsync(child,message),OpenTestFileAsync,sandbox,environment);
-            if (_closing || !_auxiliaryWindows.ContainsKey(key)) throw new InvalidOperationException("The preview window was closed.");
-            view.CoreWebView2.Navigate(BridgeMessage.TrustedOrigin + message.Url);
+            if (_closing || !_auxiliaryWindows.TryGetValue(key,out var current) || !ReferenceEquals(current,state)) throw new InvalidOperationException("The preview window was closed.");
+            state.Ready=true;
+            view.CoreWebView2.Navigate(BridgeMessage.TrustedOrigin + state.Route);
             return JsonSerializer.SerializeToElement(new { opened=true });
         }
         catch
         {
-            if (_auxiliaryWindows.TryGetValue(key, out var current) && ReferenceEquals(current, child))
+            if (_auxiliaryWindows.TryGetValue(key, out var current) && ReferenceEquals(current, state))
             {
                 _auxiliaryWindows.Remove(key);
                 child.Close();
@@ -225,14 +246,16 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private JsonElement ApplyWindowCommand(string command) => ApplyWindowCommand(this, command);
+    private JsonElement ApplyWindowCommand(BridgeMessage message) => ApplyWindowCommand(this, message);
 
-    private static JsonElement ApplyWindowCommand(Window window, string command)
+    private static JsonElement ApplyWindowCommand(Window window, BridgeMessage message)
     {
         if (window.AppWindow.Presenter is not OverlappedPresenter presenter)
             throw new InvalidOperationException("The window presenter is unavailable.");
-        switch (command)
+        switch (message.Command)
         {
+            case "window_start_drag": NativeWindowDrag.Start(window,null); break;
+            case "window_start_resize": NativeWindowDrag.Start(window,message.Value); break;
             case "window_minimize": presenter.Minimize(); break;
             case "window_toggle_maximize":
                 if (presenter.State == OverlappedPresenterState.Maximized) presenter.Restore();

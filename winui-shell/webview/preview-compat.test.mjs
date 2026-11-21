@@ -55,3 +55,18 @@ test('appearance exports require an explicit host file request',async()=>{
  const pending=context.__TAURI_INTERNALS__.invoke('export_theme_file',{contents:'{"format":"auralis-theme"}'});assert.equal(sent[0].command,'export_theme_file');listener({data:{id:sent[0].id,ok:true,value:null}});assert.equal(await pending,null);
  await assert.rejects(context.__TAURI_INTERNALS__.invoke('export_theme_file',{contents:'x'.repeat(32769)}),/unavailable/);
 });
+
+test('native drag and resize requests preserve validated directions',async()=>{
+ let listener;const sent=[];
+ const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);
+ const drag=context.__TAURI_INTERNALS__.invoke('plugin:window|start_dragging');assert.equal(sent[0].command,'window_start_drag');listener({data:{id:sent[0].id,ok:true,value:null}});await drag;
+ const resize=context.__TAURI_INTERNALS__.invoke('plugin:window|start_resize_dragging',{value:'NorthWest'});assert.equal(sent[1].direction,'NorthWest');listener({data:{id:sent[1].id,ok:true,value:null}});await resize;
+ await assert.rejects(context.__TAURI_INTERNALS__.invoke('plugin:window|start_resize_dragging',{value:'invalid'}),/unavailable/);
+});
+
+test('native movement coalesces interface layout refreshes',async()=>{
+ let listener;let refreshes=0;
+ const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage(){}}},window:{dispatchEvent:event=>{assert.equal(event.type,'resize');refreshes++}},Event:class {constructor(type){this.type=type}},setTimeout,clearTimeout};runInNewContext(source,context);
+ listener({data:{event:'window_bounds_changed'}});listener({data:{event:'window_bounds_changed'}});
+ await new Promise(resolve=>setTimeout(resolve,80));assert.equal(refreshes,1);
+});

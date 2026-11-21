@@ -97,3 +97,9 @@ test('file actions send only an ID to the host, never a web supplied path',async
   const pending=context.__TAURI_INTERNALS__.invoke('file_operation',{id:7,operation,value:'C:\\outside.exe'});const message=sent.at(-1);assert.equal(message.command,command);assert.equal(message.downloadId,7);assert.equal('value' in message,false);listener({data:{id:message.id,ok:true,value:{ok:true}}});await pending;
  }
 });
+
+test('clipboard text is only requested when the interface asks for it',async()=>{
+ let listener;const sent=[];
+ const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);
+ assert.equal(sent.length,0);const pending=context.__TAURI_INTERNALS__.invoke('clipboard_text');assert.equal(sent[0].command,'clipboard_text');listener({data:{id:sent[0].id,ok:true,value:'https://example.com/file'}});assert.equal(await pending,'https://example.com/file');
+});

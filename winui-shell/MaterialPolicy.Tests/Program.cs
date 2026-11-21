@@ -6,6 +6,12 @@ if (!PreviewLayoutPolicy.UseCompactLayout(true,1920,1920) ||
     PreviewLayoutPolicy.UseCompactLayout(false,0,1920))
     throw new Exception("Preview window layout should adapt to maximized and narrow windows.");
 
+if (WindowDragPolicy.ResizeEdge("West") != 1 || WindowDragPolicy.ResizeEdge("SouthEast") != 8)
+    throw new Exception("Window resize directions must match the Windows system commands.");
+bool invalidDirectionRejected=false;
+try { WindowDragPolicy.ResizeEdge("unexpected"); } catch (InvalidOperationException) { invalidDirectionRejected=true; }
+if (!invalidDirectionRejected) throw new Exception("Invalid resize direction accepted.");
+
 var materials = MaterialPolicy.BuiltIns;
 if (materials.Length != 8 || materials.Select(m => m.Id).Distinct().Count() != materials.Length)
     throw new Exception("Every built-in material must have a unique backdrop policy.");
@@ -45,6 +51,11 @@ foreach (var command in new[] { "window_minimize", "window_toggle_maximize", "wi
     var windowRequest = BridgeMessage.Parse("https://auralis.local/index.html", "{\"id\":1,\"command\":\"" + command + "\"}");
     if (windowRequest.Command != command) throw new Exception("Window control was not validated.");
 }
+var resizeRequest=BridgeMessage.Parse("https://auralis.local/index.html", """{"id":8,"command":"window_start_resize","direction":"NorthWest"}""");
+if (resizeRequest.Value != "NorthWest") throw new Exception("Resize direction was not preserved.");
+bool badResizeRejected=false;
+try { BridgeMessage.Parse("https://auralis.local/index.html", """{"id":8,"command":"window_start_resize","direction":"invalid"}"""); } catch (InvalidOperationException) { badResizeRejected=true; }
+if (!badResizeRejected) throw new Exception("Invalid resize request accepted.");
 var exportRequest=BridgeMessage.Parse("https://auralis.local/index.html", """{"id":6,"command":"export_theme_file","contents":"{\"format\":\"auralis-theme\"}"}""");
 if (exportRequest.Value is null || !exportRequest.Value.Contains("auralis-theme")) throw new Exception("Theme export was not preserved.");
 var queueRequest=BridgeMessage.Parse("https://auralis.local/index.html", """{"id":7,"command":"queue_action","name":"Main download queue","action":"stop_queue"}""");

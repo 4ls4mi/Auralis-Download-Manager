@@ -53,6 +53,16 @@ internal sealed record BridgeMessage(long Id, string Command, ulong DownloadId, 
             if (!root.TryGetProperty("appearance", out var appearance)) throw new InvalidOperationException("Missing appearance.");
             return new(id, command, 0, null, false, Appearance: NativeAppearance.Parse(appearance));
         }
+        if (command == "window_start_resize")
+        {
+            if (!root.TryGetProperty("direction", out var direction) || direction.ValueKind != JsonValueKind.String)
+                throw new InvalidOperationException("Invalid resize direction.");
+            string value=direction.GetString()!;
+            _=WindowDragPolicy.ResizeEdge(value);
+            return new(id,command,0,null,false,Value:value);
+        }
+        if (command == "clipboard_text") return new(id,command,0,null,false);
+        if (command == "window_start_drag") return new(id,command,0,null,false);
         if (command is "window_minimize" or "window_toggle_maximize" or "window_close" or "window_is_maximized" or "window_outer_position" or "window_outer_size" or "window_current_monitor") return new(id, command, 0, null, false);
         if (command is "dashboard_snapshot" or "dashboard_visuals" or "glass_settings") return new(id, command, 0, null, false);
         if (command == "queue_action")

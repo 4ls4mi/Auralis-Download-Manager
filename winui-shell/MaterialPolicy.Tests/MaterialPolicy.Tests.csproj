@@ -6,6 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../Auralis.WinUI/WindowDragPolicy.cs" Link="WindowDragPolicy.cs" />
     <Compile Include="../Auralis.WinUI/PreviewLayoutPolicy.cs" Link="PreviewLayoutPolicy.cs" />
     <Compile Include="../Auralis.WinUI/MaterialPolicy.cs" Link="MaterialPolicy.cs" />
     <Compile Include="../Auralis.WinUI/DownloadSnapshot.cs" Link="DownloadSnapshot.cs" />
