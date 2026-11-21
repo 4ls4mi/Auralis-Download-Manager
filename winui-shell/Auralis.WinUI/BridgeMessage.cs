@@ -26,6 +26,7 @@ internal sealed record BridgeMessage(long Id, string Command, ulong DownloadId, 
             if (!root.TryGetProperty("appearance", out var appearance)) throw new InvalidOperationException("Missing appearance.");
             return new(id, command, 0, null, false, Appearance: NativeAppearance.Parse(appearance));
         }
+        if (command is "window_minimize" or "window_toggle_maximize" or "window_close" or "window_is_maximized") return new(id, command, 0, null, false);
         if (command is "dashboard_snapshot" or "dashboard_visuals" or "glass_settings") return new(id, command, 0, null, false);
         if (command is "start_download" or "pause_download")
         {

@@ -16,7 +16,7 @@ internal static class LocalWebviewBridge
 
     /// A separate WebView profile and read-only adapter keep the preview away
     /// from the installed app, the user's data and the downloader bridge.
-    internal static async Task AttachPreviewAsync(WebView2 view, string assetDirectory, Action<NativeAppearance> applyAppearance, bool sandbox=false)
+    internal static async Task AttachPreviewAsync(WebView2 view, string assetDirectory, Action<NativeAppearance> applyAppearance, Func<string, JsonElement> windowCommand, bool sandbox=false)
     {
         if (!Directory.Exists(assetDirectory)) throw new DirectoryNotFoundException("Build the local interface preview assets first.");
         var adapterPath=Path.Combine(assetDirectory,sandbox?"winui-sandbox-compat.js":"winui-preview-compat.js");
@@ -41,6 +41,8 @@ internal static class LocalWebviewBridge
                 var message=BridgeMessage.Parse(args.Source,args.WebMessageAsJson);id=message.Id;
                 var value=message.Appearance is not null
                     ? ApplyAppearance(message.Appearance,applyAppearance)
+                    : message.Command is "window_minimize" or "window_toggle_maximize" or "window_close" or "window_is_maximized"
+                        ? windowCommand(message.Command)
                     : sandbox && (message.Command is "dashboard_snapshot" or "dashboard_visuals" or "glass_settings" or "update_glass_setting")
                         ? await BridgeDispatcher.DispatchAsync(message)
                         : throw new InvalidOperationException("This isolated host does not support that command.");

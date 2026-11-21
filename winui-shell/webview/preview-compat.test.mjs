@@ -24,3 +24,11 @@ test('native backdrop preview installs translucent desktop layers for every mate
  assert.match(added.textContent,/\.cg-frost-canvas/);
  assert.doesNotMatch(added.textContent,/:not\(\.cg-material-frosted-water-351\)/);
 });
+
+test('preview forwards native window controls and their state',async()=>{
+ let listener;const sent=[];
+ const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);
+ for(const [action,command,value] of [['minimize','window_minimize',null],['toggle_maximize','window_toggle_maximize',null],['is_maximized','window_is_maximized',true],['close','window_close',null]]){
+  const pending=context.__TAURI_INTERNALS__.invoke('plugin:window|'+action);const message=sent.at(-1);assert.equal(message.command,command);listener({data:{id:message.id,ok:true,value}});assert.equal(await pending,value);
+ }
+});

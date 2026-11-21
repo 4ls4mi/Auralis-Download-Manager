@@ -16,6 +16,7 @@
   const appearance=value=>request('set_native_appearance',{appearance:value});
   // The preview deliberately cannot contact the release push service.
   globalThis.WebSocket=class {constructor(){throw new Error('Network is disabled in visual preview.')}};
+  const windowCommands={'plugin:window|minimize':'window_minimize','plugin:window|toggle_maximize':'window_toggle_maximize','plugin:window|close':'window_close','plugin:window|is_maximized':'window_is_maximized'};
   const invoke=async(command,args={})=>{
     if(command==='boot_engine')return 'Isolated test downloader — read only';
     if(command==='dashboard_snapshot'||command==='dashboard_visuals'||command==='glass_settings')return request(command);
@@ -26,7 +27,7 @@
     if(command==='plugin:app|version')return 'visual preview';
     if(command==='plugin:event|listen')return 1;
     if(command==='plugin:event|unlisten'||command==='window_preferences'||command==='set_material_window_shape'||command==='plugin:window|set_effects')return null;
-    if(command==='plugin:window|is_maximized')return false;
+    if(Object.hasOwn(windowCommands,command))return request(windowCommands[command]);
     if(command==='plugin:window|outer_position')return {x:0,y:0};
     if(command==='plugin:window|outer_size')return {width:960,height:690};
     if(command==='plugin:window|current_monitor')return null;

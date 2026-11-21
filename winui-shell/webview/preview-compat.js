@@ -12,10 +12,12 @@
   if(!webview)throw new Error('WinUI preview host is unavailable.');
   let nextId=1;const pending=new Map();
   webview.addEventListener('message',event=>{const m=event.data,request=pending.get(m?.id);if(!request)return;pending.delete(m.id);clearTimeout(request.timer);m.ok?request.resolve(m.value):request.reject(new Error('Native backdrop could not be applied.'))});
+  const windowRequest=(command,args={})=>new Promise((resolve,reject)=>{const id=nextId++;const timer=setTimeout(()=>{pending.delete(id);reject(new Error('Native window request timed out.'))},5000);pending.set(id,{resolve,reject,timer});try{webview.postMessage({id,command,...args})}catch(error){pending.delete(id);clearTimeout(timer);reject(error)}});
   const appearance=value=>new Promise((resolve,reject)=>{const id=nextId++;const timer=setTimeout(()=>{pending.delete(id);reject(new Error('Native backdrop request timed out.'))},5000);pending.set(id,{resolve,reject,timer});try{webview.postMessage({id,command:'set_native_appearance',appearance:value})}catch(error){pending.delete(id);clearTimeout(timer);reject(error)}});
   // The preview deliberately cannot contact the release push service.
   globalThis.WebSocket=class {constructor(){throw new Error('Network is disabled in visual preview.')}};
   const empty={downloads:[],queues:[],categories:[],speed:0};
+  const windowCommands={'plugin:window|minimize':'window_minimize','plugin:window|toggle_maximize':'window_toggle_maximize','plugin:window|close':'window_close','plugin:window|is_maximized':'window_is_maximized'};
   const invoke=async(command)=>{
     if(command==='boot_engine')return 'Visual preview — downloader disabled';
     if(command==='dashboard_snapshot')return empty;
@@ -27,7 +29,7 @@
     if(command==='plugin:app|version')return 'visual preview';
     if(command==='plugin:event|listen')return 1;
     if(command==='plugin:event|unlisten'||command==='window_preferences'||command==='set_material_window_shape'||command==='plugin:window|set_effects')return null;
-    if(command==='plugin:window|is_maximized')return false;
+    if(Object.hasOwn(windowCommands,command))return windowRequest(windowCommands[command]);
     if(command==='plugin:window|outer_position')return {x:0,y:0};
     if(command==='plugin:window|outer_size')return {width:960,height:690};
     if(command==='plugin:window|current_monitor')return null;

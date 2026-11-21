@@ -34,6 +34,11 @@ foreach (var pair in new[] {
     try { BridgeMessage.Parse(pair.Item1, pair.Item2); throw new Exception("Unsafe bridge request was accepted."); }
     catch (InvalidOperationException error) when (error.Message != "Unsafe bridge request was accepted.") { }
 }
+foreach (var command in new[] { "window_minimize", "window_toggle_maximize", "window_close", "window_is_maximized" })
+{
+    var windowRequest = BridgeMessage.Parse("https://auralis.local/index.html", "{\"id\":1,\"command\":\"" + command + "\"}");
+    if (windowRequest.Command != command) throw new Exception("Window control was not validated.");
+}
 Console.WriteLine("Web interface request validation checks passed.");
 
 var lifecycleCalls = new List<DownloaderBridge.Operation>();

@@ -13,3 +13,9 @@ test('sandbox restricts downloader requests and allows isolated display preferen
  await assert.rejects(context.__TAURI_INTERNALS__.invoke('add_download',{url:'https://example.com'}),/unavailable/);
  assert.throws(()=>new context.WebSocket('wss://example.com'),/disabled/);
 });
+
+test('isolated downloader uses native window controls',async()=>{
+ let listener;const sent=[];
+ const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);
+ const result=context.__TAURI_INTERNALS__.invoke('plugin:window|is_maximized');assert.equal(sent[0].command,'window_is_maximized');listener({data:{id:sent[0].id,ok:true,value:true}});assert.equal(await result,true);
+});

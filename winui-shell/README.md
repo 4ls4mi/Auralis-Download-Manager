@@ -10,7 +10,8 @@ settings. The preview has no connection to saved settings or download data.
 The **Preview interface** and **Appearance settings** buttons display the real
 local interface inside an isolated WebView profile, using sample empty data.
 The preview disables downloader operations and blocks external navigation and
-network resources. Material and theme changes request native backdrops; they do
+network resources. The interface minimize, maximize/restore and close controls address the native
+preview window. Material and theme changes request native backdrops; they do
 not modify the installed app. Build the interface assets first with
 `cd glass-ui; npm install; npm run build`.
 

@@ -2,6 +2,8 @@ using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Windowing;
+using System.Text.Json;
 
 namespace Auralis.WinUI;
 
@@ -56,7 +58,7 @@ public sealed partial class MainWindow : Window
             if (_closing || request != _viewRequest) return;
             if (!_sandboxReady)
             {
-                await LocalWebviewBridge.AttachPreviewAsync(SandboxView,Path.Combine(AppContext.BaseDirectory,"interface"),ApplyNativeAppearance,sandbox:true);
+                await LocalWebviewBridge.AttachPreviewAsync(SandboxView,Path.Combine(AppContext.BaseDirectory,"interface"),ApplyNativeAppearance,ApplyWindowCommand,sandbox:true);
                 _sandboxReady=true;
             }
             if (_closing || request != _viewRequest) return;
@@ -88,7 +90,7 @@ public sealed partial class MainWindow : Window
         {
             if (!_previewReady)
             {
-                await LocalWebviewBridge.AttachPreviewAsync(InterfaceView,Path.Combine(AppContext.BaseDirectory,"interface"),ApplyNativeAppearance);
+                await LocalWebviewBridge.AttachPreviewAsync(InterfaceView,Path.Combine(AppContext.BaseDirectory,"interface"),ApplyNativeAppearance,ApplyWindowCommand);
                 _previewReady=true;
             }
             if (_closing || request != _viewRequest) return;
@@ -106,6 +108,28 @@ public sealed partial class MainWindow : Window
             BackdropStatus.Text=$"Interface preview unavailable: {error.Message}";
         }
         finally { _openingPreview=false; }
+    }
+
+    private JsonElement ApplyWindowCommand(string command)
+    {
+        if (AppWindow.Presenter is not OverlappedPresenter presenter)
+            throw new InvalidOperationException("The window presenter is unavailable.");
+        switch (command)
+        {
+            case "window_minimize": presenter.Minimize(); break;
+            case "window_toggle_maximize":
+                if (presenter.State == OverlappedPresenterState.Maximized) presenter.Restore();
+                else presenter.Maximize();
+                break;
+            case "window_close":
+                // Respond before closing; the normal shutdown handler stops the test engine.
+                DispatcherQueue.TryEnqueue(() => Close());
+                break;
+            case "window_is_maximized":
+                return JsonSerializer.SerializeToElement(presenter.State == OverlappedPresenterState.Maximized);
+            default: throw new InvalidOperationException("Unsupported window command.");
+        }
+        return JsonSerializer.SerializeToElement<object?>(null);
     }
 
     private void OnThemeChanged(object sender, SelectionChangedEventArgs args) => ApplyMaterial();
