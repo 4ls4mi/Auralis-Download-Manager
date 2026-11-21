@@ -11,12 +11,13 @@
         </Grid.RowDefinitions>
         <StackPanel Spacing="6">
             <TextBlock Text="WinUI shell development" FontSize="24" FontWeight="SemiBold" />
-            <TextBlock Text="Isolated visual preview — downloads, accounts and external network access are disabled." TextWrapping="Wrap" />
+            <TextBlock Text="Development preview — sample or isolated test data only; download actions are disabled." TextWrapping="Wrap" />
         </StackPanel>
         <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="12">
             <ComboBox x:Name="MaterialSelector" Header="Surface material" DisplayMemberPath="Label" SelectionChanged="OnMaterialChanged" />
             <ComboBox x:Name="ThemeSelector" Header="Preview theme" SelectionChanged="OnThemeChanged" />
             <Button Content="Preview interface" Click="OnPreviewInterface" VerticalAlignment="Bottom" />
+            <Button Content="Isolated downloader" Click="OnSandboxInterface" VerticalAlignment="Bottom" />
             <Button Content="Appearance settings" Click="OnPreviewSettings" VerticalAlignment="Bottom" />
         </StackPanel>
         <Grid Grid.Row="2">
@@ -28,6 +29,7 @@
                 </StackPanel>
             </Border>
             <WebView2 x:Name="InterfaceView" Visibility="Collapsed" />
+            <WebView2 x:Name="SandboxView" Visibility="Collapsed" />
         </Grid>
     </Grid>
 </Window>

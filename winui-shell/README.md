@@ -14,10 +14,15 @@ network resources. Material and theme changes request native backdrops; they do
 not modify the installed app. Build the interface assets first with
 `cd glass-ui; npm install; npm run build`.
 
+The **Isolated downloader** button starts the Rust engine in a fresh temporary
+folder and shows its empty download list and settings through a read-only bridge.
+Download actions are disabled. Closing the window stops the test engine; this
+mode does not use the installed app's data. Windows validation is still needed.
+
 The existing Auralis app, Rust downloader, browser integration and release
 installer are unchanged by this prototype. A narrow Rust bridge for the embedded downloader, its list and visual state,
 single-download start/pause, add-link and a restricted set of settings controls is under development in `crates/auralis-winui-bridge`.
-The preview does not load it or touch the user’s data. The replacement still needs a
+The sample preview does not load it or touch the user’s data. The replacement still needs a
 production connection to the real interface, the remaining secure bridge operations, the tray and
 multi-window lifecycle, settings and theme migration, window controls, update
 and installer integration, accessibility, and end-to-end Windows tests before

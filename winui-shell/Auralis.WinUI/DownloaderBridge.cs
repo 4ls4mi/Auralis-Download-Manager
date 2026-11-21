@@ -7,7 +7,7 @@ namespace Auralis.WinUI;
 /// invoke it yet; data-folder migration and lifecycle must be validated first.
 internal static class DownloaderBridge
 {
-    internal enum Operation : uint { Start = 1, Stop = 2, DownloadList = 3, Visuals = 4, Settings = 5 }
+    internal enum Operation : uint { Start = 1, Stop = 2, DownloadList = 3, Visuals = 4, Settings = 5, InitializeSandbox = 6 }
 
     [DllImport("auralis_winui_bridge", CallingConvention = CallingConvention.Cdecl)]
     private static extern IntPtr auralis_bridge_call(Operation operation);

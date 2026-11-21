@@ -6,6 +6,7 @@ on:
     branches: [feature/auralis-winui-shell]
     paths:
       - 'winui-shell/**'
+      - 'crates/auralis-winui-bridge/**'
       - 'glass-ui/**'
       - '.github/workflows/auralis-winui-validation.yml'
 
@@ -23,7 +24,7 @@ jobs:
       - name: Test local interface adapter
         shell: pwsh
         run: |
-          node --test winui-shell/webview/compat.test.mjs winui-shell/webview/preview-compat.test.mjs
+          node --test winui-shell/webview/compat.test.mjs winui-shell/webview/preview-compat.test.mjs winui-shell/webview/sandbox-compat.test.mjs
           if ($LASTEXITCODE) { throw 'WinUI interface adapter test failed.' }
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -41,6 +42,14 @@ jobs:
         run: |
           dotnet run --project winui-shell/MaterialPolicy.Tests/MaterialPolicy.Tests.csproj -c Release
           if ($LASTEXITCODE) { throw 'WinUI material mapping test failed.' }
+      - name: Build isolated downloader bridge
+        shell: pwsh
+        env:
+          CARGO_INCREMENTAL: '0'
+          CARGO_PROFILE_DEV_DEBUG: '0'
+        run: |
+          cargo build -p auralis-winui-bridge --lib --no-default-features
+          if ($LASTEXITCODE) { throw 'Isolated downloader bridge build failed.' }
       - name: Build WinUI development shell
         shell: pwsh
         run: |
@@ -51,6 +60,9 @@ jobs:
           if ($LASTEXITCODE) { throw 'WinUI shell build failed.' }
           $adapter = Get-ChildItem winui-shell/Auralis.WinUI/bin -Recurse -Filter winui-preview-compat.js | Select-Object -First 1
           if (!$adapter -or !(Test-Path (Join-Path $adapter.DirectoryName 'index.html'))) { throw 'WinUI interface preview assets were not bundled.' }
+          if (!(Test-Path (Join-Path $adapter.DirectoryName 'winui-sandbox-compat.js'))) { throw 'Isolated interface adapter was not bundled.' }
+          $bridge = Get-ChildItem winui-shell/Auralis.WinUI/bin -Recurse -Filter auralis_winui_bridge.dll | Select-Object -First 1
+          if (!$bridge) { throw 'Isolated downloader bridge was not bundled.' }
       - name: Test embedded downloader bridge
         shell: pwsh
         env:

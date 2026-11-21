@@ -14,6 +14,10 @@
   <ItemGroup Condition="Exists('..\..\glass-ui\dist\index.html')">
     <Content Include="..\..\glass-ui\dist\**\*" Link="interface\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\webview\preview-compat.js" Link="interface\winui-preview-compat.js" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\webview\sandbox-compat.js" Link="interface\winui-sandbox-compat.js" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup Condition="Exists('..\..\target\debug\auralis_winui_bridge.dll')">
+    <Content Include="..\..\target\debug\auralis_winui_bridge.dll" Link="auralis_winui_bridge.dll" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.250205002" />

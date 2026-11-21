@@ -16,10 +16,10 @@ internal static class LocalWebviewBridge
 
     /// A separate WebView profile and read-only adapter keep the preview away
     /// from the installed app, the user's data and the downloader bridge.
-    internal static async Task AttachPreviewAsync(WebView2 view, string assetDirectory, Action<NativeAppearance> applyAppearance)
+    internal static async Task AttachPreviewAsync(WebView2 view, string assetDirectory, Action<NativeAppearance> applyAppearance, bool sandbox=false)
     {
         if (!Directory.Exists(assetDirectory)) throw new DirectoryNotFoundException("Build the local interface preview assets first.");
-        var adapterPath=Path.Combine(assetDirectory,"winui-preview-compat.js");
+        var adapterPath=Path.Combine(assetDirectory,sandbox?"winui-sandbox-compat.js":"winui-preview-compat.js");
         if (!File.Exists(adapterPath) || !File.Exists(Path.Combine(assetDirectory,"index.html"))) throw new FileNotFoundException("Interface preview assets are missing.");
         var profile=Path.Combine(Path.GetTempPath(),"auralis-winui-preview-"+Guid.NewGuid().ToString("N"));
         var environment=await CoreWebView2Environment.CreateAsync(userDataFolder:profile);
@@ -35,15 +35,18 @@ internal static class LocalWebviewBridge
         core.AddWebResourceRequestedFilter("*",CoreWebView2WebResourceContext.All);
         core.WebResourceRequested+=(_,args)=>{if(!IsLocal(args.Request.Uri))args.Response=environment.CreateWebResourceResponse(Stream.Null,403,"Blocked","Content-Type: text/plain");};
         await core.AddScriptToExecuteOnDocumentCreatedAsync(await File.ReadAllTextAsync(adapterPath));
-        core.WebMessageReceived+=(_,args)=>{
+        core.WebMessageReceived+=async (_,args)=>{
             long? id=null;
             try {
                 var message=BridgeMessage.Parse(args.Source,args.WebMessageAsJson);id=message.Id;
-                if(message.Appearance is null)throw new InvalidOperationException("Preview accepts only appearance changes.");
-                var value=ApplyAppearance(message.Appearance,applyAppearance);
+                var value=message.Appearance is not null
+                    ? ApplyAppearance(message.Appearance,applyAppearance)
+                    : sandbox && (message.Command is "dashboard_snapshot" or "dashboard_visuals" or "glass_settings")
+                        ? await BridgeDispatcher.DispatchAsync(message)
+                        : throw new InvalidOperationException("This isolated host accepts only read-only commands.");
                 core.PostWebMessageAsJson(JsonSerializer.Serialize(new {id,ok=true,value}));
             } catch(Exception) {
-                if(id is not null)core.PostWebMessageAsJson(JsonSerializer.Serialize(new {id,ok=false,error="Appearance unavailable."}));
+                if(id is not null)core.PostWebMessageAsJson(JsonSerializer.Serialize(new {id,ok=false,error="The isolated request failed."}));
             }
         };
     }

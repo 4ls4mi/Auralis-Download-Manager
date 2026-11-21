@@ -21,6 +21,7 @@ internal sealed class DownloaderLifetime
         try
         {
             if (_started) return;
+            await _call(DownloaderBridge.Operation.InitializeSandbox);
             _mightBeRunning = true;
             await _call(DownloaderBridge.Operation.Start);
             _started = true;

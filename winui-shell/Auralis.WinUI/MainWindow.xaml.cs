@@ -10,19 +10,75 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        AppWindow.Closing += OnWindowClosing;
         MaterialSelector.ItemsSource = MaterialPolicy.BuiltIns;
         ThemeSelector.ItemsSource = new[] { "Dark", "Light", "Teal", "Amethyst" };
         ThemeSelector.SelectedIndex = 0;
         MaterialSelector.SelectedIndex = 1;
     }
 
-    private bool _previewReady;
+    private bool _previewReady, _sandboxReady, _sandboxRequested, _closing, _allowClose, _openingSandbox, _openingPreview;
+    private readonly DownloaderLifetime _sandbox = new();
+
+    private async void OnWindowClosing(Microsoft.UI.Windowing.AppWindow sender, Microsoft.UI.Windowing.AppWindowClosingEventArgs args)
+    {
+        if (_allowClose || !_sandboxRequested) return;
+        args.Cancel=true;
+        if (_closing) return;
+        _closing=true;
+        try
+        {
+            await _sandbox.StopAsync();
+            _allowClose=true;
+            Close();
+        }
+        catch (Exception error)
+        {
+            _closing=false;
+            PreviewIntro.Visibility=Visibility.Visible;
+            InterfaceView.Visibility=Visibility.Collapsed;
+            SandboxView.Visibility=Visibility.Collapsed;
+            BackdropStatus.Text=$"The test downloader has not stopped: {error.Message}";
+        }
+    }
+
+    private async void OnSandboxInterface(object sender, RoutedEventArgs args)
+    {
+        if (_openingSandbox || _closing) return;
+        _openingSandbox=true;
+        _sandboxRequested=true;
+        try
+        {
+            await _sandbox.StartAsync();
+            if (_closing) return;
+            if (!_sandboxReady)
+            {
+                await LocalWebviewBridge.AttachPreviewAsync(SandboxView,Path.Combine(AppContext.BaseDirectory,"interface"),ApplyNativeAppearance,sandbox:true);
+                _sandboxReady=true;
+            }
+            if (_closing) return;
+            PreviewIntro.Visibility=Visibility.Collapsed;
+            InterfaceView.Visibility=Visibility.Collapsed;
+            SandboxView.Visibility=Visibility.Visible;
+            SandboxView.CoreWebView2.Navigate("https://auralis.local/index.html");
+        }
+        catch (Exception error)
+        {
+            PreviewIntro.Visibility=Visibility.Visible;
+            InterfaceView.Visibility=Visibility.Collapsed;
+            SandboxView.Visibility=Visibility.Collapsed;
+            BackdropStatus.Text=$"Isolated downloader unavailable: {error.Message}";
+        }
+        finally { _openingSandbox=false; }
+    }
 
     private async void OnPreviewInterface(object sender, RoutedEventArgs args) => await OpenPreviewAsync(false);
     private async void OnPreviewSettings(object sender, RoutedEventArgs args) => await OpenPreviewAsync(true);
 
     private async Task OpenPreviewAsync(bool settings)
     {
+        if (_openingPreview || _closing) return;
+        _openingPreview=true;
         try
         {
             if (!_previewReady)
@@ -30,7 +86,9 @@ public sealed partial class MainWindow : Window
                 await LocalWebviewBridge.AttachPreviewAsync(InterfaceView,Path.Combine(AppContext.BaseDirectory,"interface"),ApplyNativeAppearance);
                 _previewReady=true;
             }
+            if (_closing) return;
             PreviewIntro.Visibility=Visibility.Collapsed;
+            SandboxView.Visibility=Visibility.Collapsed;
             InterfaceView.Visibility=Visibility.Visible;
             InterfaceView.CoreWebView2.Navigate(settings ? "https://auralis.local/index.html?settings=1&tab=Appearance" : "https://auralis.local/index.html");
         }
@@ -38,8 +96,10 @@ public sealed partial class MainWindow : Window
         {
             PreviewIntro.Visibility=Visibility.Visible;
             InterfaceView.Visibility=Visibility.Collapsed;
+            SandboxView.Visibility=Visibility.Collapsed;
             BackdropStatus.Text=$"Interface preview unavailable: {error.Message}";
         }
+        finally { _openingPreview=false; }
     }
 
     private void OnThemeChanged(object sender, SelectionChangedEventArgs args) => ApplyMaterial();

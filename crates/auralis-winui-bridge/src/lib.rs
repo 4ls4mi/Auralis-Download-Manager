@@ -4,6 +4,30 @@
 use std::{ffi::{c_char, CString}, sync::{Mutex, OnceLock}, thread::{self, JoinHandle}, time::{Duration, Instant}};
 
 static ENGINE: OnceLock<Mutex<Option<JoinHandle<Result<(), String>>>>> = OnceLock::new();
+// The development host must explicitly choose an empty, private test data
+// directory before starting. It cannot attach to an installed app's data.
+static ISOLATED_DATA: OnceLock<std::path::PathBuf> = OnceLock::new();
+fn initialize_sandbox() -> Result<serde_json::Value, String> {
+    let worker = engine().lock().map_err(|_| "Downloader state unavailable")?;
+    if worker.is_some() { return Err("Stop the downloader before initializing its test data.".into()); }
+    if let Some(path) = ISOLATED_DATA.get() { return Ok(serde_json::json!({"isolated":true,"directory":path})); }
+    let stamp=std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_err(|e|e.to_string())?.as_nanos();
+    let root=std::env::temp_dir();
+    for suffix in 0..128 {
+        let path=root.join(format!("auralis-winui-dev-{}-{stamp}-{suffix}",std::process::id()));
+        match std::fs::create_dir(&path) {
+            Ok(()) => {
+                mdm_ipc::set_data_dir(path.clone());
+                if mdm_ipc::data_dir().as_ref()!=Some(&path) { return Err("Cannot isolate the downloader data directory.".into()); }
+                ISOLATED_DATA.set(path.clone()).map_err(|_|"Downloader data was already initialized.")?;
+                return Ok(serde_json::json!({"isolated":true,"directory":path}));
+            }
+            Err(error) if error.kind()==std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(format!("Cannot create the isolated test directory: {error}")),
+        }
+    }
+    Err("Cannot choose an isolated test directory.".into())
+}
 fn engine() -> &'static Mutex<Option<JoinHandle<Result<(), String>>>> { ENGINE.get_or_init(|| Mutex::new(None)) }
 fn request(query: &str) -> Result<serde_json::Value, String> {
     let command = mdm_ipc::Command { query: Some(query.into()), ..Default::default() };
@@ -16,6 +40,7 @@ fn owned_backend() -> bool {
 }
 
 fn start() -> Result<serde_json::Value, String> {
+    if ISOLATED_DATA.get().is_none() { return Err("Initialize isolated test data before starting the development downloader.".into()); }
     let mut worker = engine().lock().map_err(|_| "Downloader state unavailable")?;
     if worker.as_ref().is_some_and(|w| !w.is_finished()) {
         return if owned_backend() { Ok(serde_json::json!({"running":true})) } else { Err("Downloader is still starting".into()) };
@@ -54,12 +79,14 @@ fn dispatch(operation: u32) -> Result<serde_json::Value, String> {
         2 => stop(),
         3..=5 if owned_backend() => request(match operation { 3 => "list", 4 => "glass-visuals", _ => "glass-settings" }),
         3..=5 => Err("The embedded downloader is not running in this process.".into()),
+        6 => initialize_sandbox(),
         _ => Err("Unsupported bridge operation".into()),
     }
 }
 fn download_action(action: u32, id: u64) -> Result<serde_json::Value, String> {
     let action = match action { 1 => "start", 2 => "pause", _ => return Err("Unsupported download action".into()) };
     if id == 0 { return Err("Invalid download ID".into()); }
+    if ISOLATED_DATA.get().is_some() { return Err("Download actions are disabled in the development sandbox.".into()); }
     if !owned_backend() { return Err("The embedded downloader is not running in this process.".into()); }
     let command = mdm_ipc::Command { action: Some(action.into()), ids: vec![id], ..Default::default() };
     let raw = mdm_ipc::request_checked(&command).map_err(|e| e.to_string())?;
@@ -104,6 +131,7 @@ fn add_download(url: &str, later: bool) -> Result<serde_json::Value, String> {
         _ => false,
     };
     if !supported { return Err("Enter a supported HTTP, HTTPS, FTP or magnet link.".into()); }
+    if ISOLATED_DATA.get().is_some() { return Err("Adding downloads is disabled in the development sandbox.".into()); }
     if !owned_backend() { return Err("The embedded downloader is not running in this process.".into()); }
     mdm_ipc::send(&mdm_ipc::Command { url: Some(url.to_owned()), later, silent: false, ..Default::default() }).map_err(|e| e.to_string())?;
     Ok(serde_json::json!({"pending":true}))
@@ -145,9 +173,12 @@ mod tests {
     use super::*;
     #[test]
     fn isolated_embedded_downloader_starts_reads_and_stops() {
-        let data = std::env::temp_dir().join(format!("auralis-winui-bridge-test-{}", std::process::id()));
-        std::fs::create_dir(&data).expect("create isolated data directory");
-        mdm_ipc::set_data_dir(data.clone());
+        assert!(start().unwrap_err().contains("isolated test data"));
+        let initialized=initialize_sandbox().expect("create isolated data directory");
+        assert_eq!(initialized["isolated"],true);
+        let data=std::path::PathBuf::from(initialized["directory"].as_str().expect("test directory"));
+        assert!(data.starts_with(std::env::temp_dir()));
+        assert_eq!(initialize_sandbox().unwrap()["directory"],initialized["directory"]);
         let started = start().expect("start isolated embedded downloader");
         assert_eq!(started["running"], true);
         let list = dispatch(3).expect("read download list");
@@ -158,8 +189,8 @@ mod tests {
         assert!(settings["max_connections"].is_number());
         update_setting("show_complete", "false").expect("update isolated setting");
         assert_eq!(dispatch(5).unwrap()["show_complete"], false);
-        let unknown = download_action(1, u64::MAX).expect("unknown ID returns a skipped result");
-        assert!(unknown["skipped"].is_array());
+        assert!(download_action(1, 1).unwrap_err().contains("disabled"));
+        assert!(add_download("https://example.com/file", false).unwrap_err().contains("disabled"));
         let stopped = stop().expect("stop isolated embedded downloader");
         assert_eq!(stopped["running"], false);
         assert!(dispatch(3).is_err());
