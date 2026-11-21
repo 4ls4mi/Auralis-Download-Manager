@@ -729,3 +729,11 @@
 /* Keep controls legible on light neutral glass while the outer surface stays tinted. */
 .cg-window:is(.cg-theme-white-frost,.cg-theme-white-pearl) :is(.cg-toolbar,.cg-sidebar,.cg-list-panel,.cg-settings-body,.cg-progress-section,.cg-mdm-details,.cg-footer){background-color:rgba(var(--glass),.90)!important}
 .cg-window:is(.cg-theme-white-frost,.cg-theme-white-pearl) .cg-fit-content :is(h1,h2,h3,h4,strong,p,small,label,button,span){text-shadow:0 1px 2px #00101f,0 0 3px #00101f}
+
+/* A restrained in-app cue remains visible regardless of desktop notification mode. */
+.cg-update-notice{border:1px solid var(--accent);border-radius:10px;margin:5px 8px;padding:8px 12px;background:linear-gradient(100deg,rgba(var(--accent-rgb),.24),var(--surface));box-shadow:inset 0 1px #ffffff45;animation:cg-update-attention 1.1s ease-out 2}
+.cg-update-notice strong{color:var(--ink)}
+@keyframes cg-update-attention{0%,100%{box-shadow:inset 0 1px #ffffff45}50%{box-shadow:inset 0 1px #ffffff70,0 0 12px rgba(var(--accent-rgb),.6)}}
+@media (prefers-reduced-motion:reduce){.cg-update-notice{animation:none}}
+
+.cg-transfer-kind{display:inline-block;margin-left:6px;padding:1px 5px;border:1px solid var(--edge-strong);border-radius:5px;color:var(--ink);font-size:.9em}

@@ -869,6 +869,7 @@ pub struct App {
     glass_duplicate_serial:u64,
     glass_account: Option<(mdm_debrid::ServiceKind,crate::debrid::SignIn)>,
     glass_checks: glass::CheckSlots,
+    glass_recovery_checks: glass::RecoverySlots,
     glass_exit_requested: bool,
     glass_power_serial: u64,
     /// Addresses (and their browser context) waiting for Download File Info to close.
@@ -1647,6 +1648,7 @@ impl App {
             glass_duplicate_serial:0,
             glass_account: None,
             glass_checks: Default::default(),
+            glass_recovery_checks: Default::default(),
             glass_exit_requested: false,
             glass_power_serial: 0,
             file_info_waiting: Default::default(),
@@ -3265,7 +3267,17 @@ impl App {
 
     /// Start or resume a download; `show` opens its progress dialog (IDM's default), unless
     /// Options → Downloads → Customize "Download progress" dialog turned it off (#1041).
+    fn recovery_check_running(&self, id: u64) -> bool {
+        self.glass_recovery_checks.get(&id).is_some_and(|slot| {
+            slot.lock().map_or(true, |result| result.is_none())
+        })
+    }
+
     fn start(&mut self, id: u64, show: bool) {
+        if self.recovery_check_running(id) {
+            self.notice = Some("Wait for the saved-data check to finish before resuming.".into());
+            return;
+        }
         let show = show && self.settings.show_progress;
         self.stopped_by_hand.remove(&id);
         let rt = self.rt.clone();
@@ -10190,6 +10202,10 @@ impl App {
     /// Download again from the start: the partial state goes; a finished file is replaced when
     /// the new download completes.
     fn redownload(&mut self, id: u64) {
+        if self.recovery_check_running(id) {
+            self.notice = Some("Wait for the saved-data check to finish before redownloading.".into());
+            return;
+        }
         if !self.can_redownload(id) {
             return;
         }

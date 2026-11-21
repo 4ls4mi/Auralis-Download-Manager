@@ -14,6 +14,7 @@ pub mod naming;
 pub mod net;
 pub mod pac;
 pub mod planner;
+pub mod recovery;
 pub mod server;
 pub mod sites;
 #[doc(hidden)]

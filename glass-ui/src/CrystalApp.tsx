@@ -395,7 +395,7 @@ export default function CrystalApp(){
     <span className="cg-muted" style={{fontSize:"var(--min-text-size)",whiteSpace:"nowrap",marginRight:9}}>{online?"● Connected":"○ Offline"}</span>
   </WindowTop>
   <div className="cg-main-body" onContextMenu={e=>e.preventDefault()}>
-    {updateVersion&&<div className="cg-update-notice" role="status"><span>Auralis Download Manager {updateVersion} is available.</span><button className="cg-btn" onClick={()=>{openWindow("tool-update-notice","/?tool=update-notice",680,520)}}>View update</button><button className="cg-btn" aria-label="Dismiss update notice" onClick={()=>setUpdateVersion(null)}>Close</button></div>}
+    {updateVersion&&<div className="cg-update-notice" role="status"><span><strong>Update available</strong> · Auralis {updateVersion}</span><button className="cg-btn cg-btn-primary" onClick={()=>{openWindow("tool-update-notice","/?tool=update-notice",680,520)}}>Review and download</button><button className="cg-btn" aria-label="Dismiss update notice" onClick={()=>setUpdateVersion(null)}>Close</button></div>}
     <div className="cg-menubar">
       {menus.map(menu=><div className="cg-menu-parent" key={menu}>
         <button className={"cg-menu-trigger "+(openMenu===menu?"active":"")} onClick={()=>{setContext(null);setOpenMenu(openMenu===menu?null:menu)}}>{menu}</button>
@@ -441,7 +441,7 @@ export default function CrystalApp(){
             }}>
             <label className="cg-select-cell" onClick={e=>e.stopPropagation()} onDoubleClick={e=>e.stopPropagation()}><input type="checkbox" aria-label={`Select ${d.file}`} checked={selected.includes(d.id)} onChange={e=>{const next=e.target.checked?[...selected,d.id]:selected.filter(id=>id!==d.id);setSelected(next);setChosen(e.target.checked?d.id:next.at(-1)??null);anchor.current=d.id;setContext(null)}}/></label>
             <span className="cg-file" role="button" tabIndex={0} aria-pressed={selected.includes(d.id)} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();setSelected([d.id]);setChosen(d.id);anchor.current=d.id}}}><FileSymbol name={d.file}/><span className="cg-file-info">
-              <strong title={d.file}>{d.file}</strong><small>{units(d.downloaded)} / {units(d.size)}</small></span></span>
+              <strong title={d.file}>{d.file}</strong><small>{units(d.downloaded)} / {units(d.size)} {visuals[d.id]?.is_torrent&&<span className="cg-transfer-kind" title="This download uses BitTorrent" aria-label="Torrent download">◆ Torrent</span>}</small></span></span>
             <span>{units(d.size)}</span><StatusBadge item={d}/>
             <span className="cg-row-progress">
               <GradientBar percent={pct(d)} size={d.size} active={d.status==="Downloading"} showLabel/>

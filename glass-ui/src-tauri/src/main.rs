@@ -534,7 +534,7 @@ async fn bulk_action(action: String) -> ApiResult<mdm_ipc::api::ActAnswer> {
 #[tauri::command]
 async fn file_operation(id: u64, operation: String, value: Option<String>) -> ApiResult<serde_json::Value> {
     if !matches!(operation.as_str(), "details" | "redownload" | "speed-limit" |
-        "open" | "folder" | "open-with" | "queue-add" | "queue-remove" | "refresh-address" | "checksum" | "checksum-result" | "completion-options" | "extract" | "extract-status" | "extract-password" | "extract-cancel") {
+        "open" | "folder" | "open-with" | "queue-add" | "queue-remove" | "refresh-address" | "checksum" | "checksum-result" | "check-saved" | "check-saved-result" | "completion-options" | "extract" | "extract-status" | "extract-password" | "extract-cancel") {
         return Err("Unsupported file operation".into());
     }
     tauri::async_runtime::spawn_blocking(move || {

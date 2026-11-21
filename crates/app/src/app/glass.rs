@@ -8,6 +8,7 @@ use super::*;
 use serde_json::{Value, json};
 
 pub(super) type CheckSlots = HashMap<u64, std::sync::Arc<std::sync::Mutex<Option<Result<bool,String>>>>>;
+pub(super) type RecoverySlots = HashMap<u64, std::sync::Arc<std::sync::Mutex<Option<Result<Value,String>>>>>;
 
 impl App {
     pub(super) fn glass_owned(&self) -> bool {
@@ -251,6 +252,32 @@ impl App {
             "extract-status" => {
                 let item=self.items.iter().find(|i|i.id==id).unwrap();
                 return Some(json!({"running":self.extracts.extracting(id),"password_required":self.extracts.ask.as_ref().is_some_and(|a|a.glass_has(id)),"needs_7zip":self.extracts.needs_7zip.is_some(),"message":item.log.last().map(|(_,text)|text)}).to_string());
+            }
+            "check-saved-result" => {
+                let result=self.glass_recovery_checks.get(&id).and_then(|slot|slot.lock().ok().and_then(|v|v.clone()));
+                return Some(match result {Some(Ok(report))=>json!({"complete":true,"report":report}),Some(Err(error))=>json!({"complete":true,"failure":error}),None=>json!({"complete":false})}.to_string());
+            }
+            "check-saved" => {
+                let item=self.items.iter().find(|i|i.id==id).unwrap();
+                if item.live.is_some() || item.status==Status::Complete || item.torrent.is_some() || item.video.is_some() || item.gallery.is_some() {
+                    return fail("Stop an incomplete ordinary download before checking its saved data");
+                }
+                if self.recovery_check_running(id) { return fail("A saved-data check is already running"); }
+                let dest=item.dest.clone();
+                let state_path=mdm_engine::state::state_path(&dest);
+                if !state_path.exists() { return fail("No saved download state is available for this file"); }
+                let slot=std::sync::Arc::new(std::sync::Mutex::new(None));
+                self.glass_recovery_checks.insert(id,slot.clone());
+                std::thread::spawn(move || {
+                    let answer=(|| -> Result<Value,String> {
+                        let saved=mdm_engine::state::ResumeState::load(&state_path)?;
+                        if saved.dest != dest {return Err("Saved state does not belong to this file".into());}
+                        let report=saved.verify_saved_blocks().map_err(|e|e.to_string())?;
+                        Ok(json!({"checked_bytes":report.checked_bytes,"unhashed_bytes":report.unhashed_bytes,"damaged_ranges":report.damaged_ranges}))
+                    })();
+                    if let Ok(mut result)=slot.lock() {*result=Some(answer);}
+                });
+                return Some(json!({"ok":true,"pending":true}).to_string());
             }
             "checksum-result" => {
                 let result=self.glass_checks.get(&id).and_then(|slot|slot.lock().ok().and_then(|v|v.clone()));
