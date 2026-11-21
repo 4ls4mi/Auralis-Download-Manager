@@ -35,7 +35,11 @@ internal static class LocalWebviewBridge
         core.Settings.AreHostObjectsAllowed=false;
         core.Settings.AreDefaultScriptDialogsEnabled=false;
         core.SetVirtualHostNameToFolderMapping("auralis.local",Path.GetFullPath(assetDirectory),CoreWebView2HostResourceAccessKind.DenyCors);
-        core.NavigationStarting+=(_,args)=>{if(!IsLocal(args.Uri))args.Cancel=true;};
+        // Requests can complete after a reused WebView navigates. Never deliver
+        // a response from the old document to the new document, whose request
+        // IDs start over at one.
+        long navigationEpoch=0;
+        core.NavigationStarting+=(_,args)=>{if(!IsLocal(args.Uri))args.Cancel=true;else navigationEpoch++;};
         core.NewWindowRequested+=(_,args)=>args.Handled=true;
         core.AddWebResourceRequestedFilter("*",CoreWebView2WebResourceContext.All);
         core.WebResourceRequested+=(_,args)=>{if(!IsLocal(args.Request.Uri))args.Response=environment.CreateWebResourceResponse(new Windows.Storage.Streams.InMemoryRandomAccessStream(),403,"Blocked","Content-Type: text/plain");};
@@ -50,6 +54,7 @@ internal static class LocalWebviewBridge
         appWindow.Changed += changed;
         owner.Closed += (_,_) => appWindow.Changed -= changed;
         core.WebMessageReceived+=async (_,args)=>{
+            long requestEpoch=navigationEpoch;
             long? id=null;
             string? command=null;
             try {
@@ -73,10 +78,10 @@ internal static class LocalWebviewBridge
                     : sandbox && (message.Command is "dashboard_snapshot" or "dashboard_visuals" or "glass_settings" or "preferences" or "update_preference" or "update_glass_setting" or "start_download" or "pause_download" or "remove_download" or "file_details" or "file_speed_limit" or "queue_action" or "add_download")
                         ? await BridgeDispatcher.DispatchAsync(message)
                         : throw new InvalidOperationException("This isolated host does not support that command.");
-                core.PostWebMessageAsJson(JsonSerializer.Serialize(new {id,ok=true,value}));
+                if (requestEpoch==navigationEpoch) core.PostWebMessageAsJson(JsonSerializer.Serialize(new {id,ok=true,value}));
             } catch(Exception) {
                 string error=command=="update_check" ? "The update check is unavailable. Try again later." : "The isolated request failed.";
-                if(id is not null) { try { core.PostWebMessageAsJson(JsonSerializer.Serialize(new {id,ok=false,error})); } catch (Exception) { } }
+                if(id is not null && requestEpoch==navigationEpoch) { try { core.PostWebMessageAsJson(JsonSerializer.Serialize(new {id,ok=false,error})); } catch (Exception) { } }
             }
         };
         return environment;
