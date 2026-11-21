@@ -45,3 +45,45 @@ test('known damaged data remains blocked when the progress window reopens',{skip
  assert.equal(await page.getByRole('button',{name:'Resume'}).isDisabled(),true);
  }finally{await browser.close();await server.close()}
 });
+
+test('repair checks the source and enables resume only after preparation succeeds',{skip:!executablePath||!existsSync(executablePath)},async()=>{
+ const server=await createServer({configFile:false,root:fileURLToPath(new URL('..',import.meta.url)),server:{host:'127.0.0.1',port:0},logLevel:'silent'});await server.listen();
+ const browser=await chromium.launch({headless:true,executablePath,args:['--no-sandbox']});
+ try{const page=await browser.newPage();await page.addInitScript(()=>{
+  window.repaired=false;window.__TAURI_EVENT_PLUGIN_INTERNALS__={unregisterListener:()=>{}};
+  window.__TAURI_INTERNALS__={metadata:{currentWindow:{label:'download-7'},currentWebview:{label:'download-7'}},transformCallback:()=>1,unregisterCallback:()=>{},invoke:async(cmd,args)=>{
+   if(cmd==='dashboard_snapshot')return {downloads:[{id:7,file:'file.zip',url:'https://example.com/file',path:'C:/file.zip',status:'Stopped',size:100,downloaded:60,speed:0,category:'General'}],queues:[],categories:[],speed:0};
+   if(cmd==='dashboard_visuals')return {downloads:[{id:7,segments:[],connections:[],is_torrent:false,recovery_damaged:!window.repaired,server:{},resumable:true}]};
+   if(cmd==='file_operation'&&args.operation==='details')return {own_limit_kb:null,is_torrent:false};
+   if(cmd==='file_operation'&&args.operation==='repair-saved')return {pending:true};
+   if(cmd==='file_operation'&&args.operation==='repair-saved-result'){window.repaired=true;return {complete:true,report:{retained_bytes:40,unhashed_bytes:0,damaged_ranges:[[0,20]]}}}
+   return null;
+  }};
+ });await page.goto(server.resolvedUrls.local[0]+'?detail=7');
+ assert.equal(await page.getByRole('button',{name:'Resume'}).isDisabled(),true);
+ await page.getByRole('button',{name:'Check source and repair'}).click();
+ await page.getByText(/source was checked/i).waitFor();
+ await page.waitForFunction(()=>!document.querySelector('button.cg-neon-mint')?.disabled);
+ assert.equal(await page.getByRole('button',{name:'Resume'}).isDisabled(),false);
+ }finally{await browser.close();await server.close()}
+});
+
+test('repair refusal keeps the saved download blocked',{skip:!executablePath||!existsSync(executablePath)},async()=>{
+ const server=await createServer({configFile:false,root:fileURLToPath(new URL('..',import.meta.url)),server:{host:'127.0.0.1',port:0},logLevel:'silent'});await server.listen();
+ const browser=await chromium.launch({headless:true,executablePath,args:['--no-sandbox']});
+ try{const page=await browser.newPage();await page.addInitScript(()=>{
+  window.__TAURI_EVENT_PLUGIN_INTERNALS__={unregisterListener:()=>{}};
+  window.__TAURI_INTERNALS__={metadata:{currentWindow:{label:'download-7'},currentWebview:{label:'download-7'}},transformCallback:()=>1,unregisterCallback:()=>{},invoke:async(cmd,args)=>{
+   if(cmd==='dashboard_snapshot')return {downloads:[{id:7,file:'file.zip',url:'https://example.com/file',path:'C:/file.zip',status:'Stopped',size:100,downloaded:60,speed:0,category:'General'}],queues:[],categories:[],speed:0};
+   if(cmd==='dashboard_visuals')return {downloads:[{id:7,segments:[],connections:[],is_torrent:false,recovery_damaged:true,server:{},resumable:false}]};
+   if(cmd==='file_operation'&&args.operation==='details')return {own_limit_kb:null,is_torrent:false};
+   if(cmd==='file_operation'&&args.operation==='repair-saved')return {pending:true};
+   if(cmd==='file_operation'&&args.operation==='repair-saved-result')return {complete:true,failure:'The source did not confirm the same file and byte-range support.'};
+   return null;
+  }};
+ });await page.goto(server.resolvedUrls.local[0]+'?detail=7');
+ await page.getByRole('button',{name:'Check source and repair'}).click();
+ await page.getByRole('alert').filter({hasText:'The source did not confirm'}).waitFor();
+ assert.equal(await page.getByRole('button',{name:'Resume'}).isDisabled(),true);
+ }finally{await browser.close();await server.close()}
+});

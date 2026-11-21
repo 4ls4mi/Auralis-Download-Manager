@@ -54,6 +54,9 @@ pub struct ResumeState {
     /// through it, on one connection.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub browser_like: bool,
+    /// Repair resumes must revalidate the source on every partial response.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub repair_strict: bool,
 }
 
 impl ResumeState {
@@ -73,6 +76,7 @@ impl ResumeState {
             asked_as_mdm: false,
             final_get: false,
             browser_like: false,
+            repair_strict: false,
         }
     }
 

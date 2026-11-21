@@ -9,6 +9,9 @@ use serde_json::{Value, json};
 
 pub(super) type CheckSlots = HashMap<u64, std::sync::Arc<std::sync::Mutex<Option<Result<bool,String>>>>>;
 pub(super) type RecoverySlots = HashMap<u64, std::sync::Arc<std::sync::Mutex<Option<Result<Value,String>>>>>;
+#[derive(Default)]
+pub(super) struct RepairSlot { pub result: Option<Result<Value,String>>, pub applied: bool }
+pub(super) type RepairSlots = HashMap<u64, std::sync::Arc<std::sync::Mutex<RepairSlot>>>;
 
 impl App {
     pub(super) fn glass_owned(&self) -> bool {
@@ -271,7 +274,7 @@ impl App {
                 if item.live.is_some() || item.status==Status::Complete || item.torrent.is_some() || item.video.is_some() || item.gallery.is_some() {
                     return fail("Stop an incomplete ordinary download before checking its saved data");
                 }
-                if self.recovery_check_running(id) { return fail("A saved-data check is already running"); }
+                if self.recovery_check_running(id) || self.repair_check_running(id) { return fail("A saved-data operation is already running"); }
                 let dest=item.dest.clone();
                 let state_path=mdm_engine::state::state_path(&dest);
                 if !state_path.exists() { return fail("No saved download state is available for this file"); }
@@ -283,9 +286,31 @@ impl App {
                         let saved=mdm_engine::state::ResumeState::load(&state_path)?;
                         if saved.dest != dest {return Err("Saved state does not belong to this file".into());}
                         let report=saved.verify_saved_blocks().map_err(|e|e.to_string())?;
-                        Ok(json!({"checked_bytes":report.checked_bytes,"unhashed_bytes":report.unhashed_bytes,"damaged_ranges":report.damaged_ranges}))
+                        Ok(json!({"checked_bytes":report.checked_bytes,"unhashed_bytes":report.unhashed_bytes,"damaged_ranges":report.damaged_ranges,"repair_prepared":saved.repair_strict}))
                     })();
                     if let Ok(mut result)=slot.lock() {*result=Some(answer);}
+                    wake.request_repaint();
+                });
+                return Some(json!({"ok":true,"pending":true}).to_string());
+            }
+            "repair-saved-result" => {
+                let result=self.glass_repair_checks.get(&id).and_then(|slot|slot.lock().ok().and_then(|s|s.applied.then(||s.result.clone()).flatten()));
+                return Some(match result {Some(Ok(report))=>json!({"complete":true,"report":report}),Some(Err(error))=>json!({"complete":true,"failure":error}),None=>json!({"complete":false})}.to_string());
+            }
+            "repair-saved" => {
+                let item=self.items.iter().find(|i|i.id==id).unwrap();
+                if item.live.is_some() || item.status==Status::Complete || item.torrent.is_some() || item.video.is_some() || item.gallery.is_some() || item.remote.is_some() {
+                    return fail("Stop an incomplete ordinary download before repairing its saved data");
+                }
+                if self.recovery_check_running(id) || self.repair_check_running(id) { return fail("A saved-data operation is already running"); }
+                let path=mdm_engine::state::state_path(&item.dest);
+                let parts=self.request_parts(&item.url,item.login.as_ref(),&item.context,item.direct);
+                let slot=std::sync::Arc::new(std::sync::Mutex::new(RepairSlot::default()));
+                self.glass_repair_checks.insert(id,slot.clone());
+                let wake=self.ui_ctx.clone();
+                self.rt.spawn(async move {
+                    let answer=mdm_engine::repair::prepare_http_repair(&path,parts.headers,&parts.opts).await.map(|report|json!({"prepared":true,"damaged_ranges":report.damaged_ranges,"retained_bytes":report.retained_bytes,"unhashed_bytes":report.unhashed_bytes})).map_err(|e|e.to_string());
+                    if let Ok(mut value)=slot.lock(){value.result=Some(answer);}
                     wake.request_repaint();
                 });
                 return Some(json!({"ok":true,"pending":true}).to_string());

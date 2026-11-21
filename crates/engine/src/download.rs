@@ -1452,6 +1452,8 @@ const REFRESH_EVERY: Duration = Duration::from_secs(120);
 struct Ctx {
     /// The download's client: every connection's requests go through its pool.
     client: Client,
+    /// A repaired checkpoint requires its original strong validator on every range.
+    repair_strict: bool,
     /// The file's version; each range request's `If-Range` is chosen from them.
     validators: Mutex<Validators>,
     /// Where ranges come from now (after redirects); switched when it expires.
@@ -2126,6 +2128,7 @@ async fn run_fresh(
         saved.browser_like = browser.is_some();
         let ctx = Arc::new(Ctx {
             client: client0.clone(),
+            repair_strict: false,
             validators: Mutex::new(validators),
             target: Mutex::new(Target {
                 url: final_url.clone(),
@@ -2357,6 +2360,7 @@ async fn run_fresh_ftp(
         let ctx = Arc::new(Ctx {
             // FTP's connections are its own (`ftp`): this client's are none of the server's.
             client: client(&opts, &req.url, &AsGet::default(), &Default::default())?,
+            repair_strict: false,
             validators: Mutex::new(validators),
             target: Mutex::new(Target {
                 url,
@@ -2540,6 +2544,7 @@ async fn run_resume(
     );
     let ctx = Arc::new(Ctx {
         client,
+        repair_strict: saved.repair_strict,
         validators: Mutex::new({
             let mut v = saved.validators.clone();
             if opts.ignore_mtime {
@@ -3869,11 +3874,14 @@ async fn request(ctx: &Ctx, target: &Target, from: u64, to: u64) -> Result<Body,
     }
     match head.status {
         StatusCode::PARTIAL_CONTENT => {
+            if ctx.repair_strict {
+                if !repair_response_matches(&target.url, &head.url, if_range.as_ref(), &head.headers) { return Err(Error::FileChanged); }
+            }
             ctx.learn_ranges(true);
             ctx.range_answered.notify_one();
         }
         // The same file under another ETag (each CDN node has its own): go on with the date.
-        StatusCode::OK if per_node_etag(ctx, if_range.as_ref(), &head) => {
+        StatusCode::OK if !ctx.repair_strict && per_node_etag(ctx, if_range.as_ref(), &head) => {
             return Err(Error::RangesUnavailable);
         }
         // A full body for a ranged request once ranges are known to work: If-Range failed (the
@@ -3906,6 +3914,32 @@ async fn request(ctx: &Ctx, target: &Target, from: u64, to: u64) -> Result<Body,
         )));
     }
     Ok(body)
+}
+
+fn repair_response_matches(target: &Url, actual: &Url, validator: Option<&HeaderValue>, headers: &HeaderMap) -> bool {
+    let Some(expected) = validator else { return false };
+    let field = if expected.as_bytes().starts_with(b"\"") { header::ETAG } else { header::LAST_MODIFIED };
+    target == actual && headers.get(field) == Some(expected)
+}
+
+#[cfg(test)]
+mod repair_validator_tests {
+    use super::*;
+    #[test]
+    fn rejects_partial_response_from_changed_source_or_validator() {
+        let url = Url::parse("https://example.org/file").unwrap();
+        let different = Url::parse("https://example.org/other").unwrap();
+        let expected = HeaderValue::from_static("\"original\"");
+        let mut headers = HeaderMap::new();
+        headers.insert(header::ETAG, expected.clone());
+        assert!(repair_response_matches(&url, &url, Some(&expected), &headers));
+        assert!(!repair_response_matches(&url, &different, Some(&expected), &headers));
+        assert!(!repair_response_matches(&url, &url, None, &headers));
+        headers.insert(header::ETAG, HeaderValue::from_static("\"changed\""));
+        assert!(!repair_response_matches(&url, &url, Some(&expected), &headers));
+        headers.remove(header::ETAG);
+        assert!(!repair_response_matches(&url, &url, Some(&expected), &headers));
+    }
 }
 
 /// A full answer that still describes the file being downloaded: the same length and, when the

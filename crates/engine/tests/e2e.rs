@@ -2472,3 +2472,52 @@ async fn restored_bundle_resumes_partial_and_preserves_completed_file() {
         assert!(on_disk(entry.range.as_deref(), &state) <= fast_opts().verify_overlap);
     }
 }
+
+/// Check the validator and range support before repairing only the damaged data.
+#[tokio::test]
+async fn damaged_checkpoint_range_can_be_refetched_without_discarding_good_ranges() {
+    use std::io::{Read, Seek, SeekFrom, Write};
+    let server = server("rate=1M").await;
+    let (_dir, state_path) = paused(&server, "/gen/8M/repair.bin?seed=81").await;
+    let saved = mdm_engine::state::ResumeState::load(&state_path).unwrap();
+    let block = saved.block_hashes.first().expect("checkpoint has saved data").clone();
+    let part_path = mdm_engine::naming::part_path(&saved.dest);
+    let mut part = std::fs::OpenOptions::new().read(true).write(true).open(&part_path).unwrap();
+    part.seek(SeekFrom::Start(block.start)).unwrap();
+    let mut byte = [0u8; 1];
+    part.read_exact(&mut byte).unwrap();
+    part.seek(SeekFrom::Start(block.start)).unwrap();
+    part.write_all(&[byte[0] ^ 0xff]).unwrap();
+    part.sync_all().unwrap();
+    drop(part);
+    let original_state = std::fs::read(&state_path).unwrap();
+    let (plan, report) = saved.proposed_repair().unwrap();
+    assert_eq!(report.damaged_ranges, vec![(block.start, block.end)]);
+    assert_eq!(std::fs::read(&state_path).unwrap(), original_state, "planning must not change the checkpoint");
+    assert_eq!(plan.downloaded(), saved.downloaded() - (block.end - block.start));
+    let before_repair = std::fs::read(&part_path).unwrap();
+    server.set_faults(Faults::parse("no_range=1").unwrap());
+    assert!(mdm_engine::repair::prepare_http_repair(&state_path, Default::default(), &fast_opts()).await.is_err());
+    assert_eq!(std::fs::read(&state_path).unwrap(), original_state);
+    assert_eq!(std::fs::read(&part_path).unwrap(), before_repair);
+    server.set_faults(Faults::default());
+    let prepared = mdm_engine::repair::prepare_http_repair(&state_path, Default::default(), &fast_opts()).await.unwrap();
+    assert_eq!(prepared.damaged_ranges, report.damaged_ranges);
+    assert_eq!(std::fs::read(&prepared.state_backup).unwrap(), original_state);
+    let repaired = mdm_engine::state::ResumeState::load(&state_path).unwrap();
+    assert!(repaired.repair_strict);
+    assert_eq!(repaired.segments, plan.segments);
+    server.set_faults(Faults::parse("etag=per-request").unwrap());
+    assert!(Download::resume(state_path.clone(), Default::default(), fast_opts()).unwrap().wait().await.is_err());
+    assert_eq!(std::fs::read(&part_path).unwrap(), before_repair, "changed source must not overwrite saved data");
+    server.set_faults(Faults::default());
+    server.clear_log();
+    let out = Download::resume(state_path, Default::default(), fast_opts()).unwrap().wait().await.unwrap();
+    let mut expected = vec![0; 8 << 20];
+    content::fill(81, 0, &mut expected);
+    assert_eq!(std::fs::read(out.path).unwrap(), expected);
+    tokio::time::timeout(SETTLE, server.settled()).await.unwrap();
+    for entry in server.log() {
+        assert!(on_disk(entry.range.as_deref(), &plan) <= fast_opts().verify_overlap, "an intact range was requested again: {:?}", entry.range);
+    }
+}

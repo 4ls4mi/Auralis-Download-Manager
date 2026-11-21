@@ -870,6 +870,7 @@ pub struct App {
     glass_account: Option<(mdm_debrid::ServiceKind,crate::debrid::SignIn)>,
     glass_checks: glass::CheckSlots,
     glass_recovery_checks: glass::RecoverySlots,
+    glass_repair_checks: glass::RepairSlots,
     glass_exit_requested: bool,
     glass_power_serial: u64,
     /// Addresses (and their browser context) waiting for Download File Info to close.
@@ -1649,6 +1650,7 @@ impl App {
             glass_account: None,
             glass_checks: Default::default(),
             glass_recovery_checks: Default::default(),
+            glass_repair_checks: Default::default(),
             glass_exit_requested: false,
             glass_power_serial: 0,
             file_info_waiting: Default::default(),
@@ -3273,7 +3275,15 @@ impl App {
         })
     }
 
+    fn repair_check_running(&self, id: u64) -> bool {
+        self.glass_repair_checks.get(&id).is_some_and(|slot| slot.lock().map_or(true, |s| !s.applied))
+    }
+
     fn start(&mut self, id: u64, show: bool) {
+        if self.repair_check_running(id) {
+            self.notice = Some(("Saved-data repair", "Wait for the repair check to finish before resuming.".to_owned()));
+            return;
+        }
         let damaged = self.glass_recovery_checks.get(&id).is_some_and(|slot| {
             slot.lock().ok().and_then(|result| result.as_ref().and_then(|r| r.as_ref().ok()).and_then(|report| report.get("damaged_ranges")).and_then(serde_json::Value::as_array).map(|ranges| !ranges.is_empty())).unwrap_or(false)
         });
@@ -3623,6 +3633,10 @@ impl App {
     /// Take a download off the list (not while it runs); with `files`, its file goes from disk
     /// too: a finished file, or the data so far (a torrent's files when its session runs).
     fn remove_download(&mut self, id: u64, files: bool) {
+        if self.repair_check_running(id) || self.recovery_check_running(id) {
+            self.notice = Some(("Saved-data check", "Wait for the saved-data operation to finish before removing this download.".to_owned()));
+            return;
+        }
         if self.item(id).is_some_and(|i| i.live.is_none()) {
             self.release_link(id);
             if let Some(spec) = self.item(id).and_then(|i| i.torrent.clone()) {
@@ -4288,6 +4302,10 @@ impl App {
 
     /// File Properties → OK.
     fn apply_properties(&mut self, c: crate::properties::Changes) {
+        if self.repair_check_running(c.id) || self.recovery_check_running(c.id) {
+            self.notice = Some(("Saved-data check", "Wait for the saved-data operation to finish before changing this download.".to_owned()));
+            return;
+        }
         let Some(item) = self.item(c.id) else { return };
         item.description = c.description;
         item.login = c.login;
@@ -4348,6 +4366,10 @@ impl App {
     /// own (a copy to another drive takes a while), one not started just takes the new place.
     /// A failure says why.
     fn start_move(&mut self, id: u64, target: PathBuf) {
+        if self.repair_check_running(id) || self.recovery_check_running(id) {
+            self.notice = Some(("Saved-data check", "Wait for the saved-data operation to finish before moving this download.".to_owned()));
+            return;
+        }
         let Some(item) = self.item(id) else { return };
         if target == item.dest {
             return;
@@ -7516,12 +7538,34 @@ impl App {
         }
         // Persist a positive damage finding even if its progress window was closed.
         for (id, slot) in &self.glass_recovery_checks {
-            let damaged = slot.lock().ok().and_then(|result| result.as_ref().and_then(|r| r.as_ref().ok()).and_then(|report| report.get("damaged_ranges")).and_then(serde_json::Value::as_array).map(|ranges| !ranges.is_empty())).unwrap_or(false);
+            let result = slot.lock().ok().and_then(|result| result.clone()).and_then(Result::ok);
+            let damaged = result.as_ref().and_then(|report| report.get("damaged_ranges")).and_then(serde_json::Value::as_array).is_some_and(|ranges| !ranges.is_empty());
             if damaged && let Some(item) = self.items.iter_mut().find(|item| item.id == *id) && !item.recovery_damaged {
                 item.recovery_damaged = true;
                 self.dirty = true;
             }
+            if !damaged && result.as_ref().is_some_and(|report| report["repair_prepared"] == true && report["damaged_ranges"].is_array())
+                && let Some(item) = self.items.iter_mut().find(|item| item.id == *id) && item.recovery_damaged {
+                item.recovery_damaged = false;
+                self.dirty = true;
+            }
         }
+        let mut repaired = Vec::new();
+        for (id, slot) in &self.glass_repair_checks {
+            if let Ok(mut slot) = slot.lock() && !slot.applied && let Some(result) = slot.result.clone() {
+                if let Ok(report) = result && let Some(item) = self.items.iter_mut().find(|item| item.id == *id) {
+                    item.recovery_damaged = false;
+                    item.downloaded = report["retained_bytes"].as_u64().unwrap_or(item.downloaded);
+                    item.status = Status::Stopped;
+                    item.error = None;
+                    item.note("Damaged ranges are ready to be downloaded again from the checked source.");
+                    self.dirty = true;
+                    repaired.push(*id);
+                }
+                slot.applied = true;
+            }
+        }
+        for id in repaired { self.glass_recovery_checks.remove(&id); }
         let mut finished = Vec::new();
         let mut failed = Vec::new();
         let mut any_live = false;
@@ -10218,7 +10262,7 @@ impl App {
     /// Download again from the start: the partial state goes; a finished file is replaced when
     /// the new download completes.
     fn redownload(&mut self, id: u64) {
-        if self.recovery_check_running(id) {
+        if self.recovery_check_running(id) || self.repair_check_running(id) {
             self.notice = Some(("Saved-data check", "Wait for the saved-data check to finish before redownloading.".to_owned()));
             return;
         }

@@ -15,6 +15,7 @@ export default function CrystalProgress({id}:{id:number}){
  const [item,setItem]=useState<Download|null>(null),[visual,setVisual]=useState<DownloadVisual|null>(null),[tab,setTab]=useState<Tab>('Download status');
  const [values,setValues]=useState<number[]>([]),[error,setError]=useState(''),[busy,setBusy]=useState(false);
  const [checking,setChecking]=useState(false),[checkMessage,setCheckMessage]=useState(''),[damaged,setDamaged]=useState(false);
+ const [repairing,setRepairing]=useState(false);
  const [limit,setLimit]=useState<Limit|null>(null),[limited,setLimited]=useState(false),[kb,setKb]=useState('512');
  const pageRef=useRef<HTMLElement>(null),{appearance}=useCrystal();
  useEffect(()=>{
@@ -38,6 +39,16 @@ export default function CrystalProgress({id}:{id:number}){
   void poll();const timer=setInterval(()=>void poll(),1000);return()=>{active=false;clearInterval(timer)};
  },[checking,id]);
  const checkSaved=async()=>{setError('');setCheckMessage('');setBusy(true);try{await invoke('file_operation',{id,operation:'check-saved',value:null});setChecking(true)}catch(e){setError(String(e))}finally{setBusy(false)}};
+ useEffect(()=>{
+  if(!repairing)return;let active=true,polling=false;
+  const poll=async()=>{if(polling)return;polling=true;try{
+   const result=await invoke<{complete:boolean;failure?:string;report?:{retained_bytes:number;unhashed_bytes:number;damaged_ranges:[number,number][]}}>('file_operation',{id,operation:'repair-saved-result',value:null});
+   if(!active||!result.complete)return;setRepairing(false);if(result.failure){setError(result.failure);return}if(!result.report){setError('The repair check returned no result.');return}
+   setDamaged(false);setCheckMessage(`The source was checked. ${result.report.damaged_ranges.length} changed range(s) are ready to download again; ${units(result.report.retained_bytes)} was retained. Press Resume to continue.${result.report.unhashed_bytes?` ${units(result.report.unhashed_bytes)} has no saved hash and could not be checked.`:''}`);
+  }catch(e){if(active){setRepairing(false);setError(String(e))}}finally{polling=false}};
+  void poll();const timer=setInterval(()=>void poll(),1000);return()=>{active=false;clearInterval(timer)};
+ },[repairing,id]);
+ const repairSaved=async()=>{setError('');setCheckMessage('');setBusy(true);try{await invoke('file_operation',{id,operation:'repair-saved',value:null});setRepairing(true)}catch(e){setError(String(e))}finally{setBusy(false)}};
  const run=async(action:string)=>{setBusy(true);setError('');try{await invoke('download_action',{action,ids:[id]});if(action==='pause'&&item?.status==='Downloading')setItem({...item,status:'Stopped',speed:0});}catch(e){setError(String(e))}finally{setBusy(false)}};
  const save=async()=>{setBusy(true);setError('');try{const n=Number(kb);if(limited&&(!Number.isInteger(n)||n<1||n>10_000_000))throw Error('Enter 1–10,000,000 KB/sec.');await invoke('file_operation',{id,operation:'speed-limit',value:limited?String(n):'off'});}catch(e){setError(String(e))}finally{setBusy(false)}};
  const server=visual?.server;
@@ -60,9 +71,10 @@ export default function CrystalProgress({id}:{id:number}){
     {visual?.recovery_damaged&&!checkMessage&&<p role="alert" className="cg-error">Saved data was found changed. Resume is blocked to protect the partial file.</p>}
     {checkMessage&&<p role="status" className="cg-muted">{checkMessage}</p>}
     {checking&&<p role="status" className="cg-muted">Checking saved data…</p>}
+    {repairing&&<p role="status" className="cg-muted">Checking the source and preparing damaged ranges…</p>}
    </>:tab==='Speed Limiter'?<section className="cg-glass cg-progress-section"><h3>Speed Limiter</h3><label className="cg-toggle"><span><strong>Use Speed Limiter</strong><small>Remember the limit after pause and resume</small></span><input type="checkbox" checked={limited} disabled={!limit||busy} onChange={e=>setLimited(e.target.checked)}/></label><label className="cg-field">Maximum speed (KB/sec)<input type="number" min="1" value={kb} disabled={!limited||busy} onChange={e=>setKb(e.target.value)}/></label><button className="cg-btn cg-btn-primary" disabled={!limit||busy} onClick={()=>void save()}><Save size={16}/>Apply limit</button></section>:<CrystalCompletionOptions id={id}/>}
    <TubeBridge container={pageRef} ready={!!item&&tab==='Download status'} active={receivingTubeSlots(visual?.connections,item?.status==='Downloading').some(Boolean)} colors={indicatorColors(appearance.connectionIndicator)} progressColors={indicatorColors(appearance.indicator)}/>
    {error&&<p className="cg-error" role="alert">{error}</p>}
-   <div className="cg-bottom-actions">{item&&item.status!=='Downloading'&&item.status!=='Complete'&&visual&&!visual.is_torrent&&<button className="cg-btn" disabled={busy||checking} onClick={()=>void checkSaved()}>Check saved data</button>}<button className="cg-btn cg-neon-violet" onClick={()=>openWindow(`properties-${id}`,`/?properties=${id}`,760,600)}><FileText size={15}/>Properties</button><span className="cg-action-space"/>{item?.status==='Downloading'?<button className="cg-btn cg-neon-amber" disabled={busy} onClick={()=>void run('pause')}><Pause size={16}/>Pause</button>:item&&item.status!=='Complete'?<button className="cg-btn cg-neon-mint" disabled={busy||checking||damaged||Boolean(visual?.recovery_damaged)} onClick={()=>void run('start')}><Play size={16}/>Resume</button>:null}<button className="cg-btn cg-btn-danger" disabled={busy} onClick={async()=>{if(item?.status==='Downloading')await run('pause');await getCurrentWindow().close()}}>Cancel</button></div>
+   <div className="cg-bottom-actions">{item&&item.status!=='Downloading'&&item.status!=='Complete'&&visual&&!visual.is_torrent&&<button className="cg-btn" disabled={busy||checking||repairing} onClick={()=>void checkSaved()}>Check saved data</button>}{item&&item.status!=='Downloading'&&item.status!=='Complete'&&visual&&!visual.is_torrent&&(damaged||visual.recovery_damaged)&&<button className="cg-btn" disabled={busy||checking||repairing} onClick={()=>void repairSaved()}>Check source and repair</button>}<button className="cg-btn cg-neon-violet" onClick={()=>openWindow(`properties-${id}`,`/?properties=${id}`,760,600)}><FileText size={15}/>Properties</button><span className="cg-action-space"/>{item?.status==='Downloading'?<button className="cg-btn cg-neon-amber" disabled={busy} onClick={()=>void run('pause')}><Pause size={16}/>Pause</button>:item&&item.status!=='Complete'?<button className="cg-btn cg-neon-mint" disabled={busy||checking||repairing||damaged||Boolean(visual?.recovery_damaged)} onClick={()=>void run('start')}><Play size={16}/>Resume</button>:null}<button className="cg-btn cg-btn-danger" disabled={busy} onClick={async()=>{if(item?.status==='Downloading')await run('pause');await getCurrentWindow().close()}}>Cancel</button></div>
   </main></CrystalWindow>;
 }
