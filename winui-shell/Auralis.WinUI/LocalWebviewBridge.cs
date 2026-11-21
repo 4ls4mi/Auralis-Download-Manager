@@ -33,7 +33,7 @@ internal static class LocalWebviewBridge
         core.NavigationStarting+=(_,args)=>{if(!IsLocal(args.Uri))args.Cancel=true;};
         core.NewWindowRequested+=(_,args)=>args.Handled=true;
         core.AddWebResourceRequestedFilter("*",CoreWebView2WebResourceContext.All);
-        core.WebResourceRequested+=(_,args)=>{if(!IsLocal(args.Request.Uri))args.Response=environment.CreateWebResourceResponse(Stream.Null,403,"Blocked","Content-Type: text/plain");};
+        core.WebResourceRequested+=(_,args)=>{if(!IsLocal(args.Request.Uri))args.Response=environment.CreateWebResourceResponse(new Windows.Storage.Streams.InMemoryRandomAccessStream(),403,"Blocked","Content-Type: text/plain");};
         await core.AddScriptToExecuteOnDocumentCreatedAsync(await File.ReadAllTextAsync(adapterPath));
         core.WebMessageReceived+=async (_,args)=>{
             long? id=null;
