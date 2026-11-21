@@ -17,7 +17,7 @@ import type { Appearance, BackgroundMode, Queue } from "./CrystalShared";
 type EngineSettings = {
   max_connections:number;speed_limit_on:boolean;speed_limit_kb:number;global_limit_on:boolean;
   global_limit_kb:number;start_immediately:boolean;only_add_to_queue:boolean;confirm_delete:boolean;
-  torrent_keep_sharing:boolean;torrent_dht:boolean;torrent_lsd:boolean;
+  torrent_keep_sharing:boolean;torrent_dht:boolean;torrent_lsd:boolean;torrent_recovery_mode?:string;
   proxy_from_browser:boolean;capture_opened:boolean;advanced_integration:boolean;
   show_complete:boolean;show_progress:boolean;double_click_open:boolean;
   category_dirs:[string,string][];net_adapter:string
@@ -177,6 +177,7 @@ export default function CrystalSettings(){
         <div className="cg-settings-fallback">After installing, restart the browser if the extension does not connect. Try a real download link to confirm interception.</div>
       </>;
       case "Torrents":return <>
+        <label className="cg-field">Recovery after a non-resumable download fails<select value={cfg?.torrent_recovery_mode??"off"} disabled={!cfg||busy} onChange={e=>void change("torrent_recovery_mode",e.target.value)}><option value="off">Off — search manually</option><option value="ask">Search for matching torrents, then ask me</option><option value="auto">Search and continue automatically when unambiguous</option></select><small>Search sends words from the filename to Internet Archive. Continuing uses BitTorrent peers. Matching saved pieces do not verify the unseen remainder. Automatic continuation requires one match with at least two verified pieces; the original partial is kept. Private downloads and files with an expected checksum are excluded.</small></label>
         {check("torrent_keep_sharing","Continue sharing after download","Keep uploading to other peers after the file finishes")}
         {check("torrent_dht","Use distributed hash table (DHT)","Discover BitTorrent peers")}
         {check("torrent_lsd","Discover local peers (LSD)","Use local peer discovery")}

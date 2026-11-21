@@ -48,6 +48,7 @@ impl App {
         if let Some(answer)=self.glass_tools(cmd){return Some(answer);}
         if cmd.action.as_deref()==Some("glass-recovery-torrent-file") {
             let Some(id)=cmd.ids.first().copied() else {return Some(json!({"error":"Missing download"}).to_string());};
+            if !cmd.silent { self.auto_recovery_pending.remove(&id); }
             let Some(item)=self.items.iter().find(|i|i.id==id) else {return Some(json!({"error":"Download not found"}).to_string());};
             if item.live.is_some() || item.status==Status::Complete || item.torrent.is_some() || item.video.is_some() || item.gallery.is_some() || item.remote.is_some() {
                 return Some(json!({"error":"Stop an incomplete ordinary download before checking a torrent"}).to_string());
@@ -60,7 +61,7 @@ impl App {
             let state_path=mdm_engine::state::state_path(&dest);
             if !state_path.exists() {return Some(json!({"error":"No saved download state is available for this file"}).to_string());}
             let slot=std::sync::Arc::new(std::sync::Mutex::new(None));
-            self.glass_torrent_recovery.clear();
+            self.glass_torrent_recovery.remove(&id);
             self.glass_torrent_handoffs.remove(&id);
             self.glass_torrent_recovery.insert(id,slot.clone());
             let wake=self.ui_ctx.clone();
@@ -422,6 +423,7 @@ impl App {
                 return Some(json!({"ok":true,"pending":true}).to_string());
             }
             "check-recovery-magnet" => {
+                if !cmd.silent { self.auto_recovery_pending.remove(&id); }
                 if value.len()>8192 {return fail("Magnet link is too long");}
                 let Some(source)=mdm_torrent::Source::magnet(value) else {return fail("Enter a valid magnet link");};
                 let item=self.items.iter().find(|i|i.id==id).unwrap();
@@ -437,7 +439,7 @@ impl App {
                 let host=self.torrent_host.clone();
                 let known=self.session_hashes();
                 let slot=std::sync::Arc::new(std::sync::Mutex::new(None));
-                self.glass_torrent_recovery.clear();
+                self.glass_torrent_recovery.remove(&id);
                 self.glass_torrent_handoffs.remove(&id);
                 self.glass_torrent_recovery.insert(id,slot.clone());
                 let wake=self.ui_ctx.clone();
@@ -464,6 +466,7 @@ impl App {
                 return Some(json!({"ok":true,"pending":true}).to_string());
             }
             "find-recovery-torrents" => {
+                if !cmd.silent { self.auto_recovery_pending.remove(&id); }
                 let item=self.items.iter().find(|i|i.id==id).unwrap();
                 if item.live.is_some() || item.status==Status::Complete || item.torrent.is_some() || item.video.is_some() || item.gallery.is_some() || item.remote.is_some() {
                     return fail("Stop an incomplete ordinary download before searching for recovery torrents");
@@ -477,7 +480,7 @@ impl App {
                 let archive=url::Url::parse("https://archive.org/").expect("fixed URL");
                 let opts=self.request_parts(&archive,None,&ipc::Command::default(),true).opts;
                 let slot=std::sync::Arc::new(std::sync::Mutex::new(None));
-                self.glass_torrent_recovery.clear();
+                self.glass_torrent_recovery.remove(&id);
                 self.glass_torrent_handoffs.remove(&id);
                 self.glass_torrent_recovery.insert(id,slot.clone());
                 let wake=self.ui_ctx.clone();

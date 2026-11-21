@@ -873,6 +873,9 @@ pub struct App {
     glass_repair_checks: glass::RepairSlots,
     glass_torrent_recovery: glass::TorrentRecoverySlots,
     glass_torrent_handoffs: glass::HandoffSlots,
+    /// Per-session automatic searches and the ones awaiting automatic handoff.
+    auto_recovery_attempted: std::collections::HashSet<u64>,
+    auto_recovery_pending: std::collections::HashSet<u64>,
     glass_exit_requested: bool,
     glass_power_serial: u64,
     /// Addresses (and their browser context) waiting for Download File Info to close.
@@ -1655,6 +1658,8 @@ impl App {
             glass_repair_checks: Default::default(),
             glass_torrent_recovery: Default::default(),
             glass_torrent_handoffs: Default::default(),
+            auto_recovery_attempted: Default::default(),
+            auto_recovery_pending: Default::default(),
             glass_exit_requested: false,
             glass_power_serial: 0,
             file_info_waiting: Default::default(),
@@ -3344,6 +3349,8 @@ impl App {
             return;
         }
         self.glass_torrent_recovery.remove(&id);
+        self.auto_recovery_attempted.remove(&id);
+        self.auto_recovery_pending.remove(&id);
         let show = show && self.settings.show_progress;
         self.stopped_by_hand.remove(&id);
         let rt = self.rt.clone();
@@ -6196,6 +6203,7 @@ impl App {
                 "global_limit_kb": self.settings.global_limit_kb,
                 "start_immediately": self.settings.start_immediately,
                 "only_add_to_queue": self.settings.only_add_to_queue,
+                "torrent_recovery_mode": self.settings.torrent_recovery_mode,
                 "confirm_delete": self.settings.confirm_delete,
                 "delete_files_too":self.settings.delete_files_too,
                 "torrent_keep_sharing": self.settings.torrent_keep_sharing,
@@ -6239,6 +6247,7 @@ impl App {
                 "global_limit_on" => bool_value.map(|n| { self.settings.global_limit_on = n; }),
                 "start_immediately" => bool_value.map(|n| { self.settings.start_immediately = n; }),
                 "only_add_to_queue" => bool_value.map(|n| { self.settings.only_add_to_queue = n; }),
+                "torrent_recovery_mode" if matches!(value,"off"|"ask"|"auto") => { self.settings.torrent_recovery_mode = value.into(); Some(()) },
                 "confirm_delete" => bool_value.map(|n| { self.settings.confirm_delete = n; }),
                 "torrent_keep_sharing" => bool_value.map(|n| { self.settings.torrent_keep_sharing = n; }),
                 "torrent_dht" => bool_value.map(|n| { self.settings.torrent_dht = n; }),
@@ -7590,6 +7599,58 @@ impl App {
     }
 
     /// Pull engine progress into the rows; open "Download complete" when one finishes.
+    /// Search after a failed non-resumable ordinary download only when the
+    /// user opted in. A unique candidate with at least two matching pieces is
+    /// still partial evidence, so automatic handoff also requires opt-in.
+    fn poll_automatic_torrent_recovery(&mut self) {
+        if !self.glass_owned() { return; }
+        let ids: Vec<u64> = self.auto_recovery_pending.iter().copied().collect();
+        for id in ids {
+            let result = self.glass_torrent_recovery.get(&id).and_then(|slot|slot.lock().ok().and_then(|guard|guard.as_ref().map(|report| match report {
+                Ok(report) if report.matches.len()==1 && report.matches[0].files.len()==1 && report.matches[0].files[0].evidence.matching.len()>=2 => {
+                    let candidate=&report.matches[0];Some((candidate.files[0].file_index,candidate.info_hash.clone()))
+                }
+                _ => None,
+            })));
+            let Some(selection)=result else {continue};
+            self.auto_recovery_pending.remove(&id);
+            let still_eligible=self.items.iter().any(|item|item.id==id && item.status==Status::Error && item.live.is_none() && !item.context.private)
+                && !self.stopped_by_hand.contains(&id)
+                && !queue::retry_pending_for(&self.queues,id,self.failures.get(&id).map_or(0,|(_,n)|*n));
+            if self.settings.torrent_recovery_mode=="auto" && still_eligible {
+                if let Some((file_index,info_hash))=selection {
+                    let payload=serde_json::json!({"candidate":0,"file_index":file_index,"info_hash":info_hash,"accept_partial_match":true});
+                    let cmd=ipc::Command{action:Some("glass-item".into()),category:Some("start-recovery-torrent".into()),ids:vec![id],queue:Some(payload.to_string()),silent:true,..Default::default()};
+                    let answer=self.glass_answer(&cmd).unwrap_or_default();
+                    if let Ok(value)=serde_json::from_str::<serde_json::Value>(&answer) && value["pending"]==true {
+                        if let Some(item)=self.items.iter_mut().find(|item|item.id==id) {item.note("Matching torrent found; preparing verified pieces for torrent recovery.");}
+                        self.dirty=true;
+                    }
+                }
+            }
+        }
+        if !matches!(self.settings.torrent_recovery_mode.as_str(),"ask"|"auto") ||
+            self.glass_torrent_recovery.len()>=8 || self.glass_torrent_recovery.values().any(|slot|slot.lock().map_or(true,|r|r.is_none())) {return;}
+        let candidate=self.items.iter().find(|item| {
+            item.status==Status::Error && item.live.is_none() && item.resumable==Some(false) && item.downloaded>0 &&
+            item.torrent.is_none() && item.direct_recovery.is_none() && item.video.is_none() && item.gallery.is_none() && item.remote.is_none() &&
+            !item.context.private && item.checksum.is_none() && !self.stopped_by_hand.contains(&item.id) &&
+            self.failures.contains_key(&item.id) && !self.auto_recovery_attempted.contains(&item.id) &&
+            !queue::retry_pending_for(&self.queues,item.id,self.failures.get(&item.id).map_or(0,|(_,n)|*n)) &&
+            mdm_engine::state::state_path(&item.dest).exists()
+        }).map(|item|item.id);
+        if let Some(id)=candidate {
+            let cmd=ipc::Command{action:Some("glass-item".into()),category:Some("find-recovery-torrents".into()),ids:vec![id],silent:true,..Default::default()};
+            let answer=self.glass_answer(&cmd).unwrap_or_default();
+            if serde_json::from_str::<serde_json::Value>(&answer).is_ok_and(|v|v["pending"]==true) {
+                self.auto_recovery_attempted.insert(id);
+                if self.settings.torrent_recovery_mode=="auto" {self.auto_recovery_pending.insert(id);}
+                if let Some(item)=self.items.iter_mut().find(|item|item.id==id) {item.note("Download cannot resume; searching Internet Archive for matching torrents.");}
+                self.dirty=true;
+            }
+        }
+    }
+
     fn poll(&mut self, ctx: &egui::Context) {
         self.poll_moves();
         self.poll_dragged_out();
@@ -7693,6 +7754,9 @@ impl App {
                 queue::requeue_failed(q, id);
             }
         }
+        // A failure is eligible only after the active queue has exhausted its
+        // retries. Opt-in is required because search discloses filename terms.
+        self.poll_automatic_torrent_recovery();
         for id in &finished {
             self.release_link(*id);
             self.failures.remove(id);

@@ -211,6 +211,9 @@ pub struct Settings {
     /// progress window opens when it starts. Off, it runs in the list (double-click opens it).
     pub show_progress: bool,
     pub only_add_to_queue: bool,
+    /// Off, search and ask, or search and continue after an unambiguous match.
+    /// Search sends filename terms to Internet Archive; continuing contacts peers.
+    pub torrent_recovery_mode: String,
     pub start_immediately: bool,
     pub queue_panel_later: bool,
     pub queue_panel_batch: bool,
@@ -470,6 +473,7 @@ impl Default for Settings {
             show_start_dialog: true,
             show_progress: true,
             only_add_to_queue: false,
+            torrent_recovery_mode: "off".into(),
             start_immediately: true,
             queue_panel_later: true,
             queue_panel_batch: true,

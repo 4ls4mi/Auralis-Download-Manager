@@ -643,7 +643,7 @@ async fn update_glass_setting(key: String, value: String) -> ApiResult<serde_jso
         "max_connections", "speed_limit_on", "speed_limit_kb",
         "global_limit_on", "global_limit_kb", "start_immediately",
         "only_add_to_queue", "confirm_delete", "torrent_keep_sharing",
-        "torrent_dht", "torrent_lsd", "proxy_from_browser",
+        "torrent_dht", "torrent_lsd", "torrent_recovery_mode", "proxy_from_browser",
         "capture_opened", "net_adapter", "show_complete", "show_progress",
         "advanced_integration", "double_click_open"
     ];
