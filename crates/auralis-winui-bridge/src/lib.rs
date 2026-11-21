@@ -171,7 +171,9 @@ fn update_preference(key: &str, value: &serde_json::Value, clear: bool) -> Resul
         return Err("Unsupported preference change.".into());
     }
     if ISOLATED_DATA.get().is_none() || !owned_backend() { return Err("The isolated downloader is not running.".into()); }
-    let payload=serde_json::json!({"key":key,"value":value,"clear":clear}).to_string();
+    let cleared=serde_json::json!("");
+    let effective_value=if clear { &cleared } else { value };
+    let payload=serde_json::json!({"key":key,"value":effective_value,"clear":clear}).to_string();
     let command=mdm_ipc::Command { action:Some("glass-original-setting".into()), queue:Some(payload), ..Default::default() };
     let raw=mdm_ipc::request_checked(&command).map_err(|e|e.to_string())?;
     let result:serde_json::Value=serde_json::from_str(&raw).map_err(|_|"Invalid preferences response")?;
@@ -377,6 +379,7 @@ mod tests {
         assert!(update_preference("duplicate_action", &serde_json::json!(4),false).is_err());
         assert!(update_preference("proxy_mode", &serde_json::json!(4),false).is_err());
         assert!(update_preference("proxy_host", &serde_json::json!("x".repeat(513)),false).is_err());
+        assert!(update_preference("proxy_host", &serde_json::json!("host"),true).is_err());
     }
     #[cfg(unix)]
     #[test]
@@ -437,7 +440,7 @@ mod tests {
         assert!(!fields.to_string().contains("example-secret"));
         assert!(update_preference("proxy_pass",&serde_json::json!(""),false).is_ok());
         assert!(dispatch(8).unwrap()["fields"].as_array().unwrap().iter().any(|field|field["key"]=="proxy_pass" && field["saved"]==true));
-        assert!(update_preference("proxy_pass",&serde_json::json!(""),true).is_ok());
+        assert!(update_preference("proxy_pass",&serde_json::json!("discard-this"),true).is_ok());
         assert!(dispatch(8).unwrap()["fields"].as_array().unwrap().iter().any(|field|field["key"]=="proxy_pass" && field["saved"]==false));
         assert!(update_setting("advanced_integration", "true").unwrap_err().contains("disabled"));
         update_setting("max_connections", "8").expect("update isolated connection limit");
