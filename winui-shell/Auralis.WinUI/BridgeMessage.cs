@@ -120,6 +120,15 @@ internal sealed record BridgeMessage(long Id, string Command, ulong DownloadId, 
                 throw new InvalidOperationException("Invalid speed limit request.");
             return new(id, command, itemId, null, false, Value: kb.ToString(System.Globalization.CultureInfo.InvariantCulture));
         }
+        if (command == "refresh_address")
+        {
+            if (!root.TryGetProperty("downloadId",out var item) || !item.TryGetUInt64(out ulong target) || target==0 ||
+                !root.TryGetProperty("value",out var value) || value.ValueKind!=JsonValueKind.String || value.GetString() is not string address ||
+                System.Text.Encoding.UTF8.GetByteCount(address)>8192 || !Uri.TryCreate(address,UriKind.Absolute,out var parsed) ||
+                parsed.Scheme is not ("http" or "https") || parsed.Host.Length==0)
+                throw new InvalidOperationException("Invalid download address.");
+            return new(id,command,target,null,false,Value:address);
+        }
         if (command == "checksum")
         {
             if (!root.TryGetProperty("downloadId",out var downloadId) || !downloadId.TryGetUInt64(out ulong target) || target==0 ||

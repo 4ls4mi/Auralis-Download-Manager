@@ -86,6 +86,15 @@ test('completed-file checksum checks use a bounded value and the download ID',as
  await assert.rejects(context.__TAURI_INTERNALS__.invoke('file_operation',{id:7,operation:'checksum',value:'x'.repeat(257)}),/unavailable/);
 });
 
+test('refreshing an address accepts only HTTP or HTTPS and preserves the download ID',async()=>{
+ let listener;const sent=[];
+ const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);
+ const pending=context.__TAURI_INTERNALS__.invoke('file_operation',{id:7,operation:'refresh-address',value:'https://example.test/new'});
+ assert.equal(sent[0].command,'refresh_address');assert.equal(sent[0].downloadId,7);
+ listener({data:{id:sent[0].id,ok:true,value:{ok:true}}});assert.equal((await pending).ok,true);
+ await assert.rejects(context.__TAURI_INTERNALS__.invoke('file_operation',{id:7,operation:'refresh-address',value:'file:///outside'}),/unavailable/);
+});
+
 test('multiple selected downloads preserve each start result',async()=>{
  let listener;const sent=[];
  const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);

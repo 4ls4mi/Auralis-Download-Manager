@@ -59,3 +59,29 @@ test('WinUI checksum window checks an available checksum for a completed downloa
   assert.equal(calls[0].value,'a'.repeat(64));assert.ok(calls.every(m=>m.downloadId===7));
  }finally{await browser.close();await server.close()}
 });
+
+test('WinUI refresh address tool forwards a replacement link for the selected download',{skip:!executable||!existsSync(executable)},async()=>{
+ const server=await createServer({configFile:false,root:fileURLToPath(new URL('..',import.meta.url)),server:{host:'127.0.0.1',port:0},logLevel:'silent'});await server.listen();
+ const browser=await chromium.launch({headless:true,executablePath:executable,args:['--no-sandbox']});
+ try{
+  const page=await browser.newPage();
+  await page.addInitScript(()=>{let listener;window.requests=[];window.chrome={webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:message=>{
+   window.requests.push(message);let value={applied:true};
+   if(message.command==='file_details')value={file:'test.zip',url:'https://example.test/old'};
+   else if(message.command==='refresh_address')value={ok:true};
+   else if(message.command==='window_is_maximized')value=false;
+   else if(message.command==='window_current_monitor')value=null;
+   else if(message.command==='window_outer_position')value={x:0,y:0};
+   else if(message.command==='window_outer_size')value={width:680,height:480};
+   queueMicrotask(()=>listener({data:{id:message.id,ok:true,value}}));
+  }}}});
+  await page.addInitScript({content:readFileSync(new URL('../../winui-shell/webview/sandbox-compat.js',import.meta.url),'utf8')});
+  await page.goto(server.resolvedUrls.local[0]+'?tool=refresh-address&id=7');
+  const input=page.getByLabel('New download URL');await input.waitFor();
+  await page.waitForFunction(()=>document.querySelector('input')?.value==='https://example.test/old');
+  await input.fill('https://example.test/new');await page.getByRole('button',{name:'Save',exact:true}).click();
+  await page.getByText('Download address updated. Existing resume data is preserved.').waitFor();
+  const request=await page.evaluate(()=>window.requests.find(m=>m.command==='refresh_address'));
+  assert.equal(request.downloadId,7);assert.equal(request.value,'https://example.test/new');
+ }finally{await browser.close();await server.close()}
+});

@@ -292,6 +292,33 @@ pub unsafe extern "C" fn auralis_bridge_checksum(id: u64, input: *const u8, len:
         checksum(id,expected)
     }))
 }
+fn refresh_address(id: u64, address: &str) -> Result<serde_json::Value, String> {
+    if id==0 || !owned_backend() { return Err("The test download is unavailable.".into()); }
+    let url=url::Url::parse(address).map_err(|_|"Enter a valid HTTP or HTTPS address.")?;
+    if address.len()>8192 || !matches!(url.scheme(),"http"|"https") || url.host_str().is_none() { return Err("Enter a valid HTTP or HTTPS address.".into()); }
+    let root=test_output_dir()?;
+    let command=mdm_ipc::Command { query:Some("list".into()), ..Default::default() };
+    let raw=mdm_ipc::request_checked(&command).map_err(|e|e.to_string())?;
+    let list:mdm_ipc::api::ListAnswer=serde_json::from_str(&raw).map_err(|_|"Invalid download list.")?;
+    let item=list.downloads.iter().find(|item|item.id==id).ok_or("The test download no longer exists.")?;
+    let destination=std::path::PathBuf::from(&item.path);
+    if destination.parent().is_none_or(|parent|!same_path(parent,&root)) { return Err("The download is outside the test folder.".into()); }
+    let command=mdm_ipc::Command { action:Some("glass-item".into()), category:Some("refresh-address".into()), ids:vec![id], queue:Some(url.to_string()), ..Default::default() };
+    let raw=mdm_ipc::request_checked(&command).map_err(|e|e.to_string())?;
+    let data:serde_json::Value=serde_json::from_str(&raw).map_err(|_|"Invalid address update response")?;
+    if data.get("error").is_some() { return Err("Stop this test download before updating its address.".into()); }
+    Ok(data)
+}
+/// # Safety
+/// `input` must point to `len` readable UTF-8 bytes for the duration of the call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn auralis_bridge_refresh_address(id: u64, input: *const u8, len: usize) -> *mut c_char {
+    encode(std::panic::catch_unwind(|| {
+        if input.is_null() || len==0 || len>8192 { return Err("Invalid address update request.".into()); }
+        let address=std::str::from_utf8(unsafe { std::slice::from_raw_parts(input,len) }).map_err(|_|"Invalid address.")?;
+        refresh_address(id,address)
+    }))
+}
 /// Returns details for one download; no file paths or operations are accepted from the caller.
 #[unsafe(no_mangle)]
 pub extern "C" fn auralis_bridge_file_details(id: u64) -> *mut c_char {
@@ -561,6 +588,8 @@ mod tests {
             thread::sleep(Duration::from_millis(100));
         }
         assert_eq!(std::fs::read(&destination).expect("read test download"),b"isolated WinUI test download");
+        assert!(refresh_address(id,"https://example.test/replacement").is_err(),"a completed download must not have its address changed");
+        assert!(refresh_address(u64::MAX,"file:///outside").is_err(),"non-HTTP replacement links must be rejected");
         assert_eq!(checksum(id,Some("6ac9dd29d34969b8e09a5f989251be3693e2b00cc5b437409e96f613b79a9695")).unwrap()["pending"],true);
         let checksum_deadline=Instant::now()+Duration::from_secs(10);
         loop {
