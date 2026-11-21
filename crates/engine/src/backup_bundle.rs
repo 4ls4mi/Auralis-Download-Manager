@@ -33,6 +33,17 @@ pub fn write_bundle_file(
     metadata: serde_json::Value,
     items: &[BackupItem<'_>],
 ) -> io::Result<()> {
+    write_bundle_file_with_progress(destination, metadata, items, |_| Ok(()))
+}
+
+/// Report archive bytes written; returning an error cancels the export and
+/// removes its staging file without publishing a partial archive.
+pub fn write_bundle_file_with_progress<F: FnMut(u64) -> io::Result<()>>(
+    destination: &Path,
+    metadata: serde_json::Value,
+    items: &[BackupItem<'_>],
+    mut progress: F,
+) -> io::Result<()> {
     let parent = destination
         .parent()
         .filter(|p| !p.as_os_str().is_empty())
@@ -60,21 +71,50 @@ pub fn write_bundle_file(
             Err(e) => return Err(e),
         }
     }
-    let (temporary_path, mut file) = temporary.ok_or_else(|| {
+    let (temporary_path, file) = temporary.ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::AlreadyExists,
             "could not reserve backup staging file",
         )
     })?;
     let result = (|| {
-        write_bundle(&mut file, metadata, items)?;
-        file.sync_all()?;
-        drop(file);
+        let mut writer = ProgressWriter {
+            file,
+            progress: &mut progress,
+            written: 0,
+        };
+        write_bundle(&mut writer, metadata, items)?;
+        writer.file.sync_all()?;
+        drop(writer);
         fs::hard_link(&temporary_path, destination)?;
         Ok(())
     })();
     let _ = fs::remove_file(&temporary_path);
     result
+}
+
+struct ProgressWriter<'a, F> {
+    file: File,
+    progress: &'a mut F,
+    written: u64,
+}
+impl<F: FnMut(u64) -> io::Result<()>> Write for ProgressWriter<'_, F> {
+    fn write(&mut self, data: &[u8]) -> io::Result<usize> {
+        let n = self.file.write(data)?;
+        self.written = self.written.saturating_add(n as u64);
+        if let Err(error) = (self.progress)(self.written) {
+            // write_all retries Interrupted, which would repeat bytes already written.
+            return Err(if error.kind() == io::ErrorKind::Interrupted {
+                io::Error::other(error)
+            } else {
+                error
+            });
+        }
+        Ok(n)
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        self.file.flush()
+    }
 }
 #[derive(Serialize, Deserialize)]
 struct Manifest {
@@ -302,11 +342,23 @@ mod tests {
         fs::write(&part, b"abcdefgh").unwrap();
         let url: url::Url = "https://example.org/file".parse().unwrap();
         let mut state = ResumeState::new(url.clone(), url, dest, 8, Default::default());
-        state.segments = vec![SavedSegment { start: 0, cursor: 4, end: 8 }];
-        state.block_hashes = vec![crate::recovery::hash_saved_block(&mut File::open(&part).unwrap(), 0, 4).unwrap()];
+        state.segments = vec![SavedSegment {
+            start: 0,
+            cursor: 4,
+            end: 8,
+        }];
+        state.block_hashes =
+            vec![crate::recovery::hash_saved_block(&mut File::open(&part).unwrap(), 0, 4).unwrap()];
         fs::write(&part, b"abXdxxxx").unwrap();
         let archive = dir.path().join("archive");
-        assert!(write_bundle_file(&archive, serde_json::Value::Null, &[BackupItem::Partial(&state)]).is_err());
+        assert!(
+            write_bundle_file(
+                &archive,
+                serde_json::Value::Null,
+                &[BackupItem::Partial(&state)]
+            )
+            .is_err()
+        );
         assert!(!archive.exists());
         assert_eq!(fs::read(&part).unwrap(), b"abXdxxxx");
     }
@@ -354,6 +406,66 @@ mod tests {
                 .to_string_lossy()
                 .starts_with(".auralis-backup-")
         }));
+    }
+    #[test]
+    fn cancellation_removes_temporary_archive_and_reports_progress() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("source");
+        fs::write(&source, vec![7u8; 200_000]).unwrap();
+        let target = dir.path().join("backup");
+        let mut last = 0;
+        let result = write_bundle_file_with_progress(
+            &target,
+            serde_json::Value::Null,
+            &[BackupItem::Completed(&source)],
+            |written| {
+                assert!(written >= last);
+                last = written;
+                if written > 65_536 {
+                    Err(io::Error::new(io::ErrorKind::Interrupted, "cancelled"))
+                } else {
+                    Ok(())
+                }
+            },
+        );
+        assert_eq!(result.unwrap_err().kind(), io::ErrorKind::Other);
+        assert!(last > 65_536);
+        assert!(!target.exists());
+        assert!(fs::read_dir(dir.path()).unwrap().all(|entry| {
+            !entry
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .starts_with(".auralis-backup-")
+        }));
+        assert_eq!(fs::metadata(source).unwrap().len(), 200_000);
+    }
+    #[test]
+    fn refuses_source_modified_during_export_even_if_size_is_unchanged() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("source");
+        fs::write(&source, vec![7u8; 200_000]).unwrap();
+        let target = dir.path().join("backup");
+        let mut changed = false;
+        let result = write_bundle_file_with_progress(
+            &target,
+            serde_json::Value::Null,
+            &[BackupItem::Completed(&source)],
+            |written| {
+                if written > 65_536 && !changed {
+                    fs::write(&source, vec![8u8; 200_000])?;
+                    let file = OpenOptions::new().write(true).open(&source)?;
+                    let old = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000_000);
+                    file.set_times(std::fs::FileTimes::new().set_modified(old))?;
+                    changed = true;
+                }
+                Ok(())
+            },
+        );
+        assert!(changed);
+        assert!(result.is_err());
+        assert!(!target.exists());
+        assert_eq!(fs::read(source).unwrap(), vec![8u8; 200_000]);
     }
     #[test]
     fn completed_and_partial_roundtrip_without_replacing_existing_data() {

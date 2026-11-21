@@ -1,6 +1,7 @@
 import {savePreferences,restorePreferences} from "./preferencesBackup";
 import { liquidMaterials } from "./LiquidIndicators";
 import {loadMaterials,materialId,materialPresets,extraMaterials,parseMaterial,MATERIALS_KEY} from "./customMaterials";
+import {loadThemes,parseTheme,paletteForTheme,themeId,THEMES_KEY,type ThemeFile,type ThemeSettings} from "./themeFiles";
 import { listen } from "@tauri-apps/api/event";
 import CrystalAccounts from "./CrystalAccounts";
 import CrystalHelpers from "./CrystalHelpers";
@@ -39,6 +40,8 @@ export default function CrystalSettings(){
   },[]);
   const [appearanceTab,setAppearanceTab]=useState("Appearance");
   const [customMaterials,setCustomMaterials]=useState(loadMaterials);
+  const [customThemes,setCustomThemes]=useState(loadThemes);
+  useEffect(()=>{const update=(e:StorageEvent)=>{if(!e.key||e.key===THEMES_KEY)setCustomThemes(loadThemes())};window.addEventListener('storage',update);return()=>window.removeEventListener('storage',update)},[]);
   useEffect(()=>{const update=(e:StorageEvent)=>{if(!e.key||e.key===MATERIALS_KEY)setCustomMaterials(loadMaterials())};window.addEventListener('storage',update);return()=>window.removeEventListener('storage',update)},[]);
   const [indicatorTab,setIndicatorTab]=useState("Progress");
   const [cfg,setCfg]=useState<EngineSettings|null>(null);
@@ -57,7 +60,22 @@ export default function CrystalSettings(){
   const adapterPicker=()=>cfg&&<label className="cg-field">Preferred network adapter<select value={cfg.net_adapter} disabled={busy||Boolean(adapterError)} onChange={e=>void change("net_adapter",e.target.value)}><option value="">Automatic — Windows chooses</option>{cfg.net_adapter&&!adapters.some(a=>a.name===cfg.net_adapter)&&<option value={cfg.net_adapter}>{cfg.net_adapter} (not connected)</option>}{adapters.map(a=><option key={a.name} value={a.name}>{a.name} {a.address?`— ${a.address}`:"(not connected)"}</option>)}</select><small>Choose Automatic unless you need to route downloads through a specific adapter or VPN. Downloads may stop if that adapter disconnects.</small>{adapterError&&<small>Unable to list adapters: {adapterError}</small>}</label>;
 
   const [connection,setConnection]=useState<{recently_connected:boolean;previously_connected:boolean}|null>(null);
-  const {appearance,set}=useCrystal();
+  const {appearance,theme,set}=useCrystal();
+  const applyTheme=(file:ThemeFile)=>{
+    const material=file.customMaterial;
+    if(material){const existing=loadMaterials();const sameName=existing.find(m=>materialId(m)===materialId(material));if(sameName&&JSON.stringify(sameName)!==JSON.stringify(material))throw Error('A different custom material already has this name. Rename customMaterial.name in the theme file.');const updated=[...existing.filter(m=>materialId(m)!==materialId(material)),material];if(updated.length>32)throw Error('A maximum of 32 custom materials is supported.');localStorage.setItem(MATERIALS_KEY,JSON.stringify(updated));setCustomMaterials(updated)}
+    set('material',material?materialId(material):file.material);
+    for(const [key,value] of Object.entries(file.settings)){set(key as keyof Appearance,value as Appearance[keyof Appearance])}
+    set('tintHue',themeHue(paletteForTheme(file.palette)));
+    set('theme',themeId(file.palette));
+  };
+  const exportTheme=async()=>{
+    const custom=customMaterials.find(m=>materialId(m)===appearance.material)??null;
+    const settingsKeys:(keyof ThemeSettings)[]=['tintStrength','fontFamily','fontSize','highContrast','uiScale','dim','blur','indicator','connectionIndicator','graphIndicator','progressMaterial','connectionMaterial','graphMaterial','progressShape','connectionShape','graphShape','trackFinish','trackColor','connectionTrackFinish','connectionTrackColor'];
+    const settings=Object.fromEntries(settingsKeys.map(key=>[key,appearance[key]]));
+    const data=parseTheme({format:'auralis-theme',version:1,palette:{name:theme.name,accent:theme.accent,secondary:theme.secondary,surface:theme.neutralTint??null,light:theme.light===true||theme.id==='white-frost'||theme.id==='white-pearl'},material:custom?'custom':appearance.material,customMaterial:custom,settings});
+    const file=await invoke<string|null>('export_theme_file',{contents:JSON.stringify(data,null,2)+'\n'});if(file)setNotice('Theme exported. Edit the JSON file and import it here.');
+  };
   const load=useCallback(async()=>{
     try{
       const [settings,data]=await Promise.all([
@@ -181,9 +199,10 @@ export default function CrystalSettings(){
         <nav className="cg-appearance-tabs" aria-label="Appearance sections">{["Appearance","Indicators","Typography"].map(name=><button key={name} className={appearanceTab===name?"selected":""} onClick={()=>setAppearanceTab(name)}>{name}</button>)}</nav>
         {appearanceTab==="Appearance"&&<>
         <h3>Color themes</h3>
-        <div className="cg-color-choices">{themes.map(t=><button key={t.id} className={appearance.theme===t.id?"selected":""}
-          onClick={()=>{set("theme",t.id);if(!t.neutralTint)set("tintHue",themeHue(t))}}><i style={{background:t.neutralTint?`linear-gradient(140deg,rgb(${t.neutralTint.join(',')}),${t.secondary})`:`linear-gradient(140deg,${t.accent},${t.secondary})`}}/>{t.name}
+        <div className="cg-color-choices">{[...themes,...customThemes.map(f=>paletteForTheme(f.palette))].map(t=><button key={t.id} className={appearance.theme===t.id?"selected":""}
+          onClick={()=>{const file=customThemes.find(f=>themeId(f.palette)===t.id);if(file){try{applyTheme(file)}catch(e){setError(String(e))}}else{set("theme",t.id);if(!t.neutralTint)set("tintHue",themeHue(t))}}}><i style={{background:t.neutralTint?`linear-gradient(140deg,rgb(${t.neutralTint.join(',')}),${t.secondary})`:`linear-gradient(140deg,${t.accent},${t.secondary})`}}/>{t.name}
         </button>)}</div>
+        <div className="cg-wall-choice"><button className="cg-btn" onClick={()=>{setError('');void exportTheme().catch(e=>setError(`Could not export theme: ${String(e)}`))}}>Export current theme…</button><label className="cg-btn cg-material-import">Import theme…<input type="file" accept=".json,application/json" onChange={async e=>{const file=e.currentTarget.files?.[0];e.currentTarget.value='';if(!file)return;setError('');try{if(file.size>32768)throw Error('Theme file exceeds 32 KB.');const value=parseTheme(JSON.parse(await file.text()));const updated=[...customThemes.filter(t=>themeId(t.palette)!==themeId(value.palette)),value];if(updated.length>32)throw Error('A maximum of 32 custom themes is supported.');applyTheme(value);localStorage.setItem(THEMES_KEY,JSON.stringify(updated));setCustomThemes(updated);setNotice(`Imported ${value.palette.name}.`)}catch(err){setError(`Could not import theme: ${String(err)}`)}}}/></label>{appearance.theme.startsWith('user-')&&<button className="cg-btn" onClick={()=>{const updated=customThemes.filter(t=>themeId(t.palette)!==appearance.theme);localStorage.setItem(THEMES_KEY,JSON.stringify(updated));setCustomThemes(updated);set('theme','silver')}}>Remove imported theme</button>}</div>
         <div className="cg-settings-fallback">Your color theme controls the surfaces, buttons and highlights. Indicator colors remain separately adjustable.</div>
         </>}
         {appearanceTab==="Appearance"&&<><h3>Surface material</h3>

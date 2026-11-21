@@ -79,6 +79,12 @@ pub(crate) fn prepare(
                     item.file_name
                 ));
             }
+            let size = std::fs::metadata(&item.dest)
+                .map_err(|e| e.to_string())?
+                .len();
+            if item.size.is_some_and(|expected| expected != size) {
+                return Err(format!("Completed file size changed: {}", item.file_name));
+            }
             Some(Content::Completed(item.dest.clone()))
         } else if has_state {
             let saved = ResumeState::load(&state_path)?;
@@ -129,6 +135,14 @@ pub(crate) fn prepare(
 }
 impl Snapshot {
     pub(crate) fn write(&self, destination: &Path) -> std::io::Result<()> {
+        self.write_with_progress(destination, |_| Ok(()))
+    }
+
+    pub(crate) fn write_with_progress<F: FnMut(u64) -> std::io::Result<()>>(
+        &self,
+        destination: &Path,
+        progress: F,
+    ) -> std::io::Result<()> {
         let items: Vec<_> = self
             .contents
             .iter()
@@ -137,7 +151,12 @@ impl Snapshot {
                 Content::Partial(state) => BackupItem::Partial(state),
             })
             .collect();
-        backup_bundle::write_bundle_file(destination, self.metadata.clone(), &items)
+        backup_bundle::write_bundle_file_with_progress(
+            destination,
+            self.metadata.clone(),
+            &items,
+            progress,
+        )
     }
 }
 
@@ -196,6 +215,11 @@ mod tests {
         let mut queue = Queue::new("main", false);
         queue.running = true;
         assert!(prepare(&[], &[queue], &Settings::default()).is_err());
+        fs::write(&path, b"short").unwrap();
+        let mut complete = item(&path);
+        complete.status = Status::Complete;
+        complete.size = Some(100);
+        assert!(prepare(&[complete], &[], &Settings::default()).is_err());
     }
     #[test]
     fn snapshots_saved_range_state_and_queued_items() {
@@ -348,6 +372,13 @@ pub(crate) fn validate_restore(
                 {
                     return Err("Saved download state does not match its record.".into());
                 }
+            } else {
+                let length = std::fs::metadata(&content.path)
+                    .map_err(|e| e.to_string())?
+                    .len();
+                if item.size.is_some_and(|size| size != length) {
+                    return Err("Completed file size does not match its record.".into());
+                }
             }
             Some(n)
         };
@@ -470,6 +501,17 @@ mod restore_tests {
         .unwrap();
         assert_eq!(restored.items[0].dest.file_name().unwrap(), "song.mp3");
         assert_eq!(fs::read(&restored.items[0].dest).unwrap(), b"music");
+        let existing = dir.path().join("existing");
+        fs::create_dir(&existing).unwrap();
+        fs::write(existing.join("keep"), b"original").unwrap();
+        assert!(
+            restore_to_directory(
+                &mut fs::File::open(dir.path().join("archive")).unwrap(),
+                &existing,
+            )
+            .is_err()
+        );
+        assert_eq!(fs::read(existing.join("keep")).unwrap(), b"original");
         bundle.metadata["downloads"][0]["item"]["file_name"] = json!("../evil");
         assert!(validate_restore(&bundle).is_err());
         bundle.metadata["downloads"][0]["item"]["file_name"] = json!("CON.txt");

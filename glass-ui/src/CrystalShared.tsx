@@ -3,6 +3,7 @@ import {LiquidProgress, LiquidChunk, isLiquidMaterial} from "./LiquidIndicators"
 import {ConnectionTubes} from "./ConnectionTubes";
 import {receivingTubeSlots} from "./tubeNetwork";
 import {loadMaterials,materialId,extraMaterials,materialPresets,materialBackdrop} from "./customMaterials";
+import {loadThemes,paletteForTheme} from "./themeFiles";
 import FrostedRibbon from "./FrostedRibbon";
 import FrostedLayers from "./FrostedLayers";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
@@ -37,7 +38,7 @@ export type Dashboard = {
   downloads: Download[]; speed: number; queues: Queue[];
   categories: { name: string; key: string }[]; free?: number | null
 };
-export type Theme = { id: string; name: string; accent: string; secondary: string; rgb: string; neutralTint?: [number,number,number] };
+export type Theme = { id: string; name: string; accent: string; secondary: string; rgb: string; neutralTint?: [number,number,number]; light?: boolean };
 export const themes: Theme[] = [
   { id: "plexo", name: "Crystal Teal", accent: "#0fe6d5", secondary: "#4b9cfc", rgb: "15,230,213" },
   { id: "ocean", name: "Glacier Blue", accent: "#4bb8fa", secondary: "#7c83f8", rgb: "75,184,250" },
@@ -126,7 +127,7 @@ export function CrystalProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(key + keys[name], String(value));
     setAppearance(prev => ({ ...prev, [name]: value }));
   };
-  const theme = themes.find(t => t.id === appearance.theme) ?? themes[0];
+  const theme = themes.find(t => t.id === appearance.theme) ?? loadThemes().map(t=>paletteForTheme(t.palette)).find(t=>t.id===appearance.theme) ?? themes[0];
   return <Context.Provider value={{ appearance, set, theme }}>{children}</Context.Provider>;
 }
 // Progress colors deliberately do NOT follow the selected theme.
@@ -353,9 +354,9 @@ export function CrystalWindow({ children, target = "main" }: {
     return()=>{active=false};
   }, [mode, appearance.material, surfaceStyle]);
   // White palettes need light surfaces and dark foregrounds in every material.
-  const effectiveLight = theme.id === "white-frost" || theme.id === "white-pearl";
-  const lightAccent = theme.id === "white-pearl" ? "#655643" : "#405b70";
-  const lightAccentRgb = theme.id === "white-pearl" ? "101,86,67" : "64,91,112";
+  const effectiveLight = theme.light === true || theme.id === "white-frost" || theme.id === "white-pearl";
+  const lightAccentRgb = theme.light ? theme.rgb.split(",").map(v=>Math.round(Number(v)*.36)).join(",") : theme.id === "white-pearl" ? "101,86,67" : "64,91,112";
+  const lightAccent = `rgb(${lightAccentRgb})`;
   const style = {
     "--accent": effectiveLight ? lightAccent : theme.accent,
     "--accent-secondary": theme.secondary,
@@ -384,7 +385,7 @@ export function CrystalWindow({ children, target = "main" }: {
     "--min-window-button": (30/Math.min(1,Math.max(.4,fit)))+"px",
     "--font-size": Math.max(Math.min(20,Math.max(12,appearance.fontSize)),12/Math.max(.4,fit))+"px"
   } as CSSProperties;
-  return <div className={`cg-window cg-mode-${mode} cg-material-${appearance.material} cg-surface-${surfaceStyle} cg-theme-${theme.id} ${customMaterial?`cg-custom-material cg-finish-${customMaterial.finish} cg-controls-${customMaterial.controls} cg-layout-${customMaterial.layout??'standard'} cg-text-${customMaterial.text??'crisp'}`:""} cg-progress-shape-${appearance.progressShape} cg-connection-shape-${appearance.connectionShape} ${maximized?"cg-maximized":""} ${tiled?"cg-tiled":""} ${effectiveLight?"cg-light":"cg-dark"} ${appearance.highContrast?"cg-high-contrast":""}`} style={style}>
+  return <div className={`cg-window cg-mode-${mode} cg-material-${appearance.material} cg-surface-${surfaceStyle} cg-theme-${theme.id} ${theme.light?"cg-custom-light":""} ${customMaterial?`cg-custom-material cg-finish-${customMaterial.finish} cg-controls-${customMaterial.controls} cg-layout-${customMaterial.layout??'standard'} cg-text-${customMaterial.text??'crisp'}`:""} cg-progress-shape-${appearance.progressShape} cg-connection-shape-${appearance.connectionShape} ${maximized?"cg-maximized":""} ${tiled?"cg-tiled":""} ${effectiveLight?"cg-light":"cg-dark"} ${appearance.highContrast?"cg-high-contrast":""}`} style={style}>
     {mode === "wallpaper" && <div className="cg-wallpaper">
       {video ? <video key={src} autoPlay loop muted playsInline src={src} /> :
         <div style={{ backgroundImage: `url("${src}")` }} />}

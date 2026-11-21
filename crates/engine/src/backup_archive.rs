@@ -99,7 +99,11 @@ pub(crate) fn write_ranges_with_manifest<W: Write>(
     let mut buffer = [0u8; BUFFER];
     for entry in entries {
         let mut source = File::open(&entry.path)?;
-        let original_size = source.metadata()?.len();
+        // A best-effort additional check; callers must still prevent writes,
+        // since a filesystem may not expose a precise modification timestamp.
+        let original_metadata = source.metadata()?;
+        let original_size = original_metadata.len();
+        let original_modified = original_metadata.modified().ok();
         if entry
             .offset
             .checked_add(entry.length)
@@ -120,8 +124,13 @@ pub(crate) fn write_ranges_with_manifest<W: Write>(
             hash.update(&buffer[..n]);
             left -= n as u64;
         }
-        if source.metadata()?.len() != original_size {
-            return Err(invalid("backup source changed size"));
+        let after = source.metadata()?;
+        if after.len() != original_size
+            || original_modified
+                .zip(after.modified().ok())
+                .is_some_and(|(before, after)| before != after)
+        {
+            return Err(invalid("backup source changed while it was being copied"));
         }
         out.write_all(&hash.finalize())?;
     }

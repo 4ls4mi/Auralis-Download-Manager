@@ -727,8 +727,8 @@
 .cg-window.cg-material-builtin-pearl-frost .cg-content{background:linear-gradient(160deg,#f6fdffb5,#deefff63 14%,transparent 40%),linear-gradient(135deg,var(--glass-tint),transparent 72%),rgba(var(--glass),var(--material-opacity))!important;box-shadow:inset 0 2px #ffffffd9,inset 0 -4px 12px #e4f8ff66!important}
 .cg-window.cg-material-builtin-pearl-frost .cg-glass{background:linear-gradient(150deg,#e4f5ff38,transparent 45%),rgba(var(--glass),.86)!important;border-color:#ebfaff8a!important;box-shadow:inset 0 1px #fff9,0 5px 16px #00101c50!important}
 /* Keep controls legible on light neutral glass while the outer surface stays tinted. */
-.cg-window:is(.cg-theme-white-frost,.cg-theme-white-pearl) :is(.cg-toolbar,.cg-sidebar,.cg-list-panel,.cg-settings-body,.cg-progress-section,.cg-mdm-details,.cg-footer){background-color:rgba(var(--glass),.90)!important}
-.cg-window:is(.cg-theme-white-frost,.cg-theme-white-pearl) .cg-fit-content :is(h1,h2,h3,h4,strong,p,small,label,button,span){text-shadow:0 1px 2px #00101f,0 0 3px #00101f}
+.cg-window:is(.cg-theme-white-frost,.cg-theme-white-pearl,.cg-custom-light) :is(.cg-toolbar,.cg-sidebar,.cg-list-panel,.cg-settings-body,.cg-progress-section,.cg-mdm-details,.cg-footer){background-color:rgba(var(--glass),.90)!important}
+.cg-window:is(.cg-theme-white-frost,.cg-theme-white-pearl,.cg-custom-light) .cg-fit-content :is(h1,h2,h3,h4,strong,p,small,label,button,span){text-shadow:0 1px 2px #00101f,0 0 3px #00101f}
 
 /* A restrained in-app cue remains visible regardless of desktop notification mode. */
 .cg-update-notice{border:1px solid var(--accent);border-radius:10px;margin:5px 8px;padding:8px 12px;background:linear-gradient(100deg,rgba(var(--accent-rgb),.24),var(--surface));box-shadow:inset 0 1px #ffffff45;animation:cg-update-attention 1.1s ease-out 2}
