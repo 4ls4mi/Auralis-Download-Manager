@@ -37,6 +37,15 @@ jobs:
           if ($LASTEXITCODE) { throw 'Interface dependencies failed to install.' }
           npm run build
           if ($LASTEXITCODE) { throw 'Interface preview assets failed to build.' }
+      - name: Exercise the hosted interface
+        shell: pwsh
+        run: |
+          $browser = Join-Path $env:ProgramFiles 'Google/Chrome/Application/chrome.exe'
+          if (!(Test-Path $browser)) { $browser = Join-Path ${env:ProgramFiles(x86)} 'Microsoft/Edge/Application/msedge.exe' }
+          if (!(Test-Path $browser)) { throw 'A Windows browser for interface checks was not found.' }
+          $env:AURALIS_TEST_BROWSER = $browser
+          node --test glass-ui/tests/winui-preview-ui.test.mjs glass-ui/tests/winui-sandbox-add.test.mjs glass-ui/tests/winui-progress-tray.test.mjs glass-ui/tests/winui-update-notification.test.mjs
+          if ($LASTEXITCODE) { throw 'WinUI hosted interface checks failed.' }
       - name: Test material mapping
         shell: pwsh
         run: |
@@ -61,6 +70,7 @@ jobs:
           $adapter = Get-ChildItem winui-shell/Auralis.WinUI/bin -Recurse -Filter winui-preview-compat.js | Select-Object -First 1
           if (!$adapter -or !(Test-Path (Join-Path $adapter.DirectoryName 'index.html'))) { throw 'WinUI interface preview assets were not bundled.' }
           if (!(Test-Path (Join-Path $adapter.DirectoryName 'winui-sandbox-compat.js'))) { throw 'Isolated interface adapter was not bundled.' }
+          if (!(Test-Path (Join-Path $adapter.DirectoryName 'winui-package.json'))) { throw 'WinUI version metadata was not bundled.' }
           $bridge = Get-ChildItem winui-shell/Auralis.WinUI/bin -Recurse -Filter auralis_winui_bridge.dll | Select-Object -First 1
           if (!$bridge) { throw 'Isolated downloader bridge was not bundled.' }
       - name: Test embedded downloader bridge
@@ -77,7 +87,7 @@ jobs:
           $executables = @(Get-ChildItem winui-shell/Auralis.WinUI/bin -Recurse -Filter Auralis.WinUI.exe)
           if ($executables.Count -ne 1) { throw "Expected one WinUI executable; found $($executables.Count)." }
           $output = $executables[0].DirectoryName
-          foreach ($required in @('auralis_winui_bridge.dll', 'interface/index.html', 'interface/winui-preview-compat.js', 'interface/winui-sandbox-compat.js')) {
+          foreach ($required in @('auralis_winui_bridge.dll', 'interface/index.html', 'interface/winui-preview-compat.js', 'interface/winui-sandbox-compat.js', 'interface/winui-package.json')) {
             if (!(Test-Path (Join-Path $output $required))) { throw "Missing development preview file: $required" }
           }
           New-Item -ItemType Directory -Force -Path winui-preview-artifact | Out-Null

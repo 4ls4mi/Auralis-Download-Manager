@@ -118,3 +118,16 @@ test('automatic progress-window preference is forwarded to the native host',asyn
  const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);
  const pending=context.__TAURI_INTERNALS__.invoke('window_preferences',{autoProgress:false});assert.equal(sent[0].command,'progress_preferences');assert.equal(sent[0].enabled,false);listener({data:{id:sent[0].id,ok:true,value:null}});assert.equal(await pending,null);
 });
+
+test('the development shell requests a release check through the validated host',async()=>{
+ let listener;const sent=[];
+ const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);
+ const pending=context.__TAURI_INTERNALS__.invoke('glass_update_check');assert.equal(sent[0].command,'update_check');listener({data:{id:sent[0].id,ok:true,value:{state:'latest'}}});assert.equal((await pending).state,'latest');
+ await assert.rejects(context.__TAURI_INTERNALS__.invoke('glass_update_install'),/unavailable/);
+});
+
+test('the Windows notification is requested only for the chosen update presentation',async()=>{
+ let listener;const sent=[];
+ const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);
+ assert.equal(sent.length,0);const pending=context.__AURALIS_WINUI__.notifyUpdate('0.3.49');assert.equal(sent[0].command,'notify_update');assert.equal(sent[0].version,'0.3.49');listener({data:{id:sent[0].id,ok:true,value:{shown:true}}});assert.equal((await pending).shown,true);
+});

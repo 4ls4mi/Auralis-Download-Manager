@@ -40,10 +40,10 @@
     if(command==='update_glass_setting' && ['show_complete','show_progress','confirm_delete','double_click_open','max_connections','speed_limit_on','speed_limit_kb','global_limit_on','global_limit_kb','start_immediately','only_add_to_queue'].includes(args.key) && typeof args.value==='string') return request(command,{key:args.key,value:args.value});
     // Disk deletion stays disabled in the isolated test host. The default is already false.
     if(command==='glass_tool' && args.action==='original-setting' && args.payload?.key==='delete_files_too' && args.payload.value===false) return {ok:true};
-    if(command==='glass_update_check')return {state:'unavailable'};
+    if(command==='glass_update_check')return request('update_check');
     if(command==='backup_prompt_enabled')return false;
     if(command==='browser_connection_status')return {recently_connected:false};
-    if(command==='plugin:app|version')return 'visual preview';
+    if(command==='plugin:app|version')return request('app_version');
     if(command==='plugin:event|listen')return 1;
     if(command==='plugin:event|unlisten'||command==='set_material_window_shape'||command==='plugin:window|set_effects')return null;
     if(command==='plugin:window|start_dragging')return request('window_start_drag');
@@ -51,7 +51,7 @@
     if(Object.hasOwn(windowCommands,command))return request(windowCommands[command]);
     throw new Error('This action is unavailable in the isolated visual preview.');
   };
-  globalThis.__AURALIS_WINUI__={setAppearance:appearance,isolatedDownloads:true};
+  globalThis.__AURALIS_WINUI__={setAppearance:appearance,isolatedDownloads:true,notifyUpdate:version=>request('notify_update',{version})};
   globalThis.__TAURI_EVENT_PLUGIN_INTERNALS__={unregisterListener(){}};
   globalThis.__TAURI_INTERNALS__={invoke,transformCallback(){return 1},unregisterCallback(){},metadata:{currentWindow:{label:'main'},currentWebview:{label:'main'}},convertFileSrc(){return 'data:,'}};
 })();

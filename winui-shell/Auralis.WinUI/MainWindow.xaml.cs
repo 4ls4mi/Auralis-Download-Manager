@@ -10,8 +10,11 @@ namespace Auralis.WinUI;
 
 public sealed partial class MainWindow : Window
 {
-    public MainWindow()
+    public MainWindow() : this(null) { }
+
+    internal MainWindow(NativeUpdateNotifications? notifications)
     {
+        _notifications=notifications;
         InitializeComponent();
         AppWindow.Closing += OnWindowClosing;
         AppWindow.Changed += (_, _) => UpdatePreviewLayout();
@@ -25,16 +28,25 @@ public sealed partial class MainWindow : Window
         {
             _tray=new NativeTrayIcon(this,ShowMain,ExitFromTray,menuAction:HandleTrayAction,menuEnabled:TrayActionEnabled);
             KeepInTray.IsEnabled=true;
+            StartMinimized.IsEnabled=true;
         }
         catch (Exception error)
         {
             TrayStatus.Text=$"Notification-area icon unavailable: {error.Message}";
         }
+        RestorePlacement();
+        try { LaunchWithWindows.IsChecked=StartupRegistration.IsEnabled(); }
+        catch (Exception error) { LaunchWithWindows.IsEnabled=false; TrayStatus.Text=$"Could not read test startup settings: {error.Message}"; }
+        _placementReady=true;
+        RememberNormalBounds();
         UpdatePreviewLayout();
     }
 
     private bool _previewReady, _sandboxReady, _sandboxRequested, _closing, _allowClose, _openingSandbox, _openingPreview;
     private readonly DownloaderLifetime _sandbox = new();
+    private readonly NativeUpdateNotifications? _notifications;
+    private readonly UpdateService _updates = new();
+    private readonly CancellationTokenSource _updatesCancellation = new();
     private NativeTrayIcon? _tray, _progressTray;
     private readonly HashSet<ulong> _hiddenProgress = new();
     private readonly DispatcherTimer _progressTrayTimer = new() { Interval=TimeSpan.FromSeconds(2) };
@@ -43,6 +55,9 @@ public sealed partial class MainWindow : Window
     private readonly DownloadTransitionTracker _transitionTracker = new();
     private bool _refreshingDownloads, _autoProgress=true;
     private int _viewRequest;
+    private bool _placementReady, _changingStartup, _notificationRequested;
+    private Task? _sandboxStartTask;
+    private WindowBounds? _normalBounds;
     private CoreWebView2Environment? _previewEnvironment, _sandboxEnvironment;
     private sealed class AuxiliaryWindowState
     {
@@ -60,6 +75,81 @@ public sealed partial class MainWindow : Window
         var compact=PreviewLayoutPolicy.UseCompactLayout(maximized,AppWindow.Size.Width,area?.WorkArea.Width ?? 0);
         Root.Padding=new Thickness(compact ? 6 : 24);
         Root.RowSpacing=compact ? 6 : 16;
+        RememberNormalBounds();
+    }
+
+    private static string PlacementPath()
+    {
+        string local=Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        if (string.IsNullOrWhiteSpace(local) || !Path.IsPathFullyQualified(local)) throw new InvalidOperationException("The local application data folder is unavailable.");
+        string root=Path.Combine(local,"Auralis WinUI Development");
+        LocalWebviewBridge.EnsureDevelopmentDirectory(root);
+        return Path.Combine(root,"window-placement.json");
+    }
+
+    private void RestorePlacement()
+    {
+        try
+        {
+            var state=WindowPlacementStore.Load(PlacementPath());
+            if (state is null) return;
+            KeepInTray.IsChecked=state.KeepInTray;
+            StartMinimized.IsChecked=state.StartMinimized;
+            var saved=new WindowBounds(state.X,state.Y,state.Width,state.Height);
+            var area=DisplayArea.GetFromRect(new Windows.Graphics.RectInt32(state.X,state.Y,state.Width,state.Height),DisplayAreaFallback.Nearest);
+            if (area is not null)
+            {
+                var work=area.WorkArea;
+                saved=WindowPlacementPolicy.Fit(saved,new(work.X,work.Y,work.Width,work.Height));
+            }
+            _normalBounds=saved;
+            AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(saved.X,saved.Y,saved.Width,saved.Height));
+            if (state.Maximized && AppWindow.Presenter is OverlappedPresenter presenter) presenter.Maximize();
+        }
+        catch (Exception error) { TrayStatus.Text=$"Could not restore test window placement: {error.Message}"; }
+    }
+
+    private void RememberNormalBounds()
+    {
+        if (!_placementReady || _closing || AppWindow.Presenter is not OverlappedPresenter presenter || presenter.State!=OverlappedPresenterState.Restored) return;
+        var position=AppWindow.Position;
+        var size=AppWindow.Size;
+        if (size.Width>=320 && size.Height>=120) _normalBounds=new(position.X,position.Y,size.Width,size.Height);
+    }
+
+    private void SavePlacement()
+    {
+        if (_normalBounds is not WindowBounds bounds) return;
+        bool maximized=AppWindow.Presenter is OverlappedPresenter presenter && presenter.State==OverlappedPresenterState.Maximized;
+        try { WindowPlacementStore.Save(PlacementPath(),new(1,bounds.X,bounds.Y,bounds.Width,bounds.Height,maximized,KeepInTray.IsChecked==true,StartMinimized.IsChecked==true)); }
+        catch (Exception error) { TrayStatus.Text=$"Could not save test window placement: {error.Message}"; }
+    }
+
+    internal async Task ApplyStartupPreferencesAsync(bool launchedAtStartup)
+    {
+        bool minimize=StartMinimized.IsChecked==true && _tray?.IsAvailable==true;
+        if (!launchedAtStartup && !minimize) return;
+        await EnsureSandboxAsync();
+        if (minimize && !_notificationRequested && _sandboxReady && !_closing && _tray?.IsAvailable==true) AppWindow.Hide();
+    }
+
+    private void OnStartupRegistrationChanged(object sender, RoutedEventArgs args)
+    {
+        if (!_placementReady || _changingStartup) return;
+        bool requested=LaunchWithWindows.IsChecked==true;
+        try { StartupRegistration.SetEnabled(requested); }
+        catch (Exception error)
+        {
+            _changingStartup=true;
+            try { LaunchWithWindows.IsChecked=!requested; }
+            finally { _changingStartup=false; }
+            TrayStatus.Text=$"Could not update test startup settings: {error.Message}";
+        }
+    }
+
+    private void OnPlacementPreferenceChanged(object sender, RoutedEventArgs args)
+    {
+        if (_placementReady) SavePlacement();
     }
 
     private async void OnWindowClosing(Microsoft.UI.Windowing.AppWindow sender, Microsoft.UI.Windowing.AppWindowClosingEventArgs args)
@@ -76,15 +166,20 @@ public sealed partial class MainWindow : Window
         if (_closing) return;
         if (WindowClosePolicy.ShouldHide(KeepInTray.IsChecked==true,_tray?.IsAvailable==true,forceExit))
         {
+            SavePlacement();
             AppWindow.Hide();
             return;
         }
+        SavePlacement();
         _closing=true;
         CloseAuxiliaryWindows();
         try
         {
             if (_sandboxRequested) await _sandbox.StopAsync();
             _tray?.Dispose();
+            _updatesCancellation.Cancel();
+            _updates.Dispose();
+            _notifications?.Dispose();
             _allowClose=true;
             Close();
         }
@@ -147,7 +242,15 @@ public sealed partial class MainWindow : Window
 
     private async void ExitFromTray() => await RequestCloseAsync(forceExit:true);
 
-    private async void OnSandboxInterface(object sender, RoutedEventArgs args)
+    private async void OnSandboxInterface(object sender, RoutedEventArgs args) => await EnsureSandboxAsync();
+
+    private Task EnsureSandboxAsync()
+    {
+        if (_sandboxStartTask is { IsCompleted:false }) return _sandboxStartTask;
+        return _sandboxStartTask=OpenSandboxAsync();
+    }
+
+    private async Task OpenSandboxAsync()
     {
         if (_openingSandbox || _closing) return;
         _openingSandbox=true;
@@ -159,7 +262,7 @@ public sealed partial class MainWindow : Window
             if (_closing || request != _viewRequest) return;
             if (!_sandboxReady)
             {
-                _sandboxEnvironment=await LocalWebviewBridge.AttachPreviewAsync(SandboxView,this,Path.Combine(AppContext.BaseDirectory,"interface"),ApplyNativeAppearance,ApplyWindowCommand, message => OpenAuxiliaryAsync(message, true), message => ExportAppearanceAsync(this,message),OpenTestFileAsync,ProgressTrayCommandAsync,sandbox:true);
+                _sandboxEnvironment=await LocalWebviewBridge.AttachPreviewAsync(SandboxView,this,Path.Combine(AppContext.BaseDirectory,"interface"),ApplyNativeAppearance,ApplyWindowCommand, message => OpenAuxiliaryAsync(message, true), message => ExportAppearanceAsync(this,message),OpenTestFileAsync,ProgressTrayCommandAsync,UpdateCommandAsync,sandbox:true);
                 _sandboxReady=true;
                 await RefreshDownloadTransitionsAsync();
                 if (!_closing) _downloadMonitor.Start();
@@ -209,7 +312,7 @@ public sealed partial class MainWindow : Window
         {
             if (!_previewReady)
             {
-                _previewEnvironment=await LocalWebviewBridge.AttachPreviewAsync(InterfaceView,this,Path.Combine(AppContext.BaseDirectory,"interface"),ApplyNativeAppearance,ApplyWindowCommand, message => OpenAuxiliaryAsync(message, false), message => ExportAppearanceAsync(this,message),OpenTestFileAsync,ProgressTrayCommandAsync);
+                _previewEnvironment=await LocalWebviewBridge.AttachPreviewAsync(InterfaceView,this,Path.Combine(AppContext.BaseDirectory,"interface"),ApplyNativeAppearance,ApplyWindowCommand, message => OpenAuxiliaryAsync(message, false), message => ExportAppearanceAsync(this,message),OpenTestFileAsync,ProgressTrayCommandAsync,UpdateCommandAsync);
                 _previewReady=true;
             }
             if (_closing || request != _viewRequest) return;
@@ -229,6 +332,49 @@ public sealed partial class MainWindow : Window
             BackdropStatus.Text=$"Interface preview unavailable: {error.Message}";
         }
         finally { _openingPreview=false; }
+    }
+
+    private static async Task<string> InterfaceVersionAsync()
+    {
+        string path=Path.Combine(AppContext.BaseDirectory,"interface","winui-package.json");
+        using var package=JsonDocument.Parse(await File.ReadAllTextAsync(path));
+        string version=package.RootElement.GetProperty("version").GetString() ?? "";
+        if (!UpdatePolicy.TryVersion(version,out _)) throw new InvalidOperationException("The preview version is unavailable.");
+        return version;
+    }
+
+    private async Task<JsonElement> UpdateCommandAsync(BridgeMessage message)
+    {
+        string version=await InterfaceVersionAsync();
+        if (message.Command=="app_version") return JsonSerializer.SerializeToElement(version);
+        if (message.Command=="notify_update")
+        {
+            if (message.Value is null || !await _updates.IsCurrentAsync(message.Value,_updatesCancellation.Token))
+                throw new InvalidOperationException("The update is no longer current.");
+            (_notifications ?? throw new InvalidOperationException("Windows notifications are unavailable.")).Show(message.Value);
+            return JsonSerializer.SerializeToElement(new { shown=true });
+        }
+        if (message.Command!="update_check") throw new InvalidOperationException("Unsupported update request.");
+        var candidate=await _updates.CheckAsync(version,_updatesCancellation.Token);
+        return JsonSerializer.SerializeToElement(new {
+            state=candidate is null ? "latest" : "available",
+            version=candidate?.Version,
+            notes=candidate?.Notes
+        });
+    }
+
+    internal async void ShowUpdateFromNotification()
+    {
+        if (_closing) return;
+        _notificationRequested=true;
+        try
+        {
+            ShowMain();
+            if (!_sandboxReady) await EnsureSandboxAsync();
+            if (_sandboxReady && !_closing)
+                await OpenAuxiliaryAsync(new BridgeMessage(1,"open_glass_window",0,"/?tool=update-notice",false,Label:"tool-update-notice",Width:680,Height:520),true);
+        }
+        catch (Exception error) { TrayStatus.Text=$"Could not open the update notice: {error.Message}"; }
     }
 
     private static async Task<JsonElement> OpenTestFileAsync(BridgeMessage message)
@@ -267,7 +413,10 @@ public sealed partial class MainWindow : Window
 
     private void CloseAuxiliaryWindows()
     {
-        foreach (var state in _auxiliaryWindows.Values.ToArray()) state.Window.Close();
+        foreach (var state in _auxiliaryWindows.Values.ToArray())
+        {
+            try { state.Window.Close(); } catch (Exception) { /* A window may already be closing. */ }
+        }
         _auxiliaryWindows.Clear();
         _hiddenProgress.Clear();
         _downloadMonitor.Stop();
@@ -288,7 +437,7 @@ public sealed partial class MainWindow : Window
         {
             bool routeChanged=existing.Route!=message.Url;
             existing.Route=message.Url;
-            if (routeChanged && existing.Ready) existing.View.CoreWebView2.Navigate(BridgeMessage.TrustedOrigin + existing.Route);
+            if (routeChanged && existing.Ready) existing.View.CoreWebView2.Navigate(WindowRoutePolicy.InterfaceUrl(existing.Route));
             existing.Window.AppWindow.Show();
             if (existing.Window.AppWindow.Presenter is OverlappedPresenter presenter && presenter.State==OverlappedPresenterState.Minimized) presenter.Restore();
             existing.Window.Activate();
@@ -331,10 +480,10 @@ public sealed partial class MainWindow : Window
         {
             await LocalWebviewBridge.AttachPreviewAsync(view,child,Path.Combine(AppContext.BaseDirectory,"interface"),
                 appearance => { ApplyAppearance(child,root,appearance); }, message => ApplyWindowCommand(child,message),
-                next => OpenAuxiliaryAsync(next,sandbox), message => ExportAppearanceAsync(child,message),OpenTestFileAsync,ProgressTrayCommandAsync,sandbox,environment);
+                next => OpenAuxiliaryAsync(next,sandbox), message => ExportAppearanceAsync(child,message),OpenTestFileAsync,ProgressTrayCommandAsync,UpdateCommandAsync,sandbox,environment);
             if (_closing || !_auxiliaryWindows.TryGetValue(key,out var current) || !ReferenceEquals(current,state)) throw new InvalidOperationException("The preview window was closed.");
             state.Ready=true;
-            view.CoreWebView2.Navigate(BridgeMessage.TrustedOrigin + state.Route);
+            view.CoreWebView2.Navigate(WindowRoutePolicy.InterfaceUrl(state.Route));
             return JsonSerializer.SerializeToElement(new { opened=true });
         }
         catch
@@ -491,6 +640,7 @@ public sealed partial class MainWindow : Window
         {
             case "window_hide":
                 if (!ReferenceEquals(window,this) || _tray?.IsAvailable!=true) throw new InvalidOperationException("The notification area is unavailable for this window.");
+                SavePlacement();
                 AppWindow.Hide();
                 break;
             case "window_start_drag": NativeWindowDrag.Start(window,null); break;

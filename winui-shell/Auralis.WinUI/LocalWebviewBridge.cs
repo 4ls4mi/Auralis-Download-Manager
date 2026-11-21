@@ -16,7 +16,7 @@ internal static class LocalWebviewBridge
 
     /// Isolated WebView profiles keep sample and test interfaces separate from
     /// installed settings and downloads; auxiliary views share their parent profile.
-    internal static async Task<CoreWebView2Environment> AttachPreviewAsync(WebView2 view, Microsoft.UI.Xaml.Window owner, string assetDirectory, Action<NativeAppearance> applyAppearance, Func<BridgeMessage, JsonElement> windowCommand, Func<BridgeMessage, Task<JsonElement>> openWindow, Func<BridgeMessage, Task<JsonElement>> exportFile, Func<BridgeMessage, Task<JsonElement>> openTestFile, Func<BridgeMessage, Task<JsonElement>> progressTray, bool sandbox=false, CoreWebView2Environment? sharedEnvironment=null)
+    internal static async Task<CoreWebView2Environment> AttachPreviewAsync(WebView2 view, Microsoft.UI.Xaml.Window owner, string assetDirectory, Action<NativeAppearance> applyAppearance, Func<BridgeMessage, JsonElement> windowCommand, Func<BridgeMessage, Task<JsonElement>> openWindow, Func<BridgeMessage, Task<JsonElement>> exportFile, Func<BridgeMessage, Task<JsonElement>> openTestFile, Func<BridgeMessage, Task<JsonElement>> progressTray, Func<BridgeMessage, Task<JsonElement>> updateCommand, bool sandbox=false, CoreWebView2Environment? sharedEnvironment=null)
     {
         if (!Directory.Exists(assetDirectory)) throw new DirectoryNotFoundException("Build the local interface preview assets first.");
         var adapterPath=Path.Combine(assetDirectory,sandbox?"winui-sandbox-compat.js":"winui-preview-compat.js");
@@ -51,10 +51,13 @@ internal static class LocalWebviewBridge
         owner.Closed += (_,_) => appWindow.Changed -= changed;
         core.WebMessageReceived+=async (_,args)=>{
             long? id=null;
+            string? command=null;
             try {
-                var message=BridgeMessage.Parse(args.Source,args.WebMessageAsJson);id=message.Id;
+                var message=BridgeMessage.Parse(args.Source,args.WebMessageAsJson);id=message.Id;command=message.Command;
                 var value=message.Appearance is not null
                     ? ApplyAppearance(message.Appearance,applyAppearance)
+                    : (message.Command == "app_version" || sandbox && (message.Command is "update_check" or "notify_update"))
+                        ? await updateCommand(message)
                     : message.Command == "clipboard_text"
                         ? await ReadClipboardAsync()
                     : message.Command is "export_theme_file" or "export_material_file"
@@ -72,13 +75,14 @@ internal static class LocalWebviewBridge
                         : throw new InvalidOperationException("This isolated host does not support that command.");
                 core.PostWebMessageAsJson(JsonSerializer.Serialize(new {id,ok=true,value}));
             } catch(Exception) {
-                if(id is not null)core.PostWebMessageAsJson(JsonSerializer.Serialize(new {id,ok=false,error="The isolated request failed."}));
+                string error=command=="update_check" ? "The update check is unavailable. Try again later." : "The isolated request failed.";
+                if(id is not null) { try { core.PostWebMessageAsJson(JsonSerializer.Serialize(new {id,ok=false,error})); } catch (Exception) { } }
             }
         };
         return environment;
     }
 
-    private static void EnsureDevelopmentDirectory(string path)
+    internal static void EnsureDevelopmentDirectory(string path)
     {
         // Do not follow a junction into an installed app profile.
         if (Directory.Exists(path) && (File.GetAttributes(path) & FileAttributes.ReparsePoint)!=0)

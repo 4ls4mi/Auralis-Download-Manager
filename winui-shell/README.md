@@ -21,7 +21,8 @@ development profile. HTTP and HTTPS test downloads use its development downloads
 folder; the test interface supports adding URLs, start, pause, queue actions,
 removing list entries, per-file speed limits, and opening test files or their folder.
 Removing a list entry keeps the file; file-opening requests are restricted to the
-isolated downloads directory. Closing the window stops the test engine; this
+isolated downloads directory. The preview remembers its window position and can
+start its test downloader minimized when a tray icon is available. Closing the window stops the test engine; this
 mode does not use the installed app's data. Windows validation is still needed.
 
 Test files remain in the development profile; this preview does not import or alter
@@ -31,9 +32,12 @@ The existing Auralis app, Rust downloader, browser integration and release
 installer are unchanged by this prototype. A narrow Rust bridge for the embedded downloader, its list and visual state,
 single-download start/pause, add-link and a restricted set of settings controls is under development in `crates/auralis-winui-bridge`.
 The sample preview does not load it or touch the user’s data. Preview windows share their isolated appearance settings and close with the main window.
-The replacement still needs a production connection to the real interface, the remaining
-secure bridge operations, tray and production lifecycle, settings and theme migration, update
-and installer integration, accessibility, and end-to-end Windows tests before
+The preview can check the fixed Auralis release feeds and show the selected in-app,
+Windows notification, or details presentation. It cannot install an update over the released app.
+The download-verification code remains under development. The replacement
+still needs a production connection to the real interface, the remaining secure bridge operations,
+production tray and lifecycle, settings and theme migration, update and installer integration,
+accessibility, and end-to-end Windows tests before
 it can replace the current shell.
 
 To build on Windows x64 with .NET 8, Visual Studio MSBuild and the Windows App SDK prerequisites:

@@ -12,6 +12,42 @@ bool invalidDirectionRejected=false;
 try { WindowDragPolicy.ResizeEdge("unexpected"); } catch (InvalidOperationException) { invalidDirectionRejected=true; }
 if (!invalidDirectionRejected) throw new Exception("Invalid resize direction accepted.");
 
+string checksum=new string('a',64);
+using var releaseJson=System.Text.Json.JsonDocument.Parse("""[{"tag_name":"v0.3.49","body":"Changes","assets":[{"name":"Auralis.Download.Manager_0.3.49_x64-setup.exe","browser_download_url":"https://github.com/4ls4mi/Auralis-Download-Manager/releases/download/v0.3.49/Auralis.Download.Manager_0.3.49_x64-setup.exe","digest":"sha256:CHECKSUM","size":123}]}]""".Replace("CHECKSUM",checksum));
+var candidate=UpdatePolicy.Select(releaseJson.RootElement,"0.3.48");
+if (candidate?.Version!="0.3.49" || candidate.Sha256!=checksum || UpdatePolicy.Select(releaseJson.RootElement,"0.3.49") is not null) throw new Exception("Update selection must only accept a newer verified Auralis installer.");
+using var badReleaseJson=System.Text.Json.JsonDocument.Parse(releaseJson.RootElement.GetRawText().Replace("github.com/4ls4mi/", "evil.example/4ls4mi/"));
+bool invalidReleaseRejected=false;
+try { UpdatePolicy.Select(badReleaseJson.RootElement,"0.3.48"); } catch (InvalidOperationException) { invalidReleaseRejected=true; }
+if (!invalidReleaseRejected) throw new Exception("An installer outside the Auralis release repository was accepted.");
+
+byte[] updateBytes=System.Text.Encoding.UTF8.GetBytes("verified installer content");
+string updateHash=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(updateBytes)).ToLowerInvariant();
+if (!await UpdateVerifier.VerifyAsync(new MemoryStream(updateBytes),updateBytes.Length,updateHash,CancellationToken.None) ||
+    await UpdateVerifier.VerifyAsync(new MemoryStream(updateBytes),updateBytes.Length,new string('0',64),CancellationToken.None) ||
+    await UpdateVerifier.VerifyAsync(new MemoryStream(updateBytes),updateBytes.Length+1,updateHash,CancellationToken.None))
+    throw new Exception("Update verification must reject tampered or incomplete installers.");
+
+string executable=Path.GetFullPath(Path.Combine(Path.GetTempPath(),"Auralis.WinUI.exe"));
+string startup=StartupPolicy.Command(executable);
+if (!StartupPolicy.Owns(startup,executable) || StartupPolicy.Owns(startup+" --extra",executable)) throw new Exception("Startup registration ownership must match the exact preview command.");
+bool invalidStartupRejected=false;
+try { StartupPolicy.Command(Path.Combine(Path.GetTempPath(),"other.exe")); } catch (ArgumentException) { invalidStartupRejected=true; }
+if (!invalidStartupRejected) throw new Exception("Invalid preview startup executable accepted.");
+
+var placement=new WindowPlacement(1,3000,100,1000,700,false,true,true);
+if (!WindowPlacementPolicy.Valid(placement) || WindowPlacementPolicy.Valid(placement with { Version=2 })) throw new Exception("Window placement must be versioned and validated.");
+var fitted=WindowPlacementPolicy.Fit(new(placement.X,placement.Y,placement.Width,placement.Height),new(0,0,1920,1040));
+if (fitted.X!=920 || fitted.Y!=100 || fitted.Width!=1000 || fitted.Height!=700) throw new Exception("Off-screen window placement must fit the monitor work area.");
+var small=WindowPlacementPolicy.Fit(new(-500,0,1000,700),new(-600,0,600,500));
+if (small.X!=-600 || small.Width!=600 || small.Height!=500) throw new Exception("Window placement must fit smaller or negative-coordinate monitors.");
+
+if (WindowRoutePolicy.InterfaceUrl("/?settings=1&tab=Appearance")!="https://auralis.local/index.html?settings=1&tab=Appearance")
+    throw new Exception("Auxiliary windows must open the packaged interface entry point.");
+bool badRouteRejected=false;
+try { WindowRoutePolicy.InterfaceUrl("//evil.example/"); } catch (InvalidOperationException) { badRouteRejected=true; }
+if (!badRouteRejected) throw new Exception("Unsafe auxiliary route accepted.");
+
 if (!WindowClosePolicy.ShouldHide(true,true,false) || WindowClosePolicy.ShouldHide(true,false,false) ||
     WindowClosePolicy.ShouldHide(true,true,true) || WindowClosePolicy.ShouldHide(false,true,false))
     throw new Exception("Closing may hide only when a tray icon can restore the window and exit was not requested.");

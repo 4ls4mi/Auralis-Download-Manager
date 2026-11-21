@@ -31,7 +31,10 @@ preview is not yet the application and must not be packaged as a release.
 - Preview settings and progress windows share an isolated WebView profile and
   support native minimize, maximize and close. Complete and validate resize,
   drag, production lifecycle, all tray actions and close-to-tray semantics.
-- Port notifications, update checks/install, startup, preferences/theme backup,
-  dialogs, file selection, clipboard, browser native host, and helper setup.
+- The development shell contains opt-in startup registration, release checking,
+  in-app update notices and a Windows-notification path. Validate notifications
+  on Windows and complete installer verification and safe installation before
+  enabling updates. Port preferences/theme backup, dialogs, file selection,
+  browser native host, and helper setup.
 - Test fresh install and upgrade from the released shell with existing downloads
   and settings. Produce a separate signed-off release only after these checks.

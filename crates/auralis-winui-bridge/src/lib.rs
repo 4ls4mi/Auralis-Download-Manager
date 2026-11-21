@@ -7,6 +7,36 @@ static ENGINE: OnceLock<Mutex<Option<JoinHandle<Result<(), String>>>>> = OnceLoc
 // The development host must explicitly choose its private test data
 // directory before starting. It cannot attach to an installed app's data.
 static ISOLATED_DATA: OnceLock<std::path::PathBuf> = OnceLock::new();
+static ISOLATED_DATA_CANONICAL: OnceLock<std::path::PathBuf> = OnceLock::new();
+fn same_path(left: &std::path::Path, right: &std::path::Path) -> bool {
+    if cfg!(windows) { left.to_string_lossy().eq_ignore_ascii_case(&right.to_string_lossy()) } else { left==right }
+}
+fn remember_isolated_data(path: &std::path::Path) -> Result<(), String> {
+    let canonical=path.canonicalize().map_err(|e|e.to_string())?;
+    ISOLATED_DATA_CANONICAL.set(canonical).map_err(|_|"Downloader data was already initialized.")?;
+    ISOLATED_DATA.set(path.to_path_buf()).map_err(|_|"Downloader data was already initialized.")
+}
+fn prepare_test_output(data: &std::path::Path, expected: &std::path::Path) -> Result<std::path::PathBuf, String> {
+    let current=data.canonicalize().map_err(|_|"The development profile is unavailable.")?;
+    if !same_path(&current,expected) { return Err("The development profile was redirected.".into()); }
+    let output=data.join("downloads");
+    match std::fs::create_dir(&output) {
+        Ok(()) => (),
+        Err(error) if error.kind()==std::io::ErrorKind::AlreadyExists => (),
+        Err(error) => return Err(format!("Cannot create the test downloads folder: {error}")),
+    }
+    let meta=std::fs::symlink_metadata(&output).map_err(|e|e.to_string())?;
+    let resolved=output.canonicalize().map_err(|e|e.to_string())?;
+    if meta.file_type().is_symlink() || !meta.is_dir() || !same_path(&resolved,&expected.join("downloads")) {
+        return Err("The test downloads folder cannot be redirected.".into());
+    }
+    Ok(output)
+}
+fn test_output_dir() -> Result<std::path::PathBuf, String> {
+    let data=ISOLATED_DATA.get().ok_or("The isolated test folder is unavailable.")?;
+    let canonical=ISOLATED_DATA_CANONICAL.get().ok_or("The isolated test folder is unavailable.")?;
+    prepare_test_output(data,canonical)
+}
 fn initialize_sandbox() -> Result<serde_json::Value, String> {
     let worker = engine().lock().map_err(|_| "Downloader state unavailable")?;
     if worker.is_some() { return Err("Stop the downloader before initializing its test data.".into()); }
@@ -19,7 +49,7 @@ fn initialize_sandbox() -> Result<serde_json::Value, String> {
             Ok(()) => {
                 mdm_ipc::set_data_dir(path.clone());
                 if mdm_ipc::data_dir().as_ref()!=Some(&path) { return Err("Cannot isolate the downloader data directory.".into()); }
-                ISOLATED_DATA.set(path.clone()).map_err(|_|"Downloader data was already initialized.")?;
+                remember_isolated_data(&path)?;
                 return Ok(serde_json::json!({"isolated":true,"directory":path}));
             }
             Err(error) if error.kind()==std::io::ErrorKind::AlreadyExists => continue,
@@ -52,12 +82,12 @@ fn initialize_development_profile() -> Result<serde_json::Value, String> {
         }
         let meta=std::fs::symlink_metadata(directory).map_err(|e|e.to_string())?;
         let actual=directory.canonicalize().map_err(|e|e.to_string())?;
-        let same=if cfg!(windows) { actual.to_string_lossy().eq_ignore_ascii_case(&expected.to_string_lossy()) } else { actual==expected };
+        let same=same_path(&actual,&expected);
         if meta.file_type().is_symlink() || !meta.is_dir() || !same { return Err("The development profile cannot be a redirected folder.".into()); }
     }
     mdm_ipc::set_data_dir(path.clone());
     if mdm_ipc::data_dir().as_ref()!=Some(&path) { return Err("Cannot isolate the downloader data directory.".into()); }
-    ISOLATED_DATA.set(path.clone()).map_err(|_|"Downloader data was already initialized.")?;
+    remember_isolated_data(&path)?;
     Ok(serde_json::json!({"isolated":true,"directory":path}))
 }
 fn engine() -> &'static Mutex<Option<JoinHandle<Result<(), String>>>> { ENGINE.get_or_init(|| Mutex::new(None)) }
@@ -161,8 +191,7 @@ pub extern "C" fn auralis_bridge_file_details(id: u64) -> *mut c_char {
 }
 fn safe_test_path(id: u64, folder: bool) -> Result<serde_json::Value, String> {
     if id==0 || !owned_backend() { return Err("The test download is unavailable.".into()); }
-    let data=ISOLATED_DATA.get().ok_or("The isolated test folder is unavailable.")?;
-    let requested_root=data.join("downloads");
+    let requested_root=test_output_dir()?;
     let root=requested_root.canonicalize().map_err(|_|"The test folder is unavailable.")?;
     let command=mdm_ipc::Command { query:Some("list".into()), ..Default::default() };
     let raw=mdm_ipc::request_checked(&command).map_err(|e|e.to_string())?;
@@ -242,10 +271,8 @@ fn add_download(url: &str, later: bool) -> Result<serde_json::Value, String> {
         _ => false,
     };
     if !supported { return Err("Enter a supported HTTP, HTTPS, FTP or magnet link.".into()); }
-    let data = ISOLATED_DATA.get().ok_or("Initialize isolated test data first.")?;
     if !matches!(parsed.scheme(), "http" | "https") { return Err("The development sandbox accepts only HTTP and HTTPS links.".into()); }
-    let output = data.join("downloads");
-    std::fs::create_dir_all(&output).map_err(|e| format!("Cannot create the test downloads folder: {e}"))?;
+    let output = test_output_dir()?;
     if !owned_backend() { return Err("The embedded downloader is not running in this process.".into()); }
     mdm_ipc::send(&mdm_ipc::Command { url: Some(url.to_owned()), dir: Some(output.to_string_lossy().into_owned()), later, silent: true, ..Default::default() }).map_err(|e| e.to_string())?;
     Ok(serde_json::json!({"pending":true}))
@@ -285,6 +312,20 @@ pub unsafe extern "C" fn auralis_bridge_free(value: *mut c_char) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
+    #[test]
+    fn development_output_rejects_redirected_downloads_folder() {
+        use std::os::unix::fs::symlink;
+        let unique=std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let base=std::env::temp_dir().join(format!("auralis-winui-link-test-{}-{unique}",std::process::id()));
+        let data=base.join("profile"); let outside=base.join("outside");
+        std::fs::create_dir_all(&data).unwrap(); std::fs::create_dir_all(&outside).unwrap();
+        let canonical=data.canonicalize().unwrap();
+        symlink(&outside,data.join("downloads")).unwrap();
+        assert!(prepare_test_output(&data,&canonical).is_err());
+        assert!(std::fs::read_dir(&outside).unwrap().next().is_none());
+        std::fs::remove_dir_all(base).unwrap();
+    }
     #[test]
     fn development_profile_is_fixed_and_separate() {
         let base=std::env::temp_dir();
@@ -386,6 +427,12 @@ mod tests {
         let stopped = stop().expect("stop isolated embedded downloader");
         assert_eq!(stopped["running"], false);
         assert!(dispatch(3).is_err());
+        assert_eq!(start().expect("restart isolated embedded downloader")["running"],true);
+        let restored=dispatch(5).expect("read restored settings");
+        assert_eq!(restored["max_connections"],8);
+        assert_eq!(restored["show_complete"],false);
+        assert!(destination.is_file(),"a restart must preserve previously downloaded files");
+        assert_eq!(stop().expect("stop restarted downloader")["running"],false);
         std::fs::remove_dir_all(data).expect("remove isolated test data");
     }
 

@@ -68,6 +68,14 @@ internal sealed record BridgeMessage(long Id, string Command, ulong DownloadId, 
             return new(id,command,0,null,false,Value:enabled.GetBoolean()?"true":"false");
         }
         if (command == "progress_ids") return new(id,command,0,null,false);
+        if (command == "notify_update")
+        {
+            if (!root.TryGetProperty("version",out var value) || value.ValueKind!=JsonValueKind.String ||
+                value.GetString() is not string version || !UpdatePolicy.TryVersion(version,out _))
+                throw new InvalidOperationException("Invalid update notification.");
+            return new(id,command,0,null,false,Value:version);
+        }
+        if (command is "app_version" or "update_check") return new(id,command,0,null,false);
         if (command == "clipboard_text") return new(id,command,0,null,false);
         if (command == "window_start_drag") return new(id,command,0,null,false);
         if (command is "window_hide" or "window_minimize" or "window_toggle_maximize" or "window_close" or "window_is_maximized" or "window_outer_position" or "window_outer_size" or "window_current_monitor") return new(id, command, 0, null, false);
