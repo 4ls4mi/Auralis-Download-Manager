@@ -306,7 +306,11 @@ fn refresh_address(id: u64, address: &str) -> Result<serde_json::Value, String> 
     let command=mdm_ipc::Command { action:Some("glass-item".into()), category:Some("refresh-address".into()), ids:vec![id], queue:Some(url.to_string()), ..Default::default() };
     let raw=mdm_ipc::request_checked(&command).map_err(|e|e.to_string())?;
     let data:serde_json::Value=serde_json::from_str(&raw).map_err(|_|"Invalid address update response")?;
-    if data.get("error").is_some() { return Err("Stop this test download before updating its address.".into()); }
+    if let Some(error)=data.get("error") {
+        return Err(if error.as_str()==Some("Stop this download before updating its address") {
+            "Stop this test download before updating its address."
+        } else { "Could not update the test download address." }.into());
+    }
     Ok(data)
 }
 /// # Safety

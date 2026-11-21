@@ -89,6 +89,7 @@ internal static class LocalWebviewBridge
                     "The checksum could not be verified." => exception.Message,
                     "The test download is not complete." => exception.Message,
                     "Stop this test download before updating its address." => exception.Message,
+                    "Could not update the test download address." => exception.Message,
                     "Enter a valid HTTP or HTTPS address." => exception.Message,
                     _ when command=="update_check" => "The update check is unavailable. Try again later.",
                     _ => "The isolated request failed."
