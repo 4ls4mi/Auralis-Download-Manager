@@ -71,7 +71,7 @@ export type Appearance = {
   theme: string; wallMain: string; wallDetail: string; mainMode: BackgroundMode;
   detailMode: BackgroundMode; dim: number; opacity: number; blur: number;
   acrylic: boolean; autoPopups: boolean; uiScale: number; highContrast: boolean;
-  lightMode: boolean; fontFamily: string; fontSize: number; material: string; indicator: string; progressMaterial: string; connectionMaterial: string; graphMaterial: string; trackFinish: string; trackColor: string; progressShape: string; graphIndicator: string; graphShape: string; connectionTrackFinish: string; connectionTrackColor: string; connectionIndicator: string; connectionShape: string; clipboardMode: string; tintHue: number; tintStrength: number
+  lightMode: boolean; fontFamily: string; fontSize: number; material: string; surfaceStyle: string; indicator: string; progressMaterial: string; connectionMaterial: string; graphMaterial: string; trackFinish: string; trackColor: string; progressShape: string; graphIndicator: string; graphShape: string; connectionTrackFinish: string; connectionTrackColor: string; connectionIndicator: string; connectionShape: string; clipboardMode: string; tintHue: number; tintStrength: number
 };
 const key = "mh-glass-";
 const stored = (name: string, fallback: string) => {
@@ -82,6 +82,7 @@ const supportedShape=(shape:string)=>shape==="wave"?"droplet":["rounded","square
 export function loadAppearance(): Appearance {
   return {
     theme: stored("theme", "silver"), material: [...["brushed-glass","frosted-water-351","rose-pine","window-glass","oversimplified"],...Object.keys(extraMaterials),...loadMaterials().map(materialId)].includes(stored("material", "frosted-water-351")) ? stored("material", "frosted-water-351") : "frosted-water-351", tintHue: Number(stored("tint-hue", "209")), tintStrength: Number(stored("tint-strength", "50")), indicator: stored("indicator", "blue-purple"), progressMaterial: stored("progress-material", "gradient"), connectionMaterial: stored("connection-material", "gradient"), graphMaterial: stored("graph-material", "gradient"), trackFinish: stored("track-finish", "recessed"), trackColor: stored("track-color", "ice"), progressShape: supportedShape(stored("progress-shape", "rounded")), graphIndicator: stored("graph-indicator", stored("indicator", "blue-purple")), graphShape: stored("graph-shape", "area"), connectionTrackFinish: stored("connection-track-finish", "recessed"), connectionTrackColor: stored("connection-track-color", "ice"), connectionIndicator: stored("connection-indicator", stored("indicator", "blue-purple")), connectionShape: supportedShape(stored("connection-shape", stored("progress-shape", "rounded"))), clipboardMode: stored("clipboard-mode", "paste"),
+    surfaceStyle: ["material","clear","soft","frosted","tinted"].includes(stored("surface-style","material")) ? stored("surface-style","material") : "material",
     wallMain: stored("wall-main", ""), wallDetail: stored("wall-detail", ""),
     mainMode: stored("back-main", "desktop") as BackgroundMode,
     detailMode: stored("back-details", "desktop") as BackgroundMode,
@@ -96,7 +97,7 @@ export function loadAppearance(): Appearance {
 const keys: Record<keyof Appearance, string> = {
   theme: "theme", material: "material", tintHue: "tint-hue", tintStrength: "tint-strength", indicator: "indicator", progressMaterial: "progress-material", connectionMaterial: "connection-material", graphMaterial: "graph-material", trackFinish: "track-finish", trackColor: "track-color", progressShape: "progress-shape", graphIndicator: "graph-indicator", graphShape: "graph-shape", connectionTrackFinish: "connection-track-finish", connectionTrackColor: "connection-track-color", connectionIndicator: "connection-indicator", connectionShape: "connection-shape", clipboardMode: "clipboard-mode", wallMain: "wall-main", wallDetail: "wall-detail",
   mainMode: "back-main", detailMode: "back-details", dim: "dim",
-  opacity: "opacity", blur: "blur", acrylic: "acrylic",
+  opacity: "opacity", blur: "blur", acrylic: "acrylic", surfaceStyle: "surface-style",
   autoPopups: "auto-popups", uiScale: "ui-scale", highContrast: "high-contrast",
   lightMode: "light-mode", fontFamily: "font-family", fontSize: "font-size"
 };
@@ -336,11 +337,11 @@ export function CrystalWindow({ children, target = "main" }: {
   const video = /\.(mp4|webm|mov|m4v)$/i.test(path);
   useEffect(() => {
     const w = getCurrentWindow();let active=true;
-    if (mode === "desktop" && appearance.acrylic)
+    if (mode === "desktop" && (appearance.acrylic || ["soft","frosted","tinted"].includes(appearance.surfaceStyle)))
       void w.setEffects({ effects: [Effect.Acrylic], state: EffectState.Active }).catch(()=>{if(active)setWindowError("Windows backdrop blur is unavailable; transparent glass is being used.");return w.clearEffects().catch(()=>undefined)});
     else void w.clearEffects().catch(() => undefined);
     return()=>{active=false};
-  }, [mode, appearance.acrylic, appearance.material]);
+  }, [mode, appearance.acrylic, appearance.material, appearance.surfaceStyle]);
   // White palettes need light surfaces and dark foregrounds in every material.
   const effectiveLight = theme.id === "white-frost" || theme.id === "white-pearl";
   const lightAccent = theme.id === "white-pearl" ? "#655643" : "#405b70";
@@ -348,6 +349,7 @@ export function CrystalWindow({ children, target = "main" }: {
   const style = {
     "--accent": effectiveLight ? lightAccent : theme.accent,
     "--accent-secondary": theme.secondary,
+    "--palette-hue": themeHue(theme),
     "--theme-action-rgb": effectiveLight ? lightAccentRgb : mixColor(theme.rgb.split(",").map(Number),[255,255,255],.20),
     "--theme-primary-rgb": effectiveLight ? lightAccentRgb : mixColor(theme.rgb.split(",").map(Number),[255,255,255],.10),
     "--theme-warn-rgb": effectiveLight ? lightAccentRgb : mixColor(theme.rgb.split(",").map(Number),secondaryRgb(theme),.55),
@@ -371,14 +373,14 @@ export function CrystalWindow({ children, target = "main" }: {
     "--min-window-button": (30/Math.min(1,Math.max(.4,fit)))+"px",
     "--font-size": Math.max(Math.min(20,Math.max(12,appearance.fontSize)),12/Math.max(.4,fit))+"px"
   } as CSSProperties;
-  return <div className={`cg-window cg-mode-${mode} cg-material-${appearance.material} cg-theme-${theme.id} ${customMaterial?`cg-custom-material cg-finish-${customMaterial.finish} cg-controls-${customMaterial.controls} cg-layout-${customMaterial.layout??'standard'} cg-text-${customMaterial.text??'crisp'}`:""} cg-progress-shape-${appearance.progressShape} cg-connection-shape-${appearance.connectionShape} ${maximized?"cg-maximized":""} ${effectiveLight?"cg-light":"cg-dark"} ${appearance.highContrast?"cg-high-contrast":""}`} style={style}>
+  return <div className={`cg-window cg-mode-${mode} cg-material-${appearance.material} cg-surface-${appearance.surfaceStyle} cg-theme-${theme.id} ${customMaterial?`cg-custom-material cg-finish-${customMaterial.finish} cg-controls-${customMaterial.controls} cg-layout-${customMaterial.layout??'standard'} cg-text-${customMaterial.text??'crisp'}`:""} cg-progress-shape-${appearance.progressShape} cg-connection-shape-${appearance.connectionShape} ${maximized?"cg-maximized":""} ${effectiveLight?"cg-light":"cg-dark"} ${appearance.highContrast?"cg-high-contrast":""}`} style={style}>
     {mode === "wallpaper" && <div className="cg-wallpaper">
       {video ? <video key={src} autoPlay loop muted playsInline src={src} /> :
         <div style={{ backgroundImage: `url("${src}")` }} />}
       <span style={{ background: `rgba(3,9,19,${appearance.dim / 100})` }} />
     </div>}
     {mode === "solid" && <div className="cg-solid" />}
-    <div className="cg-content" ref={frame}>{appearance.material === "frosted-water-351" && !maximized && <FrostedLayers maskBackdrop={mode!=="desktop"} tintHue={appearance.tintHue} tintRgb={themeTintRgb} tintStrength={appearance.tintStrength} opacity={appearance.opacity}/>}<div className="cg-fit-content">{children}</div></div>
+    <div className="cg-content" ref={frame}>{appearance.material === "frosted-water-351" && !maximized && <FrostedLayers maskBackdrop={mode!=="desktop"} tintHue={appearance.tintHue} tintRgb={themeTintRgb} tintStrength={appearance.tintStrength} opacity={appearance.opacity * ({material:1,clear:.45,soft:.58,frosted:.72,tinted:.82}[appearance.surfaceStyle]??1)}/>}<div className="cg-fit-content">{children}</div></div>
     {windowError&&<aside className="cg-window-notice cg-error" role="alert"><span>{windowError}</span><button title="Dismiss" onClick={()=>setWindowError("")}><X size={15}/></button></aside>}
     <ResizeGrips />
   </div>;

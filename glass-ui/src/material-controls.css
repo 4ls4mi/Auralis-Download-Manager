@@ -76,3 +76,39 @@
 .cg-window.cg-light .cg-fit-content select option{background:rgb(var(--glass))!important;color:var(--ink)!important}
 .cg-window.cg-light .cg-solid{background:rgb(var(--glass))!important}
 .cg-window.cg-dark .cg-solid{background:linear-gradient(145deg,rgba(var(--accent-rgb),.22),transparent 70%),rgb(var(--glass))!important}
+
+/* Independent backdrop treatments preserve material geometry. */
+.cg-window.cg-surface-clear:not(.cg-material-frosted-water-351) .cg-content{background:linear-gradient(155deg,rgba(var(--accent-rgb),.08),transparent 65%),rgba(var(--glass),.35)!important;box-shadow:inset 0 1px #ffffff90,0 8px 30px #0003!important}
+.cg-window.cg-surface-soft:not(.cg-material-frosted-water-351) .cg-content{background:linear-gradient(155deg,rgba(var(--accent-rgb),.12),transparent 65%),rgba(var(--glass),.58)!important;box-shadow:inset 0 1px #ffffff50,0 8px 32px #0004!important}
+.cg-window.cg-surface-frosted:not(.cg-material-frosted-water-351) .cg-content{background:linear-gradient(155deg,rgba(255,255,255,.12),transparent 65%),rgba(var(--glass),.72)!important;box-shadow:inset 0 1px #ffffff88,0 8px 32px #0004!important}
+.cg-window.cg-surface-tinted:not(.cg-material-frosted-water-351) .cg-content{background:linear-gradient(155deg,var(--glass-tint),transparent 80%),rgba(var(--glass),.65)!important;box-shadow:inset 0 1px #ffffff70,0 8px 32px #0004!important}
+.cg-window:is(.cg-surface-clear,.cg-surface-soft,.cg-surface-frosted,.cg-surface-tinted) .cg-fit-content .cg-glass{background:rgba(var(--glass),.68)!important}
+.cg-window.cg-light:is(.cg-surface-clear,.cg-surface-soft,.cg-surface-frosted,.cg-surface-tinted) .cg-fit-content .cg-glass{background:rgba(var(--glass),.88)!important}
+
+/* Keep action buttons compact as the window grows. */
+.cg-window .cg-toolbar>button{flex:0 0 clamp(42px,4.5vw,58px)!important;min-width:42px!important;max-width:58px!important}
+
+/* Theme-derived vivid accents, varied by action and readable on either surface. */
+.cg-window{--vivid-hue:var(--palette-hue)}
+.cg-window :is(.cg-toolbar>button,.cg-btn,.cg-settings-nav button,.cg-sidebar button){--vivid-offset:0}
+.cg-window :is(.cg-toolbar>button,.cg-btn,.cg-settings-nav button,.cg-sidebar button):nth-of-type(5n+1){--vivid-offset:105}
+.cg-window :is(.cg-toolbar>button,.cg-btn,.cg-settings-nav button,.cg-sidebar button):nth-of-type(5n+2){--vivid-offset:195}
+.cg-window :is(.cg-toolbar>button,.cg-btn,.cg-settings-nav button,.cg-sidebar button):nth-of-type(5n+3){--vivid-offset:275}
+.cg-window :is(.cg-toolbar>button,.cg-btn,.cg-settings-nav button,.cg-sidebar button):nth-of-type(5n+4){--vivid-offset:330}
+.cg-window.cg-dark :is(.cg-toolbar>button,.cg-btn,.cg-settings-nav button,.cg-sidebar button){--vivid:hsl(calc((var(--vivid-hue) + var(--vivid-offset))*1deg) 95% 76%)}
+.cg-window.cg-light :is(.cg-toolbar>button,.cg-btn,.cg-settings-nav button,.cg-sidebar button){--vivid:hsl(calc((var(--vivid-hue) + var(--vivid-offset))*1deg) 85% 29%)}
+.cg-window .cg-fit-content :is(.cg-toolbar>button,.cg-btn,.cg-settings-nav button,.cg-sidebar button) svg{color:var(--vivid)!important}
+.cg-window .cg-fit-content :is(.cg-toolbar>button,.cg-btn):not(:disabled){border-color:var(--vivid)!important}
+.cg-window .cg-fit-content :is(.cg-toolbar>button,.cg-btn,.cg-settings-nav button,.cg-sidebar button):hover:not(:disabled){box-shadow:inset 0 1px #ffffff99,0 0 12px var(--vivid)!important}
+
+/* White themes must never inherit the material's white-on-white text. */
+.cg-window.cg-light .cg-fit-content :is(.cg-title,.cg-settings-nav button,.cg-sidebar button,.cg-color-choices button,.cg-menubar button,.cg-page-tabs button,.cg-appearance-tabs button,.cg-indicator-tabs button,.cg-footer-message){color:#102738!important;text-shadow:none!important}
+.cg-window.cg-light .cg-fit-content :is(h1,h2,h3,h4,strong,p,small,label,dt,dd,.cg-row){color:var(--ink)!important;text-shadow:none!important}
+.cg-window.cg-light .cg-fit-content :is(.cg-settings-nav button.selected,.cg-sidebar button.selected,.cg-appearance-tabs button.selected,.cg-page-tabs button.active){color:#102738!important;background:rgba(255,255,255,.9)!important;border:1px solid var(--vivid,var(--accent))!important}
+.cg-window.cg-dark .cg-fit-content :is(.cg-settings-nav button,.cg-sidebar button){color:var(--vivid)!important}
+.cg-window.cg-light.cg-material-frosted-water-351 .cg-fit-content :is(.cg-title,.cg-settings-nav button,.cg-sidebar button,.cg-color-choices button,.cg-menubar button,.cg-page-tabs button,.cg-appearance-tabs button,.cg-indicator-tabs button,.cg-footer-message){color:#102738!important;text-shadow:none!important}
+.cg-window.cg-light.cg-material-frosted-water-351 .cg-fit-content :is(h1,h2,h3,h4,strong,p,small,label,dt,dd,.cg-row){color:#102738!important;text-shadow:none!important}
+.cg-window.cg-light .cg-fit-content :is(.cg-settings-nav button span,.cg-sidebar button span,.cg-color-choices button span,.cg-title span){color:#102738!important;text-shadow:none!important}
+.cg-window.cg-light.cg-material-frosted-water-351 .cg-fit-content :is(.cg-settings-nav button span,.cg-sidebar button span,.cg-color-choices button span,.cg-title span){color:#102738!important;text-shadow:none!important}
+.cg-window.cg-dark.cg-dark .cg-fit-content :is(.cg-toolbar>button,.cg-btn,.cg-settings-nav button,.cg-sidebar button) svg{color:var(--vivid)!important}
+.cg-window.cg-light.cg-light .cg-fit-content :is(.cg-toolbar>button,.cg-btn,.cg-settings-nav button,.cg-sidebar button) svg{color:var(--vivid)!important}

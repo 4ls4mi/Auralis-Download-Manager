@@ -57,7 +57,7 @@ fn request_snapshot() -> ApiResult<mdm_ipc::api::ListAnswer> {
         ..Default::default()
     })?;
     serde_json::from_str(&response)
-        .map_err(|_| format!("Cannot read download list from existing MDM: {response}"))
+        .map_err(|_| format!("Cannot read the download list: {response}"))
 }
 
 fn possible_legacy_paths(app: &AppHandle) -> Vec<PathBuf> {
@@ -87,7 +87,7 @@ fn current_backend() -> ApiResult<BackendIdentity> {
         ..Default::default()
     })?;
     serde_json::from_str(&response)
-        .map_err(|_| "Another original Mister Download Manager instance is running. It still owns the original tray icon. Finish active downloads, then exit original MDM before starting Auralis. Your download data and settings will be preserved.".into())
+        .map_err(|_| "Another download manager instance is using the same data. Finish active downloads and close it before starting Auralis. Your download data and settings will be preserved.".into())
 }
 
 #[cfg(not(feature = "embedded-downloader"))]
@@ -133,12 +133,12 @@ fn boot_existing_engine(app: &AppHandle) -> ApiResult<String> {
                 request_snapshot()?;
                 return Ok("Headless Rust downloader started • One Glass tray icon".into());
             }
-            Ok(_) => return Err("A different MDM process acquired the download data lock.                 Please close that instance without losing active downloads.".into()),
+            Ok(_) => return Err("Another process acquired the download data lock.                 Please close that instance without losing active downloads.".into()),
             Err(e) if e.contains("Another original Mister") => return Err(e),
             Err(_) => {}
         }
     }
-    Err("Headless downloader did not initialize. See its crash logs in the original MDM data directory.".into())
+    Err("The downloader did not initialize. Check the application crash logs.".into())
 }
 
 // The experimental build owns the backend thread. Serializing startup prevents
@@ -322,7 +322,7 @@ fn extension_store_target(browser: &str) -> ApiResult<String> {
     match browser {
         "edge" => Ok(format!("microsoft-edge:{}", chromium()?)),
         "chromium" => chromium(),
-        "firefox" => Ok(mdm_ipc::extension::FIREFOX_PAGE.to_owned()),
+        "firefox" => Err("The Auralis Firefox store listing is not available yet. Use the bundled extension through browser setup.".into()),
         _ => Err("Unsupported browser".into()),
     }
 }
@@ -418,18 +418,18 @@ fn native_host_candidates(app: &AppHandle) -> Vec<PathBuf> {
 
 fn register_browser_host(app: &AppHandle) -> ApiResult<String> {
     let host = native_host_candidates(app).into_iter().find(|p| p.is_file())
-        .ok_or_else(|| "MDM browser native-messaging helper was not included in this installation".to_string())?;
+        .ok_or_else(|| "Auralis browser helper was not included in this installation".to_string())?;
     // Reuse the original signed extension's host identifier, allowed origins,
     // Chromium/Firefox manifests and Windows registry logic. Register for the
     // current user only; do not overwrite other applications' registry keys.
     let output = ProcessCommand::new(&host).arg("--register")
         .stdin(Stdio::null()).output()
-        .map_err(|e| format!("Could not launch the original MDM browser helper: {e}"))?;
+        .map_err(|e| format!("Could not launch the Auralis browser helper: {e}"))?;
     if !output.status.success() {
         return Err(format!("Browser host registration failed: {}",
             String::from_utf8_lossy(&output.stderr)));
     }
-    Ok(format!("MDM browser integration registered: {}",
+    Ok(format!("Auralis browser integration registered: {}",
         host.to_string_lossy()))
 }
 
@@ -506,9 +506,9 @@ async fn browser_integration(app: AppHandle, repair: bool) -> ApiResult<String> 
     tauri::async_runtime::spawn_blocking(move || {
         if repair { register_browser_host(&app) }
         else {
-            let host = native_host_candidates(&app).into_iter().find(|p| p.is_file())
-                .ok_or_else(|| "Browser helper is missing from the Glass package".to_string())?;
-            Ok(format!("Original MDM browser helper installed at {}. Choose repair if your extension is disconnected.",host.display()))
+            let _host = native_host_candidates(&app).into_iter().find(|p| p.is_file())
+                .ok_or_else(|| "Browser helper is missing from the installation".to_string())?;
+            Ok("Auralis browser helper is installed. Open setup if your extension is disconnected.".to_string())
         }
     }).await.map_err(|e| e.to_string())?
 }
