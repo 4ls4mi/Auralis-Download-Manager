@@ -3134,14 +3134,43 @@ pub fn drag_files_out(
     files: Vec<std::path::PathBuf>,
     followed: impl FnMut(std::path::PathBuf, crate::dialogs::DraggedOut) + Send + 'static,
 ) -> Result<(), String> {
-    use std::sync::atomic::Ordering;
     let hwnd = own_capture()
         .or_else(|| find_own_window(title))
         .ok_or("window not found")? as isize;
+    drag_files_out_with_window(hwnd, None, files, false, followed)
+}
+
+/// Glass owns its window in another process. Verify its PID and attach the drag
+/// thread to that window's input before using MDM's original shell tracker.
+pub fn drag_file_out_from_glass(
+    hwnd: isize,
+    expected_pid: u32,
+    file: &std::path::Path,
+    followed: impl FnOnce(crate::dialogs::DraggedOut) + Send + 'static,
+) -> Result<(), String> {
+    use windows_sys::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId;
+    let mut pid=0u32;
+    // SAFETY: Windows validates the handle and writes to the local PID slot.
+    let thread=unsafe { GetWindowThreadProcessId(hwnd as HWND, &mut pid) };
+    if thread==0 || pid!=expected_pid || expected_pid==0 {return Err("Glass window is no longer available".into());}
+    let mut followed=Some(followed);
+    drag_files_out_with_window(hwnd, Some(thread), vec![file.to_path_buf()], true, move |_, result| {
+        if let Some(callback)=followed.take() { callback(result); }
+    })
+}
+
+fn drag_files_out_with_window(
+    hwnd: isize,
+    source_thread: Option<u32>,
+    files: Vec<std::path::PathBuf>,
+    move_only: bool,
+    followed: impl FnMut(std::path::PathBuf, crate::dialogs::DraggedOut) + Send + 'static,
+) -> Result<(), String> {
+    use std::sync::atomic::Ordering;
     if DRAGGING.swap(true, Ordering::AcqRel) {
         return Ok(());
     }
-    let started = with_shared_input("drag out", move |shared| {
+    let started = with_shared_input("drag out", source_thread, move |shared| {
         if !shared {
             tracing::warn!("drag out: the window's input isn't shared");
         }
@@ -3150,7 +3179,7 @@ pub fn drag_files_out(
         let result = if there.is_empty() {
             Ok(None)
         } else {
-            dragout::drag(hwnd as HWND, &there)
+            dragout::drag(hwnd as HWND, &there, move_only)
         };
         if let Ok(mut t) = DRAG_ENDED.lock() {
             *t = Some(std::time::Instant::now());
@@ -3216,6 +3245,7 @@ fn release_button(hwnd: HWND) {
 /// follow-up), and OLE is closed. The caller has a message queue (a window thread).
 fn with_shared_input<A: FnOnce()>(
     name: &str,
+    source_thread: Option<u32>,
     work: impl FnOnce(bool) -> A + Send + 'static,
 ) -> Result<(), String> {
     use windows_sys::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
@@ -3226,7 +3256,7 @@ fn with_shared_input<A: FnOnce()>(
         fn OleUninitialize();
     }
     // SAFETY: a plain query.
-    let caller = unsafe { GetCurrentThreadId() };
+    let caller = source_thread.unwrap_or_else(|| unsafe { GetCurrentThreadId() });
     std::thread::Builder::new()
         .name(name.to_owned())
         .spawn(move || {
@@ -3274,7 +3304,7 @@ mod drag_thread_tests {
         let window_thread = unsafe { GetCurrentThreadId() };
         let (tx, rx) = std::sync::mpsc::channel();
         let (go_tx, go_rx) = std::sync::mpsc::channel::<()>();
-        with_shared_input("drag test", move |shared| {
+        with_shared_input("drag test", None, move |shared| {
             // Held until the caller has gone on: the work doesn't hold the caller up.
             go_rx.recv().unwrap();
             let mut kind: APTTYPE = 0;
@@ -3826,7 +3856,7 @@ mod dragout {
 
     /// Drag `files` out of `hwnd` (on the drag's thread, OLE set up), offering a move, a copy and
     /// a link. Some when they were dropped.
-    pub(super) fn drag(hwnd: HWND, files: &[PathBuf]) -> Result<Option<Dropped>, String> {
+    pub(super) fn drag(hwnd: HWND, files: &[PathBuf], move_only: bool) -> Result<Option<Dropped>, String> {
         let files = files
             .iter()
             .map(|f| Ok((f.clone(), plain(std::fs::canonicalize(f)?))))
@@ -3851,7 +3881,7 @@ mod dragout {
                 hwnd,
                 data.0,
                 std::ptr::null_mut(),
-                DROPEFFECT_COPY | DROPEFFECT_MOVE | DROPEFFECT_LINK,
+                if move_only { DROPEFFECT_MOVE } else { DROPEFFECT_COPY | DROPEFFECT_MOVE | DROPEFFECT_LINK },
                 &mut effect,
             )
         };

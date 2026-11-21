@@ -1,0 +1,56 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Auralis Download Manager",
+  "version": "0.3.48",
+  "identifier": "com.misterhybrid.glass",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "node scripts/generate-icon.mjs && npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Auralis Download Manager",
+        "width": 960,
+        "height": 690,
+        "minWidth": 600,
+        "minHeight": 420,
+        "center": true,
+        "decorations": false,
+        "backgroundColor": "#00000000",
+        "transparent": true,
+        "shadow": false,
+        "noRedirectionBitmap": true,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self' customprotocol: asset: http://asset.localhost; connect-src 'self' ipc: http://ipc.localhost customprotocol: asset: http://asset.localhost wss://auralis-release-push.auralis-updates.workers.dev; img-src 'self' asset: http://asset.localhost data: blob:; media-src 'self' asset: http://asset.localhost blob:; style-src 'self' 'unsafe-inline'; script-src 'self'",
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "$APPDATA/**"
+        ]
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis"
+    ],
+    "icon": [
+      "icons/auralis.ico",
+      "icons/auralis.png"
+    ],
+    "resources": {
+      "resources/deno.exe": "deno.exe",
+      "resources/deno-LICENSE.md": "deno-LICENSE.md",
+      "resources/misterdownloadmanager-nmhost.exe": "misterdownloadmanager-nmhost.exe",
+      "../../auralis-extension/": "auralis-extension/"
+    }
+  }
+}

@@ -700,6 +700,8 @@ pub struct PasswordDialog {
 }
 
 impl PasswordDialog {
+    pub(crate) fn glass_has(&self,id:u64)->bool { self.job.ids.contains(&id) }
+
     fn new(job: Job, wrong: bool) -> Self {
         let password = if wrong {
             job.password.clone().unwrap_or_default()

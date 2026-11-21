@@ -816,6 +816,10 @@ pub struct ConnView {
     pub id: WorkerId,
     pub downloaded: u64,
     pub status: ConnStatus,
+    /// Last actual network retry/failure, retained briefly for sampled Glass displays.
+    pub last_disconnect: Option<std::time::Instant>,
+    /// A failed connection has not yet resumed receiving.
+    pub reconnecting_after_loss: bool,
     /// Bytes/s over the current response (0 while not receiving).
     pub speed: u64,
 }
@@ -832,11 +836,16 @@ impl ConnView {
             self.status = ConnStatus::Finished;
         }
         self.speed = 0;
+        self.reconnecting_after_loss = false;
     }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SegmentView {
+    /// Current planner owner, if any; ranges can be reassigned dynamically.
+    pub worker: Option<WorkerId>,
+    /// Most recent owner, only valid for this engine session.
+    pub last_worker: Option<WorkerId>,
     pub start: u64,
     pub cursor: u64,
     pub end: u64,
@@ -851,6 +860,8 @@ pub struct Snapshot {
     pub size: Option<u64>,
     pub downloaded: u64,
     pub resumable: Option<bool>,
+    /// Expected whole-file checksum supplied by the server or the user, if any.
+    pub checksum: Option<crate::verify::Hash>,
     pub segments: Vec<SegmentView>,
     pub connections: Vec<ConnView>,
     /// Why the download failed (state `Failed`), in English (the command line, logs).
@@ -1323,6 +1334,7 @@ impl Download {
                 size: None,
                 downloaded,
                 resumable: None,
+                checksum: None,
                 segments: Vec::new(),
                 connections: Vec::new(),
                 error: None,
@@ -1493,6 +1505,8 @@ impl Shared {
                 .segments()
                 .iter()
                 .map(|g| SegmentView {
+                worker: g.worker,
+                last_worker: g.last_worker,
                     start: g.start,
                     cursor: g.cursor,
                     end: g.end,
@@ -1543,12 +1557,22 @@ impl Shared {
                     id,
                     downloaded: 0,
                     status: ConnStatus::Connecting,
+                    last_disconnect: None,
+                    reconnecting_after_loss: false,
                     speed: 0,
                 });
                 v.connections.len() - 1
             }
         };
+        let was_disconnected = matches!(v.connections[i].status, ConnStatus::Retrying(_) | ConnStatus::Failed(_));
         f(&mut v.connections[i]);
+        if !was_disconnected && matches!(v.connections[i].status, ConnStatus::Retrying(_) | ConnStatus::Failed(_)) {
+            v.connections[i].last_disconnect = Some(std::time::Instant::now());
+            v.connections[i].reconnecting_after_loss = true;
+        }
+        if matches!(v.connections[i].status, ConnStatus::Receiving | ConnStatus::Finished | ConnStatus::Retired { .. }) {
+            v.connections[i].reconnecting_after_loss = false;
+        }
     }
 
     fn with_planner<T>(&self, f: impl FnOnce(&mut Planner) -> T) -> T {
@@ -1587,6 +1611,8 @@ struct Refreshes {
 struct Ctx {
     /// The download's client: every connection's requests go through its pool.
     client: Client,
+    /// A repaired checkpoint requires its original strong validator on every range.
+    repair_source: Option<Url>,
     /// The file's version; each range request's `If-Range` is chosen from them.
     validators: Mutex<Validators>,
     /// Where ranges come from now (after redirects); switched when it expires.
@@ -2167,13 +2193,13 @@ async fn run_fresh(
             // once, as the link was (the browser's User-Agent first). The link's refusal is
             // the one told if that fails too.
             if let Err(e) = &first
-                && link_refused(e)
+                && (link_refused(e) || refused_as_a_program(e))
                 && unlocked.is_none()
                 && opts.post.is_none()
-                && let Some(other) = opts.browser_final.clone().filter(|o| *o != target)
+                && let Some(other) = opts.browser_final.clone().filter(|o| *o != target).or_else(|| sourceforge_fresh_link(&target))
             {
                 shared.event(format!(
-                    "{}: {e}; asking where the browser's download ended ({})",
+                    "{}: {e}; trying a recovery address ({})",
                     target.host_str().unwrap_or("?"),
                     other.host_str().unwrap_or("?"),
                 ));
@@ -2181,6 +2207,7 @@ async fn run_fresh(
                 let headers = scoped_headers(&asked, &target, &other);
                 match ask.at(&mut again, &other, &headers).await {
                     Ok((client1, Ok(answer), as_mdm)) => {
+                        first_at = other.clone();
                         (opts, client0, first, asked_as_mdm) = (again, client1, Ok(answer), as_mdm);
                     }
                     Ok((_, Err(Error::Cancelled), _)) | Err(Error::Cancelled) => {
@@ -2277,6 +2304,7 @@ async fn run_fresh(
             .then(|| crate::verify::Hash::from_headers(h))
             .flatten()
     });
+    shared.view.lock().unwrap().checksum = checksum.clone();
     let validators = Validators::from_response(
         header_str(h, header::ETAG),
         header_str(h, header::LAST_MODIFIED),
@@ -2344,6 +2372,7 @@ async fn run_fresh(
         saved.browser_like = browser.is_some();
         let ctx = Arc::new(Ctx {
             client: client0.clone(),
+            repair_source: None,
             validators: Mutex::new(validators),
             target: Mutex::new(Target {
                 url: final_url.clone(),
@@ -2587,6 +2616,7 @@ async fn run_fresh_ftp(
         let ctx = Arc::new(Ctx {
             // FTP's connections are its own (`ftp`): this client's are none of the server's.
             client: client(&opts, &req.url, &AsGet::default(), &Default::default())?,
+            repair_source: None,
             validators: Mutex::new(validators),
             target: Mutex::new(Target {
                 url,
@@ -2659,6 +2689,9 @@ async fn run_resume(
     if state_file != state_path(&saved.dest) {
         return Err(bad("does not belong to the file it names"));
     }
+    if saved.repair_strict && saved.repair_source.as_ref() != Some(&saved.final_url) {
+        return Err(bad("the checked repair source changed; saved data was preserved"));
+    }
     let _reservation =
         naming::reserve(&saved.dest).ok_or_else(|| Error::InUse(saved.dest.clone()))?;
     let part = naming::part_path(&saved.dest);
@@ -2693,7 +2726,7 @@ async fn run_resume(
     // Through a service account (#44), the service is asked for today's link even when the
     // state holds none of its links (the download went directly until now).
     let refreshed =
-        if browser.is_none() && (saved.url != saved.final_url || opts.unlocker.is_some()) {
+        if !saved.repair_strict && browser.is_none() && (saved.url != saved.final_url || opts.unlocker.is_some()) {
             let post = opts.post.as_ref();
             let agent = opts.site_agent();
             refresh_final_url(
@@ -2716,13 +2749,9 @@ async fn run_resume(
         Some((url, h)) => (url.clone(), as_get.contains(&url), Some(h)),
         None => (saved.final_url.clone(), saved.final_get, None),
     };
-    let origin = origin_of(
-        &saved.url,
-        &headers,
-        &url,
-        browser.is_some(),
-        &pages_of(&opts, &headers),
-    );
+    let origin = if saved.repair_strict { None } else {
+        origin_of(&saved.url, &headers, &url, browser.is_some(), &pages_of(&opts, &headers))
+    };
     // Credentials stay with the host they were given for (the refresh's own way there scoped
     // them as it went).
     headers = refreshed_headers.unwrap_or_else(|| scoped_headers(&headers, &saved.url, &url));
@@ -2779,6 +2808,7 @@ async fn run_resume(
     let checksum = opts.checksum.clone().or_else(|| saved.checksum.clone());
     // Given again by whoever resumes, as the headers are: not in the resume state.
     let replace = opts.replace_existing;
+    shared.view.lock().unwrap().checksum = checksum.clone();
     let web_page_ok = expects_web_page(&dest, saved.content_type.as_deref());
     // The server's type for it then stands for the browser's (#701).
     let never_page = never_a_page(
@@ -2787,6 +2817,7 @@ async fn run_resume(
     );
     let ctx = Arc::new(Ctx {
         client,
+        repair_source: saved.repair_source.clone().filter(|_| saved.repair_strict),
         validators: Mutex::new({
             let mut v = saved.validators.clone();
             if opts.ignore_mtime {
@@ -2888,6 +2919,31 @@ async fn refresh_final_url(
         read += chunk.len();
     }
     Some((url, headers))
+}
+
+/// Re-obtain a redirected repair URL, but only from the same final origin and
+/// only when the response confirms the exact saved validator and byte range.
+pub(crate) async fn refresh_repair_url(saved: &ResumeState, headers: &HeaderMap, opts: &Options) -> Option<Url> {
+    let expected = saved.validators.if_range(saved.final_url.host_str())?;
+    if opts.ignore_mtime && saved.validators.etag.as_deref() != Some(expected) { return None; }
+    let expected_header = HeaderValue::from_str(expected).ok()?;
+    let field = if expected.as_bytes().starts_with(b"\"") { header::ETAG } else { header::LAST_MODIFIED };
+    let client = http_client(opts, &saved.url).ok()?;
+    let mut asked = headers.clone();
+    asked.remove(header::RANGE);
+    asked.remove(header::IF_RANGE);
+    asked.insert(header::RANGE, HeaderValue::from_static("bytes=0-0"));
+    asked.insert(header::IF_RANGE, expected_header.clone());
+    let (response, _, _) = get(&client, saved.url.clone(), asked, None, opts.site_agent(), false, &CancellationToken::new()).await.ok()?;
+    let url = response.url();
+    if response.status() != StatusCode::PARTIAL_CONTENT
+        || url.scheme() != saved.final_url.scheme()
+        || url.host_str() != saved.final_url.host_str()
+        || url.port_or_known_default() != saved.final_url.port_or_known_default()
+        || response.headers().get(field) != Some(&expected_header)
+        || parse_content_range(response.headers()).ok()? != (0, 0, Some(saved.size))
+    { return None; }
+    Some(url.clone())
 }
 
 /// Check the finished part file against `hash` (at most two files at once: it reads them
@@ -3282,6 +3338,25 @@ fn link_refused(e: &Error) -> bool {
         // The site's page where the browser got the file (#701): its link spent, or bound to
         // the browser's visit.
         || matches!(e, Error::GotWebPage)
+}
+
+/// An expired SourceForge mirror address can be exchanged for a fresh mirror
+/// by requesting the same public file from SourceForge's download redirector.
+fn sourceforge_fresh_link(url: &Url) -> Option<Url> {
+    if url.scheme() != "https" || !url.username().is_empty() || url.password().is_some() || url.port().is_some() {
+        return None;
+    }
+    let host = url.host_str()?;
+    if host != "downloads.sourceforge.net" && !host.ends_with(".dl.sourceforge.net") {
+        return None;
+    }
+    let rest = url.path().strip_prefix("/project/")?;
+    let (project, file) = rest.split_once('/')?;
+    if project.is_empty() || !project.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_')) || file.is_empty() || file.ends_with('/') || file.split('/').any(|part| part.is_empty() || part == "." || part == "..") {
+        return None;
+    }
+    let fresh = Url::parse(&format!("https://downloads.sourceforge.net/project/{project}/{file}")).ok()?;
+    (fresh != *url).then_some(fresh)
 }
 
 /// What a download's first request needs besides its address, headers and options.
@@ -3860,6 +3935,7 @@ async fn supervise(ctx: Arc<Ctx>, first: Option<Body>) -> Result<(), Error> {
     // asks for a part of it, and the others follow its 206 (a site that refuses it leaves the
     // download on the first: `request`).
     let mut held = ctx.wait_for_ranges;
+    // The dynamic planner splits unfinished ranges while retaining browser range probes.
     let scouts = if probing && ctx.browser.is_some() {
         2
     } else {
@@ -4035,6 +4111,7 @@ async fn worker(ctx: Arc<Ctx>, id: WorkerId, mut first: Option<Body>) -> Result<
                         ));
                         ctx.shared
                             .conn(id, |c| c.status = ConnStatus::Retired { host, cap });
+                        ctx.shared.with_planner(|p| p.reassign_abandoned(id));
                         return Ok(());
                     }
                 }
@@ -4061,6 +4138,7 @@ async fn worker(ctx: Arc<Ctx>, id: WorkerId, mut first: Option<Body>) -> Result<
                     };
                     ctx.shared
                         .conn(id, |c| c.status = ConnStatus::Failed(e.clone()));
+                    ctx.shared.with_planner(|p| p.reassign_abandoned(id));
                     return if others { Ok(()) } else { Err(e) };
                 }
                 let mut received = 0;
@@ -4074,6 +4152,7 @@ async fn worker(ctx: Arc<Ctx>, id: WorkerId, mut first: Option<Body>) -> Result<
                     let others = ctx.shared.with_planner(|p| p.active_workers()) > 0;
                     ctx.shared
                         .conn(id, |c| c.status = ConnStatus::Failed(e.clone()));
+                    ctx.shared.with_planner(|p| p.reassign_abandoned(id));
                     return if others { Ok(()) } else { Err(e) };
                 }
                 ctx.shared
@@ -4236,11 +4315,14 @@ async fn request(ctx: &Ctx, target: &Target, from: u64, to: u64) -> Result<Body,
     }
     match head.status {
         StatusCode::PARTIAL_CONTENT => {
+            if let Some(source) = &ctx.repair_source {
+                if target.url != *source || !repair_response_matches(source, &head.url, if_range.as_ref(), &head.headers) { return Err(Error::FileChanged); }
+            }
             ctx.learn_ranges(true);
             ctx.range_answered.notify_one();
         }
         // The same file under another ETag (each CDN node has its own): go on with the date.
-        StatusCode::OK if per_node_etag(ctx, if_range.as_ref(), &head) => {
+        StatusCode::OK if ctx.repair_source.is_none() && per_node_etag(ctx, if_range.as_ref(), &head) => {
             return Err(Error::RangesUnavailable);
         }
         // Another server's copy, after the address moved there (a file host's fresh link):
@@ -4295,6 +4377,32 @@ fn browser_ranges_refused(ctx: &Ctx, head: &Head, why: &str) {
             "{}: a part of the file asked on the browser-like connection was {why}; going on with one connection",
             head.url.host_str().unwrap_or("?")
         ));
+    }
+}
+
+fn repair_response_matches(target: &Url, actual: &Url, validator: Option<&HeaderValue>, headers: &HeaderMap) -> bool {
+    let Some(expected) = validator else { return false };
+    let field = if expected.as_bytes().starts_with(b"\"") { header::ETAG } else { header::LAST_MODIFIED };
+    target == actual && headers.get(field) == Some(expected)
+}
+
+#[cfg(test)]
+mod repair_validator_tests {
+    use super::*;
+    #[test]
+    fn rejects_partial_response_from_changed_source_or_validator() {
+        let url = Url::parse("https://example.org/file").unwrap();
+        let different = Url::parse("https://example.org/other").unwrap();
+        let expected = HeaderValue::from_static("\"original\"");
+        let mut headers = HeaderMap::new();
+        headers.insert(header::ETAG, expected.clone());
+        assert!(repair_response_matches(&url, &url, Some(&expected), &headers));
+        assert!(!repair_response_matches(&url, &different, Some(&expected), &headers));
+        assert!(!repair_response_matches(&url, &url, None, &headers));
+        headers.insert(header::ETAG, HeaderValue::from_static("\"changed\""));
+        assert!(!repair_response_matches(&url, &url, Some(&expected), &headers));
+        headers.remove(header::ETAG);
+        assert!(!repair_response_matches(&url, &url, Some(&expected), &headers));
     }
 }
 
@@ -5038,6 +5146,7 @@ async fn receive(
         match complete {
             Some(end) => {
                 note_best(ctx, &pace);
+                note_short_completion(ctx, &pace);
                 // A segment another connection shortened leaves an HTTP body far from its end
                 // (dropped); an FTP session is kept either way.
                 if err.is_none() && (out.pos >= to || matches!(body, Body::Ftp(_))) {
@@ -5353,6 +5462,23 @@ fn note_best(ctx: &Ctx, pace: &Pace) {
     note_link(&ctx.shared);
 }
 
+/// Fast fixed ranges can finish before a normal speed sample exists. Record a deliberately
+/// conservative lower bound so a remaining connection crawling for minutes can reconnect.
+/// Divide by the full configured connection count to avoid penalizing a shared link.
+fn short_completion_floor(bytes: u64, elapsed: Duration, connections: u32) -> Option<u64> {
+    if bytes < 256 * 1024 || elapsed >= BEST_AFTER { return None; }
+    Some(rate(bytes, Duration::from_secs(1)) / u64::from(connections.max(1)))
+}
+
+fn note_short_completion(ctx: &Ctx, pace: &Pace) {
+    let count = ctx.opts.connections();
+    let Some(floor) = short_completion_floor(pace.received, pace.started.elapsed(), count).filter(|v| *v > 0) else { return; };
+    if ctx.shared.best_speed.compare_exchange(0, floor, Ordering::Relaxed, Ordering::Relaxed).is_ok() {
+        let mut link = ctx.shared.link.lock().unwrap();
+        link.best = link.best.max(floor.saturating_mul(u64::from(count)));
+    }
+}
+
 /// What a download's connections receive together, window by window (`LINK_WINDOW`).
 #[derive(Debug, Default)]
 struct LinkMeter {
@@ -5589,6 +5715,18 @@ pub(crate) async fn cancellable<T>(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn sourceforge_expired_mirrors_recover_through_public_redirector() {
+        use super::sourceforge_fresh_link;
+        use url::Url;
+        for host in ["downloads.sourceforge.net", "cfhcable.dl.sourceforge.net"] {
+            let old = Url::parse(&format!("https://{host}/project/crdroid/davinci/12.x/example%20file.zip?ts=expired")).unwrap();
+            assert_eq!(sourceforge_fresh_link(&old).unwrap().as_str(), "https://downloads.sourceforge.net/project/crdroid/davinci/12.x/example%20file.zip");
+        }
+        for value in ["https://downloads.sourceforge.net.evil.test/project/p/a.zip?ts=x", "https://user@downloads.sourceforge.net/project/p/a.zip?ts=x", "http://downloads.sourceforge.net/project/p/a.zip?ts=x", "https://downloads.sourceforge.net/project/onlyproject?ts=x"] {
+            assert!(sourceforge_fresh_link(&Url::parse(value).unwrap()).is_none(), "{value}");
+        }
+    }
     use super::*;
 
     #[test]
@@ -5790,6 +5928,17 @@ mod tests {
         assert_eq!(shed_bar(first, 3 * crawl, 3), first / 3);
         let end = shed_bar(first, 3 * crawl, 1);
         assert!(too_slow(crawl, three, end, 62 << 10, None), "a last piece");
+    }
+
+    #[test]
+    fn short_fixed_range_provides_a_conservative_slow_connection_floor() {
+        let mb = 1u64 << 20;
+        let floor = short_completion_floor(mb, Duration::from_millis(30), 8).unwrap();
+        assert_eq!(floor, mb / 8);
+        assert!(too_slow(1024, Duration::from_secs(3), floor, mb, None));
+        assert!(!too_slow(mb / 8, Duration::from_secs(3), floor, mb, None));
+        assert_eq!(short_completion_floor(100 << 10, Duration::from_millis(30), 8), None);
+        assert_eq!(short_completion_floor(mb, BEST_AFTER, 8), None);
     }
 
     #[test]

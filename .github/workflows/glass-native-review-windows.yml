@@ -1,0 +1,88 @@
+# Rerun native acceptance on an already-built installer candidate, Windows x64 only.
+name: Glass native Windows review
+on:
+  push:
+    branches: ["feature/ice-crystal-parity-windows"]
+  workflow_dispatch:
+    inputs:
+      source_run:
+        description: 'Windows installer build run containing the candidate artifact'
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+jobs:
+  native:
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[native review]') }}
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Select the installer candidate
+        shell: pwsh
+        env:
+          GLASS_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          GLASS_REQUESTED_RUN: ${{ inputs.source_run }}
+        run: |
+          $run = $env:GLASS_REQUESTED_RUN
+          if (-not $run) { $run = [regex]::Match($env:GLASS_COMMIT_MESSAGE, 'source-run:(\d+)').Groups[1].Value }
+          if ($run -notmatch '^\d+$') { throw 'Specify a valid installer source run' }
+          "GLASS_REVIEW_RUN=$run" >> $env:GITHUB_ENV
+      - uses: actions/download-artifact@v4
+        with:
+          name: mister-hybrid-glass-windows-x64-candidate
+          path: ${{ runner.temp }}/glass-installer
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ env.GLASS_REVIEW_RUN }}
+      - name: Install WebView2 and the candidate in an isolated directory
+        shell: pwsh
+        run: |
+          $runtime = Join-Path $env:RUNNER_TEMP 'MicrosoftEdgeWebview2Setup.exe'
+          Invoke-WebRequest 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile $runtime
+          Start-Process $runtime -ArgumentList '/silent /install' -Wait
+          $root = Join-Path $env:RUNNER_TEMP 'glass-native-acceptance'
+          $installer = (Get-ChildItem (Join-Path $env:RUNNER_TEMP 'glass-installer') -Filter *.exe).FullName
+          Start-Process $installer -ArgumentList "/S /D=$root" -Wait
+          "GLASS_E2E_DIR=$root" >> $env:GITHUB_ENV
+          "GLASS_E2E_EXE=$root\mister-hybrid-glass.exe" >> $env:GITHUB_ENV
+          "GLASS_E2E_SOURCE_RUN=$env:GLASS_REVIEW_RUN" >> $env:GITHUB_ENV
+      - name: Install test client
+        working-directory: glass-ui
+        shell: pwsh
+        run: npm install --no-audit --no-fund
+      - name: Rebuild the current Glass interface against the candidate backend
+        if: ${{ contains(github.event.head_commit.message, '[rebuild ui]') }}
+        shell: pwsh
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add x86_64-pc-windows-msvc
+          New-Item -ItemType Directory -Force glass-ui/src-tauri/resources,glass-ui/src-tauri/icons | Out-Null
+          Copy-Item (Join-Path $env:GLASS_E2E_DIR 'mdm-legacy.exe') glass-ui/src-tauri/resources/mdm-legacy.exe
+          Copy-Item (Join-Path $env:GLASS_E2E_DIR 'misterdownloadmanager-nmhost.exe') glass-ui/src-tauri/resources/misterdownloadmanager-nmhost.exe
+          Copy-Item crates/app/assets/icons/app/mdm.ico glass-ui/src-tauri/icons/icon.ico
+          Push-Location glass-ui
+          try { npm run tauri -- build --no-bundle; if ($LASTEXITCODE -ne 0) { throw 'Glass UI build failed' } }
+          finally { Pop-Location }
+          Get-Process 'mister-hybrid-glass','mdm-legacy' -ErrorAction SilentlyContinue | Stop-Process -Force
+          Copy-Item glass-ui/src-tauri/target/release/mister-hybrid-glass.exe $env:GLASS_E2E_EXE -Force
+
+      - name: Real native acceptance
+        timeout-minutes: 7
+        shell: pwsh
+        run: |
+          node tools/lab/glass-native-acceptance.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Native acceptance failed; inspect proof artifact' }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mister-hybrid-glass-windows-proof
+          path: ${{ runner.temp }}/glass-native-acceptance/proof/
+          if-no-files-found: warn
+          retention-days: 14

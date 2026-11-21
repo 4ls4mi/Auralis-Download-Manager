@@ -32,6 +32,9 @@ pub struct ResumeState {
     legacy_validator: Option<String>,
     /// Bytes `[start, cursor)` of each segment are on disk.
     pub segments: Vec<SavedSegment>,
+    /// Hashes of committed ranges, including partial blocks; absent in older downloads.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub block_hashes: Vec<crate::recovery::SavedBlockHash>,
     /// The `Content-Type` the file was first served with (an HTML answer to a file that wasn't
     /// HTML is a sign-in wall, not data).
     #[serde(default)]
@@ -51,6 +54,12 @@ pub struct ResumeState {
     /// through it, on one connection.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub browser_like: bool,
+    /// Repair resumes must revalidate the source on every partial response.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub repair_strict: bool,
+    /// Exact source confirmed when the repair plan was created.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repair_source: Option<Url>,
 }
 
 impl ResumeState {
@@ -64,11 +73,14 @@ impl ResumeState {
             validators,
             legacy_validator: None,
             segments: Vec::new(),
+            block_hashes: Vec::new(),
             content_type: None,
             checksum: None,
             asked_as_mdm: false,
             final_get: false,
             browser_like: false,
+            repair_strict: false,
+            repair_source: None,
         }
     }
 
@@ -100,8 +112,49 @@ impl ResumeState {
         part: &File,
     ) -> io::Result<()> {
         part.sync_data()?;
+        // Reopen separately: seeking a cloned handle can disturb concurrent writers.
+        let mut reader = File::open(crate::naming::part_path(&self.dest))?;
+        let hashes = crate::recovery::capture_checkpoint_blocks(
+            &mut reader,
+            self.size,
+            &segments,
+            &self.block_hashes,
+            crate::recovery::CHECKPOINT_BLOCK_SIZE,
+        )?;
         self.segments = segments;
+        self.block_hashes = hashes;
         self.write(path)
+    }
+
+    /// Check a stopped partial download without modifying it. Unhashed saved
+    /// bytes (including older downloads) remain explicitly unverified.
+    pub fn verify_saved_blocks(&self) -> io::Result<crate::recovery::CheckpointVerification> {
+        let mut part = File::open(crate::naming::part_path(&self.dest))?;
+        if part.metadata()?.len() != self.size {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "partial file has the wrong size",
+            ));
+        }
+        crate::recovery::verify_checkpoint(&mut part, self.size, &self.segments, &self.block_hashes)
+    }
+
+    /// Prepare (but do not persist) a repair plan for changed saved ranges.
+    /// The caller must first establish a compatible range-capable source and
+    /// preserve the original state before applying the returned plan.
+    pub fn proposed_repair(&self) -> io::Result<(Self, crate::recovery::CheckpointVerification)> {
+        let report = self.verify_saved_blocks()?;
+        let segments =
+            crate::recovery::plan_range_repair(self.size, &self.segments, &report.damaged_ranges)?;
+        let mut planned = self.clone();
+        planned.segments = segments;
+        planned.block_hashes.retain(|block| {
+            !report
+                .damaged_ranges
+                .iter()
+                .any(|&(start, end)| start < block.end && block.start < end)
+        });
+        Ok((planned, report))
     }
 
     /// Write as is (its segments must already be on disk).
@@ -257,7 +310,8 @@ mod tests {
     fn save_load_round_trip() {
         let dir = tempfile::tempdir().unwrap();
         let dest = dir.path().join("a.bin");
-        let part = File::create(dir.path().join("a.bin.part")).unwrap();
+        let part = File::create(crate::naming::part_path(&dest)).unwrap();
+        part.set_len(100).unwrap();
         let url: Url = "http://x/a.bin".parse().unwrap();
         let v = Validators::from_response(Some("\"e\""), None, None, Some("x"));
         let mut s = ResumeState::new(url.clone(), url, dest.clone(), 100, v);
@@ -277,6 +331,60 @@ mod tests {
         let loaded = ResumeState::load(&state_path(&dest)).unwrap();
         assert_eq!(loaded, s);
         assert_eq!(loaded.downloaded(), 20);
+    }
+
+    #[test]
+    fn checkpoint_persists_complete_and_partial_committed_blocks() {
+        use std::io::{Seek, SeekFrom, Write};
+        let dir = tempfile::tempdir().unwrap();
+        let dest = dir.path().join("data.bin");
+        let mut part = std::fs::OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .truncate(true)
+            .open(crate::naming::part_path(&dest))
+            .unwrap();
+        let block = crate::recovery::CHECKPOINT_BLOCK_SIZE;
+        part.write_all(&vec![42; (block + 4) as usize]).unwrap();
+        let url: Url = "http://x/data.bin".parse().unwrap();
+        let mut s = ResumeState::new(
+            url.clone(),
+            url,
+            dest.clone(),
+            block + 4,
+            Validators::default(),
+        );
+        let segments = vec![SavedSegment {
+            start: 0,
+            cursor: block + 2,
+            end: block + 4,
+        }];
+        s.save(&state_path(&dest), segments.clone(), &part).unwrap();
+        let loaded = ResumeState::load(&state_path(&dest)).unwrap();
+        assert_eq!(loaded.block_hashes.len(), 2);
+        assert_eq!(
+            (loaded.block_hashes[0].start, loaded.block_hashes[0].end),
+            (0, block)
+        );
+        assert_eq!(
+            (loaded.block_hashes[1].start, loaded.block_hashes[1].end),
+            (block, block + 2)
+        );
+        part.seek(SeekFrom::Start(1)).unwrap();
+        part.write_all(&[9]).unwrap();
+        s.save(&state_path(&dest), segments, &part).unwrap();
+        let saved = ResumeState::load(&state_path(&dest)).unwrap();
+        assert_eq!(saved.block_hashes, loaded.block_hashes);
+        let report = saved.verify_saved_blocks().unwrap();
+        assert_eq!(report.checked_bytes, block + 2);
+        assert_eq!(report.unhashed_bytes, 0);
+        assert_eq!(report.damaged_ranges, vec![(0, block)]);
+        let (plan, report) = saved.proposed_repair().unwrap();
+        assert_eq!(report.damaged_ranges, vec![(0, block)]);
+        assert_eq!(plan.downloaded(), 2);
+        assert_eq!(plan.block_hashes.len(), 1);
+        assert_eq!(ResumeState::load(&state_path(&dest)).unwrap(), saved);
     }
 
     const LM: &str = "Wed, 21 Oct 2015 07:28:00 GMT";

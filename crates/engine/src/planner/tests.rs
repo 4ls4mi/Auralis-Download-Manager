@@ -3,6 +3,68 @@ use proptest::prelude::*;
 
 const MB: u64 = 1 << 20;
 
+#[test]
+fn fixed_ranges_stay_with_their_worker_through_a_disconnect() {
+    let mut p = Planner::new(100, 1);
+    p.reserve_fixed_ranges(2);
+    assert_eq!((p.assign(0, None).unwrap().from, p.assign(1, None).unwrap().from), (0, 50));
+    assert_eq!(p.claim(1, 50, 20), Claim::Granted(20));
+    p.commit(1, 70);
+    p.release(1);
+    assert_eq!(p.claim(0, 0, 50), Claim::Granted(50));
+    assert_eq!(p.commit(0, 50), Some(50));
+    assert_eq!(p.assign(0, Some(50)), None, "a worker cannot take another's range");
+    let resumed = p.assign(1, None).unwrap();
+    assert_eq!((resumed.from, resumed.to, resumed.written), (70, 100, 20));
+    assert_eq!(p.downloaded(), 70);
+    check_invariants(&p);
+}
+
+#[test]
+fn fixed_ranges_preserve_progress_from_an_older_resume_file() {
+    let saved = [SavedSegment { start: 0, cursor: 30, end: 60 }, SavedSegment { start: 60, cursor: 75, end: 100 }];
+    let mut p = Planner::resume(100, 1, &saved).unwrap();
+    p.reserve_fixed_ranges(2);
+    assert_eq!(p.downloaded(), 45);
+    assert_eq!(p.assign(0, None).unwrap().from, 30);
+    assert_eq!(p.assign(1, None).unwrap().from, 50);
+    check_invariants(&p);
+}
+
+#[test]
+fn fixed_ranges_can_fall_back_if_a_server_refuses_a_worker() {
+    let mut p = Planner::new(100, 1);
+    p.reserve_fixed_ranges(2);
+    p.assign(0, None).unwrap();
+    p.assign(1, None).unwrap();
+    p.release(1);
+    assert_eq!(p.claim(0, 0, 50), Claim::Granted(50));
+    assert_eq!(p.commit(0, 50), Some(50));
+    p.allow_reassignment();
+    assert_eq!(p.assign(0, None).unwrap().from, 50);
+    check_invariants(&p);
+}
+
+#[test]
+fn refused_connection_does_not_enable_repeated_dynamic_splits() {
+    let mut p = Planner::new(120, 1);
+    p.reserve_fixed_ranges(3);
+    for w in 0..3 { p.assign(w, None).unwrap(); }
+    assert_eq!(p.claim(1, 40, 10), Claim::Granted(10));
+    p.commit(1, 50);
+    p.release(1);
+    p.reassign_abandoned(1);
+    assert_eq!(p.claim(0, 0, 40), Claim::Granted(40));
+    assert_eq!(p.commit(0, 40), Some(40));
+    let next = p.assign(0, Some(40)).unwrap();
+    assert_eq!((next.from, next.to), (50, 80));
+    assert_eq!(p.claim(0, 50, 30), Claim::Granted(30));
+    assert_eq!(p.commit(0, 80), Some(80));
+    assert_eq!(p.assign(0, Some(80)), None, "worker 0 must not split worker 2's range");
+    assert_eq!(p.downloaded(), 80);
+    check_invariants(&p);
+}
+
 fn check_invariants(p: &Planner) {
     let mut expect = 0;
     let mut workers = std::collections::HashSet::new();
@@ -59,6 +121,33 @@ fn reassigned_segment_reports_the_bytes_already_written() {
         (3 * MB, 3 * MB),
         "resume point and data before it"
     );
+    check_invariants(&p);
+}
+
+#[test]
+fn different_worker_does_not_claim_previous_workers_completed_bytes() {
+    let mut p = Planner::new(10 * MB, MB);
+    p.assign(0, None).unwrap();
+    assert_eq!(p.claim(0, 0, 3 * MB), Claim::Granted(3 * MB));
+    p.commit(0, 3 * MB);
+    p.release(0);
+    let a = p.assign(1, None).unwrap();
+    assert_eq!((a.from, a.to, a.written), (3 * MB, 10 * MB, 3 * MB));
+    assert_eq!(p.segments()[0].last_worker, Some(0));
+    assert_eq!((p.segments()[0].start, p.segments()[0].cursor, p.segments()[0].end), (0, 3 * MB, 3 * MB));
+    assert_eq!((p.segments()[1].start, p.segments()[1].worker), (3 * MB, Some(1)));
+    assert_eq!(p.downloaded(), 3 * MB);
+    check_invariants(&p);
+}
+
+#[test]
+fn restored_bytes_are_not_attributed_to_new_connection() {
+    let saved = [SavedSegment { start: 0, cursor: 3 * MB, end: 10 * MB }];
+    let mut p = Planner::resume(10 * MB, MB, &saved).unwrap();
+    let a = p.assign(1, None).unwrap();
+    assert_eq!((a.from, a.written), (3 * MB, 3 * MB));
+    assert_eq!(p.segments()[0].last_worker, None);
+    assert_eq!(p.segments()[1].worker, Some(1));
     check_invariants(&p);
 }
 
@@ -432,4 +521,15 @@ proptest! {
         }
         world.finish();
     }
+}
+
+#[test]
+fn completed_segment_retains_its_last_worker_for_progress_display() {
+    let mut p = Planner::new(100, 1);
+    let a = p.assign(7, None).expect("worker receives the file range");
+    assert_eq!(a.from, 0);
+    assert_eq!(p.claim(7, 0, 100), Claim::Granted(100));
+    assert_eq!(p.commit(7, 100), Some(100));
+    assert_eq!(p.segments()[0].worker, None);
+    assert_eq!(p.segments()[0].last_worker, Some(7));
 }

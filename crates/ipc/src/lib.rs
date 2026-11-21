@@ -17,6 +17,8 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
+fn is_false(value: &bool) -> bool { !*value }
+
 /// A request to the running app.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(default)]
@@ -32,6 +34,10 @@ pub struct Command {
     pub checksum: Option<String>,
     /// `/a`: add to the main queue, don't start.
     pub later: bool,
+    /// Optional per-download connection/chunk limit. The app validates 1..=128.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(skip)]
+    pub connections: Option<u32>,
     /// `/n`: silent — no Download File Info dialog.
     pub silent: bool,
     /// `/s`: start the main queue.
@@ -50,6 +56,14 @@ pub struct Command {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub origin: Option<String>,
     pub cookies: Option<String>,
+    /// Use this video's supplied browser cookies instead of global helper cookie settings.
+    #[serde(skip_serializing_if = "is_false")]
+    #[schemars(skip)]
+    pub video_explicit_cookies: bool,
+    /// Browser selected specifically for this video lookup.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(skip)]
+    pub video_cookie_browser: Option<String>,
     /// From the browser: the same cookies, each with the domain, path and flags the browser
     /// keeps for it, for yt-dlp's cookie file. yt-dlp may ask another host than the page's (a
     /// YouTube Music page is looked up on www.youtube.com), and a cookie of `.youtube.com` goes

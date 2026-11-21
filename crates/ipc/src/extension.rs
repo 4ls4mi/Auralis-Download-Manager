@@ -4,10 +4,14 @@
 
 /// The extension's ID loaded unpacked (the public key in extension/manifest.json).
 pub const UNPACKED_ID: &str = "oogbclbbninliongijffeeggalppliok";
+/// The separate Auralis development extension, with its own public key.
+pub const AURALIS_UNPACKED_ID: &str = "ghelllciojchjjlnghidngnfedogaggk";
 /// Its ID in the Chrome Web Store, which signs it with the store's own key
 /// (tools/extension/pack.ps1 leaves the manifest's key out of the store's copy). [`store_id`] is
 /// `None` while this is not a valid ID (a placeholder), and then nothing names it.
-pub const STORE_ID: &str = "ejoleppdfgjdndddcjoehopknmlglojp";
+pub const STORE_ID: &str = "bobmhloppnfipdjjncalidjenegfgebg";
+/// Previously supported upstream store extension, retained for existing installations.
+pub const LEGACY_STORE_ID: &str = "ejoleppdfgjdndddcjoehopknmlglojp";
 /// Its IDs in Microsoft Edge Add-ons and Opera add-ons, which give their own; placeholders until
 /// listed there, never served then (`valid_id`).
 pub const OTHER_STORE_IDS: [&str; 2] = ["EDGE_ADDONS_ID_PENDING", "OPERA_ADDONS_ID_PENDING"];
@@ -16,6 +20,7 @@ pub const OTHER_STORE_IDS: [&str; 2] = ["EDGE_ADDONS_ID_PENDING", "OPERA_ADDONS_
 pub const FIREFOX_PAGE: &str = "https://addons.mozilla.org/firefox/addon/mister-download-manager/";
 /// The Firefox add-on's ID (extension/manifest.firefox.json).
 pub const FIREFOX_ID: &str = "integration@misterdownloadmanager.com";
+pub const AURALIS_FIREFOX_ID: &str = "integration@auralis.download";
 /// Chrome's update service: an external-install entry naming it makes Chrome offer the store's
 /// extension at its next start (developer.chrome.com, "Alternative extension distribution
 /// options").
@@ -38,6 +43,8 @@ pub fn store_id() -> Option<&'static str> {
 /// The Chromium extensions the native host serves: unpacked, and each store's once listed.
 pub fn chromium_ids() -> Vec<&'static str> {
     std::iter::once(UNPACKED_ID)
+        .chain(std::iter::once(AURALIS_UNPACKED_ID))
+        .chain(std::iter::once(LEGACY_STORE_ID))
         .chain(store_id())
         .chain(OTHER_STORE_IDS.into_iter().filter(|id| valid_id(id)))
         .collect()
@@ -47,7 +54,7 @@ pub fn chromium_ids() -> Vec<&'static str> {
 /// install from it), once it is listed: the listing's own address, its name then its ID.
 pub fn store_page() -> Option<String> {
     store_id()
-        .map(|id| format!("https://chromewebstore.google.com/detail/mister-download-manager/{id}"))
+        .map(|id| format!("https://chromewebstore.google.com/detail/auralis-download-manager/{id}"))
 }
 
 /// The tutorial that adds the extension: from the stores, and by hand (a build of its own, or
@@ -67,10 +74,14 @@ const SEEN: &str = "extension-seen";
 
 /// The host, started by a browser for the extension: the extension is installed there. The
 /// file holds one line per browser (`capture::browser_named`), with the extension's version.
-pub fn mark_seen(browser: &str, version: &str) {
+pub fn mark_seen(browser: &str, version: &str, extension_id: Option<&str>) {
     let Some(dir) = crate::data_dir() else {
         return;
     };
+    // Timestamp a real browser-to-host handshake independently of historical installs.
+    let _ = crate::private_dir(&dir);
+    let id = extension_id.filter(|id| valid_id(id)).unwrap_or("");
+    let _ = std::fs::write(dir.join("extension-recent-handshake"), format!("{browser}\t{id}"));
     let file = dir.join(SEEN);
     let known = std::fs::read_to_string(&file).ok();
     let mut lines: Vec<(String, String)> = known.as_deref().map(parse_seen).unwrap_or_default();
@@ -102,6 +113,28 @@ pub fn seen() -> bool {
     crate::data_dir().is_some_and(|d| d.join(SEEN).exists())
 }
 
+/// True only shortly after a browser actually started the native host.
+pub fn recently_connected() -> bool {
+    crate::data_dir().and_then(|d|std::fs::metadata(d.join("extension-recent-handshake")).ok())
+        .and_then(|m|m.modified().ok()).and_then(|t|t.elapsed().ok())
+        .is_some_and(|age|age.as_secs()<120)
+}
+
+/// Browser associated with the latest recent handshake, when identified.
+pub fn recently_connected_browser() -> Option<String> {
+    if !recently_connected() { return None; }
+    crate::data_dir().and_then(|d|std::fs::read_to_string(d.join("extension-recent-handshake")).ok())
+        .and_then(|s| s.split('\t').next().map(str::to_owned))
+        .filter(|s|!s.is_empty() && s!="connected" && s.len()<=128)
+}
+
+/// The Chromium extension ID that made the latest native-messaging handshake.
+pub fn recently_connected_extension_id() -> Option<String> {
+    if !recently_connected() { return None; }
+    crate::data_dir().and_then(|d|std::fs::read_to_string(d.join("extension-recent-handshake")).ok())
+        .and_then(|s|s.split('\t').nth(1).filter(|id|valid_id(id)).map(str::to_owned))
+}
+
 /// The browsers whose extension has reached the app, with its version (empty when unknown).
 pub fn seen_browsers() -> Vec<(String, String)> {
     crate::data_dir()
@@ -129,7 +162,7 @@ mod tests {
     /// allowed_origins and the host's own caller check are this list.
     #[test]
     fn store_and_unpacked_both_served() {
-        assert_eq!(STORE_ID, "ejoleppdfgjdndddcjoehopknmlglojp");
+        assert_eq!(STORE_ID, "bobmhloppnfipdjjncalidjenegfgebg");
         assert_eq!(UNPACKED_ID, "oogbclbbninliongijffeeggalppliok");
         let ids = chromium_ids();
         assert!(
@@ -139,7 +172,7 @@ mod tests {
         assert_eq!(
             store_page().as_deref(),
             Some(
-                "https://chromewebstore.google.com/detail/mister-download-manager/ejoleppdfgjdndddcjoehopknmlglojp"
+                "https://chromewebstore.google.com/detail/auralis-download-manager/bobmhloppnfipdjjncalidjenegfgebg"
             )
         );
     }

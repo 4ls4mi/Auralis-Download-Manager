@@ -1,0 +1,343 @@
+name: Auralis Windows build on your PC
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/auralis-frosted-candidate]
+    paths:
+      - '.github/workflows/auralis-self-hosted-windows.yml'
+      - '.github/scripts/verify-auralis-release.py'
+      - '.github/scripts/test_verify_auralis_release.py'
+      - 'glass-ui/**'
+      - 'tools/lab/auralis-embedded-smoke.mjs'
+      - 'auralis-extension/**'
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rust-toolchain.toml'
+      - '.cargo/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: auralis-self-hosted-windows
+  cancel-in-progress: false
+
+jobs:
+  windows-x64:
+    name: Build and test on your PC
+    permissions:
+      contents: read
+    # Only explicitly named, owner-maintained branches may run on a personal computer.
+    if: github.ref == 'refs/heads/feature/auralis-frosted-candidate' || (github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/feature/auralis-embedded-engine' || github.ref == 'refs/heads/feature/auralis-preferences-ui' || github.ref == 'refs/heads/feature/auralis-recovery-validation'))
+    runs-on: [self-hosted, Windows, X64, auralis]
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          # Keep target/ and node_modules/ on this dedicated runner between builds.
+          clean: false
+
+      - name: Set up Node.js 22
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $cacheDir = Join-Path $env:RUNNER_WORKSPACE 'auralis-cache'
+          New-Item -ItemType Directory -Force $cacheDir | Out-Null
+          $archive = Join-Path $cacheDir 'node-v22.23.5-win-x64.zip'
+          $nodeDir = Join-Path $cacheDir 'node-v22.23.5-win-x64'
+          if (!(Test-Path (Join-Path $nodeDir 'node.exe'))) {
+            if (!(Test-Path $archive)) { Invoke-WebRequest 'https://nodejs.org/dist/v22.23.5/node-v22.23.5-win-x64.zip' -OutFile $archive }
+            if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne '4a191082e9706866830379d577d2cc8a50c776fcd9436a8d061b063ed0d9a0e3') { Remove-Item $archive -Force; throw 'Node archive checksum mismatch.' }
+            Expand-Archive -Path $archive -DestinationPath $cacheDir -Force
+          }
+          $nodeDir >> $env:GITHUB_PATH
+
+      - name: Use a short persistent build path
+        shell: pwsh
+        run: |
+          $targetDir = Join-Path $env:LOCALAPPDATA 'AuralisRunner/target'
+          New-Item -ItemType Directory -Force $targetDir | Out-Null
+          "CARGO_TARGET_DIR=$targetDir" >> $env:GITHUB_ENV
+
+      - name: Set up cached Rust toolchain
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $cacheDir = Join-Path $env:RUNNER_WORKSPACE 'auralis-cache'
+          $env:CARGO_HOME = Join-Path $cacheDir 'cargo'
+          $env:RUSTUP_HOME = Join-Path $cacheDir 'rustup'
+          "CARGO_HOME=$env:CARGO_HOME" >> $env:GITHUB_ENV
+          "RUSTUP_HOME=$env:RUSTUP_HOME" >> $env:GITHUB_ENV
+          (Join-Path $env:CARGO_HOME 'bin') >> $env:GITHUB_PATH
+          if (!(Test-Path (Join-Path $env:CARGO_HOME 'bin/rustup.exe'))) {
+            $installer = Join-Path $cacheDir 'rustup-init.exe'
+            $url = 'https://static.rust-lang.org/rustup/archive/1.29.3/x86_64-pc-windows-msvc/rustup-init.exe'
+            Invoke-WebRequest $url -OutFile $installer
+            $expected = '38027d51d69a5d05493627a0634dbea52d6cd793c8f072d2373d3f4163eec7db'
+            if ((Get-FileHash $installer -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) { throw 'Rust installer checksum mismatch.' }
+            & $installer -y --profile minimal --default-toolchain stable --no-modify-path
+            if ($LASTEXITCODE) { throw 'Rust toolchain setup failed.' }
+          }
+
+      - name: Check required tools
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($tool in @('node', 'npm', 'cargo', 'rustup')) {
+            if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) { throw "Missing $tool. Install it for the runner account and restart the runner." }
+          }
+          node --version
+          cargo --version
+          rustup target add x86_64-pc-windows-msvc
+          if ($LASTEXITCODE) { throw 'Could not install the Windows MSVC target.' }
+
+      - name: Set up cached CMake and NASM
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $cacheDir = Join-Path $env:RUNNER_WORKSPACE 'auralis-cache'
+          $tools = @(
+            @{ Name='CMake'; Archive='cmake-3.31.10-windows-x86_64.zip'; Url='https://cmake.org/files/v3.31/cmake-3.31.10-windows-x86_64.zip'; Sha='13d1a463d7130df5339baedd63d8ae990aaf385062b2f42f372796143ae94086'; Bin='cmake-3.31.10-windows-x86_64/bin'; Exe='cmake.exe' },
+            @{ Name='NASM'; Archive='nasm-2.16.03-win64.zip'; Url='https://www.nasm.us/pub/nasm/releasebuilds/2.16.03/win64/nasm-2.16.03-win64.zip'; Sha='3ee4782247bcb874378d02f7eab4e294a84d3d15f3f6ee2de2f47a46aa7226e6'; Bin='nasm-2.16.03'; Exe='nasm.exe' }
+          )
+          foreach ($tool in $tools) {
+            $bin = Join-Path $cacheDir $tool.Bin
+            if (!(Test-Path (Join-Path $bin $tool.Exe))) {
+              $archive = Join-Path $cacheDir $tool.Archive
+              if (!(Test-Path $archive)) { Invoke-WebRequest $tool.Url -OutFile $archive }
+              if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne $tool.Sha) { Remove-Item $archive -Force; throw "$($tool.Name) archive checksum mismatch." }
+              Expand-Archive -Path $archive -DestinationPath $cacheDir -Force
+            }
+            $bin >> $env:GITHUB_PATH
+          }
+
+      - name: Set up cached libclang
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $cacheDir = Join-Path $env:RUNNER_WORKSPACE 'auralis-cache'
+          $folder = Join-Path $cacheDir 'libclang-18.1.3.2'
+          $native = Join-Path $folder 'runtimes/win-x64/native'
+          if (!(Test-Path (Join-Path $native 'libclang.dll'))) {
+            $archive = Join-Path $cacheDir 'libclang-win-x64-18.1.3.2.zip'
+            if (!(Test-Path $archive)) { Invoke-WebRequest 'https://api.nuget.org/v3-flatcontainer/libclang.runtime.win-x64/18.1.3.2/libclang.runtime.win-x64.18.1.3.2.nupkg' -OutFile $archive }
+            if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne '524e5cce91f43a74d5bbf57debc42c11b87e8fa86f1fc95be7375dd67b427e18') { Remove-Item $archive -Force; throw 'libclang archive checksum mismatch.' }
+            Expand-Archive -Path $archive -DestinationPath $folder -Force
+          }
+          "LIBCLANG_PATH=$native" >> $env:GITHUB_ENV
+
+      - name: Prepare verified Deno runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $cacheDir = Join-Path $env:RUNNER_WORKSPACE 'auralis-cache'
+          New-Item -ItemType Directory -Force $cacheDir | Out-Null
+          $cache = Join-Path $cacheDir 'auralis-deno-2.9.8.zip'
+          if (!(Test-Path $cache)) { Invoke-WebRequest 'https://github.com/denoland/deno/releases/download/v2.9.8/deno-x86_64-pc-windows-msvc.zip' -OutFile $cache }
+          if ((Get-FileHash $cache -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'cba84b26e0df5ae7f74fc66b86a95b866872a86292ebd84fa1e959927edd93bf') { Remove-Item $cache -Force; throw 'Deno archive checksum mismatch.' }
+          $folder = Join-Path $env:RUNNER_TEMP 'auralis-deno-2.9.8'
+          Expand-Archive -Path $cache -DestinationPath $folder -Force
+          New-Item -ItemType Directory -Force glass-ui/src-tauri/resources | Out-Null
+          Copy-Item (Join-Path $folder 'deno.exe') glass-ui/src-tauri/resources/deno.exe -Force
+          Invoke-WebRequest 'https://raw.githubusercontent.com/denoland/deno/v2.9.8/LICENSE.md' -OutFile glass-ui/src-tauri/resources/deno-LICENSE.md
+
+      - name: Build browser helper
+        shell: pwsh
+        run: |
+          $env:AURALIS_ENGINE_REV = (git log -1 --format=%h -- crates i18n assets Cargo.toml Cargo.lock .cargo rust-toolchain.toml).Trim()
+          if ($LASTEXITCODE -ne 0 -or !$env:AURALIS_ENGINE_REV) { throw 'Could not determine backend revision.' }
+          "AURALIS_ENGINE_REV=$env:AURALIS_ENGINE_REV" >> $env:GITHUB_ENV
+          cargo build --release --target x86_64-pc-windows-msvc -p mdm-nmhost
+          if ($LASTEXITCODE) { throw 'Browser helper build failed.' }
+          Copy-Item "$env:CARGO_TARGET_DIR/x86_64-pc-windows-msvc/release/misterdownloadmanager-nmhost.exe" glass-ui/src-tauri/resources/misterdownloadmanager-nmhost.exe -Force
+
+      - name: Test download engine
+        shell: pwsh
+        run: |
+          cargo test -p mdm-engine --target x86_64-pc-windows-msvc --lib --test e2e --test ftp
+          if ($LASTEXITCODE) { throw 'Download engine tests failed.' }
+
+      - name: Test embedded downloader service
+        shell: pwsh
+        run: |
+          cargo test -p mdm-app --target x86_64-pc-windows-msvc --test embedded_service
+          if ($LASTEXITCODE) { throw 'Embedded downloader smoke test failed.' }
+
+      - name: Test backup snapshot and torrent comparison
+        shell: pwsh
+        run: |
+          cargo test -p mdm-app --target x86_64-pc-windows-msvc --lib backup_snapshot::
+          if ($LASTEXITCODE) { throw 'Backup snapshot tests failed.' }
+          cargo test -p mdm-torrent --target x86_64-pc-windows-msvc --lib compare_saved_download
+          if ($LASTEXITCODE) { throw 'Torrent comparison test failed.' }
+
+      - name: Install and test interface
+        working-directory: glass-ui
+        shell: pwsh
+        run: |
+          npm install
+          if ($LASTEXITCODE) { throw 'npm install failed.' }
+          npm test
+          if ($LASTEXITCODE) { throw 'Interface tests failed.' }
+          npm run build
+          if ($LASTEXITCODE) { throw 'Interface build failed.' }
+
+      - name: Build Windows installer
+        working-directory: glass-ui
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Remove-Item "$env:CARGO_TARGET_DIR/release/bundle/nsis" -Recurse -Force -ErrorAction SilentlyContinue
+          # NSIS is a 32-bit program. A runner under System32 is redirected to SysWOW64,
+          # so inputs must be staged outside System32 before makensis reads them.
+          $staging = Join-Path $env:LOCALAPPDATA 'AuralisRunner/bundle-resources'
+          $extension = Join-Path $staging 'auralis-extension'
+          New-Item -ItemType Directory -Force $staging | Out-Null
+          Remove-Item $extension -Recurse -Force -ErrorAction SilentlyContinue
+          Copy-Item '../auralis-extension' $extension -Recurse -Force
+          $resourceFiles = @('misterdownloadmanager-nmhost.exe','deno.exe','deno-LICENSE.md')
+          foreach ($file in $resourceFiles) {
+            Copy-Item (Join-Path 'src-tauri/resources' $file) (Join-Path $staging $file) -Force
+          }
+          foreach ($file in @('auralis.ico','auralis.png')) {
+            Copy-Item (Join-Path 'src-tauri/icons' $file) (Join-Path $staging $file) -Force
+          }
+          $configPath = (Resolve-Path 'src-tauri/tauri.conf.json').Path
+          $original = [IO.File]::ReadAllText($configPath)
+          try {
+            $config = $original | ConvertFrom-Json -AsHashtable
+            $resources = [ordered]@{}
+            foreach ($file in $resourceFiles) {
+              $resources[(Join-Path $staging $file).Replace('\','/')] = $file
+            }
+            $resources[$extension.Replace('\','/') + '/'] = 'auralis-extension/'
+            $config.bundle.resources = $resources
+            $config.bundle.icon = @((Join-Path $staging 'auralis.ico').Replace('\','/'), (Join-Path $staging 'auralis.png').Replace('\','/'))
+            [IO.File]::WriteAllText($configPath, ($config | ConvertTo-Json -Depth 100), [Text.UTF8Encoding]::new($false))
+            npm run tauri -- build --bundles nsis --features embedded-downloader
+            if ($LASTEXITCODE) { throw 'Installer build failed.' }
+          } finally {
+            [IO.File]::WriteAllText($configPath, $original, [Text.UTF8Encoding]::new($false))
+          }
+
+      - name: Test integrated Windows application
+        shell: pwsh
+        run: |
+          $env:AURALIS_EMBEDDED_EXE = Join-Path $env:CARGO_TARGET_DIR 'release/auralis-download-manager.exe'
+          $env:AURALIS_NATIVE_HOST = Join-Path $env:CARGO_TARGET_DIR 'x86_64-pc-windows-msvc/release/misterdownloadmanager-nmhost.exe'
+          node tools/lab/auralis-embedded-smoke.mjs
+          if ($LASTEXITCODE) { throw 'Integrated application smoke test failed.' }
+
+      - name: Upload Auralis installer
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: auralis-download-manager-windows-x64
+          path: ${{ env.CARGO_TARGET_DIR }}/release/bundle/nsis/*.exe
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Package Auralis browser extensions
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($script in @('background.js','video.js','thumbnail.js')) {
+            node --check (Join-Path 'auralis-extension' $script)
+            if ($LASTEXITCODE) { throw "Invalid extension script: $script" }
+          }
+          Remove-Item extension-staging, extension-packages -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path extension-packages, extension-staging/chromium, extension-staging/edge-store, extension-staging/firefox | Out-Null
+          Copy-Item auralis-extension/* extension-staging/chromium/ -Recurse -Force
+          Copy-Item auralis-extension/* extension-staging/edge-store/ -Recurse -Force
+          $manifest = Get-Content extension-staging/edge-store/manifest.json -Raw | ConvertFrom-Json
+          $manifest.PSObject.Properties.Remove('key')
+          $manifest | ConvertTo-Json -Depth 100 | Set-Content extension-staging/edge-store/manifest.json -Encoding utf8
+          Copy-Item auralis-extension/* extension-staging/firefox/ -Recurse -Force
+          Copy-Item extension-staging/firefox/manifest.firefox.json extension-staging/firefox/manifest.json -Force
+          Compress-Archive -Path extension-staging/chromium/* -DestinationPath extension-packages/auralis-chromium.zip
+          Compress-Archive -Path extension-staging/edge-store/* -DestinationPath extension-packages/auralis-edge-store.zip
+          Compress-Archive -Path extension-staging/firefox/* -DestinationPath extension-packages/auralis-firefox.zip
+
+      - name: Upload Auralis browser extensions
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: auralis-browser-extensions
+          path: extension-packages/*.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish verified Auralis release
+    needs: windows-x64
+    if: github.event_name == 'push' && github.ref == 'refs/heads/feature/auralis-frosted-candidate'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Publish successful build and verify assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s .github/scripts -p 'test_verify_auralis_release.py'
+          version="$(python3 -c 'import tomllib; print(tomllib.load(open("glass-ui/src-tauri/Cargo.toml", "rb"))["package"]["version"])')"
+          tag="v$version"
+          if gh release view "$tag" --json isDraft --jq .isDraft 2>/dev/null | grep -qx false; then
+            echo "$tag is already published; leaving it unchanged."
+            exit 0
+          fi
+          if gh api "repos/$GH_REPO/git/ref/tags/$tag" >/dev/null 2>&1; then
+            echo "Tag $tag already exists; refusing to replace it." >&2; exit 1
+          fi
+          test -f "docs/glass-releases/$tag.md"
+          gh run download "$GITHUB_RUN_ID" --name auralis-download-manager-windows-x64 --dir installer
+          gh run download "$GITHUB_RUN_ID" --name auralis-browser-extensions --dir extensions
+          test "$(find installer -type f | wc -l)" -eq 1
+          test -f "installer/Auralis Download Manager_${version}_x64-setup.exe"
+          for name in auralis-chromium.zip auralis-edge-store.zip auralis-firefox.zip; do test -f "extensions/$name"; done
+          cp "installer/Auralis Download Manager_${version}_x64-setup.exe" "Auralis.Download.Manager_${version}_x64-setup.exe"
+          gh release create "$tag" --draft --target "$GITHUB_SHA" --title "Auralis Download Manager $version — Windows x64" --notes-file "docs/glass-releases/$tag.md"
+          if ! gh release upload "$tag" "Auralis.Download.Manager_${version}_x64-setup.exe" extensions/*.zip; then
+            echo "::warning::Upload command reported an error; verifying whether every artifact arrived intact."
+          fi
+          # GitHub can take a short time to return a newly created draft and
+          # its uploaded asset digests. Do not skip verification or assume the
+          # first page contains the draft.
+          release_id=""
+          for attempt in {1..15}; do
+            release_id="$(gh api --paginate "repos/$GH_REPO/releases?per_page=100" --jq ".[] | select(.tag_name==\"$tag\" and .draft==true) | .id" 2>/dev/null || true)"
+            if [[ "$release_id" =~ ^[0-9]+$ ]]; then break; fi
+            echo "Waiting for a unique draft release for $tag (attempt $attempt/15)."
+            sleep 4
+          done
+          if [[ ! "$release_id" =~ ^[0-9]+$ ]]; then
+            echo "::error::Could not find a unique draft release for $tag; it was not published."
+            exit 1
+          fi
+          verified=false
+          for attempt in {1..15}; do
+            if gh api "repos/$GH_REPO/releases/$release_id" > release.json &&
+              python3 .github/scripts/verify-auralis-release.py release.json "$version" "$GITHUB_SHA" \
+                "Auralis.Download.Manager_${version}_x64-setup.exe" extensions/*.zip; then
+              verified=true
+              break
+            fi
+            echo "Waiting for release assets and their digests (attempt $attempt/15)."
+            sleep 4
+          done
+          if [[ "$verified" != true ]]; then
+            echo "::error::The draft release did not pass artifact verification; it was not published."
+            exit 1
+          fi
+          gh release edit "$tag" --draft=false --prerelease=false --latest
+          test "$(gh api "repos/$GH_REPO/git/ref/tags/$tag" --jq .object.sha)" = "$GITHUB_SHA"

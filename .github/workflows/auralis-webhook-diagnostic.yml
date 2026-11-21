@@ -1,0 +1,35 @@
+name: Test Auralis webhook signature
+on:
+  push:
+    branches: [feature/auralis-frosted-candidate]
+    paths: [.github/workflows/auralis-webhook-diagnostic.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      AURALIS_WEBHOOK_SECRET: ${{ secrets.AURALIS_WEBHOOK_SECRET }}
+    steps:
+      - name: Verify signed ping and reject invalid signature
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib, hmac, os, urllib.error, urllib.request
+          secret=os.environ.get('AURALIS_WEBHOOK_SECRET','').encode()
+          if not secret: raise SystemExit('AURALIS_WEBHOOK_SECRET is missing')
+          body=b'{}'
+          signature='sha256='+hmac.new(secret,body,hashlib.sha256).hexdigest()
+          url='https://auralis-release-push.auralis-updates.workers.dev/github/webhook'
+          def send(sig):
+              request=urllib.request.Request(url,data=body,headers={'Content-Type':'application/json','User-Agent':'GitHub-Hookshot/Auralis-Diagnostic','X-GitHub-Event':'ping','X-Hub-Signature-256':sig},method='POST')
+              try:
+                  with urllib.request.urlopen(request,timeout=20) as response: return response.status
+              except urllib.error.HTTPError as error: return error.code
+          valid=send(signature); invalid=send('sha256='+'0'*64)
+          print('Signed ping HTTP status:',valid)
+          print('Invalid signature HTTP status:',invalid)
+          if valid!=204 or invalid!=401: raise SystemExit('Signing configuration did not match')
+          PY

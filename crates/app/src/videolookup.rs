@@ -102,6 +102,8 @@ struct Key {
     private: bool,
     store_id: Option<String>,
     cookies: Option<String>,
+    video_explicit_cookies: bool,
+    video_cookie_browser: Option<String>,
     jar: Vec<mdm_ipc::BrowserCookie>,
     referer: Option<String>,
     origin: Option<String>,
@@ -116,6 +118,8 @@ impl Key {
             private: context.private,
             store_id: store_id.clone(),
             cookies: context.cookies.clone(),
+            video_explicit_cookies: context.video_explicit_cookies,
+            video_cookie_browser: context.video_cookie_browser.clone(),
             jar: context.cookie_jar.clone(),
             referer: context.referer.clone(),
             origin: context.origin.clone(),
@@ -342,6 +346,16 @@ impl Lookups {
         }
     }
 
+    /// Subtitle languages from the original lookup, without browser credentials.
+    pub fn glass_tracks(&mut self, token: &str, now: Instant) -> Option<serde_json::Value> {
+        self.prune(now);
+        let search = self.searches.get(token)?;
+        let found = lock(&search.found);
+        let Found::Video(video, _) = &*found else { return None; };
+        let tracks = |list: &[mdm_tools::resolve::Track]| list.iter().map(|t| serde_json::json!({"code": t.code, "name": t.name})).collect::<Vec<_>>();
+        Some(serde_json::json!({"subtitles": tracks(&video.subtitles), "automatic": tracks(&video.automatic)}))
+    }
+
     /// The choice `pick` made in the browser (from a private window: `private`), if it fits
     /// its look-up: found, one of the choices offered, from the same kind of window and the
     /// same cookie store. Taken once: the look-up is forgotten then.
@@ -416,6 +430,8 @@ pub fn context_of(ask: &mdm_ipc::VideoLookup, cmd: &mdm_ipc::Command) -> mdm_ipc
         page_url: cmd.page_url.clone(),
         origin: cmd.origin.clone(),
         cookies: cmd.cookies.clone(),
+        video_explicit_cookies: cmd.video_explicit_cookies,
+        video_cookie_browser: cmd.video_cookie_browser.clone(),
         cookie_jar: cmd.cookie_jar.clone(),
         user_agent: cmd.user_agent.clone(),
         private: cmd.private,
@@ -472,6 +488,8 @@ fn answer(token: &str, s: &Search) -> VideoLookupAnswer {
             token: Some(token.to_owned()),
             title: Some(cut(title_of(v, &s.address, &s.context), TITLE_MAX)),
             choices: choices.iter().take(CHOICES).map(menu_choice).collect(),
+            subtitles: v.subtitles.iter().take(200).map(|t| mdm_ipc::api::VideoSubtitle {code: cut(&t.code, 80), name: cut(&t.name, 160)}).collect(),
+            automatic_subtitles: v.automatic.iter().take(200).map(|t| mdm_ipc::api::VideoSubtitle {code: cut(&t.code, 80), name: cut(&t.name, 160)}).collect(),
             notice: notice(v),
             ..VideoLookupAnswer::of(lookup::READY)
         },
@@ -718,6 +736,8 @@ mod tests {
         let ready = l.poll(&a.token, now);
         assert_eq!(ready.state, lookup::READY);
         assert_eq!(ready.token.as_deref(), Some(a.token.as_str()));
+        assert_eq!(ready.subtitles.len(), 1);
+        assert_eq!(ready.subtitles[0].code, "de");
         assert_eq!(
             ready.title.as_deref(),
             Some("A talk: in Lisbon"),

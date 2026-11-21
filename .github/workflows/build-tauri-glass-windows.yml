@@ -1,0 +1,164 @@
+# Windows x64 only: Tauri/React frontend plus bundled original headless Rust engine.
+name: Mister Hybrid Glass Windows x64
+
+on:
+  push:
+    branches: ["feature/progress-chunks-windows", "feature/ice-crystal-parity-windows", "feature/indicator-glass-fixes"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Do not use a workflow concurrency group here. Rust release compilation is
+# slow on Windows. A push to the Glass branch must never cancel an already
+# running Windows build, and queued reruns must not block a newer build.
+jobs:
+  windows:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.ref_name != 'feature/ice-crystal-parity-windows' || contains(github.event.head_commit.message, '[windows installer]') }}
+    runs-on: windows-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout custom fork
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Rust stable Windows target
+        shell: pwsh
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add x86_64-pc-windows-msvc
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          workspaces: |
+            . -> target
+            glass-ui/src-tauri -> target
+      - name: Install Windows native build dependencies
+        shell: pwsh
+        run: |
+          choco install nasm --version 2.16.3 --no-progress -y
+          "C:\Program Files\NASM" >> $env:GITHUB_PATH
+          choco install nsis --no-progress -y
+
+      - name: Ensure the Windows WebView2 runtime is installed
+        shell: pwsh
+        run: |
+          $runtime = Join-Path $env:RUNNER_TEMP 'MicrosoftEdgeWebview2Setup.exe'
+          Invoke-WebRequest 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile $runtime
+          $install = Start-Process $runtime -ArgumentList '/silent /install' -Wait -PassThru
+          Write-Host "WebView2 setup exit code: $($install.ExitCode)"
+          Get-ChildItem 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients','HKCU:\Software\Microsoft\EdgeUpdate\Clients' -ErrorAction SilentlyContinue | Get-ItemProperty | Select-Object name,pv
+
+      - name: Verify original engine and build companion executable
+        shell: pwsh
+        run: |
+          cargo build --release --target x86_64-pc-windows-msvc -p mdm-app -p mdm-nmhost
+          if ($LASTEXITCODE -ne 0) { throw "Original MDM Rust backend compilation failed" }
+          New-Item -ItemType Directory -Force glass-ui/src-tauri/resources,glass-ui/src-tauri/icons | Out-Null
+          Copy-Item target/x86_64-pc-windows-msvc/release/misterdownloadmanager.exe glass-ui/src-tauri/resources/mdm-legacy.exe
+          Copy-Item target/x86_64-pc-windows-msvc/release/misterdownloadmanager-nmhost.exe glass-ui/src-tauri/resources/misterdownloadmanager-nmhost.exe
+          Copy-Item crates/app/assets/icons/app/mdm.ico glass-ui/src-tauri/icons/icon.ico
+
+      - name: Headless Rust runtime integration smoke test
+        shell: pwsh
+        run: |
+          # The script throws on test failure and returns normally on success.
+          # Do not inspect $LASTEXITCODE here: a previous Rust native command
+          # may leave it nonzero after all four smoke assertions have passed.
+          ./tools/lab/tauri-headless-smoke.ps1 -Backend target/x86_64-pc-windows-msvc/release/misterdownloadmanager.exe
+
+      - name: Install frontend dependencies
+        shell: pwsh
+        working-directory: glass-ui
+        run: |
+          npm install --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { throw "npm install failed" }
+
+      - name: Test connection indicator behavior
+        shell: pwsh
+        working-directory: glass-ui
+        run: |
+          npm test
+          if ($LASTEXITCODE -ne 0) { throw "Frontend tests failed" }
+
+      - name: Test helper cookie selection
+        shell: pwsh
+        run: |
+          cargo test --target x86_64-pc-windows-msvc -p mdm-tools manual_cookies_override_extension_and_can_be_disabled_for_retry
+          if ($LASTEXITCODE -ne 0) { throw "Cookie selection test failed" }
+
+      - name: Compile React frontend and TypeScript checks
+        shell: pwsh
+        working-directory: glass-ui
+        run: |
+          npm run build
+          if ($LASTEXITCODE -ne 0) { throw "frontend build failed" }
+
+      - name: Build Tauri Windows NSIS installer
+        id: package
+        shell: pwsh
+        working-directory: glass-ui
+        run: |
+          npm run tauri -- build --bundles nsis
+          if ($LASTEXITCODE -ne 0) { throw "Tauri Windows packaging failed" }
+
+      - name: Test Windows fork update release validation
+        shell: pwsh
+        run: |
+          cargo test --release --manifest-path glass-ui/src-tauri/Cargo.toml accepts_only_newer_fork_installer_with_digest
+          if ($LASTEXITCODE -ne 0) { throw "Fork update validation test failed" }
+
+      - name: Verify isolated Windows installer upgrade and restart
+        shell: pwsh
+        run: ./tools/lab/glass-upgrade-windows.ps1
+
+      - name: Exercise real Windows native dialogs and original transfers
+        timeout-minutes: 25
+        shell: pwsh
+        run: |
+          $testRoot = Join-Path $env:RUNNER_TEMP 'glass-native-acceptance'
+          New-Item -ItemType Directory -Force $testRoot | Out-Null
+          Copy-Item glass-ui/src-tauri/target/release/mister-hybrid-glass.exe $testRoot
+          Copy-Item glass-ui/src-tauri/resources/mdm-legacy.exe $testRoot
+          Copy-Item glass-ui/src-tauri/resources/misterdownloadmanager-nmhost.exe $testRoot
+          $env:GLASS_E2E_EXE = Join-Path $testRoot 'mister-hybrid-glass.exe'
+          $env:GLASS_E2E_DIR = $testRoot
+          $env:GLASS_TEST_HELPERS = '1'
+          $env:GLASS_TEST_INSTALL_HELPERS = '1'
+          node tools/lab/glass-native-acceptance.mjs
+          if ($LASTEXITCODE -ne 0) { throw "Native Windows acceptance failed; inspect the proof artifact" }
+
+      - name: Upload Windows behavior and visual evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mister-hybrid-glass-windows-proof
+          path: ${{ runner.temp }}/glass-native-acceptance/proof/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload installer candidate
+        if: always() && steps.package.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mister-hybrid-glass-windows-x64-candidate
+          path: glass-ui/src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload compiled frontend for visual review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mister-hybrid-glass-react-frontend
+          path: glass-ui/dist/
+          if-no-files-found: warn
+          retention-days: 14

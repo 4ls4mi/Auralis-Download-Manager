@@ -1,6 +1,9 @@
 //! Mister Download Manager download engine. See notes/ENGINE.md.
 
 pub mod agent;
+pub mod backup_archive;
+pub mod backup_bundle;
+pub mod backup_partial;
 pub mod browserlike;
 pub mod disk;
 pub mod dns;
@@ -14,6 +17,9 @@ pub mod naming;
 pub mod net;
 pub mod pac;
 pub mod planner;
+pub mod recovery;
+pub mod repair;
+pub mod safe_move;
 pub mod server;
 pub mod sites;
 #[doc(hidden)]

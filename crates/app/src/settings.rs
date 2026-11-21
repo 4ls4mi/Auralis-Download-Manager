@@ -160,6 +160,8 @@ pub struct Settings {
     /// to the clipboard. On by default: without the browser extension, copying a link is the
     /// quickest way in.
     pub clipboard_autostart: bool,
+    /// Glass: immediately add matching copied links instead of asking for File Info.
+    pub glass_clipboard_auto_download: bool,
     /// General: Minimize hides the main window, and a download's progress window, to the
     /// notification area, as closing the main window does (#63). On by default (the
     /// maintainer's choice), for existing lists too. Only where a tray shows MDM's icon.
@@ -366,6 +368,7 @@ pub struct Settings {
     /// browser's last used). A settings file from before has neither: off.
     pub video_cookies: String,
     pub video_cookies_profile: String,
+    pub video_cookies_file: String,
     /// Options → Archives (#37): extract an archive when its download completes (a Link grabber
     /// package says so itself). Off, as a browser leaves archives alone.
     pub extract_auto: bool,
@@ -458,7 +461,8 @@ impl Default for Settings {
             language_asked: false,
             helpers_asked: false,
             extension_never_ask: false,
-            clipboard_autostart: true,
+            clipboard_autostart: false,
+            glass_clipboard_auto_download: false,
             minimize_to_tray: true,
             close_to_tray: true,
             keep_private_downloads: false,
@@ -548,6 +552,7 @@ impl Default for Settings {
             video_chapters: true,
             video_cookies: String::new(),
             video_cookies_profile: String::new(),
+            video_cookies_file: String::new(),
             extract_auto: false,
             extract_delete: false,
             extract_in_place: false,
@@ -1162,6 +1167,7 @@ impl Settings {
 /// and every video started on Embed chapters (#827).
 pub fn share_video_settings(s: &Settings) {
     mdm_tools::proc::set_browser_cookies(s.video_cookies());
+    mdm_tools::proc::set_manual_cookie_file(&s.video_cookies_file);
     mdm_tools::video::set_chapters(s.video_chapters);
 }
 

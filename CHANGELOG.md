@@ -3,77 +3,137 @@
 Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 `.github/workflows/release.yml`).
 
-## Auralis Download Manager 0.3.8 — Windows x64
+## Auralis Download Manager — Windows x64
 
-- Addresses the YouTube sign-in window freeze; the Windows build includes a responsiveness smoke test.
-- Shows subtitle languages directly in wider extension menus, adds browser-session YouTube sign-in entry points, and separates interface, engine and extension version details.
-- Prepares extension files in an Auralis-named folder. [Full 0.3.8 release notes](docs/glass-releases/v0.3.8.md); real Google sign-in and video extraction still require user testing.
+- Added a Tauri/WebView2 glass-style frontend backed by the original MDM engine and browser extension.
+- Added separate progress, completion, file-information, settings and confirmation windows, appearance controls and configurable indicators.
+- Added 32 responsive progress-window connection slots based on engine telemetry, with interruption/retry and paused states shown distinctly, plus a live indicator preview.
+- Added a fork-specific in-app updater that checks this repository's public releases, displays release notes, downloads the Windows x64 installer, verifies its published SHA-256 digest, and offers restart-and-install. The original MDM release checker remains separate.
+- The real public release update was exercised from inside the installed app, including download, verification, installation and restart, in [Windows Actions run 44159354623](https://github.com/4ls4mi/misterdownloadmanager/actions/runs/44159354623) (successful; proof artifacts retained through 2026-12-01).
+- Reduced overlapping visual layers and added manual Netscape-format cookie-file selection for video helpers. Google-account autodetection/direct connection remains unfinished.
+- Remaining manual Windows checks include physical DPI/transparency review and native drag-to-Explorer/application behavior. Automated success does not establish complete original-MDM feature parity.
 
-## Auralis Download Manager 0.3.6 — Windows x64
+### Auralis Download Manager 0.3.26 — Windows x64
 
-- Refreshed the extension popup and video overlay, added a switch to restore the video control on a site, and routed Open and Options requests to Auralis windows.
-- Added an experimental in-app YouTube sign-in session for manual video lookups. Google can block embedded sign-in or require additional verification.
-- [Full 0.3.6 release notes](docs/glass-releases/v0.3.6.md). Real Windows, browser and YouTube sign-in checks remain necessary.
+- Adds preferences backup and restore, including a first-launch restore option. Passwords, account credentials and browser cookies are excluded.
+- Adds a choice of update notification, fixes the maximize button, and refines hidden-download tray actions and hover details.
+- Animates droplets entering active liquid connection indicators and detects successful browser and yt-dlp setup.
+- Refreshes the Auralis project description, screenshots and liquid animation.
 
-## Auralis Download Manager 0.3.5 — Windows x64
+### Auralis Download Manager 0.3.25 — Windows x64
 
-- Added guided extension setup, a recent browser-connection indicator, clearer selected rows, and a bulk-delete disk checkbox.
-- Adjusted default window sizes, tray menu handling, button styling, solid indicator colors, experimental surfaces and the thumbnail quality menu.
-- [Full 0.3.5 release notes](docs/glass-releases/v0.3.5.md). Windows desktop behavior and material appearance still need visual and functional verification.
+- Runs the downloader inside Auralis instead of starting a separate Mister-based downloader executable. The browser native messaging helper remains a separate process.
+- Preserves the existing data format and adds graceful downloader shutdown for exit and updates.
 
-## Auralis Download Manager 0.3.4 — Windows x64
+### Auralis Download Manager 0.3.24 — Windows x64
 
-- Added independent indicator styling, download sorting and multi-selection, update reminders, and a bundled Auralis extension with guided setup.
-- Improved browser-session lookup and grouped thumbnail video, audio and subtitle choices.
-- [Full 0.3.4 release notes](docs/glass-releases/v0.3.4.md).
+- Adds Windows startup controls to General settings, with a choice between the main window and starting minimized in the system tray.
 
-## Auralis Download Manager 0.3.3 — Windows x64
+### Auralis Download Manager 0.3.23 — Windows x64
 
-- Added a dedicated **Auralis browser extension** with Chromium and Firefox development ZIPs attached to the [0.3.3 release](https://github.com/4ls4mi/Auralis-Download-Manager/releases/tag/v0.3.3). It offers in-browser video and audio qualities, available subtitle choices, and per-video browser-session or pasted-cookie controls.
-- Added browser and pasted-cookie choices to the manual video helper, plus explicit per-video cookie precedence.
-- Added a separate download-progress tray list, a more compact progress window and an experimental water-droplet indicator; fixed updater handling for the renamed repository and installer.
-- Real-site browser testing, permanent Firefox signing, Safari packaging and physical Windows visual checks remain outstanding. The droplet is still an approximation of the design concept.
+- Blends the tube endpoints behind the download panels and aligns each branch above the center of its connection block. Tube liquid now follows the progress indicator palette.
 
-## Mister Hybrid Glass 0.3.1 — Windows x64
+### Auralis Download Manager 0.3.22 — Windows x64
 
-- Added an independent red background for a connection that is interrupted or retrying, while keeping its reported gradient progress visible. A short interruption remains observable between refreshes; the red indication stays while reconnecting. The existing paused appearance remains.
-- Added fork release checks, a closable changelog, installer download and SHA-256 digest verification, and a restart-and-install option. The original MDM release check remains separate.
-- The [Windows x64 run](https://github.com/4ls4mi/misterdownloadmanager/actions/runs/44151010931) passed a real interrupted-connection test, engine and UI checks, and an isolated 0.3.0-to-0.3.1 installer upgrade and restart. A complete in-app update to a later release, Explorer/app dragging, and physical DPI/transparency review remain to be tested.
-- Version 0.3.0 requires a one-time manual install of 0.3.1. Installer verification uses GitHub’s release digest, not an independent code signature.
+- Moves the transfer graph to the right of the connection grid and adds a translucent tube network connecting the URL, progress bar and connection blocks.
+- Animates colored flow only for reported receiving connections while preserving progress and connection-loss states.
 
-## Mister Hybrid Glass — Windows x64 preview
+### Auralis Download Manager 0.3.21 — Windows x64
 
-This fork-specific summary describes work in the Glass frontend and its original MDM backend integration. The [complete fork development history](https://github.com/4ls4mi/misterdownloadmanager/compare/c3a7843fddfb5a990c58be9ad7f7ef5c1759b2c9...34b36cff2a0d13b2274e1a41a7a621b33ec2b652) contains the individual changes behind this summary. The upstream MDM changelog follows below. See the [public preview release](https://github.com/4ls4mi/misterdownloadmanager/releases/tag/v0.3.0-glass-preview.1) for the installer and validation details.
+- Adds three independently selectable liquid materials for progress, connections and graphs, with palette-aware shading and animation.
+- Preserves real download progress and connection-loss feedback; liquid graph curves follow measured speed history.
+- Uses a shared WebGL progress renderer with a reduced-motion option and a 2D fallback, and fixes a thumbnail-control reinjection race.
 
-### Interface and windows
+### Auralis Download Manager 0.3.13 — Windows x64
 
-- Introduced a separate Windows x64 Tauri/WebView2 interface, backed by MDM's existing Rust downloader through authenticated local IPC and a single Glass tray owner.
-- Added a glass-style main list and separate movable File Info, progress, completion, properties, Add URL/torrent, settings and confirmation windows, plus original Tasks, File, Downloads, View and Help menus.
-- Added light/dark appearances, accent choices, backgrounds and wallpapers, material controls, font families and sizes, scaling, native resize handling, colorful icons and hover feedback.
-- Added independently scrollable download-list and navigation areas and compact responsive layouts. Removed redundant material layers from this preview to reduce haze.
+- Adds an adapter selector, current version display, cookie-file and other path pickers, and explanations for technical settings.
+- Presents browser video selections in Download File Info before starting, followed by a foreground progress window.
+- Improves browser-session sign-in feedback and cookie handoff for video lookups, narrows the Frosted Layers left edge, and extends text/icon shading to other materials.
+- Honors the checked multi-selection delete-from-disk option without a second confirmation.
+- Adds a Windows passive installer and automatic-restart check.
 
-### Downloads and indicators
+### Auralis Download Manager 0.3.12 — Windows x64
 
-- Connected the list and progress windows to actual engine status, overall completion, segment/connection information and sampled transfer rates. Added separate percentage bars, connection indicators and speed graphs.
-- Added customizable indicator gradients and shapes and a Settings preview. The progress window now reserves 32 responsive, text-free connection slots; active data comes from engine telemetry, paused reported connections are red and unused slots are grey. Hover reveals details.
-- Restored or exposed original download actions, file properties, queue and scheduler controls, pause/resume/stop, movable deletion and redownload confirmations, and search across the download list.
-- Added completion-dialog options, file/folder actions and original move tracking. Progress windows close after completion or a Stop from the main window; Pause keeps the window available.
-- Preserved available server country, observed latency and resume-capability details in the progress view.
+- Adds six crystalline color themes, applies the chosen tint across materials, and removes the solid light/dark buttons.
 
-### Browser, clipboard and tools
+- Removes the newer sculpted indicator designs and makes the approved ice ribbon available with every remaining progress shape.
+- Shows download progress and verification status in the update window and settings.
+- Starts the verified installer and automatic restart after download, without a second confirmation.
 
-- Bundled and registered the original native-messaging host and added Edge's official extension-store link to browser repair.
-- Added clipboard choices for automatic download, offering a copied link, and pasting into Add URL.
-- Exposed original verified yt-dlp, ffmpeg and gallery-dl helper management; connected video lookup, quality and subtitle selection and gallery queue operations to MDM.
-- Added manual Netscape-format cookie-file selection for video helpers alongside browser/profile cookie selection. Google account autodetection/direct connection remains unfinished.
-- Added a read-only upstream MDM release check that does not overwrite the fork. A fork-specific automatic installer and restart updater is not yet included in the preview.
+### Auralis Download Manager 0.3.11 — Windows x64
 
-### Validation and limits
+- Prevents the download graph, connection blocks and buttons from overlapping when the window or interface is scaled; scrolls when space is limited.
+- Makes the ice-ribbon clear backdrop visibly distinct from its default finish.
+- Preserves the selected backdrop and progress fill if WebGL is unavailable.
+- Adds browser rendering checks for backdrop finishes and the fallback.
 
-- The preview was built and exercised on Windows x64 in [run 44131486405](https://github.com/4ls4mi/misterdownloadmanager/actions/runs/44131486405), including live transfers, connection slots, completion, delete dialogs, settings and dark/light screenshots.
-- Native dragging into Explorer/apps and physical DPI/transparency review still require manual Windows testing. Material styles do not yet reproduce all approved design concepts. A successful build does not establish complete feature parity.
+### Auralis Download Manager 0.3.10 — Windows x64
 
----
+- Checks for Auralis updates at startup, on release signals and when reconnecting, with a system notification and a movable changelog window offering download or reminders.
+- Masks wallpaper and solid backgrounds to the Frosted Layers pane outline and targets resize drags at the visible glass edge.
+- Gives main-list progress and connection indicators more space, adds independent progress and connection backdrop finishes and palettes, and removes graph backdrop styles.
+- Windows notifications, desktop compositing and edge dragging still need real-device verification. See [full notes](docs/glass-releases/v0.3.10.md).
+
+### Auralis Download Manager 0.3.9 — Windows x64
+
+- Adds the experimental Frosted Layers material and independently selectable sculpted progress, connection and graph-backdrop designs.
+- Adds live indicator previews, matching shaped connection backdrops and distinct paused and lost-connection states.
+- Refines glass input fields, colored button highlights and compact download-window layout.
+- Windows appearance, desktop transparency, DPI scaling, small indicator readability and performance still need manual validation. See [full notes](docs/glass-releases/v0.3.9.md).
+
+### Auralis Download Manager 0.3.8 — Windows x64
+
+- Addresses the YouTube sign-in freeze by moving WebView creation and cookie access off the UI thread; the Windows smoke test checks responsiveness.
+
+- Displays subtitle languages directly in both player and thumbnail menus and widens the menus.
+- Adds YouTube browser-session sign-in from the thumbnail menu, player menu and extension popup.
+- Distinguishes Auralis, engine and extension versions and prepares the extension in an Auralis-named folder. See [full notes](docs/glass-releases/v0.3.8.md).
+
+### Auralis Download Manager 0.3.7 — Windows x64
+
+- Moves YouTube sign-in window creation and cookie access off the Windows UI thread to address the reported WebView2 deadlock.
+- Adds a Windows smoke test that opens the window and checks that the app remains responsive; Google sign-in and age-restricted playback still need real-account testing.
+- Only the Auralis installer is published. See [full release notes](docs/glass-releases/v0.3.7.md).
+
+### Auralis Download Manager 0.3.6 — Windows x64
+
+- Refreshes the extension popup and player overlay with a glass appearance and adds a way to restore the video control for the current site.
+- Routes the extension's Open and Options actions to the Auralis windows and reports connection failures instead of silently closing.
+- Adds an experimental YouTube sign-in window to the manual video helper; Google and YouTube may block embedded sign-in or require further checks.
+- Windows native build, real-browser session handling and YouTube sign-in need verification. See [full release notes](docs/glass-releases/v0.3.6.md).
+
+### Auralis Download Manager 0.3.5 — Windows x64
+
+- Keeps download tray entries stable during live updates to address restoring hidden progress windows.
+- Adds first-run extension guidance and a recent-connection indicator, clearer selection, and a bulk-delete disk checkbox.
+- Enlarges the default main, download and settings windows; adds solid indicator colors and refreshed button styling.
+- Adds experimental Windhawk-inspired surfaces and reorganizes thumbnail choices into video, audio and subtitle sections.
+- Windows desktop validation and visual comparisons for the experimental surfaces remain outstanding. See [full release notes](docs/glass-releases/v0.3.5.md).
+
+### Auralis Download Manager 0.3.4 — Windows x64
+
+- Shows a dedicated tray icon only while download progress windows are hidden, with transfer details for those windows.
+- Adds multi-selection, sorting and bulk actions; independent indicator settings; and a movable update notice with changelog and reminders.
+- Bundles the Auralis browser extension with guided setup and improves browser-session handling and subtitle visibility.
+- Sets new-install appearance and clipboard defaults and renames the executable.
+- Windows automated build and tests passed for the preceding test build. Live Edge/YouTube sessions, tray behavior, and updater installation still require manual verification; the Windhawk-inspired material styles are unfinished. See [full release notes](docs/glass-releases/v0.3.4.md).
+
+### Auralis Download Manager 0.3.3 — Windows x64
+
+- Added Auralis development extensions for Chromium and Firefox with browser quality menus, subtitle choices, and per-video cookie controls.
+- Added per-video browser and pasted-cookie options to the manual video helper, and protected explicitly selected sessions from app-wide cookie overrides.
+- Added a separate download-progress tray list, compact connection blocks, a larger transfer graph, and a water-droplet progress style.
+- Fixed update checks after the repository and installer were renamed, and prevented repeat publishing from failing when a release already exists.
+- Browser-store signing, Safari packaging, physical Windows visual review and real-site video/cookie verification remain outstanding. The droplet design is an implementation in progress; it has not been visually verified against the concept.
+- Full notes: [docs/glass-releases/v0.3.3.md](docs/glass-releases/v0.3.3.md).
+
+### Auralis Download Manager 0.3.2 — Windows x64
+
+- Rebranded the Windows glass desktop as **Auralis Download Manager**, with an original crystalline A/download mark and generated Windows app icon.
+- Expanded the original MDM tray commands, including Speed Limiter on/off, Scheduler, queue controls, batch-from-clipboard and Options.
+- Added a per-download restore entry to the shared tray menu when a floating progress window is hidden.
+- Updated the fork updater's expected Auralis installer asset name, while retaining a legacy-named installer alias for existing 0.3.1 updaters. The Tauri application identifier remains unchanged for upgrade compatibility.
+- Windows x64 build, automated tests and the manual Windows acceptance checks are complete. Full release notes: [docs/glass-releases/v0.3.2.md](docs/glass-releases/v0.3.2.md).
 
 ## [Unreleased]
 

@@ -132,6 +132,17 @@ impl Batch {
         Ok(urls)
     }
 
+    /// Expand a Glass pattern through the same parser as the original batch dialog.
+    pub(crate) fn glass_pattern(data:&serde_json::Value)->Result<Vec<url::Url>, &'static str> {
+        let mut batch=Self::new();
+        batch.address=data["address"].as_str().unwrap_or("").to_owned();
+        batch.letters=data["letters"].as_bool().unwrap_or(false);
+        batch.from=data["from"].as_str().unwrap_or("0").to_owned();
+        batch.to=data["to"].as_str().unwrap_or("10").to_owned();
+        batch.size=data["width"].as_str().unwrap_or("1").to_owned();
+        batch.pattern()
+    }
+
     pub fn show(&mut self, ctx: &egui::Context) -> Outcome<Added> {
         // Worked out again only when the pattern changes (up to 100,000 addresses).
         let key = (

@@ -1506,7 +1506,7 @@
 #. message or event log entry in the main window
 	from a page (yt-dlp)	from a page (yt-dlp)
 #. message or event log entry in the main window
-#. where a download came from (its Properties): a phone or computer paired in Options → Remote
+#. where a download came from: a phone or computer paired in Options → Remote.
 	from a paired device	from a paired device
 #. message or event log entry in the main window
 #. where a download came from, in its log: a playlist or channel, by yt-dlp
@@ -1516,6 +1516,9 @@
 #. option (radio button) in the Options window
 #. Options → Sites Logins → Cookies for video sites: read the cookies of the browser chosen in the list after it
 	From browser:	From browser:
+#. message or event log entry in the main window
+#. where an automatically added download came from.
+	from clipboard	from clipboard
 #. text in the Batch download window
 #. why Batch download's OK is greyed
 	From must come before To	From must come before To

@@ -42,6 +42,8 @@ impl Declared {
             origin: None,
             user_agent: from.user_agent.clone(),
             cookies: None,
+            explicit_cookies: from.explicit_cookies,
+            cookie_browser: from.cookie_browser.clone(),
             jar: from.jar.clone(),
         }
     }
@@ -426,6 +428,8 @@ mod tests {
             origin: Some("https://www.shortverse.com".into()),
             user_agent: Some("UA".into()),
             cookies: Some("session=1".into()),
+            explicit_cookies: false,
+            cookie_browser: None,
             jar: Vec::new(),
         };
         let asked = d.browser(&browser);

@@ -1,6 +1,8 @@
 //! The main window (notes/ui-spec/main-window.md): menu bar, toolbar, Categories tree and the
 //! download list at IDM 6.42's measured positions, plus the download actions behind them.
 
+mod glass;
+
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -1233,6 +1235,21 @@ pub struct App {
     queues_open: bool,
     add_url: Option<AddUrl>,
     file_info: Option<FileInfo>,
+    glass_info_serial: u64,
+    glass_active_video: Option<crate::videodlg::VideoAdd>,
+    glass_video_waiting: std::collections::VecDeque<crate::videodlg::VideoAdd>,
+    glass_video_serial: u64,
+    glass_videos: std::collections::HashMap<u64, (String, ipc::api::VideoLookupAnswer, bool)>,
+    glass_import_serial: u64,
+    glass_duplicate_serial:u64,
+    glass_account: Option<(mdm_debrid::ServiceKind,crate::debrid::SignIn)>,
+    glass_checks: glass::CheckSlots,
+    glass_recovery_checks: glass::RecoverySlots,
+    glass_repair_checks: glass::RepairSlots,
+    glass_torrent_recovery: glass::TorrentRecoverySlots,
+    glass_torrent_handoffs: glass::HandoffSlots,
+    glass_exit_requested: bool,
+    glass_power_serial: u64,
     /// Addresses (and their browser context) waiting for Download File Info to close.
     file_info_waiting: std::collections::VecDeque<(dialogs::NewUrl, ipc::Command)>,
     /// Download File Info's open answers, for the download each was given to (by id) to start
@@ -1811,6 +1828,13 @@ impl App {
         }
         // Nobody to answer Click'n'Load's question or tick Link grabber's packages.
         let _ = self.cnl.listen(false);
+        // Glass is the desktop shell: keep an existing MDM-managed yt-dlp current
+        // with the original signed, atomic once-per-session update check. Ordinary
+        // headless servers do not perform a desktop helper update here.
+        if self.glass_owned() {
+            crate::videodlg::refresh_ytdlp(&self.rt);
+            self.glass_refresh_helpers();
+        }
         self
     }
 
@@ -1960,7 +1984,7 @@ impl App {
         // D-021: torrents are a category of their own (lists from before had them by file
         // type); their files stay where they are.
         for i in &mut items {
-            if i.torrent.is_some() {
+            if i.torrent.is_some() && i.direct_recovery.is_none() {
                 i.category = Category::Torrents;
             }
             // A user's category that is gone: General.
@@ -2031,6 +2055,21 @@ impl App {
             started: Instant::now(),
             update_checked_this_run: None,
             file_info: None,
+            glass_info_serial: 0,
+            glass_active_video: None,
+            glass_video_waiting: Default::default(),
+            glass_video_serial: 0,
+            glass_videos: Default::default(),
+            glass_import_serial: 0,
+            glass_duplicate_serial:0,
+            glass_account: None,
+            glass_checks: Default::default(),
+            glass_recovery_checks: Default::default(),
+            glass_repair_checks: Default::default(),
+            glass_torrent_recovery: Default::default(),
+            glass_torrent_handoffs: Default::default(),
+            glass_exit_requested: false,
+            glass_power_serial: 0,
             file_info_waiting: Default::default(),
             kept_answers: Default::default(),
             progress: Vec::new(),
@@ -2784,6 +2823,7 @@ impl App {
         // The page it was started from (#607), whole: Refresh download address opens it.
         item.page = context.page_url.clone().filter(|p| !p.is_empty());
         item.private_window = context.private;
+        item.chunk_count = Some(context.connections.unwrap_or_else(|| self.settings.connections_for(&item.url)).clamp(1, 128));
         item.context = context;
         self.items.push(item);
         self.dirty = true;
@@ -3422,9 +3462,48 @@ impl App {
             self.run(Cmd::Exit, None, ctx);
             return;
         }
+        if self.glass_owned()&&!cmd.remote {
+            if let Some(host)=cmd.exclude_site.as_deref(){self.settings.excluded_sites=mdm_ipc::capture::add_site(&self.settings.excluded_sites,host);self.dirty=true;return;}
+            if let Some(host)=cmd.include_site.as_deref(){self.settings.excluded_sites=mdm_ipc::capture::unlist_site(&self.settings.excluded_sites,host);self.dirty=true;return;}
+            if let Some(host)=cmd.panel_hide_site.as_deref(){self.settings.video_panel_sites=mdm_ipc::capture::add_site(&self.settings.video_panel_sites,host);self.dirty=true;return;}
+            if let Some(host)=cmd.panel_show_site.as_deref(){self.settings.video_panel_sites=mdm_ipc::capture::remove_site(&self.settings.video_panel_sites,host);self.dirty=true;return;}
+        }
         // Without a window (#157): an address, magnet or .torrent is added as a paired device's
         // is (no Download File Info, no Add torrent); nothing else opens anything.
         if self.headless {
+            if self.glass_owned() && !cmd.remote && let Some(target)=cmd.show.as_deref()
+                && (target=="main" || target.starts_with("options:")) {
+                if let Some(dir)=mdm_ipc::data_dir() { let _=mdm_ipc::private_dir(&dir); let _=std::fs::write(dir.join("glass-browser-window-request"),target); }
+                return;
+            }
+            if self.glass_owned() && !cmd.remote && let Some(page) = cmd.video_page.as_deref() {
+                if let Some(file) = drive_file_behind_player(&cmd).or_else(|| cmd.video_direct.then(|| page.to_owned())) {
+                    let mut direct = cmd.clone();
+                    direct.video_page = None;
+                    direct.url = Some(file);
+                    direct.silent = true;
+                    let _ = self.remote_add(direct);
+                    return;
+                }
+                let mut lookup = cmd.clone();
+                lookup.video_lookup = Some(ipc::VideoLookup { address: page.to_owned(), title: cmd.video_title.clone(), store_id: None });
+                let answer = self.quality_menu(&lookup);
+                self.glass_video_serial = self.glass_video_serial.wrapping_add(1);
+                if self.glass_videos.len() >= 20 { if let Some(old) = self.glass_videos.keys().min().copied() { self.glass_videos.remove(&old); } }
+                self.glass_videos.insert(self.glass_video_serial, (page.to_owned(), answer, cmd.private));
+                return;
+            }
+            if self.glass_owned() && !cmd.remote && (!cmd.links.is_empty()||cmd.links_part.is_some()) {
+                let cmd=if cmd.links_part.is_some(){match self.link_parts.add(cmd,Instant::now()){crate::linkparts::Placed::Whole(c)=>*c,_=>return}}else{cmd};
+                let found=cmd.links.iter().map(|url|crate::transfer::Imported{url:url.clone(),referer:cmd.referer.clone(),cookies:page_data_for(url,cmd.referer.as_deref(),cmd.cookies.as_deref()),user_agent:cmd.user_agent.clone(),private:cmd.private,..Default::default()}).collect();
+                self.show_import(found,crate::i18n::t("Links from the browser").to_owned());return;
+            }
+            if self.glass_owned() && !cmd.remote && !cmd.silent
+                && let Some(url) = cmd.url.as_deref().and_then(|u| url::Url::parse(u).ok()).filter(mdm_engine::supported)
+            {
+                if self.duplicate_gate(&url,||Pending::Command(Box::new(cmd.clone()))){self.open_file_info(dialogs::NewUrl { url, login: None }, cmd, ctx);}
+                return;
+            }
             if cmd.start_queue {
                 self.start_queue(0);
             }
@@ -3912,7 +3991,77 @@ impl App {
 
     /// Start or resume a download; `show` opens its progress dialog (IDM's default), unless
     /// Options → Downloads → Customize "Download progress" dialog turned it off (#1041).
+    fn recovery_check_running(&self, id: u64) -> bool {
+        self.glass_recovery_checks.get(&id).is_some_and(|slot| {
+            slot.lock().map_or(true, |result| result.is_none())
+        }) || self.glass_torrent_recovery.get(&id).is_some_and(|slot| {
+            slot.lock().map_or(true, |result| result.is_none())
+        }) || self.glass_torrent_handoffs.get(&id).is_some_and(|slot| {
+            slot.lock().map_or(true, |slot| slot.result.is_none())
+        })
+    }
+
+    fn repair_check_running(&self, id: u64) -> bool {
+        self.glass_repair_checks.get(&id).is_some_and(|slot| slot.lock().map_or(true, |s| !s.applied))
+    }
+
+    /// Persist the torrent handoff before starting it. The original resume
+    /// state and partial file remain at their old destination.
+    fn commit_torrent_recovery(&mut self, id:u64, prepared:mdm_torrent::PreparedRecovery) -> Result<serde_json::Value,String> {
+        let hash=prepared.metadata.info_hash.clone();
+        let folder=prepared.folder.clone();
+        let staged=prepared.staged.file.clone();
+        let verified=prepared.staged.verified_bytes;
+        if store::path().is_none() {return Err("Cannot save download history; the original partial was kept".into());}
+        if self.torrent_hashes().contains(&hash) || self.torrent_host.get().is_some_and(|session|session.has(&hash)) {
+            return Err("This torrent is already active or listed; the original partial was kept".into());
+        }
+        let Some(item)=self.items.iter().find(|item|item.id==id) else{return Err("Download no longer exists".into())};
+        if item.dest!=prepared.source_dest || item.live.is_some() || item.status==Status::Complete || item.torrent.is_some() || item.direct_recovery.is_some() || item.context.private || item.checksum.is_some() || self.moving.iter().any(|(moving,_,_)|*moving==id) || self.renaming.iter().any(|(renaming,_)|*renaming==id) {
+            return Err("Download changed while preparing recovery; the original partial was kept".into());
+        }
+        crate::torrents::save_recovery_torrent(&hash,&prepared.metadata.torrent).map_err(|e|format!("Could not save torrent metadata: {e}"))?;
+        // Ensure an older queued asynchronous save cannot overwrite the new state.
+        self.saver.flush();
+        let item=self.items.iter_mut().find(|item|item.id==id).expect("item checked above");
+        let before=(item.dest.clone(),item.downloaded,item.status,item.error.clone(),item.resumable,item.recovery_damaged);
+        item.direct_recovery=Some(crate::model::DirectRecoveryOrigin{dest:item.dest.clone(),downloaded:prepared.source_downloaded,damaged:item.recovery_damaged});
+        item.dest=staged.clone();
+        item.downloaded=verified;
+        item.status=Status::Stopped;
+        item.error=None;
+        item.resumable=Some(true);
+        item.recovery_damaged=false;
+        item.torrent=Some(crate::torrents::TorrentSpec{hash,files:Some(vec![prepared.file_index]),folder,uploaded:0,seeded_secs:0,peers:0,up_speed:0.0,upload_limit:None,in_order:false,ends_first:true});
+        if let Err(error)=store::save(self.next_id,&self.items,&self.list.layout(),&self.settings,&self.queues) {
+            let item=self.items.iter_mut().find(|item|item.id==id).expect("item checked above");
+            item.dest=before.0;item.downloaded=before.1;item.status=before.2;item.error=before.3;item.resumable=before.4;item.recovery_damaged=before.5;item.torrent=None;item.direct_recovery=None;
+            return Err(format!("Could not save the recovery state: {error}. The original partial and prepared copy were kept."));
+        }
+        self.dirty=false;
+        self.last_save=Instant::now();
+        if let Some(item)=self.items.iter_mut().find(|item|item.id==id) {item.note("Continuing as a torrent; the original partial was preserved.");}
+        self.dirty=true;
+        Ok(serde_json::json!({"verified_bytes":verified,"path":staged.to_string_lossy()}))
+    }
+
     fn start(&mut self, id: u64, show: bool) {
+        if self.repair_check_running(id) {
+            self.notice = Some(("Saved-data repair", "Wait for the repair check to finish before resuming.".to_owned()));
+            return;
+        }
+        let damaged = self.glass_recovery_checks.get(&id).is_some_and(|slot| {
+            slot.lock().ok().and_then(|result| result.as_ref().and_then(|r| r.as_ref().ok()).and_then(|report| report.get("damaged_ranges")).and_then(serde_json::Value::as_array).map(|ranges| !ranges.is_empty())).unwrap_or(false)
+        });
+        if damaged || self.items.iter().any(|item| item.id == id && item.recovery_damaged) {
+            self.notice = Some(("Saved-data check", "Saved data changed. Resume is blocked to protect the file; redownload it or wait for a repair option.".to_owned()));
+            return;
+        }
+        if self.recovery_check_running(id) {
+            self.notice = Some(("Saved-data check", "Wait for the saved-data check to finish before resuming.".to_owned()));
+            return;
+        }
+        self.glass_torrent_recovery.remove(&id);
         let show = show && self.settings.show_progress;
         self.stopped_by_hand.remove(&id);
         let rt = self.rt.clone();
@@ -3993,6 +4142,10 @@ impl App {
         // Download File Info's open answer for it, if it has one (#28); used once.
         let kept = self.kept_answers.remove(&id);
         // The file's own remembered limit, else the Speed Limiter's.
+        if let Some(item) = self.item(id) {
+            let count = *item.chunk_count.get_or_insert(opts.max_connections);
+            opts.max_connections = count.clamp(1, 128);
+        }
         opts.speed_limit = own_limit.or(self.settings.speed_limit());
         opts.checksum = checksum;
         let Some(item) = self.item(id) else { return };
@@ -4298,6 +4451,10 @@ impl App {
     /// the session deletes). No disk here: the files are handed back, for [`crate::deleter`],
     /// their place held from now on.
     fn take_off_list(&mut self, id: u64, files: bool) -> Option<crate::deleter::Doomed> {
+        if self.repair_check_running(id) || self.recovery_check_running(id) {
+            self.notice = Some(("Saved-data check", "Wait for the saved-data operation to finish before removing this download.".to_owned()));
+            return None;
+        }
         if !self.item(id).is_some_and(|i| i.live.is_none()) {
             return None;
         }
@@ -4323,6 +4480,10 @@ impl App {
             ));
         }
         self.items.retain(|i| i.id != id);
+        self.glass_recovery_checks.remove(&id);
+        self.glass_repair_checks.remove(&id);
+        self.glass_torrent_recovery.remove(&id);
+        self.glass_torrent_handoffs.remove(&id);
         for q in &mut self.queues {
             q.items.retain(|i| *i != id);
         }
@@ -4940,14 +5101,19 @@ impl App {
             return;
         };
         let name = mdm_engine::naming::file_name(None, &url);
-        if mdm_engine::supported(&url) && self.settings.clipboard_type(&name) {
-            // Where a Download File Info came from, without the address (#1157).
+        let automatic = self.glass_owned() && self.settings.glass_clipboard_auto_download;
+        if mdm_engine::supported(&url) && (automatic || self.settings.clipboard_type(&name)) {
             tracing::info!("clipboard: a newly copied link, offered for download");
             let cmd = ipc::Command {
                 url: Some(text),
+                silent: automatic,
                 ..Default::default()
             };
-            self.handle_command(cmd, ctx);
+            if automatic {
+                let _ = self.remote_add_from(cmd, true);
+            } else {
+                self.handle_command(cmd, ctx);
+            }
         }
     }
 
@@ -4970,6 +5136,16 @@ impl App {
     /// File Properties → OK. Its resume state follows a new address or route beside the window
     /// ([`crate::deleter::Deleter::rewrite`]): its next start waits for it on its own task.
     fn apply_properties(&mut self, c: crate::properties::Changes) {
+        if self.repair_check_running(c.id) || self.recovery_check_running(c.id) {
+            self.notice = Some(("Saved-data check", "Wait for the saved-data operation to finish before changing this download.".to_owned()));
+            return;
+        }
+        if (c.address.is_some() || c.direct.is_some()) && self.items.iter().find(|i| i.id == c.id)
+            .and_then(|i| mdm_engine::state::ResumeState::load(&state_path(&i.dest)).ok())
+            .is_some_and(|saved| saved.repair_strict) {
+            self.notice = Some(("Saved-data repair", "The checked source must remain unchanged until this repair finishes.".to_owned()));
+            return;
+        }
         let Some(item) = self.item(c.id) else { return };
         item.description = c.description;
         item.login = c.login;
@@ -5110,6 +5286,10 @@ impl App {
     /// own (a copy to another drive takes a while), one not started just takes the new place.
     /// A failure says why.
     fn start_move(&mut self, id: u64, target: PathBuf) {
+        if self.repair_check_running(id) || self.recovery_check_running(id) {
+            self.notice = Some(("Saved-data check", "Wait for the saved-data operation to finish before moving this download.".to_owned()));
+            return;
+        }
         let Some(item) = self.item(id) else { return };
         if target == item.dest {
             return;
@@ -5599,7 +5779,9 @@ impl App {
     /// into the main queue instead, with no queue panel either).
     fn quality_menu(&mut self, cmd: &ipc::Command) -> ipc::api::VideoLookupAnswer {
         use ipc::api::{VideoLookupAnswer, lookup};
-        if menu_needs_window(cmd, self.headless) {
+        // Glass supplies its own desktop quality picker while the original MDM
+        // engine runs headlessly; server-only mode still requires a window.
+        if menu_needs_window(cmd, self.headless && !self.glass_owned()) {
             return VideoLookupAnswer::of(lookup::USE_WINDOW);
         }
         let now = Instant::now();
@@ -5624,18 +5806,28 @@ impl App {
         let music = (!Category::Music.deleted())
             .then(|| self.settings.category_dir(Category::Music, &self.downloads));
         let start_now = !self.settings.only_add_to_queue;
+        let requested_subs = (self.glass_owned() && cmd.category.as_deref()==Some("glass-subtitles"))
+            .then(||cmd.queue.as_deref().and_then(|s|serde_json::from_str::<mdm_tools::video::Subs>(s).ok())).flatten();
         let add = self.lookups.pick(pick, cmd.private, now).and_then(|p| {
-            crate::videolookup::video_add(
-                p,
-                &folder,
-                music.as_deref(),
-                start_now,
-                &self.settings.video_subs,
-            )
+            let selected = requested_subs.as_ref().map(|requested| {
+                let available = if requested.automatic { &p.video.automatic } else { &p.video.subtitles };
+                let langs = if requested.langs.iter().any(|s|s=="all") { available.iter().map(|t|t.code.clone()).collect() }
+                    else { requested.langs.iter().filter(|code|available.iter().any(|t|t.code.as_str()==code.as_str())).cloned().collect() };
+                mdm_tools::video::Subs { langs, automatic: requested.automatic, embed: requested.embed }
+            });
+            let mut add = crate::videolookup::video_add(p, &folder, music.as_deref(), start_now, &self.settings.video_subs)?;
+            if let Some(subs)=selected { add.subs=subs; }
+            Some(add)
         });
         let Some(add) = add else {
             return VideoLookupAnswer::of(lookup::USE_WINDOW);
         };
+        // Auralis confirms the selected video destination before starting it. Preserve the
+        // resolved quality, subtitles and browser context without serializing credentials.
+        if self.glass_owned() && cmd.show.as_deref()!=Some("glass-manual-video") {
+            self.glass_video_waiting.push_back(add);
+            return VideoLookupAnswer::of(lookup::SENT);
+        }
         // Its category's folder, made when it isn't there yet (the window asks first; the
         // choice was made in the browser): beside the window, as its start makes it too.
         if let Some(dir) = add.dest.parent().map(std::path::Path::to_path_buf) {
@@ -6809,6 +7001,9 @@ impl App {
     /// is on, whatever the automation API's switch: it may list, add and act, nothing else.
     fn answer(&mut self, cmd: &ipc::Command, ctx: &egui::Context) -> String {
         use ipc::api::{ApiAnswer, DownloadInfo, ErrorAnswer, ListAnswer, line};
+        if self.glass_owned() && !cmd.remote
+            && let Some(answer) = self.glass_answer(cmd)
+        { return answer; }
         // The browser's quality menu (its native host asks): whatever the automation API's
         // switch, and never for a paired device.
         if !cmd.remote
@@ -6844,11 +7039,308 @@ impl App {
         if !cmd.remote && cmd.url.is_some() && cmd.checksum.is_some() {
             return self.answer_add(cmd, ctx);
         }
-        if !cmd.remote && cmd.api.is_none() && !self.settings.automation_api {
+        if !cmd.remote && cmd.api.is_none() && !self.settings.automation_api && !self.glass_owned() {
             return line(&ErrorAnswer {
                 error: "the automation API is off (misterdownloadmanager-cli api on)".into(),
                 code: Some(ipc::api::API_OFF.into()),
             });
+        }
+        // The Tauri shell uses a strict, local-only extension to the existing
+        // automation API. Never expose configuration or backend identity to
+        // paired remote clients, nor accept writes from the legacy GUI process.
+        let glass_owned = self.headless
+            && crate::headless::glass_owned();
+        if !cmd.remote && cmd.query.as_deref() == Some("glass-backend") {
+            return serde_json::json!({
+                "headless": self.headless,
+                "glass": glass_owned,
+                "ipc": "local-authenticated",
+            }).to_string();
+        }
+        // The original download engine's real segment cursors and connection
+        // snapshots for the Glass views. Separate from the public automation
+        // schema so third-party and paired remote clients are unaffected.
+        // Never fabricate a segment map from the overall completion percent.
+        if !cmd.remote && glass_owned && cmd.query.as_deref() == Some("glass-visuals") {
+            let files = self.items.iter().map(|i| {
+                let server = i.snap.as_ref()
+                    .and_then(|snap| snap.server.as_ref())
+                    .map(crate::whereis::Seen::from)
+                    .or_else(|| i.server.clone());
+                let country_code = server.as_ref().and_then(|seen| seen.ip)
+                    .and_then(mdm_geo::country)
+                    .map(|country| country.code().to_owned());
+                let segments = i.snap.as_ref().map(|snap| {
+                    snap.segments.iter().map(|part| {
+                        serde_json::json!({
+                            "start": part.start,
+                            "worker": part.worker,
+                            "last_worker": part.last_worker,
+                            "cursor": part.cursor,
+                            "end": part.end
+                        })
+                    }).collect::<Vec<_>>()
+                }).unwrap_or_else(|| {
+                    // A persisted Complete result is the engine's confirmation that every byte arrived.
+                    if i.status==Status::Complete {i.size.map(|size|vec![serde_json::json!({"start":0,"cursor":size,"end":size})]).unwrap_or_default()}else{Vec::new()}
+                });
+                let connections = i.snap.as_ref().map(|snap| {
+                    snap.connections.iter().map(|conn| {
+                        let state = match &conn.status {
+                            mdm_engine::download::ConnStatus::Connecting => "Connecting",
+                            mdm_engine::download::ConnStatus::Receiving => "Receiving",
+                            mdm_engine::download::ConnStatus::Retrying(_) => "Retrying",
+                            mdm_engine::download::ConnStatus::Finished => "Finished",
+                            mdm_engine::download::ConnStatus::Failed(_) => "Failed",
+                            mdm_engine::download::ConnStatus::Retired { .. } => "Retired",
+                        };
+                        serde_json::json!({
+                            "id": conn.id,
+                            "downloaded": conn.downloaded,
+                            "speed": conn.speed,
+                            "state": state,
+                            "recent_disconnect": conn.last_disconnect.is_some_and(|at| at.elapsed().as_millis() < 2500),
+                            "reconnecting_after_loss": conn.reconnecting_after_loss
+                        })
+                    }).collect::<Vec<_>>()
+                }).unwrap_or_default();
+                serde_json::json!({
+                    "id": i.id,
+                    "segments": segments,
+                    "chunk_count": i.chunk_count.unwrap_or_else(|| self.settings.connections_for(&i.url)),
+                    "active_connections": connections.iter().filter(|c| c["state"] == "Receiving" || c["state"] == "Connecting").count(),
+                    "connections": connections,
+                    "resumable": i.snap.as_ref().and_then(|snap| snap.resumable).or(i.resumable),
+                    "server": {
+                        "hostname": i.snap.as_ref()
+                            .and_then(|snap| snap.url.host_str())
+                            .or_else(|| i.file_url.as_ref().and_then(url::Url::host_str))
+                            .or_else(|| i.url.host_str()),
+                        "ip": server.as_ref().and_then(|seen| seen.ip).map(|ip| ip.to_string()),
+                        "country_code": country_code,
+                        "place":server.as_ref().map(crate::whereis::glass),
+                        "rtt_ms": server.as_ref().and_then(|seen| seen.rtt_ms),
+                        "cdn": server.as_ref().and_then(|seen| seen.cdn.as_ref()),
+                        "proxied": server.as_ref().is_some_and(|seen| seen.proxied),
+                    },
+                    "last_try": i.last_try,
+                    "added": i.added,
+                    "referer": i.referer,
+                    "page": i.page,
+                    "description": i.description,
+                    "category": i.category.key(),
+                    "is_torrent": i.torrent.is_some(),
+                    "direct_recovery": i.direct_recovery.is_some(),
+                    "original_partial": i.direct_recovery.as_ref().map(|origin|mdm_engine::naming::part_path(&origin.dest).to_string_lossy().into_owned()),
+                    "recovery_search_available": self.glass_torrent_recovery.contains_key(&i.id),
+                    "recovery_handoff_available": self.glass_torrent_handoffs.contains_key(&i.id),
+                    "is_video": i.video.is_some(),
+                    "is_gallery": i.gallery.is_some(),
+                    "is_remote": i.remote.is_some(),
+                    "recovery_damaged": i.recovery_damaged,
+                })
+            }).collect::<Vec<_>>();
+            return serde_json::json!({ "downloads": files }).to_string();
+        }
+        if !cmd.remote && cmd.query.as_deref() == Some("glass-network-adapters") {
+            if !glass_owned { return line(&ErrorAnswer { error: "glass backend not active".into(), code: None }); }
+            let adapters=mdm_engine::net::adapters().into_iter().map(|a| {
+                let address=a.v4.first().map(ToString::to_string).or_else(||a.v6.first().map(ToString::to_string));
+                serde_json::json!({"name":a.name,"address":address})
+            }).collect::<Vec<_>>();
+            return serde_json::json!({"adapters":adapters}).to_string();
+        }
+        if !cmd.remote && cmd.query.as_deref() == Some("glass-settings") {
+            if !glass_owned {
+                return line(&ErrorAnswer { error: "glass backend not active".into(), code: None });
+            }
+            return serde_json::json!({
+                "max_connections": self.settings.max_connections,
+                "speed_limit_on": self.settings.speed_limit_on,
+                "speed_limit_kb": self.settings.speed_limit_kb,
+                "global_limit_on": self.settings.global_limit_on,
+                "global_limit_kb": self.settings.global_limit_kb,
+                "start_immediately": self.settings.start_immediately,
+                "only_add_to_queue": self.settings.only_add_to_queue,
+                "confirm_delete": self.settings.confirm_delete,
+                "delete_files_too":self.settings.delete_files_too,
+                "torrent_keep_sharing": self.settings.torrent_keep_sharing,
+                "torrent_dht": self.settings.torrent_dht,
+                "torrent_lsd": self.settings.torrent_lsd,
+                "proxy_from_browser": self.settings.proxy_from_browser,
+                "capture_opened": self.settings.capture_opened,
+                "show_progress": self.settings.show_progress,
+                "show_complete": self.settings.show_complete,
+                "advanced_integration": self.settings.advanced_integration,
+                "double_click_open": self.settings.double_click_open,
+                "net_adapter": self.settings.net_adapter,
+                "category_dirs": self.settings.category_dirs,
+            }).to_string();
+        }
+        if !cmd.remote && cmd.action.as_deref() == Some("glass-setting") {
+            if !glass_owned {
+                return line(&ErrorAnswer { error: "glass backend not active".into(), code: None });
+            }
+            // Reuse authenticated IPC's existing text fields: category is the
+            // exact setting name, queue is its value. No file can be edited
+            // directly by the frontend while downloads run.
+            let key = cmd.category.as_deref().unwrap_or("");
+            let value = cmd.queue.as_deref().unwrap_or("");
+            let bool_value = match value {
+                "true" => Some(true),
+                "false" => Some(false),
+                _ => None,
+            };
+            let changed = match key {
+                "max_connections" => value.parse::<u32>()
+                    .ok().filter(|n| (1..=128).contains(n))
+                    .map(|n| { self.settings.max_connections = n; }),
+                "speed_limit_kb" => value.parse::<u64>()
+                    .ok().filter(|n| *n <= 10_000_000)
+                    .map(|n| { self.settings.speed_limit_kb = n; }),
+                "global_limit_kb" => value.parse::<u64>()
+                    .ok().filter(|n| *n <= 10_000_000)
+                    .map(|n| { self.settings.global_limit_kb = n; }),
+                "speed_limit_on" => bool_value.map(|n| { self.settings.speed_limit_on = n; }),
+                "global_limit_on" => bool_value.map(|n| { self.settings.global_limit_on = n; }),
+                "start_immediately" => bool_value.map(|n| { self.settings.start_immediately = n; }),
+                "only_add_to_queue" => bool_value.map(|n| { self.settings.only_add_to_queue = n; }),
+                "confirm_delete" => bool_value.map(|n| { self.settings.confirm_delete = n; }),
+                "torrent_keep_sharing" => bool_value.map(|n| { self.settings.torrent_keep_sharing = n; }),
+                "torrent_dht" => bool_value.map(|n| { self.settings.torrent_dht = n; }),
+                "torrent_lsd" => bool_value.map(|n| { self.settings.torrent_lsd = n; }),
+                "proxy_from_browser" => bool_value.map(|n| { self.settings.proxy_from_browser = n; }),
+                "capture_opened" => bool_value.map(|n| { self.settings.capture_opened = n; }),
+                "show_complete" => bool_value.map(|n| { self.settings.show_complete = n; for p in &mut self.progress {p.glass_set_show_complete(n);} }),
+                "show_progress" => bool_value.map(|n| { self.settings.show_progress = n; }),
+                "advanced_integration" => bool_value.map(|n| { self.settings.advanced_integration = n; }),
+                "double_click_open" => bool_value.map(|n| { self.settings.double_click_open = n; }),
+                "net_adapter" if value.len() <= 256 => {
+                    self.settings.net_adapter = value.into();
+                    Some(())
+                }
+                _ => None,
+            };
+            return if changed.is_some() {
+                self.dirty = true;
+                serde_json::json!({ "saved": true, "key": key }).to_string()
+            } else {
+                line(&ErrorAnswer {
+                    error: format!("invalid or unsupported Glass setting: {key}"),
+                    code: Some("invalid-setting".into()),
+                })
+            };
+        }
+        // Unified Windows glass frontend: real backend commands. Only the
+        // authenticated local GUI process may invoke these actions. The paired
+        // remote-control API never gets these capabilities.
+        if !cmd.remote && glass_owned
+            && cmd.action.as_deref() == Some("glass-torrent-file") {
+            let Some(path) = cmd.dir.as_deref().map(std::path::Path::new) else {
+                return line(&ErrorAnswer { error: "no torrent file path".into(), code: None });
+            };
+            if !path.is_absolute() ||
+                !path.extension().is_some_and(|e| e.eq_ignore_ascii_case("torrent")) {
+                return line(&ErrorAnswer {
+                    error: "select an absolute .torrent file".into(), code: None,
+                });
+            }
+            let Some(len) = std::fs::metadata(path).ok().map(|m| m.len()) else {
+                return line(&ErrorAnswer { error: "torrent file not found".into(), code: None });
+            };
+            if len > 16_000_000 {
+                return line(&ErrorAnswer { error: "torrent file is too large".into(), code: None });
+            }
+            let Ok(bytes) = std::fs::read(path) else {
+                return line(&ErrorAnswer {
+                    error: "could not read selected .torrent file".into(), code: None,
+                });
+            };
+            let mut imported = ipc::Command::default();
+            imported.torrent_file = Some(bytes);
+            return self.remote_add(imported);
+        }
+        if !cmd.remote && glass_owned
+            && cmd.action.as_deref() == Some("glass-bulk") {
+            let action = cmd.category.as_deref().unwrap_or("");
+            let ids: Vec<u64> = match action {
+                "stop-all" => self.items.iter()
+                    .filter(|it| it.live.is_some()).map(|it| it.id).collect(),
+                "delete-completed" => self.items.iter()
+                    .filter(|it| it.status == Status::Complete && it.live.is_none())
+                    .map(|it| it.id).collect(),
+                _ => return line(&ErrorAnswer {
+                    error: "invalid bulk command".into(), code: Some("invalid-action".into()),
+                }),
+            };
+            return line(&self.act(if action == "stop-all" { "pause" } else { "remove" }, &ids)
+                .unwrap_or_default());
+        }
+        if !cmd.remote && glass_owned
+            && cmd.action.as_deref() == Some("glass-item") {
+            let id = match cmd.ids.as_slice() {
+                [id] => *id,
+                _ => return line(&ErrorAnswer { error: "select one file".into(), code: None }),
+            };
+            match cmd.category.as_deref().unwrap_or("") {
+                "redownload" => {
+                    if !self.items.iter().any(|it| it.id == id && it.live.is_none()) {
+                        return line(&ErrorAnswer { error: "pause this download first".into(), code: None });
+                    }
+                    self.redownload(id);
+                    return serde_json::json!({ "ok": true }).to_string();
+                }
+                "speed-limit" => {
+                    let value = cmd.queue.as_deref().unwrap_or("");
+                    let limit = match value {
+                        "off" => None,
+                        v => match v.parse::<u64>().ok()
+                            .filter(|kb| (1..=10_000_000).contains(kb))
+                            .and_then(|kb| kb.checked_mul(1024)) {
+                            Some(bytes) => Some(bytes),
+                            None => return line(&ErrorAnswer {
+                                error: "speed limit must be 1..10000000 KB/s or off".into(),
+                                code: Some("invalid-setting".into()),
+                            }),
+                        }
+                    };
+                    let mut helper = false;
+                    if let Some(it) = self.item(id) {
+                        if let Some(live) = it.live.as_ref() {
+                            live.dl.set_speed_limit(limit);
+                            helper = live.dl.is_helper();
+                        }
+                        it.own_limit = limit;
+                        self.dirty = true;
+                    } else {
+                        return line(&ErrorAnswer { error: "download not found".into(), code: None });
+                    }
+                    if helper {
+                        self.helper_own.insert(id, limit);
+                        self.reapply_helper_limits();
+                    }
+                    return serde_json::json!({ "ok": true }).to_string();
+                }
+                "details" => {
+                    let Some(it) = self.items.iter().find(|it| it.id == id) else {
+                        return line(&ErrorAnswer { error: "download not found".into(), code: None });
+                    };
+                    return serde_json::json!({
+                        "id": id,
+                        "own_limit_kb": it.own_limit.map(|n| n / 1024),
+                        "checksum": it.checksum.as_ref().map(mdm_engine::verify::Hash::display),
+                        "completion":self.progress.iter().find(|p|p.id==id).map(Progress::glass_completion).unwrap_or(serde_json::json!({"hang_up":false,"exit":false,"turn_off":null,"force":false})),
+                        "file": it.file_name,
+                        "status": format!("{:?}", it.status),
+                        "is_torrent": it.torrent.is_some(),
+                        "url": it.url.to_string(),
+                        "path": it.dest.to_string_lossy(),
+                    }).to_string();
+                }
+                _ => return line(&ErrorAnswer {
+                    error: "unknown download command".into(), code: Some("invalid-action".into()),
+                })
+            }
         }
         if let Some(action @ ("start_queue" | "stop_queue")) = cmd.action.as_deref() {
             let at = match cmd.queue.as_deref() {
@@ -7015,7 +7507,11 @@ impl App {
     /// or a magnet link or .torrent file as Add torrent's Download Now with every file, in the
     /// category and queue it chose (by file type, and started now, when it chose none). No
     /// window opens. Answered with its id, or `pending` while a torrent's files are looked up.
-    fn remote_add(&mut self, mut cmd: ipc::Command) -> String {
+    fn remote_add(&mut self, cmd: ipc::Command) -> String {
+        self.remote_add_from(cmd, false)
+    }
+
+    fn remote_add_from(&mut self, mut cmd: ipc::Command, from_clipboard: bool) -> String {
         use ipc::api::{AddAnswer, ErrorAnswer, line};
         let fail = |code: &str, error: &str| {
             line(&ErrorAnswer {
@@ -7097,8 +7593,13 @@ impl App {
             None,
             None,
             cmd,
-            // i18n: where a download came from (its Properties): a phone or computer paired in Options → Remote
-            crate::i18n::mark("from a paired device"),
+            if from_clipboard {
+                // i18n: where an automatically added download came from.
+                crate::i18n::mark("from clipboard")
+            } else {
+                // i18n: where a download came from: a phone or computer paired in Options → Remote.
+                crate::i18n::mark("from a paired device")
+            },
         );
         self.name_guessed(id, true);
         self.number_at_start(id);
@@ -7548,8 +8049,10 @@ impl App {
             });
         }
         if let Some(mode) = w.turn_off {
+            self.glass_power_serial=self.glass_power_serial.wrapping_add(1);
             self.turn_off = Some(dialogs::TurnOffCountdown::new(mode, w.force));
         } else if w.exit {
+            if self.glass_owned() {self.glass_exit_requested=true;return;}
             tracing::info!("when done: exit");
             let ctx = self.ui_ctx.clone();
             self.quit(&ctx);
@@ -8124,6 +8627,52 @@ impl App {
             || !self.deferred_torrent_queue.is_empty()
         {
             ctx.request_repaint_after(Duration::from_millis(200));
+        }
+        // Persist a positive damage finding even if its progress window was closed.
+        for (id, slot) in &self.glass_recovery_checks {
+            let result = slot.lock().ok().and_then(|result| result.clone()).and_then(Result::ok);
+            let damaged = result.as_ref().and_then(|report| report.get("damaged_ranges")).and_then(serde_json::Value::as_array).is_some_and(|ranges| !ranges.is_empty());
+            if damaged && let Some(item) = self.items.iter_mut().find(|item| item.id == *id) && !item.recovery_damaged {
+                item.recovery_damaged = true;
+                self.dirty = true;
+            }
+            if !damaged && result.as_ref().is_some_and(|report| report["repair_prepared"] == true && report["damaged_ranges"].is_array())
+                && let Some(item) = self.items.iter_mut().find(|item| item.id == *id) && item.recovery_damaged {
+                item.recovery_damaged = false;
+                self.dirty = true;
+            }
+        }
+        let mut repaired = Vec::new();
+        for (id, slot) in &self.glass_repair_checks {
+            if let Ok(mut slot) = slot.lock() && !slot.applied && let Some(result) = slot.result.clone() {
+                if let Ok(report) = result && let Some(item) = self.items.iter_mut().find(|item| item.id == *id) {
+                    item.recovery_damaged = false;
+                    item.downloaded = report["retained_bytes"].as_u64().unwrap_or(item.downloaded);
+                    item.status = Status::Stopped;
+                    item.error = None;
+                    item.note("Damaged ranges are ready to be downloaded again from the checked source.");
+                    self.dirty = true;
+                    repaired.push(*id);
+                }
+                slot.applied = true;
+            }
+        }
+        for id in repaired { self.glass_recovery_checks.remove(&id); }
+        let ready:Vec<_>=self.glass_torrent_handoffs.iter().filter_map(|(id,slot)| {
+            slot.lock().ok().and_then(|mut value|value.prepared.take().map(|result|(result,value.cancelled))).map(|(result,cancelled)|(*id,slot.clone(),result,cancelled))
+        }).collect();
+        for (id,slot,prepared,cancelled) in ready {
+            let result=prepared.and_then(|value| {
+                let folder=value.folder.clone();
+                if cancelled {return Err(format!("Torrent recovery was cancelled. The original partial and prepared files at {} were kept.",folder.display()));}
+                self.commit_torrent_recovery(id,value).map_err(|error|format!("{error} Prepared files were kept at {}.",folder.display()))
+            });
+            let success=result.is_ok();
+            if let Ok(mut value)=slot.lock(){value.result=Some(result);}
+            if success {
+                self.glass_recovery_checks.remove(&id);
+                self.start(id,true);
+            }
         }
         let mut finished = Vec::new();
         let mut failed = Vec::new();
@@ -10131,6 +10680,7 @@ impl App {
         );
         fi.remember = self.settings.change_folder_on_last;
         fi.folders = self.settings.folder_history.clone();
+        self.glass_info_serial = self.glass_info_serial.wrapping_add(1);
         self.file_info = Some(fi);
     }
 
@@ -10256,6 +10806,7 @@ impl App {
             .unwrap_or_default();
         let ask = (dup, pending, dialogs::Duplicate::new(name));
         if self.duplicate.is_none() {
+            self.glass_duplicate_serial=self.glass_duplicate_serial.wrapping_add(1);
             self.duplicate = Some(ask);
         } else {
             self.duplicates_waiting.push_back(ask);
@@ -10837,6 +11388,7 @@ impl App {
     /// the list already go unticked under "Already in the list" (imported twice, they were
     /// doubled).
     fn show_import(&mut self, found: Vec<crate::transfer::Imported>, source: String) {
+        self.glass_import_serial=self.glass_import_serial.wrapping_add(1);
         let known: std::collections::HashSet<String> =
             self.items.iter().map(|i| i.url.to_string()).collect();
         let (downloads, s) = (&self.downloads, &self.settings);
@@ -11051,9 +11603,16 @@ impl App {
     /// Download again from the start: the partial state goes; a finished file is replaced when
     /// the new download completes.
     fn redownload(&mut self, id: u64) {
+        if self.recovery_check_running(id) || self.repair_check_running(id) {
+            self.notice = Some(("Saved-data check", "Wait for the saved-data check to finish before redownloading.".to_owned()));
+            return;
+        }
         if !self.can_redownload(id) {
             return;
         }
+        self.glass_recovery_checks.remove(&id);
+        self.glass_torrent_recovery.remove(&id);
+        self.glass_torrent_handoffs.remove(&id);
         let Some(item) = self.item(id) else { return };
         // Its state and part file go beside the window (#1170); its start, just below, waits on
         // its own task until they are gone: it never resumes from them.
@@ -11067,6 +11626,11 @@ impl App {
         item.downloaded = 0;
         item.status = Status::Stopped;
         item.error = None;
+        item.recovery_damaged = false;
+        if item.checksum_from_server {
+            item.checksum = None;
+            item.checksum_from_server = false;
+        }
         item.note(crate::i18n::t("Downloading again from the start"));
         self.dirty = true;
         self.deleter.delete(vec![doomed]);
@@ -11624,6 +12188,7 @@ impl App {
                     &[("algorithm", h.algo.name())],
                 ));
                 item.checksum = Some(h);
+                item.checksum_from_server = false;
                 self.dirty = true;
             }
         }
@@ -12390,12 +12955,20 @@ impl App {
         self.poll(ctx);
         crate::crash::step(crate::crash::Step::RemoteTorrents);
         self.poll_remote_torrents();
+        if self.glass_owned(){self.grabber_checks(ctx);}
         // What failed in any window, told here (dialogs::tell).
         if let Some((title, text)) = dialogs::told().pop() {
             self.notice = Some((title, text));
         }
         crate::crash::step(crate::crash::Step::Limits);
         self.apply_global_limit();
+        // Glass is a desktop shell with its own windows even though its MDM backend is
+        // headless. Reuse the original asynchronous clipboard watch and capture rules;
+        // ordinary headless servers still have no clipboard integration.
+        if self.glass_owned() {
+            crate::crash::step(crate::crash::Step::Clipboard);
+            self.watch_clipboard(ctx);
+        }
         // A server (#157) has no screen, clipboard or tray, and is updated by its image.
         if !self.headless {
             crate::crash::step(crate::crash::Step::UpdateCheck);
@@ -14334,6 +14907,156 @@ mod deferred_rename_guard_tests {
             let zone = std::fs::read_to_string(stream).unwrap_or_default();
             assert!(zone.contains("ZoneId=3"), "{}: {zone}", f.display());
         }
+    }
+}
+
+#[cfg(test)]
+mod torrent_recovery_handoff_tests {
+    use super::*;
+
+    #[test]
+    fn recovery_handoff_persists_origin_and_refuses_metadata_overwrite() {
+        let tmp=tempfile::tempdir().unwrap();
+        mdm_ipc::set_data_dir(tmp.path().join("app-data"));
+        let dest=tmp.path().join("original.bin");
+        let part=mdm_engine::naming::part_path(&dest);
+        std::fs::write(&part,b"abcdefghijkl").unwrap();
+        let url:url::Url="https://example.org/file".parse().unwrap();
+        let mut saved=mdm_engine::state::ResumeState::new(url.clone(),url.clone(),dest.clone(),12,Default::default());
+        saved.segments=vec![mdm_engine::planner::SavedSegment{start:0,cursor:6,end:12}];
+        let state=mdm_engine::state::state_path(&dest);
+        std::fs::write(&state,serde_json::to_vec(&saved).unwrap()).unwrap();
+        let pieces:[u8;60]=[129,254,139,254,135,87,108,62,203,34,66,111,142,87,132,115,130,145,122,207,42,237,138,169,248,38,194,30,240,125,94,225,91,72,238,160,110,156,138,98,96,78,189,235,141,59,229,48,60,15,200,145,119,63,105,252,58,55,32,250];
+        let mut torrent=b"d4:infod6:lengthi12e4:name8:file.bin12:piece lengthi4e6:pieces60:".to_vec();
+        torrent.extend_from_slice(&pieces);torrent.extend_from_slice(b"ee");
+        let first=mdm_torrent::prepare_saved_recovery(&torrent,&saved,0,&tmp.path().join("stage-one")).unwrap();
+        let torrent_file=crate::torrents::torrent_file(&first.metadata.info_hash).unwrap();
+        std::fs::create_dir_all(torrent_file.parent().unwrap()).unwrap();
+        std::fs::write(&torrent_file,b"unrelated metadata").unwrap();
+        let mut item=Item::new(1,url,dest.clone(),Category::General);
+        item.status=Status::Stopped;item.size=Some(12);item.downloaded=6;
+        let loaded=store::Loaded{next_id:2,items:vec![item],columns:None,settings:Settings::default(),queues:vec![]};
+        let rt=Box::leak(Box::new(tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap()));
+        let (_,commands)=std::sync::mpsc::channel();
+        let mut app=std::mem::ManuallyDrop::new(App::assemble(&egui::Context::default(),rt.handle().clone(),commands,loaded,crate::Start::Shown));
+        let matches=mdm_torrent::candidate_search::matching_files(&torrent,&saved).unwrap();
+        let report=mdm_torrent::candidate_search::SearchReport{searched:1,failed:0,matches:vec![mdm_torrent::candidate_search::MatchedCandidate{
+            candidate:mdm_torrent::candidate_search::Candidate{identifier:String::new(),title:"chosen".into(),torrent_url:"about:blank".parse().unwrap()},info_hash:first.metadata.info_hash.clone(),torrent:torrent.clone(),files:matches
+        }]};
+        app.glass_torrent_recovery.insert(1,std::sync::Arc::new(std::sync::Mutex::new(Some(Ok(report)))));
+        let command=|payload:serde_json::Value|ipc::Command{action:Some("glass-item".into()),category:Some("start-recovery-torrent".into()),ids:vec![1],queue:Some(payload.to_string()),..Default::default()};
+        let rejected=app.glass_answer(&command(serde_json::json!({"candidate":0,"file_index":0,"info_hash":first.metadata.info_hash}))).unwrap();
+        assert!(rejected.contains("Confirm"));
+        let rejected=app.glass_answer(&command(serde_json::json!({"candidate":0,"file_index":0,"info_hash":"0000000000000000000000000000000000000000","accept_partial_match":true}))).unwrap();
+        assert!(rejected.contains("no longer available"));
+        assert!(app.glass_torrent_handoffs.is_empty());
+        let mut offline=mdm_torrent::Config::new(tmp.path().join("preparation-session"));
+        offline.offline=true;offline.dht=false;app.torrent_host.set_config(Some(offline));
+        let accepted=app.glass_answer(&command(serde_json::json!({"candidate":0,"file_index":0,"info_hash":first.metadata.info_hash,"accept_partial_match":true}))).unwrap();
+        assert!(accepted.contains("pending"));
+        let cancelled=app.glass_answer(&ipc::Command{action:Some("glass-item".into()),category:Some("cancel-recovery-torrent".into()),ids:vec![1],..Default::default()}).unwrap();
+        assert!(cancelled.contains("already_started\":false"));
+        let cancel_deadline=Instant::now()+Duration::from_secs(30);
+        loop {
+            rt.block_on(async {tokio::time::sleep(Duration::from_millis(50)).await});
+            app.poll(&egui::Context::default());
+            if let Some(result)=app.glass_torrent_handoffs.get(&1).and_then(|slot|slot.lock().ok().and_then(|slot|slot.result.clone())) {
+                assert!(result.unwrap_err().contains("cancelled"));
+                break;
+            }
+            assert!(Instant::now()<cancel_deadline,"handoff cancellation did not finish");
+        }
+        assert_eq!(app.items[0].dest,dest);
+        assert!(app.items[0].torrent.is_none());
+        let accepted=app.glass_answer(&command(serde_json::json!({"candidate":0,"file_index":0,"info_hash":first.metadata.info_hash,"accept_partial_match":true}))).unwrap();
+        assert!(accepted.contains("pending"));
+        let deadline=Instant::now()+Duration::from_secs(30);
+        loop {
+            rt.block_on(async {tokio::time::sleep(Duration::from_millis(50)).await});
+            app.poll(&egui::Context::default());
+            if let Some(result)=app.glass_torrent_handoffs.get(&1).and_then(|slot|slot.lock().ok().and_then(|slot|slot.result.clone())) {
+                assert!(result.is_err());
+                break;
+            }
+            assert!(Instant::now()<deadline,"handoff preparation did not finish");
+        }
+        assert_eq!(app.items[0].dest,dest);
+        assert!(app.items[0].torrent.is_none());
+        assert!(app.commit_torrent_recovery(1,first).is_err());
+        assert_eq!(std::fs::read(&torrent_file).unwrap(),b"unrelated metadata");
+        assert_eq!(app.items[0].dest,dest);
+        assert!(app.items[0].torrent.is_none());
+        std::fs::remove_file(&torrent_file).unwrap();
+        let second=mdm_torrent::prepare_saved_recovery(&torrent,&saved,0,&tmp.path().join("stage-two")).unwrap();
+        let stage_two=second.staged.file.clone();
+        let history=store::path().unwrap();
+        app.saver.flush();
+        if history.is_file(){std::fs::remove_file(&history).unwrap();}
+        std::fs::create_dir(&history).unwrap();
+        assert!(app.commit_torrent_recovery(1,second).is_err());
+        assert_eq!(app.items[0].dest,dest);
+        assert!(app.items[0].torrent.is_none());
+        assert!(app.items[0].direct_recovery.is_none());
+        assert_eq!(std::fs::read(&stage_two).unwrap(),b"abcd\0\0\0\0\0\0\0\0");
+        std::fs::remove_dir(&history).unwrap();
+        let third=mdm_torrent::prepare_saved_recovery(&torrent,&saved,0,&tmp.path().join("stage-three")).unwrap();
+        let staged=third.staged.file.clone();
+        app.commit_torrent_recovery(1,third).unwrap();
+        app.glass_torrent_handoffs.get(&1).unwrap().lock().unwrap().result=Some(Ok(serde_json::json!({})));
+        app.items[0].status=Status::Queued;
+        app.quota.held.push(1);
+        let cancelled=app.glass_answer(&ipc::Command{action:Some("glass-item".into()),category:Some("cancel-recovery-torrent".into()),ids:vec![1],..Default::default()}).unwrap();
+        assert!(cancelled.contains("already_started\":true"));
+        assert_eq!(app.items[0].status,Status::Stopped);
+        assert!(!app.quota.held.contains(&1));
+        assert_eq!(std::fs::read(&part).unwrap(),b"abcdefghijkl");
+        assert!(state.is_file());
+        assert_eq!(std::fs::read(&staged).unwrap(),b"abcd\0\0\0\0\0\0\0\0");
+        let loaded=store::load();
+        assert_eq!(loaded.items.len(),1);
+        assert_eq!(loaded.items[0].dest,staged);
+        assert_eq!(loaded.items[0].direct_recovery.as_ref().unwrap().dest,dest);
+        assert!(loaded.items[0].torrent.is_some());
+        assert_eq!(loaded.items[0].status,Status::Stopped);
+        // Recreate the app from its persisted list and continue from a local
+        // peer. DHT and discovery stay disabled; the original partial must
+        // remain intact even after the recovered torrent finishes.
+        let (_,commands)=std::sync::mpsc::channel();
+        let mut restarted=std::mem::ManuallyDrop::new(App::assemble(&egui::Context::default(),rt.handle().clone(),commands,loaded,crate::Start::Shown));
+        assert_eq!(restarted.items[0].category,Category::General);
+        let mut config=mdm_torrent::Config::new(tmp.path().join("leecher-state"));
+        config.offline=true;config.dht=false;
+        restarted.torrent_host.set_config(Some(config));
+        let seed_dir=tmp.path().join("seed");std::fs::create_dir(&seed_dir).unwrap();
+        std::fs::write(seed_dir.join("file.bin"),b"abcdefghijkl").unwrap();
+        let mut seed_config=mdm_torrent::Config::new(tmp.path().join("seeder-state"));
+        seed_config.offline=true;seed_config.dht=false;
+        let (seeder,session)=rt.block_on(async {
+            let seed=mdm_torrent::Torrents::start(seed_config).await.unwrap();
+            let hash=seed.add(&torrent,&seed_dir,None,Vec::new(),false).await.unwrap();
+            let deadline=Instant::now()+Duration::from_secs(20);
+            while seed.stats(&hash).unwrap().phase!=mdm_torrent::Phase::Finished {
+                assert!(Instant::now()<deadline,"seed did not finish checking");
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+            let peer=seed.listen_addr().unwrap();
+            let session=restarted.torrent_host.session(restarted.session_hashes()).await.unwrap();
+            let spec=restarted.items[0].torrent.as_ref().unwrap();
+            session.add(&torrent,&spec.folder,spec.files.clone(),vec![peer],true).await.unwrap();
+            (seed,session)
+        });
+        restarted.start(1,false);
+        let deadline=Instant::now()+Duration::from_secs(30);
+        while restarted.items[0].status!=Status::Complete {
+            rt.block_on(async {tokio::time::sleep(Duration::from_millis(50)).await});
+            restarted.items[0].poll();
+            assert!(Instant::now()<deadline,"recovered torrent did not finish: {:?}",restarted.items[0].error);
+            assert_ne!(restarted.items[0].status,Status::Error,"recovery failed: {:?}",restarted.items[0].error);
+        }
+        assert_eq!(std::fs::read(&staged).unwrap(),b"abcdefghijkl");
+        assert_eq!(std::fs::read(&part).unwrap(),b"abcdefghijkl");
+        assert!(state.is_file());
+        rt.block_on(async {session.stop().await;seeder.stop().await;});
     }
 }
 

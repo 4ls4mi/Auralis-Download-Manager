@@ -31,6 +31,8 @@ pub struct Segment {
     /// Exclusive end; moves down when the segment is split.
     pub end: u64,
     pub worker: Option<WorkerId>,
+    /// Most recent owner in this session, retained after an assignment completes.
+    pub last_worker: Option<WorkerId>,
     /// The worker has received data for this assignment (it can no longer be preempted).
     pub receiving: bool,
     /// When the current worker got it.
@@ -83,6 +85,8 @@ pub struct Planner {
     preempt_after: std::time::Duration,
     /// Sorted by `start`, contiguous, covering `[0, size)`.
     segs: Vec<Segment>,
+    /// When enabled, each segment is reserved for the same worker until it completes.
+    fixed: bool,
 }
 
 impl Planner {
@@ -98,6 +102,7 @@ impl Planner {
             min_split: min_split.max(1),
             preempt_after: std::time::Duration::ZERO,
             segs,
+            fixed: false,
         }
     }
 
@@ -127,6 +132,7 @@ impl Planner {
                 reserved: s.cursor,
                 end: s.end,
                 worker: None,
+                last_worker: None,
                 receiving: false,
                 given_at: None,
             })
@@ -136,7 +142,64 @@ impl Planner {
             min_split: min_split.max(1),
             preempt_after: std::time::Duration::ZERO,
             segs,
+            fixed: false,
         })
+    }
+
+    /// Partition the file into stable worker ranges, preserving every saved byte. Existing
+    /// segments can have arbitrary boundaries, so a worker may own several segments.
+    pub fn reserve_fixed_ranges(&mut self, workers: u32) {
+        if self.size == 0 || workers == 0 { return; }
+        let workers = u64::from(workers).min(self.size);
+        let mut parts = Vec::new();
+        for original in &self.segs {
+            let mut start = original.start;
+            while start < original.end {
+                let owner = (((start as u128 + 1) * workers as u128 - 1) / self.size as u128) as u64;
+                let end = original.end.min((((owner + 1) as u128 * self.size as u128) / workers as u128) as u64);
+                let cursor = original.cursor.clamp(start, end);
+                let mut segment = fresh(start, end, None);
+                segment.cursor = cursor;
+                segment.reserved = cursor;
+                segment.last_worker = Some(owner as WorkerId);
+                parts.push(segment);
+                start = end;
+            }
+        }
+        self.segs = parts;
+        self.fixed = true;
+    }
+
+    /// A server refused an assignment permanently; allow the remaining connections to
+    /// complete it instead of leaving the download stuck.
+    pub fn allow_reassignment(&mut self) { self.fixed = false; }
+
+    /// A permanently unavailable worker gives its remaining fixed ranges to one
+    /// connection that is still working. Keep fixed scheduling enabled so the
+    /// remaining connections do not repeatedly split and exchange work.
+    pub fn reassign_abandoned(&mut self, failed: WorkerId) {
+        if !self.fixed { return; }
+        let Some(target) = self.segs.iter().find_map(|s| s.worker.filter(|&w| w != failed)) else {
+            self.allow_reassignment();
+            return;
+        };
+        let mut i = 0;
+        while i < self.segs.len() {
+            let s = self.segs[i];
+            if s.last_worker == Some(failed) && s.worker.is_none() && s.cursor < s.end {
+                if s.cursor > s.start {
+                    self.segs[i].end = s.cursor;
+                    self.segs[i].reserved = s.cursor;
+                    let mut remainder = fresh(s.cursor, s.end, None);
+                    remainder.last_worker = Some(target);
+                    self.segs.insert(i + 1, remainder);
+                    i += 1;
+                } else {
+                    self.segs[i].last_worker = Some(target);
+                }
+            }
+            i += 1;
+        }
     }
 
     pub fn save(&self) -> Vec<SavedSegment> {
@@ -183,6 +246,11 @@ impl Planner {
     /// `None` means there is nothing worth splitting: the worker should stop.
     pub fn assign(&mut self, w: WorkerId, after: Option<u64>) -> Option<Assignment> {
         self.release(w);
+
+        if self.fixed {
+            let i = self.segs.iter().position(|s| s.last_worker == Some(w) && s.worker.is_none() && s.unclaimed() > 0)?;
+            return Some(self.give(i, w, None));
+        }
 
         // 1. An unassigned, unfinished segment — prefer the one continuing where `w` stopped.
         let open = |s: &Segment| s.worker.is_none() && s.unclaimed() > 0;
@@ -324,16 +392,36 @@ impl Planner {
         true
     }
 
-    fn give(&mut self, i: usize, w: WorkerId, preempted: Option<WorkerId>) -> Assignment {
+    fn give(&mut self, mut i: usize, w: WorkerId, preempted: Option<WorkerId>) -> Assignment {
+        // Keep already-written bytes attributed to their previous owner. A resumed or
+        // reassigned connection owns only the unfinished suffix, not bytes written by
+        // another worker (or restored from an earlier session).
+        let original = self.segs[i];
+        let written = original.cursor - original.start;
+        if original.cursor > original.start && original.cursor < original.end
+            && original.last_worker != Some(w)
+            && original.worker.is_none()
+        {
+            let split = original.cursor;
+            self.segs[i].end = split;
+            self.segs[i].reserved = split;
+            self.segs[i].receiving = false;
+            self.segs[i].given_at = None;
+            self.segs.insert(i + 1, fresh(split, original.end, None));
+            i += 1;
+        }
         let s = &mut self.segs[i];
         s.worker = Some(w);
+        s.last_worker = Some(w);
         s.receiving = false;
         s.given_at = Some(std::time::Instant::now());
         s.reserved = s.cursor;
         Assignment {
             from: s.cursor,
             to: s.end,
-            written: s.cursor - s.start,
+            // Resume verification still needs the bytes preceding `from`, including
+            // when those bytes now live in the preserved prefix segment.
+            written,
             preempted,
         }
     }
@@ -346,6 +434,7 @@ fn fresh(start: u64, end: u64, worker: Option<WorkerId>) -> Segment {
         reserved: start,
         end,
         worker,
+        last_worker: worker,
         receiving: false,
         given_at: worker.map(|_| std::time::Instant::now()),
     }

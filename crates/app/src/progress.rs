@@ -1222,6 +1222,22 @@ impl Progress {
         }
     }
 
+    pub(crate) fn glass_completion(&self) -> serde_json::Value {
+        serde_json::json!({"hang_up":self.hang_up,"exit":self.exit,
+            "turn_off":self.turn_off_on.then(||crate::queue::TurnOff::ALL[self.turn_off]),"force":self.force})
+    }
+
+    pub(crate) fn glass_set_show_complete(&mut self,on:bool) {self.show_complete=on;}
+
+    pub(crate) fn glass_set_completion(&mut self,value:&serde_json::Value,show_complete:bool) {
+        self.show_complete=show_complete;
+        self.hang_up=value["hang_up"].as_bool().unwrap_or(false);
+        self.exit=value["exit"].as_bool().unwrap_or(false);
+        self.force=value["force"].as_bool().unwrap_or(false);
+        self.turn_off_on=!value["turn_off"].is_null();
+        self.turn_off=match value["turn_off"].as_str(){Some("Sleep")=>1,Some("Hibernate")=>2,_=>0};
+    }
+
     /// Options on completion → "Show download complete dialog" for this file.
     pub fn shows_complete(&self) -> bool {
         self.show_complete

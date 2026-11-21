@@ -1,0 +1,74 @@
+name: Publish verified Auralis 0.3.13
+on:
+  push:
+    branches: [feature/auralis-frosted-candidate]
+    paths: [.github/workflows/auralis-publish-0313.yml]
+permissions:
+  actions: read
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TESTED_SHA: d1111c9682715489976c090675d4358eed06a288
+      TESTED_RUN: '44475684904'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: d1111c9682715489976c090675d4358eed06a288
+          persist-credentials: false
+      - name: Verify exact build and download artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run view "$TESTED_RUN" --json headSha,conclusion --jq '[.headSha,.conclusion] | @tsv' > run.txt
+          IFS=$'\t' read -r sha conclusion < run.txt
+          test "$sha" = "$TESTED_SHA" && test "$conclusion" = success
+          gh run download "$TESTED_RUN" --name auralis-download-manager-windows-x64 --dir installer
+          gh run download "$TESTED_RUN" --name auralis-browser-extensions --dir extensions
+          test -f 'installer/Auralis Download Manager_0.3.13_x64-setup.exe'
+          test "$(find installer -type f | wc -l)" -eq 1
+          test -f extensions/auralis-chromium.zip && test -f extensions/auralis-firefox.zip
+          cp 'installer/Auralis Download Manager_0.3.13_x64-setup.exe' Auralis.Download.Manager_0.3.13_x64-setup.exe
+      - name: Create draft and upload verified artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh api "repos/$GH_REPO/releases/tags/v0.3.13" >/dev/null 2>&1; then
+            echo 'Release already exists; refusing to replace it.' >&2; exit 1
+          fi
+          if gh api "repos/$GH_REPO/git/ref/tags/v0.3.13" >/dev/null 2>&1; then
+            echo 'Tag already exists; refusing to replace it.' >&2; exit 1
+          fi
+          gh release create v0.3.13 --draft --target "$TESTED_SHA" --title 'Auralis Download Manager 0.3.13 — Windows x64' --notes-file docs/glass-releases/v0.3.13.md
+          gh release upload v0.3.13 Auralis.Download.Manager_0.3.13_x64-setup.exe extensions/auralis-chromium.zip extensions/auralis-firefox.zip
+      - name: Verify published asset digests before release
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_id="$(gh api "repos/$GH_REPO/releases" --jq '[.[] | select(.tag_name=="v0.3.13" and .draft==true)] | if length==1 then .[0].id else empty end')"
+          test -n "$release_id"
+          gh api "repos/$GH_REPO/releases/$release_id" > release.json
+          python3 - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          r=json.loads(Path('release.json').read_text())
+          assert r['draft'] and r['tag_name']=='v0.3.13'
+          assert r['target_commitish']==os.environ['TESTED_SHA']
+          files={'Auralis.Download.Manager_0.3.13_x64-setup.exe':Path('Auralis.Download.Manager_0.3.13_x64-setup.exe'),'auralis-chromium.zip':Path('extensions/auralis-chromium.zip'),'auralis-firefox.zip':Path('extensions/auralis-firefox.zip')}
+          assets={a['name']:a for a in r['assets']}
+          assert set(assets)==set(files)
+          for name,path in files.items():
+              digest=hashlib.sha256(path.read_bytes()).hexdigest()
+              assert assets[name]['digest']=='sha256:'+digest, f'Digest mismatch: {name}'
+              assert assets[name]['size']==path.stat().st_size
+              print(f'Verified {name}: sha256:{digest}')
+          PY
+      - name: Publish Auralis release
+        run: |
+          set -euo pipefail
+          gh release edit v0.3.13 --draft=false --prerelease=false --latest
+          test "$(gh api "repos/$GH_REPO/git/ref/tags/v0.3.13" --jq .object.sha)" = "$TESTED_SHA"

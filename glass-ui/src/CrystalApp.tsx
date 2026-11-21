@@ -1,0 +1,481 @@
+/// <reference types="vite/client" />
+import { invoke } from "@tauri-apps/api/core";
+import { getVersion } from "@tauri-apps/api/app";
+import {restorePreferences} from "./preferencesBackup";
+import {connectReleasePush} from "./releasePush";
+import {isPermissionGranted, sendNotification} from "@tauri-apps/plugin-notification";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
+import {
+  Activity, Archive, CheckCircle2, Clock3, Download as DownloadIcon, File,
+  FileArchive, Film, Folder, FolderOpen,
+  Pause, Play, Plus, Search, Settings, Square, Trash2, ListChecks, ChevronDown,
+  ListFilter
+} from "lucide-react";
+import {
+  CrystalWindow, WindowTop, GradientBar, ConnectionMap, SpeedGraph, pct, rate, units,
+  timeLeft, openWindow
+} from "./CrystalShared";
+import type { Dashboard, Download as MdmFile, DownloadVisual, VisualDashboard } from "./CrystalShared";
+
+
+import type { DeleteRequest } from "./CrystalDialog";
+import { selectDownload } from "./selection";
+
+type Menu = "Tasks" | "File" | "Downloads" | "View" | "Help";
+type MenuEntry = { label: string; action: string; disabled?: boolean; shortcut?: string; children?:MenuEntry[] };
+const menus: Menu[]=["Tasks","File","Downloads","View","Help"];
+const blank:Dashboard={downloads:[],speed:0,queues:[],categories:[]};
+const columnLabels=["FILE NAME","PROGRESS","TIME LEFT"];
+const visibleColumns=[0,3,5];
+const defaultColumns=[220,76,100,220,85,75];
+function loadColumns(){try{const v=JSON.parse(localStorage.getItem("auralis-download-columns")||"null");if(Array.isArray(v)&&v.length===6&&v.every(n=>typeof n==="number"&&Number.isFinite(n)))return v.map(n=>Math.max(60,Math.min(600,n)))}catch{}return [...defaultColumns]}
+const pop = (id:number)=>openWindow("download-"+id,"/?detail="+id,760,560);
+const settings = (tab="General", panel="")=>openWindow("settings","/?settings=1&tab="+encodeURIComponent(tab)+"&panel="+encodeURIComponent(panel),968,765);
+const add=(torrent=false)=>openWindow(torrent?"add-torrent":"add-url",`/?add=${torrent?"torrent":"url"}`,590,390);
+const props=(id:number)=>openWindow("properties-"+id,"/?properties="+id,760,600);
+const tool=(kind:string,id:number)=>openWindow(`tool-${kind}-${id}`,`/?tool=${kind}&id=${id}`,700,500);
+function FileSymbol({name}:{name:string}){
+  const ext=name.split(".").pop()?.toLowerCase();
+  const Icon=["mp4","mkv","mov","avi","webm"].includes(ext??"")?Film:
+    ["zip","rar","7z","iso","nsp","torrent"].includes(ext??"")?Archive:
+      ["exe","msi"].includes(ext??"")?FileArchive:File;
+  return <div className="cg-file-icon"><Icon size={21}/></div>;
+}
+function StatusBadge({item}:{item:MdmFile}){
+  const label=item.status==="Complete"?"Completed":item.status==="Stopped"?"Paused":item.status;
+  return <span className={"cg-status "+item.status.toLowerCase()}><span className="dot"/>{label}</span>;
+}
+export default function CrystalApp(){
+  const [data,setData]=useState<Dashboard>(blank),[online,setOnline]=useState(false),[message,setMessage]=useState("Connecting to downloads…");
+  const [chosen,setChosen]=useState<number|null>(null),[filter,setFilter]=useState("All Downloads"),[term,setTerm]=useState("");
+  const [selected,setSelected]=useState<number[]>([]),[sort,setSort]=useState("newest"),[deleteDisk,setDeleteDisk]=useState(false);
+  const anchor=useRef<number|null>(null);
+  const [openMenu,setOpenMenu]=useState<Menu|null>(null),[context,setContext]=useState<{id:number;x:number;y:number}|null>(null);
+  const [busy,setBusy]=useState(false),[error,setError]=useState(""),[history,setHistory]=useState<number[]>([]);
+  const [visuals,setVisuals]=useState<Record<number,DownloadVisual>>({});
+  const [fileRates,setFileRates]=useState<Record<number,number[]>>({});
+  const [doubleClickOpen,setDoubleClickOpen]=useState(false);
+  const [showCategories,setShowCategories]=useState(true);
+  const [updateVersion,setUpdateVersion]=useState<string|null>(null);
+  const [appVersion,setAppVersion]=useState("");
+  useEffect(()=>{void getVersion().then(setAppVersion).catch(()=>setAppVersion("unavailable"))},[]);
+  const [columnWidths,setColumnWidths]=useState<number[]>(loadColumns);
+  const resizingColumn=useRef<{index:number;start:number;width:number;scale:number}|null>(null);
+  const setColumnWidth=(index:number,width:number)=>setColumnWidths(old=>{const next=old.map((v,i)=>i===index?Math.max(60,Math.min(600,Math.round(width))):v);try{localStorage.setItem("auralis-download-columns",JSON.stringify(next))}catch{}return next});
+
+  const contextRef=useRef<HTMLDivElement>(null);
+  useLayoutEffect(()=>{
+    const menu=contextRef.current;if(!menu)return;
+    const fit=menu.closest<HTMLElement>('.cg-fit-content');if(!fit)return;
+    const place=()=>{
+      const host=fit.getBoundingClientRect(),scale=host.width/fit.offsetWidth;
+      const maxHeight=(host.height-16)/scale;
+      menu.style.zoom=String(Math.min(1,maxHeight/menu.scrollHeight));
+      const resized=menu.getBoundingClientRect();
+      menu.style.left=Math.max(8,Math.min(context?.x??8,(host.width-resized.width-8)/scale))+'px';
+      menu.style.top=Math.max(8,Math.min(context?.y??8,(host.height-resized.height-8)/scale))+'px';
+    };
+    place();menu.addEventListener('toggle',place,true);return()=>menu.removeEventListener('toggle',place,true);
+  },[context]);
+  const pending=useRef(false),searchRef=useRef<HTMLInputElement|null>(null);
+  const refresh=useCallback(async()=>{
+    if(pending.current)return;
+    pending.current=true;
+    try{
+      const next=await invoke<Dashboard>("dashboard_snapshot");
+      setData(next);setOnline(true);setMessage("Ready");
+      setHistory(h=>[...h.slice(-52),Math.max(0,next.speed)]);
+      setFileRates(old=>{
+        const updated={...old};
+        for(const item of next.downloads)
+          updated[item.id]=[...(old[item.id]??[]).slice(-45),Math.max(0,item.speed)];
+        for(const key of Object.keys(updated))
+          if(!next.downloads.some(item=>item.id===Number(key)))delete updated[Number(key)];
+        return updated;
+      });
+      // The backend returns REAL byte-range segment cursors. The completion
+      // percentage is independently calculated from downloaded/total bytes.
+      const telemetry=await invoke<VisualDashboard>("dashboard_visuals").catch(()=>null);
+      if(telemetry?.downloads)
+        setVisuals(Object.fromEntries(telemetry.downloads.map(x=>[x.id,x])));
+    }catch(e){setOnline(false);setMessage(String(e))}
+    finally{pending.current=false}
+  },[]);
+  useEffect(()=>{
+    let mounted=true;
+    void invoke<string>("boot_engine").then(async text=>{
+      if(!mounted)return;
+      setMessage(text);void refresh();
+      if(!localStorage.getItem("auralis-backup-asked")) {
+        const firstInstall=!localStorage.getItem("auralis-browser-guide-seen")&&!localStorage.getItem("mh-glass-theme");
+        localStorage.setItem("auralis-backup-asked","1");
+        const shouldOffer=firstInstall&&(await invoke<boolean>("backup_prompt_enabled").catch(()=>true))!==false;
+        if(shouldOffer&&window.confirm("Do you have an Auralis preferences backup to restore?")) {
+          try{if(await restorePreferences()){location.reload();return}}catch(e){setMessage("Could not restore preferences: "+String(e))}
+        }
+      }
+      if(!localStorage.getItem("auralis-browser-guide-seen")){
+        void invoke<{recently_connected:boolean}>("browser_connection_status").then(status=>{
+          if(mounted&&!status.recently_connected){localStorage.setItem("auralis-browser-guide-seen","1");openWindow("tool-browser-guide","/?tool=browser-guide",680,530)}
+          else if(mounted)localStorage.setItem("auralis-browser-guide-seen","1");
+        }).catch(()=>undefined);
+      }
+      void invoke<{double_click_open:boolean;confirm_delete:boolean;delete_files_too:boolean}>("glass_settings").then(s=>{
+        if(mounted){setDoubleClickOpen(Boolean(s.double_click_open));}
+      }).catch(()=>undefined);
+    }).catch(e=>{if(mounted){setOnline(false);setMessage(String(e))}});
+    const timer=window.setInterval(()=>{if(mounted)void refresh()},1200);
+    return()=>{mounted=false;window.clearInterval(timer)}
+  },[refresh]);
+  // Update checks must not depend on the download engine starting or the
+  // Settings window being opened. Only the main window owns this scheduler.
+  useEffect(()=>{
+    let mounted=true,inFlight=false,queued=false,lastShown="";
+    const check=async(reminder=false)=>{
+      if(inFlight){queued=true;return}inFlight=true;
+      try{
+        const update=await invoke<{state:string;version?:string;notes?:string}>("glass_update_check");
+        if(!mounted)return;
+        if(update.state!=="available"||!update.version){setUpdateVersion(null);return}
+        setUpdateVersion(update.version);
+        localStorage.setItem("auralis-update-notice",JSON.stringify(update));
+        const snooze=Number(localStorage.getItem("auralis-update-snooze")||0);
+        const snoozeVersion=localStorage.getItem("auralis-update-snooze-version");
+        const applies=!snoozeVersion||snoozeVersion===update.version;
+        if(localStorage.getItem("auralis-update-dismissed")===update.version||(applies&&snooze>Date.now()))return;
+        if(lastShown===update.version&&!reminder)return;
+        if(applies&&snooze>0&&snooze<=Date.now()){localStorage.removeItem("auralis-update-snooze");localStorage.removeItem("auralis-update-snooze-version")}
+        lastShown=update.version;
+        const presentation=localStorage.getItem("auralis-update-presentation")||"quiet";
+        if(presentation==="dialog") openWindow("tool-update-notice","/?tool=update-notice",680,520);
+        else if(presentation==="notify"||presentation==="toast") {
+          const host=(globalThis as typeof globalThis & {__AURALIS_WINUI__?:{notifyUpdate?:(version:string)=>Promise<unknown>}}).__AURALIS_WINUI__;
+          if(host?.notifyUpdate && presentation==="notify")void host.notifyUpdate(update.version!).catch(()=>undefined);
+          else if(host?.notifyUpdate)openWindow("tool-update-toast","/?tool=update-toast",400,150);
+          else {
+            openWindow("tool-update-toast","/?tool=update-toast",400,150);
+            if(presentation==="notify")void (async()=>{try{if(await isPermissionGranted())sendNotification({title:"Auralis update available",body:`Version ${update.version} is ready to review in Auralis.`})}catch{/* The in-app and corner notices remain available. */}})();
+          }
+        }
+      }catch{/* A later reconnect, signal or manual check can retry. */}
+      finally{inFlight=false;if(queued&&mounted){queued=false;void check()}}
+    };
+    void check();
+    // Push wakes the updater; every hint and reconnection is verified with GitHub.
+    // Startup and manual checks remain available when the service is offline.
+    let stopPush:(()=>void)|undefined;
+    try{stopPush=connectReleasePush("wss://auralis-release-push.auralis-updates.workers.dev/events",()=>void check(),()=>void check())}catch{/* Initial/manual check remains available. */}
+    const reminder=window.setInterval(()=>{const due=Number(localStorage.getItem("auralis-update-snooze")||0);if(due>0&&due<=Date.now())void check(true)},60000);
+    return()=>{mounted=false;stopPush?.();window.clearInterval(reminder)};
+  },[]);
+  useEffect(()=>{
+    const changed=(event:StorageEvent)=>{if(event.key==="glass-downloads-changed")void refresh()};
+    window.addEventListener("storage",changed);
+    return()=>window.removeEventListener("storage",changed);
+  },[refresh]);
+  const counts=useMemo(()=>({
+    all:data.downloads.length,downloading:data.downloads.filter(x=>x.status==="Downloading").length,
+    stopped:data.downloads.filter(x=>x.status==="Stopped").length,
+    unfinished:data.downloads.filter(x=>x.status!=="Complete").length,
+    finished:data.downloads.filter(x=>x.status==="Complete").length
+  }),[data.downloads]);
+  const shown=useMemo(()=>data.downloads.filter(d=>{
+    const match=filter==="All Downloads"||
+      (filter==="Downloading"&&d.status==="Downloading")||
+      (filter==="Stopped"&&d.status==="Stopped")||
+      (filter==="Unfinished"&&d.status!=="Complete")||
+      (filter==="Finished"&&d.status==="Complete")||
+      (filter.startsWith("cat:")&&d.category===filter.slice(4))||
+      (filter.startsWith("queue:")&&data.queues.find(q=>q.name===filter.slice(6))?.ids.includes(d.id));
+    const normalize=(value:string)=>value.normalize("NFKD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase();
+    const words=normalize(term).trim().split(/\s+/).filter(Boolean);
+    const searchable=normalize(`${d.file} ${d.url} ${d.path} ${d.category}`);
+    return match&&words.every(word=>searchable.includes(word))
+  }).sort((a,b)=>{if(sort==="name")return a.file.localeCompare(b.file,undefined,{numeric:true});if(sort==="size")return (b.size??0)-(a.size??0)||b.id-a.id;if(sort==="status")return a.status.localeCompare(b.status)||b.id-a.id;const at=a.added?Date.parse(a.added):NaN,bt=b.added?Date.parse(b.added):NaN;const date=(Number.isFinite(bt)?bt:0)-(Number.isFinite(at)?at:0)||b.id-a.id;return sort==="oldest"?-date:date}),[data.downloads,data.queues,filter,term,sort]);
+  const picked=data.downloads.find(i=>i.id===chosen)??null;
+  const selectedItems=data.downloads.filter(d=>selected.includes(d.id));
+  const anyRunning=counts.downloading>0,anyComplete=counts.finished>0;
+  const mainQueue=data.queues[0];
+  const remove=async(request:DeleteRequest)=>{
+    setBusy(true);setError("");
+    try{
+      for(let start=0;start<request.ids.length;start+=100){
+        const result=await invoke<{skipped:{why:string}[]}>("download_action",{action:request.disk?"delete":"remove",ids:request.ids.slice(start,start+100)});
+        if(result.skipped.length)throw Error(result.skipped.map(x=>x.why).join("; "));
+      }
+      await invoke("glass_tool",{action:"original-setting",payload:{key:"delete_files_too",value:request.disk}});
+      if(request.dontAsk){await invoke("update_glass_setting",{key:"confirm_delete",value:"false"});}
+      await refresh();
+    }catch(e){setError(String(e))}finally{setBusy(false)}
+  };
+  const execute=async(action:string,item:MdmFile|null=picked)=>{
+    setOpenMenu(null);setContext(null);setError("");
+    if(action==="selected-start"){
+      if(!online){setError("The download service is unavailable.");return}
+      setBusy(true);
+      try{
+        const skipped:string[]=[];
+        for(let start=0;start<selectedItems.length;start+=100){
+          const result=await invoke<{done:number[];skipped:{why:string}[]}>("download_action",{action:"start",ids:selectedItems.slice(start,start+100).map(d=>d.id)});
+          skipped.push(...result.skipped.map(x=>x.why));
+        }
+        if(skipped.length)setError(skipped.join("; "));
+        await refresh();
+      }catch(e){setError(String(e))}finally{setBusy(false)}
+      return;
+    }
+    if(["remove","delete","delete-completed","selected-delete"].includes(action)){
+      const items=action==="delete-completed"?data.downloads.filter(x=>x.status==="Complete"):item&&selected.includes(item.id)&&selectedItems.length>1?selectedItems:item?[item]:[];
+      if(!items.length)return;
+      const request:DeleteRequest={ids:items.map(x=>x.id),name:items.length===1?items[0].file:`${items.length} downloads`,disk:action==="delete",dontAsk:false};
+      const latest=await invoke<{confirm_delete:boolean;delete_files_too:boolean}>("glass_settings");
+      request.disk=action==="selected-delete"?deleteDisk:action==="delete"||latest.delete_files_too;
+      if(latest.confirm_delete&&!(action==="selected-delete"&&deleteDisk)){localStorage.setItem("glass-delete-request",JSON.stringify(request));openWindow("tool-delete","/?tool=delete",620,410)}else await remove(request);
+      return;
+    }
+    if(action.startsWith("selected-")) {
+      const operation=action.slice(9);setBusy(true);const errors:string[]=[];
+      try {
+        for(const entry of selectedItems){
+          if(operation==="open"&&entry.status!=="Complete"){errors.push(`${entry.file}: download is not complete`);continue;}
+          if(operation==="extract"){
+            // The engine recognizes multipart archive sets and queues each set once.
+            if(entry.status!=="Complete"||!/(?:\.(?:zip|7z|rar|tar|tgz|txz|gz|xz)|\.r\d{2}|\.(?:7z|zip)\.\d{3})$/i.test(entry.file))continue;
+          }
+          try{await invoke("file_operation",{id:entry.id,operation,value:null})}catch(e){errors.push(`${entry.file}: ${String(e)}`)}
+        }
+        if(errors.length)setError(errors.join("; "));
+      }finally{setBusy(false)}
+      return;
+    }
+    if(action==="open-with"&&item){try{await invoke("file_operation",{id:item.id,operation:"open-with",value:null})}catch(e){setError(String(e))}return}
+    if(action==="move"&&item){try{await invoke("choose_move",{id:item.id});await refresh()}catch(e){setError(String(e))}return}
+    if(["checksum","extract","refresh-address"].includes(action)&&item){tool(action,item.id);return}
+    if(action.startsWith("queue-add:")&&item){try{await invoke("file_operation",{id:item.id,operation:"queue-add",value:action.slice(10)});await refresh()}catch(e){setError(String(e))}return}
+    if(action==="queue-remove"&&item){try{await invoke("file_operation",{id:item.id,operation:"queue-remove",value:null});await refresh()}catch(e){setError(String(e))}return}
+    if(action==="double-open"||action==="double-properties"){try{const on=action==="double-open";await invoke("update_glass_setting",{key:"double_click_open",value:String(on)});setDoubleClickOpen(on)}catch(e){setError(String(e))}return}
+    if(action==="video")return openWindow("tool-video","/?tool=video",720,560);
+    if(action==="gallery")return openWindow("tool-gallery","/?tool=gallery",680,520);
+    if(action==="batch"||action==="grabber")return openWindow("tool-"+action,"/?tool="+action,action==="batch"?760:900,680);
+    if(action==="add")return add();
+    if(action==="torrent")return add(true);
+    if(action==="settings")return settings();
+    if(action==="scheduler")return openWindow("scheduler","/?schedule=1",860,660);
+    if(action==="browser")return settings("Browser Integration");
+    if(action==="appearance")return settings("Appearance");
+    if(action==="limit")return settings("Connection");
+    if(action==="about")return settings("Advanced", "Updates");
+    if(action==="shortcuts")return openWindow("tool-shortcuts","/?tool=shortcuts",620,600);
+    if(action==="refresh")return void refresh();
+    if(action==="search"){searchRef.current?.focus();return}
+    if(action==="toggle-categories"){setShowCategories(v=>!v);return}
+    if(action==="details"){if(item)pop(item.id);return}
+    if(action==="properties"){if(item)props(item.id);return}
+    if(action==="hide"){void import("@tauri-apps/api/window").then(m=>m.getCurrentWindow().close());return}
+    if(action==="exit"){
+      localStorage.setItem("glass-confirm-request",JSON.stringify({action:"exit"}));
+      openWindow("tool-confirm","/?tool=confirm",560,300);return;
+    }
+    if(!online){setError("The download service is unavailable.");return}
+    setBusy(true);
+    try{
+      if(action==="stop-all"||action==="delete-completed"){
+
+        const result=await invoke<{done:number[];skipped:{why:string}[]}>("bulk_action",{action});
+        if(action==="stop-all")await invoke("close_progress_windows",{ids:result.done});
+        if(result.skipped.length)setError(result.skipped.map(x=>x.why).join("; "));
+      }else if(action==="queue-start"||action==="queue-stop"){
+        if(!mainQueue)throw Error("No main queue exists");
+        await invoke("queue_action",{name:mainQueue.name,action:action==="queue-start"?"start_queue":"stop_queue"});
+      }else if(item&&(action==="start"||action==="stop"||action==="remove"||action==="delete")){
+        const result=await invoke<{done:number[];skipped:{why:string}[]}>("download_action",{
+          action:action==="stop"?"pause":action,ids:[item.id]
+        });
+        if(action==="stop")await invoke("close_progress_windows",{ids:result.done});
+        if(result.skipped.length)setError(result.skipped.map(x=>x.why).join("; "));
+      }else if(item&&(action==="open"||action==="folder"||action==="redownload")){
+        if(action==="redownload"){localStorage.setItem("glass-confirm-request",JSON.stringify({action:"redownload",id:item.id,name:item.file}));openWindow("tool-confirm","/?tool=confirm",560,300);return;}
+        await invoke("file_operation",{id:item.id,operation:action,value:null});
+      }
+      await refresh();
+    }catch(e){setError(String(e))}
+    finally{setBusy(false)}
+  };
+  function menuEntries(name:Menu):MenuEntry[]{
+    switch(name){
+      case "Tasks":return [
+        {label:"Add new download…",action:"add",shortcut:"Ctrl+N"},
+        {label:"Open torrent file / magnet…",action:"torrent",shortcut:"Ctrl+O"},
+        {label:"Download video from a page…",action:"video"},
+        {label:"Download gallery…",action:"gallery"},
+        {label:"Batch download…",action:"batch"},
+        {label:"Link grabber…",action:"grabber"},
+        {label:"Browser integration",action:"browser"},
+        {label:"Hide in system tray",action:"hide"},
+        {label:"Exit",action:"exit"}];
+      case "File":return [
+        {label:"Open",action:"open",disabled:!picked||picked.status!=="Complete"},
+        {label:"Open folder",action:"folder",disabled:!picked},
+        {label:"Move/Rename…",action:"move",disabled:!picked||picked.status==="Downloading"},
+        {label:"Redownload",action:"redownload",disabled:!picked||picked.status==="Downloading"},
+        {label:"Remove",action:"remove",disabled:!picked||picked.status==="Downloading",shortcut:"Delete"},
+        {label:"Remove with files",action:"delete",shortcut:"Shift+Delete",disabled:!picked||picked.status==="Downloading"},
+        {label:"Properties",action:"properties",disabled:!picked}];
+      case "Downloads":return [
+        {label:"Pause All / Stop All",action:"stop-all",disabled:!anyRunning},
+        {label:"Delete All Completed",action:"delete-completed",disabled:!anyComplete},
+        {label:"Scheduler…",action:"scheduler"},
+        {label:"Start queue",action:"queue-start",disabled:!mainQueue||mainQueue.running},
+        {label:"Stop queue",action:"queue-stop",disabled:!mainQueue||!mainQueue.running},
+        {label:"Speed Limiter…",action:"limit"},
+        {label:"Options",action:"settings"}];
+      case "View":return [
+        {label:showCategories?"Hide categories":"Show categories",action:"toggle-categories"},
+        {label:"Refresh",action:"refresh",shortcut:"F5"},
+        {label:"Search downloads…",action:"search",shortcut:"Ctrl+F"},
+        {label:"Crystal Appearance…",action:"appearance"},
+        {label:"Unified Settings…",action:"settings"}];
+      case "Help":return [
+        {label:"Browser integration and repair",action:"browser"},
+        {label:"About Auralis Download Manager",action:"about"},
+        {label:"Keyboard shortcuts",action:"shortcuts"}];
+    }
+  }
+  useEffect(()=>{
+    const keyboard=(e:KeyboardEvent)=>{
+      if(e.key==="Escape"){setOpenMenu(null);setContext(null);return}
+      if(e.ctrlKey&&e.key.toLowerCase()==="n"){e.preventDefault();void execute("add")}
+      else if(e.ctrlKey&&e.key.toLowerCase()==="o"){e.preventDefault();void execute("torrent")}
+      else if(e.ctrlKey&&e.key.toLowerCase()==="f"){e.preventDefault();searchRef.current?.focus()}
+      else if(e.ctrlKey&&e.key===","){e.preventDefault();void execute("settings")}
+      else if(e.ctrlKey&&e.key.toLowerCase()==="a"&&(e.target as HTMLElement).closest(".cg-table-viewport")){e.preventDefault();setSelected(shown.map(d=>d.id));if(shown.length){setChosen(shown[0].id);anchor.current=shown[0].id}}
+      else if(e.key==="F5"){e.preventDefault();void refresh()}
+      else if(e.ctrlKey&&e.key.toLowerCase()==="m"&&picked){e.preventDefault();void execute("move")}
+      else if(e.key==="Delete"&&picked&&document.activeElement?.tagName!=="INPUT"){e.preventDefault();void execute(e.shiftKey?"delete":"remove")}
+      else if(e.key==="Enter"&&picked&&document.activeElement?.tagName!=="INPUT"){e.preventDefault();pop(picked.id)}
+    };
+    const click=(e:MouseEvent)=>{
+      if(!(e.target as HTMLElement).closest(".cg-menu-parent"))setOpenMenu(null);
+      if(!(e.target as HTMLElement).closest(".cg-context"))setContext(null);
+    };
+    window.addEventListener("keydown",keyboard);document.addEventListener("mousedown",click);
+    return()=>{window.removeEventListener("keydown",keyboard);document.removeEventListener("mousedown",click)}
+  });
+  const nav=[["All Downloads",DownloadIcon,counts.all],["Downloading",Activity,counts.downloading],
+    ["Stopped",Pause,counts.stopped],["Unfinished",Clock3,counts.unfinished],["Finished",CheckCircle2,counts.finished]] as const;
+  const toolbar=[
+    {name:"Add URL",key:"add",icon:Plus,primary:true},
+    {name:"Add Torrent",key:"torrent",icon:FileArchive},
+    {name:"Resume",key:"start",icon:Play,disabled:!picked||picked.status==="Downloading"||picked.status==="Complete"},
+    {name:"Stop",key:"stop",icon:Square,disabled:!picked||picked.status!=="Downloading",danger:true},
+    {name:"Stop All",key:"stop-all",icon:Pause,disabled:!anyRunning,danger:true},
+    {name:"Delete",key:"remove",icon:Trash2,disabled:!picked||picked.status==="Downloading",danger:true},
+    {name:"Delete Completed",key:"delete-completed",icon:ListChecks,disabled:!anyComplete,danger:true},
+    {name:"Settings",key:"settings",icon:Settings},
+    {name:"Scheduler",key:"scheduler",icon:Clock3},
+    {name:"Start Queue",key:"queue-start",icon:Play,disabled:!mainQueue||mainQueue.running},
+    {name:"Stop Queue",key:"queue-stop",icon:Pause,disabled:!mainQueue||!mainQueue.running,danger:true},
+  ];
+  const contextItems:MenuEntry[]=[
+    {label:"Open",action:"open",disabled:!picked||picked.status!=="Complete"},
+    {label:"Open with…",action:"open-with",disabled:!picked||picked.status!=="Complete"},
+    {label:"Open folder",action:"folder",disabled:!picked},
+    {label:"Move/Rename…",action:"move",disabled:!picked||picked.status==="Downloading",shortcut:"Ctrl+M"},
+    {label:"Redownload",action:"redownload",disabled:!picked||picked.status==="Downloading"},
+    {label:"Resume Download",action:"start",disabled:!picked||picked.status==="Downloading"||picked.status==="Complete"},
+    {label:"Stop Download",action:"stop",disabled:!picked||picked.status!=="Downloading"},
+    {label:"Refresh download address",action:"refresh-address",disabled:!picked||picked.status==="Downloading"||picked.status==="Complete"},
+    {label:"Verify checksum…",action:"checksum",disabled:!picked},
+    {label:"Extract",action:"extract",disabled:!picked||picked.status!=="Complete"||!(/\.(zip|7z|rar|tar|gz|xz)$/i.test(picked.file))},
+    {label:"Remove",action:"remove",shortcut:"Delete",disabled:!picked||picked.status==="Downloading"},
+    {label:"Remove with files",action:"delete",disabled:!picked||picked.status==="Downloading"},
+    {label:"Add to queue",action:"move-queue",children:data.queues.map(q=>({label:q.name,action:"queue-add:"+q.name}))},
+    {label:"Delete from queue",action:"queue-remove",disabled:!picked||!data.queues.some(q=>q.ids.includes(picked.id))},
+    {label:"On Double-click",action:"double",children:[{label:"Open",action:"double-open"},{label:"Properties",action:"double-properties"}]},
+    {label:"Properties",action:"properties",disabled:!picked}
+  ];
+  const rowDouble=(d:MdmFile)=>{
+    if(d.status==="Complete"&&doubleClickOpen)void execute("open",d);
+    else if(d.status==="Complete")openWindow(`complete-${d.id}`,`/?complete=${d.id}`,720,420);
+    else pop(d.id);
+  };
+  return <CrystalWindow><WindowTop title="Auralis Download Manager — Download Manager">
+    <span className="cg-muted" style={{fontSize:"var(--min-text-size)",whiteSpace:"nowrap",marginRight:9}}>{online?"● Connected":"○ Offline"}</span>
+  </WindowTop>
+  <div className="cg-main-body" onContextMenu={e=>e.preventDefault()}>
+    {updateVersion&&<div className="cg-update-notice" role="status"><span><strong>Update available</strong> · Auralis {updateVersion}</span><button className="cg-btn cg-btn-primary" onClick={()=>{openWindow("tool-update-notice","/?tool=update-notice",680,520)}}>Review and download</button><button className="cg-btn" aria-label="Dismiss update notice" onClick={()=>setUpdateVersion(null)}>Close</button></div>}
+    <div className="cg-menubar">
+      {menus.map(menu=><div className="cg-menu-parent" key={menu}>
+        <button className={"cg-menu-trigger "+(openMenu===menu?"active":"")} onClick={()=>{setContext(null);setOpenMenu(openMenu===menu?null:menu)}}>{menu}</button>
+        {openMenu===menu&&<div className="cg-dropdown">
+          {menuEntries(menu).map(x=><button key={x.label} disabled={x.disabled} onClick={()=>void execute(x.action)}>
+            <span>{x.label}</span>{x.shortcut&&<kbd>{x.shortcut}</kbd>}</button>)}
+        </div>}
+      </div>)}
+    </div>
+    <div className="cg-toolbar cg-glass">
+      {toolbar.map((b,i)=><button key={i} data-action={b.key} className={`${b.primary?"primary":""} ${b.danger?"danger":""}`}
+        disabled={busy||b.disabled} title={b.name} onClick={()=>void execute(b.key)}><b.icon size={19}/><span>{b.name}</span></button>)}
+    </div>
+    <div className="cg-workspace">
+      {showCategories&&<aside className="cg-sidebar cg-glass">
+        <div className="cg-side-heading">AURALIS • LIBRARY</div>
+        {nav.map(([label,Icon,count])=><button key={label} className={filter===label?"selected":""} onClick={()=>setFilter(label)}>
+          <Icon size={17}/><span>{label}</span><b>{count}</b></button>)}
+        <div className="cg-side-separator">CATEGORIES</div>
+        {data.categories.filter(c=>c.key!=="General").slice(0,10).map(c=><button className={filter==="cat:"+c.key?"selected":""}
+          key={c.key} onClick={()=>setFilter("cat:"+c.key)}><Folder size={15}/><span>{c.name}</span></button>)}
+        <div className="cg-side-separator">QUEUES</div>
+        {data.queues.map(q=><button className={"cg-side-queue "+(filter==="queue:"+q.name?"selected":"")} key={q.name}
+          onClick={()=>setFilter("queue:"+q.name)}><ListFilter size={15}/><span>{q.name}</span><b>{q.ids.length}</b></button>)}
+      </aside>}
+      <section className="cg-list-panel cg-glass">
+        <header className="cg-list-title"><div><h2>{filter.startsWith("cat:")?filter.slice(4):filter.startsWith("queue:")?filter.slice(6):filter}</h2>
+          <small>{shown.length} of {data.downloads.length} downloads • Double-click for the floating progress window</small></div>
+          <label className="cg-sort">Sort <select aria-label="Sort downloads" value={sort} onChange={e=>setSort(e.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="name">Name</option><option value="size">Size</option><option value="status">Status</option></select></label><label className="cg-search"><Search size={17}/><input ref={searchRef} placeholder="Search downloads..." value={term} onChange={e=>setTerm(e.target.value)}/></label>
+        </header>
+        {selectedItems.length>0&&<div className="cg-selection-actions" role="toolbar" aria-label="Selected downloads"><strong>{selectedItems.length} selected</strong><button className="cg-btn cg-btn-primary" disabled={busy||!online} onClick={()=>void execute("selected-start")}>Start selected</button>{selectedItems.length>1&&<><button className="cg-btn" onClick={()=>void execute("selected-open")}>Open files</button><button className="cg-btn" onClick={()=>void execute("selected-folder")}>Open folders</button><button className="cg-btn" onClick={()=>void execute("selected-extract")}>Extract archives</button><label className="cg-delete-disk"><input type="checkbox" checked={deleteDisk} onChange={e=>setDeleteDisk(e.target.checked)}/> Also delete from disk</label><button className="cg-btn cg-btn-danger" onClick={()=>void execute("selected-delete")}>Delete…</button></>}<button className="cg-btn" onClick={()=>{setSelected([]);setChosen(null)}}>Clear</button></div>}
+        <div className="cg-table-viewport" tabIndex={0} aria-label="Downloads list"><div className="cg-table" style={{"--download-columns":`28px ${visibleColumns.map(i=>i===0||i===3?`minmax(${columnWidths[i]}px,1fr)`:`${columnWidths[i]}px`).join(" ")}`,minWidth:visibleColumns.reduce((a,i)=>a+columnWidths[i],0)+64} as CSSProperties}>
+          <header className="cg-cols"><label className="cg-select-cell"><input type="checkbox" aria-label="Select all visible downloads" disabled={!shown.length} checked={shown.length>0&&shown.every(d=>selected.includes(d.id))} ref={el=>{if(el)el.indeterminate=shown.some(d=>selected.includes(d.id))&&!shown.every(d=>selected.includes(d.id))}} onChange={e=>{const visible=new Set(shown.map(d=>d.id));const next=e.target.checked?Array.from(new Set([...selected,...visible])):selected.filter(id=>!visible.has(id));setSelected(next);setChosen(next.at(-1)??null)}}/></label>{columnLabels.map((label,n)=>{const index=visibleColumns[n];return <span key={label}>{label}<span className="cg-column-resize" role="separator" aria-label={`Resize ${label.toLowerCase()} column`} aria-orientation="vertical" tabIndex={0}
+            onPointerDown={e=>{e.preventDefault();e.stopPropagation();const fit=e.currentTarget.closest<HTMLElement>('.cg-fit-content');resizingColumn.current={index,start:e.clientX,width:columnWidths[index],scale:fit?fit.getBoundingClientRect().width/fit.offsetWidth:1};e.currentTarget.setPointerCapture(e.pointerId)}}
+            onPointerMove={e=>{const drag=resizingColumn.current;if(drag?.index===index)setColumnWidth(index,drag.width+(e.clientX-drag.start)/(drag.scale||1))}}
+            onPointerUp={()=>{resizingColumn.current=null}} onPointerCancel={()=>{resizingColumn.current=null}}
+            onKeyDown={e=>{if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();setColumnWidth(index,columnWidths[index]+(e.key==='ArrowRight'?10:-10))}}}/></span>})}</header>
+          {shown.map(d=><div className={"cg-row "+(selected.includes(d.id)?"selected":"")} key={d.id} role="group" aria-label={`Download ${d.file}`}
+            onClick={e=>{const next=selectDownload(shown.map(x=>x.id),selected,anchor.current,d.id,e.shiftKey,e.ctrlKey||e.metaKey);setSelected(next);if(!e.shiftKey)anchor.current=d.id;setChosen(next.includes(d.id)?d.id:next.at(-1)??null);setContext(null)}} onDoubleClick={()=>rowDouble(d)}
+            onContextMenu={e=>{
+              e.preventDefault();if(!selected.includes(d.id)){setSelected([d.id]);anchor.current=d.id}setChosen(d.id);setOpenMenu(null);
+              const fit=e.currentTarget.closest<HTMLElement>(".cg-fit-content");if(fit){const box=fit.getBoundingClientRect(),scale=box.width/fit.offsetWidth;setContext({id:d.id,x:(e.clientX-box.left)/scale,y:(e.clientY-box.top)/scale});}
+            }}>
+            <label className="cg-select-cell" onClick={e=>e.stopPropagation()} onDoubleClick={e=>e.stopPropagation()}><input type="checkbox" aria-label={`Select ${d.file}`} checked={selected.includes(d.id)} onChange={e=>{const next=e.target.checked?[...selected,d.id]:selected.filter(id=>id!==d.id);setSelected(next);setChosen(e.target.checked?d.id:next.at(-1)??null);anchor.current=d.id;setContext(null)}}/></label>
+            <span className="cg-file" role="button" tabIndex={0} aria-pressed={selected.includes(d.id)} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();setSelected([d.id]);setChosen(d.id);anchor.current=d.id}}}><FileSymbol name={d.file}/><span className="cg-file-info">
+              <strong title={d.file}>{d.file}</strong><small>{units(d.downloaded)} / {units(d.size)} {visuals[d.id]?.is_torrent&&<span className="cg-transfer-kind" title={visuals[d.id]?.direct_recovery?"Started as a direct download and continued using BitTorrent":"This download uses BitTorrent"} aria-label={visuals[d.id]?.direct_recovery?"Direct download continued as torrent":"Torrent download"}>{visuals[d.id]?.direct_recovery?"◈ Direct → Torrent":"◆ Torrent"}</span>}</small><span className="cg-row-status"><StatusBadge item={d}/><small>{d.status==="Downloading"?rate(d.speed):"—"}</small></span></span></span>
+            <span className="cg-row-progress">
+              <GradientBar percent={pct(d)} size={d.size} active={d.status==="Downloading"} showLabel/>
+              <ConnectionMap segments={visuals[d.id]?.segments} connections={visuals[d.id]?.connections} downloading={d.status==="Downloading"} compact/>
+              <SpeedGraph values={fileRates[d.id]??[d.speed,d.speed]} small/>
+            </span>
+            <span>{timeLeft(d)}</span>
+          </div>)}
+          {!shown.length&&<div className="cg-empty"><FolderOpen size={35}/><strong>{online?"No downloads in this view":"Connecting to Auralis"}</strong>
+            <p>{online?"Add a URL or torrent to begin.":message}</p>
+            {online&&<button className="cg-btn cg-btn-primary" onClick={()=>add()}><Plus size={15}/> Add URL</button>}
+          </div>}
+        </div></div>
+        <div className="cg-list-count">{shown.length} downloads</div>
+      </section>
+    </div>
+    <footer className="cg-footer cg-glass">
+      <span className="cg-footer-version">Auralis v{appVersion||"…"}</span>
+      <div className="cg-footer-stats"><span><small>TOTAL SPEED</small><strong>{rate(data.speed)}</strong></span>
+        <span><small>ACTIVE</small><strong>{counts.downloading}</strong></span>
+        <span><small>COMPLETED</small><strong>{counts.finished}</strong></span></div>
+      <SpeedGraph values={history}/>
+      <span className="cg-footer-message" title={error||message}>{error||message}</span>
+    </footer>
+    {context&&picked&&picked.id===context.id&&<div ref={contextRef} className="cg-context" style={{left:Math.max(10,context.x),top:Math.max(10,context.y)}}
+      onContextMenu={e=>e.preventDefault()}>{contextItems.map(x=>x.children?<details key={x.label}><summary>{x.label}<ChevronDown size={13}/></summary><div className="cg-context-submenu">{x.children.map(c=><button key={c.label} onClick={()=>void execute(c.action,picked)}>{c.label}</button>)}</div></details>:<button key={x.label} disabled={x.disabled} onClick={()=>void execute(x.action,picked)}><span>{x.label}</span>{x.shortcut&&<kbd>{x.shortcut}</kbd>}</button>)}</div>}
+
+  </div></CrystalWindow>;
+}

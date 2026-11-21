@@ -697,6 +697,31 @@ impl Grabber {
             .collect()
     }
 
+    /// Glass displays only safe metadata: request cookies and passwords stay here.
+    pub(crate) fn glass_view(&mut self)->serde_json::Value {
+        self.follow_categories();self.take_answers();
+        serde_json::json!({"hide_pages":self.hide_pages,
+            "packages":self.packages.iter().enumerate().map(|(id,p)|serde_json::json!({"id":id,"name":p.name,"folder":p.folder,"extract":p.extract,"delete":p.delete})).collect::<Vec<_>>(),
+            "links":self.links.iter().enumerate().filter(|(_,l)|self.shows(l)).map(|(id,l)|serde_json::json!({"id":id,"package":l.pkg,"url":l.url,"name":l.name,"size":l.size,"selected":l.on,"state":format!("{:?}",l.state)})).collect::<Vec<_>>()})
+    }
+    pub(crate) fn glass_edit(&mut self,data:&serde_json::Value)->Result<(),String> {
+        if let Some(hide)=data["hide_pages"].as_bool(){self.hide_pages=hide;}
+        if let Some(id)=data["link"].as_u64(){
+            let l=self.links.get_mut(id as usize).ok_or("Link is no longer available")?;
+            if let Some(on)=data["selected"].as_bool(){l.on=on;}
+        }
+        if let Some(id)=data["package"].as_u64(){
+            let p=self.packages.get_mut(id as usize).ok_or("Package is no longer available")?;
+            if let Some(name)=data["name"].as_str(){p.name=name.chars().take(256).collect();}
+            if let Some(folder)=data["folder"].as_str(){p.folder=folder.to_owned();p.folder_set=true;}
+            if let Some(password)=data["password"].as_str(){if !password.is_empty()||data["clear_password"]==true{p.password=password.to_owned();}}
+            if let Some(extract)=data["extract"].as_bool(){p.extract=extract;p.extract_set=true;}
+            if let Some(delete)=data["delete"].as_bool(){p.delete=delete;}
+        }
+        Ok(())
+    }
+    pub(crate) fn glass_picked(&mut self)->Vec<Picked>{self.follow_categories();self.take_answers();self.picked()}
+
     /// `Done((start, packages))`: Start (`true`) or Add to queue (`false`) with the ticked
     /// links of each package.
     pub fn show(&mut self, ctx: &egui::Context) -> Outcome<(bool, Vec<Picked>)> {

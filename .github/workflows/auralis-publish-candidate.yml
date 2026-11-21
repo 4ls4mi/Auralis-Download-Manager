@@ -1,0 +1,64 @@
+name: Publish verified Auralis candidate
+on:
+  push:
+    branches: [feature/auralis-frosted-candidate]
+    paths: [.github/workflows/auralis-publish-candidate.yml]
+permissions:
+  actions: read
+  contents: write
+jobs:
+  publish:
+    if: contains(github.event.head_commit.message, '[finish-auralis-039]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TESTED_SHA: 4be7d92507ce6edba290320f06e53d9f6a13c120
+      TESTED_RUN: '44420891773'
+      RELEASE_ID: '450708121'
+    steps:
+      - name: Verify run and retrieve exact artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run view "$TESTED_RUN" --json headSha,conclusion --jq '[.headSha,.conclusion] | @tsv' > run.txt
+          IFS=$'\t' read -r sha conclusion < run.txt
+          test "$sha" = "$TESTED_SHA" && test "$conclusion" = success
+          gh run download "$TESTED_RUN" --name auralis-download-manager-windows-x64 --dir installer
+          gh run download "$TESTED_RUN" --name auralis-browser-extensions --dir extensions
+          test -f 'installer/Auralis Download Manager_0.3.9_x64-setup.exe'
+          test -f extensions/auralis-chromium.zip
+          test -f extensions/auralis-firefox.zip
+          test "$(find installer -type f | wc -l)" -eq 1
+      - name: Check draft and all artifact digests
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/$GH_REPO/releases/$RELEASE_ID" > release.json
+          python3 - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          release = json.loads(Path('release.json').read_text())
+          assert release['draft'] and release['tag_name'] == 'v0.3.9'
+          assert release['target_commitish'] == os.environ['TESTED_SHA']
+          files = {
+            'Auralis.Download.Manager_0.3.9_x64-setup.exe': Path('installer/Auralis Download Manager_0.3.9_x64-setup.exe'),
+            'auralis-chromium.zip': Path('extensions/auralis-chromium.zip'),
+            'auralis-firefox.zip': Path('extensions/auralis-firefox.zip'),
+          }
+          assets = {asset['name']:asset for asset in release['assets']}
+          assert set(assets) == set(files), f'Unexpected release assets: {list(assets)}'
+          for name, path in files.items():
+              digest = hashlib.sha256(path.read_bytes()).hexdigest()
+              assert assets[name]['digest'] == 'sha256:' + digest, f'Digest mismatch: {name}'
+              assert assets[name]['size'] == path.stat().st_size, f'Size mismatch: {name}'
+              print(f'Verified {name}: sha256:{digest}')
+          PY
+      - name: Publish verified release
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release edit v0.3.9 --draft=false --prerelease=false --latest
+          gh api "repos/$GH_REPO/git/ref/tags/v0.3.9" --jq .object.sha > tag-sha.txt
+          test "$(cat tag-sha.txt)" = "$TESTED_SHA"

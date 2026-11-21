@@ -308,6 +308,49 @@ pub async fn read_kept(hash: &str) -> Result<Vec<u8>, String> {
     })
 }
 
+/// Save a recovery torrent without replacing metadata belonging to another
+/// download. Publish only a complete, flushed file.
+pub fn save_recovery_torrent(hash: &str, bytes: &[u8]) -> std::io::Result<()> {
+    let path = torrent_file(hash).ok_or_else(|| std::io::Error::other("No torrent data folder"))?;
+    let owned=bytes.to_vec();
+    let (tx,rx)=mpsc::sync_channel(1);
+    // Serialize the existing recovery save with pending changes for this hash.
+    kept_files().change(hash, move || { let _=tx.send(save_recovery_torrent_to(&path,&owned)); });
+    rx.recv().map_err(|_|std::io::Error::other("Torrent metadata save was interrupted"))?
+}
+
+fn save_recovery_torrent_to(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let parent = path.parent().ok_or_else(|| std::io::Error::other("No torrent data folder"))?;
+    std::fs::create_dir_all(parent)?;
+    if path.exists() {
+        return if mdm_torrent::read_file(&path)? == bytes { Ok(()) } else {
+            Err(std::io::Error::new(std::io::ErrorKind::AlreadyExists, "Another torrent metadata file already exists"))
+        };
+    }
+    let mut opened = None;
+    for _ in 0..100 {
+        let serial = NEXT.fetch_add(1, Ordering::Relaxed);
+        let temp = parent.join(format!(".auralis-recovery-{}-{serial}.tmp", std::process::id()));
+        match std::fs::OpenOptions::new().write(true).create_new(true).open(&temp) {
+            Ok(file) => { opened = Some((temp, file)); break; }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e),
+        }
+    }
+    let (temp, mut file) = opened.ok_or_else(|| std::io::Error::other("Cannot reserve torrent metadata file"))?;
+    let result = (|| {
+        file.write_all(bytes)?;
+        file.sync_all()?;
+        drop(file);
+        mdm_engine::safe_move::rename_no_replace(&temp, path)
+    })();
+    if result.is_err() { let _ = std::fs::remove_file(&temp); }
+    result
+}
+
 /// A magnet link for a torrent in the list, with its trackers, from the .torrent kept for it.
 pub fn magnet_of(hash: &str) -> Option<String> {
     let bytes = std::fs::read(torrent_file(hash)?).ok()?;
@@ -1022,6 +1065,10 @@ impl Run {
                         .map_err(|e| crate::errors::torrent(&e))?;
                 } else {
                     let bytes = read_kept(&spec2.hash).await?;
+                    let actual=mdm_torrent::metadata_from_bytes(&bytes).map_err(|e|e.to_string())?;
+                    if actual.info_hash!=spec2.hash {
+                        return Err("The saved torrent metadata no longer matches this download".to_owned());
+                    }
                     t.add(
                         &bytes,
                         &spec2.folder,
@@ -1104,6 +1151,7 @@ impl Run {
             size: None,
             downloaded: 0,
             resumable: Some(true),
+            checksum: None,
             segments: Vec::new(),
             connections: Vec::new(),
             error: None,
@@ -1303,6 +1351,17 @@ pub fn dest_for(meta: &mdm_torrent::Meta, dir: &Path, files: Option<&[usize]>) -
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recovery_torrent_metadata_never_replaces_existing_data() {
+        let dir=tempfile::tempdir().unwrap();
+        let path=dir.path().join("files").join("metadata.torrent");
+        save_recovery_torrent_to(&path,b"original").unwrap();
+        save_recovery_torrent_to(&path,b"original").unwrap();
+        assert_eq!(save_recovery_torrent_to(&path,b"different").unwrap_err().kind(),std::io::ErrorKind::AlreadyExists);
+        assert_eq!(std::fs::read(&path).unwrap(),b"original");
+        assert_eq!(std::fs::read_dir(path.parent().unwrap()).unwrap().count(),1);
+    }
 
     fn a_spec() -> TorrentSpec {
         TorrentSpec {

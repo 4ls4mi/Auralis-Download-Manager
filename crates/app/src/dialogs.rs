@@ -1481,6 +1481,47 @@ impl FileInfo {
         matches!(self.info, Some(Ok(_)))
     }
 
+    /// Consume the original asynchronous probe without drawing an egui window.
+    pub(crate) fn glass_refresh(&mut self) {
+        if self.info.is_none()
+            && let Some(res) = self.probe.lock().unwrap().take()
+        {
+            let res = res.map(|(pi, kept)| {
+                self.kept = kept;
+                pi
+            });
+            if let (Ok(pi), false) = (&res, self.edited) {
+                self.category = Category::of(&pi.file_name);
+                let dir = crate::model::category_folder(self.category, &self.downloads, &self.dirs);
+                self.save_as = self.place.name_in(&dir, &pi.file_name);
+            }
+            self.info = Some(res);
+        }
+        // The name numbered in its folder, once the disk has answered (#743).
+        self.place.follow(&mut self.save_as);
+    }
+
+    pub(crate) fn glass_view(&mut self) -> serde_json::Value {
+        self.glass_refresh();
+        let server = self.info.as_ref().and_then(|r| r.as_ref().ok())
+            .and_then(|p| p.server.as_ref()).map(crate::whereis::Seen::from);
+        let country = server.as_ref().and_then(|s| s.ip).and_then(mdm_geo::country)
+            .map(|c| c.code().to_owned());
+        serde_json::json!({
+            "url": self.url.to_string(), "save_as": self.save_as,
+            "category": self.category.key(), "description": self.description,
+            "remember": self.remember, "size": self.size(),
+            "probing": self.info.is_none(),
+            "error": self.info.as_ref().and_then(|r| r.as_ref().err()),
+            "server": { "country_code": country, "place":server.as_ref().map(crate::whereis::glass), "rtt_ms": server.as_ref().and_then(|s| s.rtt_ms) },
+        })
+    }
+
+    pub(crate) fn glass_destination(&mut self, path: String) {
+        self.save_as = path;
+        self.edited = true;
+    }
+
     /// The name in Save As is only the address's guess: not edited, and no answer (the
     /// browser's, the look-up's) gave one. The server names the file when it starts (#28).
     pub fn name_guessed(&self) -> bool {
@@ -1564,22 +1605,7 @@ impl FileInfo {
         ctx: &egui::Context,
         icons: &mut crate::chrome::ShellIcons,
     ) -> Outcome<Start> {
-        if self.info.is_none()
-            && let Some(res) = self.probe.lock().unwrap().take()
-        {
-            let res = res.map(|(pi, kept)| {
-                self.kept = kept;
-                pi
-            });
-            if let (Ok(pi), false) = (&res, self.edited) {
-                self.category = Category::of(&pi.file_name);
-                let dir = crate::model::category_folder(self.category, &self.downloads, &self.dirs);
-                self.save_as = self.place.name_in(&dir, &pi.file_name);
-            }
-            self.info = Some(res);
-        }
-        // The name numbered in its folder, once the disk has answered (#743).
-        self.place.follow(&mut self.save_as);
+        self.glass_refresh();
         self.follow_route(ctx);
         // The "Download through" line (#44) takes a row of its own while an account takes the
         // address: the window grows by it.
@@ -2966,6 +2992,11 @@ impl TurnOffCountdown {
         }
     }
 
+    pub(crate) fn glass_view(&self)->serde_json::Value {
+        let left=self.deadline.saturating_duration_since(std::time::Instant::now());
+        serde_json::json!({"mode":self.mode,"force":self.force,"seconds":left.as_secs()+u64::from(left.subsec_millis()>0)})
+    }
+
     /// `Done` when the time is up or "Turn off now" was pressed; `Closed` on Cancel.
     pub fn show(&mut self, ctx: &egui::Context) -> Outcome<()> {
         use crate::queue::TurnOff;
@@ -3337,6 +3368,11 @@ pub struct Followed {
 
 /// Files dragged out and moved, for the app to update their downloads.
 static DRAGGED_OUT: Mutex<Vec<Followed>> = Mutex::new(Vec::new());
+
+/// Queue a tracked Glass drag for the original app's move-following logic.
+pub fn record_dragged_out(id:u64, from:PathBuf, out:DraggedOut) {
+    DRAGGED_OUT.lock().unwrap_or_else(|e|e.into_inner()).push((id,from,out));
+}
 
 /// What [`DRAGGED_OUT`] was given since the last call (the app updates its downloads).
 pub fn dragged_out() -> Vec<Followed> {

@@ -8,6 +8,7 @@ pub mod gdrive;
 mod gofile;
 mod mediafire;
 mod rapidgator;
+mod sourceforge;
 
 use url::Url;
 
@@ -97,16 +98,13 @@ pub(crate) fn read_page(at: &Url, page: &[u8]) -> PageSays {
 }
 
 /// The page that gives `url` again when it stops working, for a site whose file addresses
-/// expire (MediaFire's, a few hours after its page gave one, #952; Rapidgator's, whose page is
-/// known only from `pages`: the browser's tab the download was started from and its Referer):
-/// the download's origin (`download::Ctx::refresh_target`). None: `url` itself is all there is.
+/// expire (MediaFire, SourceForge and Rapidgator). The browser's page and
+/// referrer provide the origin when a signed file link does not contain it.
 pub(crate) fn origin(url: &Url, pages: &[Url]) -> Option<Url> {
-    mediafire::origin(url).or_else(|| rapidgator::origin(url, pages))
+    mediafire::origin(url).or_else(|| sourceforge::origin(url)).or_else(|| rapidgator::origin(url, pages))
 }
 
-/// `url` is a site's address for a file that expires (a signed link: Rapidgator's file hosts'):
-/// a dead link's answer from it is the link expired (`Error::LinkExpired`), even when no page is
-/// known to ask for a fresh one.
+/// Recognize Rapidgator signed links whose expired responses need refreshing.
 pub(crate) fn expiring(url: &Url) -> bool {
     rapidgator::expiring(url)
 }

@@ -57,7 +57,7 @@ mod win32;
 use mdm_ipc::browsers::HOST_NAME;
 #[cfg(windows)]
 use mdm_ipc::browsers::{Family, Holder, Repair, WINDOWS_HOST_KEYS};
-use mdm_ipc::extension::{FIREFOX_ID, STORE_ID, chromium_ids, store_id};
+use mdm_ipc::extension::{AURALIS_FIREFOX_ID, FIREFOX_ID, STORE_ID, chromium_ids, store_id};
 
 /// Chrome's external extensions: an entry naming the store's extension makes Chrome offer it at
 /// its next start ("New extension added"), the user turning it on there. HKLM's is read from the
@@ -159,6 +159,7 @@ struct Message {
     video_lookup: Option<LookupAsk>,
     video_poll: Option<PollAsk>,
     video_pick: Option<PickAsk>,
+    explicit_video_cookies: bool,
     /// With `video` and `videoLookup`: what the browser sent with `src` as its page's player
     /// asked for it (#900), sent again with it and each of its pieces. An older extension sends
     /// none: the page is the stream's Referer then, as before.
@@ -230,6 +231,7 @@ struct PickAsk {
     token: String,
     choice: usize,
     store_id: Option<String>,
+    subs: Option<serde_json::Value>,
 }
 
 /// A download the extension left to the browser: why (a `Declined` code, or `site-access`:
@@ -255,6 +257,9 @@ struct Reply {
     /// Mister Download Manager's version (this host comes with it).
     #[serde(skip_serializing_if = "Option::is_none")]
     version: Option<&'static str>,
+    /// The separate Auralis interface version, if this host is serving it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    auralis_version: Option<String>,
     /// For `rules`: Options → File types.
     #[serde(skip_serializing_if = "Option::is_none")]
     types: Option<String>,
@@ -386,6 +391,7 @@ fn answer(m: Message, rules: &mdm_ipc::capture::CaptureRules) -> Reply {
         return Reply {
             ok: true,
             version: Some(env!("CARGO_PKG_VERSION")),
+            auralis_version: mdm_ipc::data_dir().and_then(|d|std::fs::read_to_string(d.join("auralis-interface-version")).ok()).map(|v|v.trim().to_owned()).filter(|v|!v.is_empty()&&v.len()<=32&&v.bytes().all(|b|b.is_ascii_digit()||b==b'.'||b==b'-')),
             types: Some(rules.auto_types.clone()),
             capture: Some(rules.captures(browser)),
             excluded_sites: Some(rules.excluded_sites.clone()),
@@ -456,8 +462,8 @@ fn answer(m: Message, rules: &mdm_ipc::capture::CaptureRules) -> Reply {
             ..Default::default()
         })
     } else if m.open {
-        // An empty command: the running app comes to the front (a second launch's).
-        Some(mdm_ipc::Command::default())
+        // Named request lets the headless Auralis shell bring its window forward.
+        Some(mdm_ipc::Command { show: Some("main".into()), ..Default::default() })
     } else if let Some(host) = m
         .exclude_site
         .as_deref()
@@ -711,6 +717,7 @@ fn menu_command(
                 referer,
                 origin,
                 cookies: m.cookies.clone().filter(|c| !c.is_empty()),
+                video_explicit_cookies: m.explicit_video_cookies,
                 cookie_jar: m.cookie_jar.clone(),
                 user_agent: m.user_agent.clone(),
                 private: m.private,
@@ -733,6 +740,8 @@ fn menu_command(
                     store_id: store(&p.store_id),
                 }),
                 private: m.private,
+                category: p.subs.as_ref().map(|_| "glass-subtitles".into()),
+                queue: p.subs.as_ref().filter(|s| s.to_string().len() <= 8192).map(|s| s.to_string()),
                 ..Default::default()
             }
         }
@@ -1054,11 +1063,20 @@ fn deliver(cmd: &mdm_ipc::Command) -> Result<(), Undelivered> {
     // written next to this copy.
     let app = match std::fs::read_to_string(dir.join("app-path")) {
         Ok(path) if !path.trim().is_empty() => PathBuf::from(path.trim()),
-        _ => dir.join(if cfg!(windows) {
-            "misterdownloadmanager.exe"
-        } else {
-            "misterdownloadmanager"
-        }),
+        _ => {
+            // The Glass package keeps the ORIGINAL native host protocol, but its
+            // visible application has a different name. Prefer that shell when
+            // it is installed beside this host (or above a resources folder).
+            // A stock MDM installation still follows its original path.
+            let glass = [Some(dir.join("mister-hybrid-glass.exe")),
+                dir.parent().map(|p|p.join("mister-hybrid-glass.exe"))]
+                .into_iter().flatten().find(|p|cfg!(windows)&&p.is_file());
+            glass.unwrap_or_else(|| dir.join(if cfg!(windows) {
+                "misterdownloadmanager.exe"
+            } else {
+                "misterdownloadmanager"
+            }))
+        },
     };
     let safari = SAFARI.load(std::sync::atomic::Ordering::Relaxed);
     let mut child = if safari {
@@ -1162,7 +1180,8 @@ fn serve() -> io::Result<()> {
             // The rules as saved now: a change in Options applies to the next download.
             Ok(m) => {
                 // This browser has the extension: the app stops offering it (extension.rs).
-                mdm_ipc::extension::mark_seen(browser(&m), m.v.as_deref().unwrap_or_default());
+                let caller = std::env::args().find_map(|arg| arg.strip_prefix("chrome-extension://").map(|id| id.trim_end_matches('/').to_owned()));
+                mdm_ipc::extension::mark_seen(browser(&m), m.v.as_deref().unwrap_or_default(), caller.as_deref());
                 answer(m, &mdm_ipc::capture::CaptureRules::load())
             }
             Err(e) => Reply::failed("refused", e.to_string()),
@@ -1199,7 +1218,7 @@ fn firefox_manifest(program: &std::path::Path) -> serde_json::Value {
         "description": "Mister Download Manager",
         "path": program,
         "type": "stdio",
-        "allowed_extensions": [FIREFOX_ID],
+        "allowed_extensions": [FIREFOX_ID, AURALIS_FIREFOX_ID],
     })
 }
 
@@ -1249,13 +1268,13 @@ fn origin(id: &str) -> String {
 fn our_caller(args: &[String]) -> bool {
     args.first()
         .is_some_and(|a| chromium_ids().iter().any(|id| *a == origin(id)))
-        || args.get(1).is_some_and(|a| a == FIREFOX_ID)
+        || args.get(1).is_some_and(|a| a == FIREFOX_ID || a == AURALIS_FIREFOX_ID)
 }
 
 /// Windows: the manifest beside this exe that a browser of `family` reads, written when it isn't
 /// already what it should be (an installation for everyone can't write there, and needn't).
 #[cfg(windows)]
-fn own_manifest(family: Family) -> Result<PathBuf, String> {
+fn own_manifest(family: Family, per_user: bool) -> Result<PathBuf, String> {
     let program = this_program()?;
     let (name, value) = match family {
         Family::Chromium => (format!("{HOST_NAME}.json"), chromium_manifest(&program)),
@@ -1264,12 +1283,22 @@ fn own_manifest(family: Family) -> Result<PathBuf, String> {
             firefox_manifest(&program),
         ),
     };
-    let path = exe_dir()?.join(name);
+    let path = exe_dir()?.join(&name);
     let current = std::fs::read(&path)
         .ok()
         .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok());
     if current.as_ref() != Some(&value) {
-        write_json(&path, &value)?;
+        if let Err(error) = write_json(&path, &value) {
+            // A machine-wide install may put the executable in Program Files.
+            // Per-user browser registration must not require write access there.
+            if !per_user { return Err(error); }
+            let local = std::env::var_os("LOCALAPPDATA").ok_or(error)?;
+            let dir = PathBuf::from(local).join("MisterHybridGlass").join("NativeMessaging");
+            std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+            let writable = dir.join(&name);
+            write_json(&writable, &value)?;
+            return Ok(writable);
+        }
     }
     Ok(path)
 }
@@ -1297,7 +1326,7 @@ fn register(all_users: bool) -> Result<(), String> {
     temporary_refused()?;
     let root = if all_users { "HKLM" } else { "HKCU" };
     for (key, family) in WINDOWS_HOST_KEYS {
-        reg_point(root, key, &own_manifest(family)?)?;
+        reg_point(root, key, &own_manifest(family, !all_users)?)?;
     }
     // Chrome offers the store's extension once it is listed (never a placeholder ID).
     if let Some(id) = store_id() {
@@ -1317,8 +1346,8 @@ fn register(all_users: bool) -> Result<(), String> {
     println!(
         "registered {HOST_NAME} for Chrome, Edge, Brave, Helium and the other Chromium browsers \
          ({}), and for Firefox, Zen and its other forks ({})",
-        own_manifest(Family::Chromium)?.display(),
-        own_manifest(Family::Gecko)?.display()
+        own_manifest(Family::Chromium, !all_users)?.display(),
+        own_manifest(Family::Gecko, !all_users)?.display()
     );
     Ok(())
 }
@@ -1342,7 +1371,7 @@ fn repair() -> Result<(), String> {
         match mdm_ipc::browsers::windows_repair(user.as_ref(), holder(true, &entry).as_ref()) {
             Repair::Keep => continue,
             Repair::Take => {
-                let manifest = own_manifest(family)?;
+                let manifest = own_manifest(family, true)?;
                 reg_point("HKCU", key, &manifest)?;
                 println!(r"HKCU\{entry}: {user:?}, now {}", manifest.display());
             }
@@ -1646,6 +1675,7 @@ mod tests {
     fn store_and_unpacked_extensions_both_allowed() {
         let manifest = chromium_manifest(&this_program().unwrap());
         for id in [
+            "bobmhloppnfipdjjncalidjenegfgebg",
             "ejoleppdfgjdndddcjoehopknmlglojp",
             "oogbclbbninliongijffeeggalppliok",
         ] {
@@ -2082,6 +2112,10 @@ mod tests {
         .unwrap();
         assert_eq!(menu_ask(&pick), Some(MenuAsk::Pick));
         let cmd = menu_command(MenuAsk::Pick, &pick, &rules, "").unwrap();
+        let with_subs: Message = serde_json::from_str(r#"{"videoPick":{"token":"abc","choice":2,"subs":{"langs":["en"],"automatic":false,"embed":false}}}"#).unwrap();
+        let selected = menu_command(MenuAsk::Pick, &with_subs, &rules, "").unwrap();
+        assert_eq!(selected.category.as_deref(), Some("glass-subtitles"));
+        assert_eq!(serde_json::from_str::<serde_json::Value>(selected.queue.as_deref().unwrap()).unwrap()["langs"][0], "en");
         assert_eq!(
             cmd.video_pick,
             Some(mdm_ipc::VideoPick {

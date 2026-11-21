@@ -1,0 +1,121 @@
+/* The toolbar button's popup: the app's look (Windows 11 controls, one blue), day and dark. */
+:root {
+  --bg: #ffffff;
+  --text: #1a1a1a;
+  --muted: #5f5f5f;
+  --edge: #d6d6d6;
+  --field: #f5f5f5;
+  --accent: #0078d4;
+  --accent-text: #ffffff;
+  --ok: #0f7b0f;
+  --bad: #c42b1c;
+  --warn: #9d5d00;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #202020;
+    --text: #f3f3f3;
+    --muted: #b5b5b5;
+    --edge: #3d3d3d;
+    --field: #2b2b2b;
+    --accent: #4cc2ff;
+    --accent-text: #000000;
+    --ok: #6ccb5f;
+    --bad: #ff99a4;
+    --warn: #fce100;
+  }
+}
+* { box-sizing: border-box; }
+/* The hidden attribute wins over a class's display ("How to fix it" showed while connected). */
+[hidden] { display: none !important; }
+body {
+  margin: 0;
+  width: 300px;
+  padding: 12px 14px;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.4 "Segoe UI", system-ui, sans-serif;
+}
+header { display: flex; align-items: center; gap: 8px; font-weight: 600; margin-bottom: 10px; }
+.status { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; background: var(--field); border: 1px solid var(--edge); border-radius: 4px; }
+.dot { flex: none; width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: var(--muted); }
+.status.ok .dot { background: var(--ok); }
+.status.bad .dot { background: var(--bad); }
+.status.warn .dot { background: var(--warn); }
+.link { display: inline-block; margin: 6px 0 0; color: var(--accent); text-decoration: none; cursor: pointer; }
+.link:hover { text-decoration: underline; }
+.switch { display: flex; align-items: center; gap: 8px; margin: 12px 0 4px; cursor: pointer; }
+.switch input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+button {
+  font: inherit;
+  color: var(--text);
+  background: var(--field);
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+button:hover { filter: brightness(0.96); }
+button:focus-visible, input:focus-visible, .link:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+button.accent { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+button.row { width: 100%; text-align: start; margin-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Each button as wide as its text; when both don't fit on one line (a wider font, a longer
+   language), Options goes below Open and each takes the whole line, so neither is cut. */
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.actions button { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.note { color: var(--muted); margin: 10px 0 0; font-size: 12px; }
+/* The last download left to the browser, and why (#208): its name on one line, the rule below. */
+.declined { margin: 10px 0 0; font-size: 12px; }
+.declined span { display: block; }
+#declined-what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#declined-why { color: var(--muted); }
+/* "Never take downloads from <site>" done (#404): it says so where the button was, with Undo. */
+.excluded { display: flex; align-items: center; gap: 10px; margin: 6px 0 0; padding: 6px 10px; background: var(--field); border: 1px solid var(--edge); border-radius: 4px; }
+#excluded-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+button.undo { flex: none; padding: 2px 4px; border: 0; background: none; color: var(--accent); }
+button.undo:hover { filter: none; text-decoration: underline; }
+footer { display: flex; justify-content: space-between; align-items: baseline; margin-top: 10px; border-top: 1px solid var(--edge); padding-top: 6px; color: var(--muted); font-size: 12px; }
+/* Help and Support MDM side by side on the footer's one line: the popup keeps its height. */
+.footer-links { display: flex; align-items: baseline; gap: 14px; min-width: 0; }
+/* The media the tab loaded (#38): one row each, its type, name, what is known, and Download. */
+.media { margin-top: 12px; border-top: 1px solid var(--edge); padding-top: 8px; }
+.media h2 { margin: 0 0 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.media ul { list-style: none; margin: 0; padding: 0; max-height: 228px; overflow-y: auto; }
+.media li { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--edge); }
+.media li:last-child { border-bottom: 0; }
+.tag { flex: none; min-width: 38px; padding: 1px 4px; border: 1px solid var(--edge); border-radius: 3px; background: var(--field); font-size: 10px; font-weight: 600; text-align: center; letter-spacing: .02em; }
+.what { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.what .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.what .meta { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.media li button { flex: none; padding: 3px 10px; }
+.media li button:disabled { cursor: default; color: var(--muted); filter: none; }
+.drm { flex: none; color: var(--bad); font-size: 11px; font-weight: 600; }
+.media .note { margin-top: 6px; }
+.media .note.bad { color: var(--bad); }
+/* Send downloads to (#157): this computer, or another MDM with its address and a pairing code. */
+.send { margin-top: 12px; border-top: 1px solid var(--edge); padding-top: 8px; }
+.send h2 { margin: 0 0 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.choice { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
+#remote-form input[type="url"], #remote-form input[inputmode] { width: 100%; box-sizing: border-box; margin-top: 6px; padding: 4px 6px; border: 1px solid var(--edge); border-radius: 4px; background: var(--field); color: inherit; font: inherit; }
+#remote-form .actions { margin-top: 8px; }
+.note.bad { color: var(--bad); }
+/* Auralis layered glass popup, with color contrast in both browser themes. */
+:root{--bg:#101b30;--text:#f3f7ff;--muted:#bdcbe0;--edge:#a4cfff45;--field:#ffffff12;--accent:#92e3ef;--accent-text:#12283b;--ok:#4be0a8;--bad:#ff8796;--warn:#ffd379;color-scheme:dark}
+@media(prefers-color-scheme:light){:root{--bg:#e8f2ff;--text:#152841;--muted:#49627c;--edge:#5185ad55;--field:#ffffff9c;--accent:#146c89;--accent-text:#fff;--ok:#087c59;--bad:#b92f45;--warn:#875200;color-scheme:light}}
+body{width:340px;padding:14px;background:radial-gradient(ellipse at top left,#8b69da44,transparent 54%),radial-gradient(ellipse at bottom right,#1db9b426,transparent 50%),var(--bg);font:13px/1.45 system-ui,sans-serif}
+header{gap:10px;font-size:15px;letter-spacing:.01em}header img{width:29px;height:29px}header small{display:block;font-size:11px;color:var(--muted);font-weight:400}
+.status,.panel-card,.send,.media,.excluded{background:var(--field);border:1px solid var(--edge);border-radius:13px;padding:10px 12px;box-shadow:inset 0 1px #ffffff28,0 5px 18px #0002;backdrop-filter:blur(14px)}
+.panel-card,.send,.media{margin-top:10px}.panel-card h2,.send h2,.media h2{margin:0 0 6px;color:var(--text);font-size:12px;letter-spacing:.03em}.panel-card .switch{margin:4px 0}.panel-card .note{margin:5px 0 0}
+button{border-radius:9px;padding:7px 11px;transition:transform .15s,background .15s,box-shadow .15s;background:var(--field);border-color:var(--edge)}
+button:hover:not(:disabled){filter:none;background:#ad8afa50;box-shadow:0 0 12px #ad8afa45;transform:translateY(-1px)}button:active:not(:disabled){transform:scale(.98)}button:disabled{opacity:.52;cursor:not-allowed}
+button.accent{background:linear-gradient(135deg,#57d6c0,#8bb9ff);color:#112438;border-color:#b2fff0}.switch input,.choice input{accent-color:#ae8dff}.link{font-weight:600}.media ul{max-height:220px}.media li{padding:8px 0}.tag{border-radius:7px}.actions{gap:7px}
+@media(prefers-reduced-motion:reduce){button{transition:none}button:hover:not(:disabled),button:active:not(:disabled){transform:none}}
+
+footer{flex-wrap:wrap;gap:4px 10px}
+/* Auralis tinted glass, with opaque-enough panels for reliable contrast. */
+:root{color-scheme:dark;--bg:#102036;--text:#f4f8ff;--muted:#c8d7e8;--edge:#c3e7ff55;--field:#17314cdd;--accent:#8deaff;--accent-text:#071c2b;--ok:#74f6bf;--bad:#ffacb9;--warn:#ffe19c}
+body{width:340px;padding:16px;background:radial-gradient(ellipse at 10% 0%,#65caff55,transparent 50%),radial-gradient(ellipse at 95% 20%,#9f75ff44,transparent 47%),linear-gradient(160deg,#294d6ced,#101e32fa);font-family:'Segoe UI',system-ui,sans-serif;backdrop-filter:blur(24px) saturate(130%)}
+header{gap:10px;font-size:15px;letter-spacing:.02em}header img{width:28px;height:28px;filter:drop-shadow(0 2px 6px #75caff88)}header small{display:block;color:var(--muted);font-size:11px;font-weight:400}
+.status,.panel-card,.send,.excluded{border-radius:12px;background:linear-gradient(150deg,#c9edff18,#0b2036bd);border:1px solid var(--edge);box-shadow:inset 0 1px #fff5,0 5px 16px #0003}
+.status{padding:10px 12px}.switch{padding:4px 2px}button,input:not([type=checkbox]):not([type=radio]){border-radius:9px}button{background:linear-gradient(160deg,#8ad4fa3a,#173350d9);border-color:#9bc8ec70;box-shadow:inset 0 1px #fff5;color:var(--text)}button:hover{filter:brightness(1.2)}button.accent{background:linear-gradient(145deg,#83f4dc,#60bdf1);border-color:#c1fff0;color:#071c2b;font-weight:650}.link{color:#9fe9ff}footer{border-color:#c6edff33}

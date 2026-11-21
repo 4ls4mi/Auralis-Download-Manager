@@ -1,0 +1,25 @@
+[package]
+name = "auralis-winui-bridge"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["browser-connection"]
+browser-connection = ["mdm-app/browser-connection"]
+# Production data access is opt-in while shell parity and migration are being
+# completed. The development artifact does not enable this feature.
+installed-profile = []
+
+[dependencies]
+mdm-app = { path = "../app", default-features = false }
+mdm-ipc.workspace = true
+serde_json.workspace = true
+url.workspace = true
+[lints]
+workspace = true
