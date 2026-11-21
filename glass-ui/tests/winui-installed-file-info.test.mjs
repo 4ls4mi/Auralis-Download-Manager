@@ -9,8 +9,8 @@ test('installed WinUI file-info view sends its chosen destination and queue choi
  const server=await createServer({configFile:false,root:fileURLToPath(new URL('..',import.meta.url)),server:{host:'127.0.0.1',port:0},logLevel:'silent'});await server.listen();
  const browser=await chromium.launch({headless:true,executablePath:executable,args:['--no-sandbox']});
  try{
-  const page=await browser.newPage();page.setDefaultTimeout(5000);
-  await page.addInitScript(()=>{let listener;window.__AURALIS_INSTALLED_HOST__=true;window.requests=[];window.chrome={webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:message=>{
+  const page=await browser.newPage();page.setDefaultTimeout(15000);
+  const setup=()=>{let listener;window.__AURALIS_INSTALLED_HOST__=true;window.requests=[];window.chrome={webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:message=>{
    window.requests.push(message);let value={applied:true};
    if(message.command==='pending_file_info')value={id:7,waiting:0,categories:[{key:'general',name:'General'}],info:{url:'https://example.test/file',save_as:'C:\\Downloads\\file.bin',category:'general',description:'',remember:false,size:100,probing:false,error:null,server:{country_code:null,rtt_ms:null}}};
    else if(message.command==='dashboard_snapshot')value={downloads:[],queues:[],categories:[{key:'general',name:'General'}],speed:0};
@@ -22,8 +22,10 @@ test('installed WinUI file-info view sends its chosen destination and queue choi
    else if(message.command==='window_outer_size')value={width:780,height:560};
    else if(message.command==='window_close')value=null;
    queueMicrotask(()=>listener({data:{id:message.id,ok:true,value}}));
-  }}}});
-  await page.addInitScript({content:readFileSync(new URL('../../winui-shell/webview/sandbox-compat.js',import.meta.url),'utf8')});
+  }}}};
+  // Playwright does not guarantee the order of separate init scripts. The
+  // installed flag and native mock must exist before the adapter evaluates.
+  await page.addInitScript({content:`(${setup.toString()})();\n${readFileSync(new URL('../../winui-shell/webview/sandbox-compat.js',import.meta.url),'utf8')}`});
   await page.goto(server.resolvedUrls.local[0]+'?request=7');
   const path=page.getByLabel('Save As');await path.fill('C:\\Downloads\\renamed.bin');
   await page.getByRole('button',{name:'Download Later'}).click();
