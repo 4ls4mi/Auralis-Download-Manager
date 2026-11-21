@@ -1052,9 +1052,13 @@ button:focus-visible { outline: none; }
 .menu .rows::-webkit-scrollbar,.menu .subtitle-list::-webkit-scrollbar{width:4px;height:4px}
 .menu .rows::-webkit-scrollbar-thumb,.menu .subtitle-list::-webkit-scrollbar-thumb{background:#a98ee2;border-radius:8px}
 .menu .rows button,.menu .subtitle-list button{min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.menu .subtitle-list{max-height:none;overflow:visible}
 .menu .subtitle-controls{display:grid;gap:5px;padding:5px 3px;border-bottom:1px solid var(--bd);font-size:11px}
-.menu .subtitle-controls>label{display:flex;align-items:center;gap:6px;min-width:0}.menu .subtitle-controls select{flex:1;min-width:0;max-width:100%;background:#20334f;color:var(--tx);border:1px solid var(--bd);border-radius:5px;padding:4px}
+.menu .subtitle-heading{display:flex;align-items:flex-start;gap:7px;min-width:0}.menu .subtitle-heading>span{flex:none;padding-top:6px}
+.menu .subtitle-combo{flex:1;min-width:0}.menu .subtitle-combo .subtitle-trigger{height:26px;width:100%;display:flex;align-items:center;justify-content:space-between;gap:6px;padding:3px 7px;border:1px solid #a8bde088;border-radius:7px;background:linear-gradient(145deg,#435978cc,#1b2b43e8);color:var(--tx);font-size:11px}
+.menu .subtitle-trigger .subtitle-value{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.menu .subtitle-trigger .subtitle-chevron{color:var(--accent);flex:none}
+.menu .subtitle-list{max-height:112px;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;margin:3px 0 0;padding:3px;border:1px solid #a8bde066;border-radius:8px;background:#182840f5;scrollbar-width:thin;scrollbar-color:#a98ee2 transparent}
+.menu .subtitle-list[hidden]{display:none}.menu .subtitle-list button{height:25px;min-height:25px;display:block;padding:4px 7px;text-align:left;color:var(--tx);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:5px}
+.menu .subtitle-list button[aria-selected="true"]{background:#856dba80;box-shadow:inset 2px 0 #d9c3ff}.menu .subtitle-list button:focus-visible,.menu .subtitle-trigger:focus-visible{outline:2px solid #d9c3ff;outline-offset:-2px}
 .menu .subtitle-modes{display:flex;gap:7px;align-items:center;flex-wrap:wrap}.menu .subtitle-modes label{display:flex;align-items:center;gap:3px}.menu .subtitle-modes small{flex-basis:100%;color:var(--tx2)}
 .menu button.quality-row{height:auto;min-height:42px;display:flex;flex-direction:column;align-items:stretch;gap:2px;padding:5px 8px;text-align:left;border-bottom:1px solid #ffffff18}
 .menu .quality-primary{display:flex;align-items:center;gap:4px;min-width:0;white-space:nowrap}.menu .quality-name{font-weight:650;overflow:hidden;text-overflow:ellipsis}.menu .quality-badge,.menu .quality-codec{flex:none;font-size:9px;padding:1px 3px;border:1px solid var(--accent);border-radius:3px;color:var(--accent)}
@@ -2053,15 +2057,32 @@ button:focus-visible { outline: none; }
       rows.append(tabs);
       if(qualityTab==="video") {
         const section=document.createElement("section");section.className="subtitle-controls";
-        const label=document.createElement("label");label.textContent="Subtitle language ";
-        const select=document.createElement("select");select.setAttribute("aria-label","Subtitle language");
-        const add=(value,text)=>{const option=document.createElement("option");option.value=value;option.textContent=text;select.append(option)};
+        const heading=document.createElement("div");heading.className="subtitle-heading";
+        const headingText=document.createElement("span");headingText.textContent="Subtitle language";heading.append(headingText);
+        const combo=document.createElement("div");combo.className="subtitle-combo";
+        const trigger=document.createElement("button");trigger.type="button";trigger.className="subtitle-trigger";trigger.setAttribute("role","combobox");trigger.setAttribute("aria-label","Subtitle language");trigger.setAttribute("aria-haspopup","listbox");trigger.setAttribute("aria-controls","subtitle-options");trigger.setAttribute("aria-expanded","false");
+        const current=document.createElement("span");current.className="subtitle-value";const chevron=document.createElement("span");chevron.className="subtitle-chevron";chevron.setAttribute("aria-hidden","true");chevron.textContent="▾";trigger.append(current,chevron);
+        const list=document.createElement("div");list.className="subtitle-list";list.id="subtitle-options";list.setAttribute("role","listbox");list.setAttribute("aria-label","Subtitle languages");list.hidden=true;
+        const options=[];
+        const close=()=>{list.hidden=true;trigger.setAttribute("aria-expanded","false")};
+        const open=()=>{list.hidden=false;trigger.setAttribute("aria-expanded","true")};
+        const add=(value,text)=>{const option=document.createElement("button");option.type="button";option.setAttribute("role","option");option.textContent=text;option.dataset.value=value;option.setAttribute("aria-selected",String(value===subtitleChoice));if(value===subtitleChoice)current.textContent=text;option.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();subtitleChoice=value;current.textContent=text;for(const item of options)item.setAttribute("aria-selected",String(item===option));close();trigger.focus()});options.push(option);list.append(option)};
         add("none","No subtitles");
         for(const [kind,tracks] of [["manual",look.subtitles||[]],["auto",look.automatic_subtitles||[]]]) {
           if(tracks.length)add(`${kind}:all`,kind==="auto"?"All automatic captions":"All subtitles");
           for(const track of tracks)add(`${kind}:${track.code}`,`${track.name||track.code} (${track.code})${kind==="auto"?" · automatic":""}`);
         }
-        select.value=subtitleChoice;select.addEventListener("change",()=>{subtitleChoice=select.value});label.append(select);section.append(label);
+        if(!current.textContent){subtitleChoice="none";current.textContent="No subtitles";options[0].setAttribute("aria-selected","true")}
+        trigger.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();list.hidden?open():close()});
+        combo.addEventListener("keydown",e=>{
+          const target=e.target,index=options.indexOf(target);
+          if(e.key==="Escape"&&!list.hidden){e.preventDefault();e.stopPropagation();close();trigger.focus();return}
+          if(target===trigger&&(e.key==="ArrowDown"||e.key==="ArrowUp")){e.preventDefault();e.stopPropagation();open();(options.find(item=>item.getAttribute("aria-selected")==="true")||options[0]).focus();return}
+          if(index>=0&&["ArrowDown","ArrowUp","Home","End"].includes(e.key)){e.preventDefault();e.stopPropagation();const next=e.key==="Home"?0:e.key==="End"?options.length-1:(index+(e.key==="ArrowDown"?1:-1)+options.length)%options.length;options[next].focus();options[next].scrollIntoView({block:"nearest"});return}
+          if(index>=0&&(e.key==="Enter"||e.key===" ")){e.preventDefault();e.stopPropagation();options[index].click();return}
+          if(target===trigger&&(e.key==="Enter"||e.key===" ")){e.preventDefault();e.stopPropagation();trigger.click()}
+        });
+        combo.append(trigger,list);heading.append(combo);section.append(heading);
         const modes=document.createElement("div");modes.className="subtitle-modes";modes.setAttribute("role","group");modes.setAttribute("aria-label","Subtitle output");
         for(const [value,text] of [[false,"Separate file"],[true,"Selectable track"]]){const item=document.createElement("label");const radio=document.createElement("input");radio.type="radio";radio.name="subtitle-output";radio.checked=subtitleEmbed===value;radio.addEventListener("change",()=>{if(radio.checked)subtitleEmbed=value});item.append(radio,document.createTextNode(text));modes.append(item)}
         const burn=document.createElement("label"),burnRadio=document.createElement("input");burnRadio.type="radio";burnRadio.name="subtitle-output";burnRadio.disabled=true;burn.append(burnRadio,document.createTextNode("Burn into picture (not available yet)"));modes.append(burn);const note=document.createElement("small");note.textContent="Selectable tracks need FFmpeg and MP4/MKV/MOV; otherwise saved separately.";modes.append(note);section.append(modes);rows.append(section);
@@ -2175,7 +2196,7 @@ button:focus-visible { outline: none; }
   }
 
   // The menu's items the arrows go through.
-  const menuItems = () => [...menu.querySelectorAll("button")];
+  const menuItems = () => [...menu.querySelectorAll("button")].filter(button=>!button.disabled&&!button.closest("[hidden]")&&button.getClientRects().length>0);
   function focusItem(b) {
     if (!b) return;
     b.focus();

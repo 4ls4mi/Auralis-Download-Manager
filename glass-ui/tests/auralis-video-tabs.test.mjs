@@ -7,7 +7,7 @@ test('in-player panel tabs preserve subtitle selection and stay anchored',{skip:
  const browser=await chromium.launch({headless:true,executablePath:browserPath,args:['--no-sandbox']});
  try{const page=await browser.newPage({viewport:{width:1000,height:700}});
   await page.route('https://www.youtube.com/**',r=>r.fulfill({contentType:'text/html',body:'<video controls style="width:640px;height:360px"></video>'}));
-  await page.addInitScript(()=>{const attach=Element.prototype.attachShadow;Element.prototype.attachShadow=function(init){return attach.call(this,{...init,mode:'open'})};window.sent=[];window.chrome={i18n:{getMessage:()=>'',getUILanguage:()=> 'en'},runtime:{id:'test',sendMessage:async m=>{window.sent.push(m);if(m.type==='panel')return {on:true};if(m.type==='video-lookup')return {lookup:{state:'ready',token:'t',title:'A very long video title '.repeat(30),subtitles:[{code:'en',name:'English'}],choices:[{label:'1080p',ext:'mp4',height:1080,fps:30,codec:'AV1',size:104857600},{label:'128 kbps',audio:true,size:10485760}]}};if(m.type==='video-pick')return {lookup:{state:'sent'}};return {}}},storage:{local:{get:async defaults=>defaults,set:async()=>{}},onChanged:{addListener:()=>{}}}}});
+  await page.addInitScript(()=>{const attach=Element.prototype.attachShadow;Element.prototype.attachShadow=function(init){return attach.call(this,{...init,mode:'open'})};window.sent=[];window.chrome={i18n:{getMessage:()=>'',getUILanguage:()=> 'en'},runtime:{id:'test',sendMessage:async m=>{window.sent.push(m);if(m.type==='panel')return {on:true};if(m.type==='video-lookup')return {lookup:{state:'ready',token:'t',title:'A very long video title '.repeat(30),subtitles:[{code:'en',name:'English'},...Array.from({length:18},(_,i)=>({code:`l${i}`,name:`Language ${i}`}))],choices:[{label:'1080p',ext:'mp4',height:1080,fps:30,codec:'AV1',size:104857600},{label:'128 kbps',audio:true,size:10485760}]}};if(m.type==='video-pick')return {lookup:{state:'sent'}};return {}}},storage:{local:{get:async defaults=>defaults,set:async()=>{}},onChanged:{addListener:()=>{}}}}});
   await page.goto('https://www.youtube.com/watch?v=abcdef12345');
   await page.addScriptTag({content:readFileSync(new URL('../../auralis-extension/video.js',import.meta.url),'utf8')});
   await page.mouse.move(100,100);
@@ -25,8 +25,11 @@ test('in-player panel tabs preserve subtitle selection and stay anchored',{skip:
   await host.locator('[role="tab"]',{hasText:'Video'}).focus();await page.keyboard.press('ArrowRight');
   assert.equal(await host.locator('[role="tab"][aria-selected="true"]').innerText(),'Audio');
   await page.keyboard.press('ArrowRight');assert.equal(await host.locator('[role="tab"][aria-selected="true"]').innerText(),'Video');
-  assert.equal(await host.getByLabel('Subtitle language').locator('option[value="manual:all"]').count(),1);
-  await host.getByLabel('Subtitle language').selectOption('manual:en');
+  const language=host.getByRole('combobox',{name:'Subtitle language'});await language.click();
+  const list=host.getByRole('listbox',{name:'Subtitle languages'});assert.equal(await list.evaluate(el=>getComputedStyle(el).overflowY),'auto');
+  assert.equal(await list.getByRole('option',{name:'All subtitles',exact:true}).count(),1);assert.ok(await list.evaluate(el=>el.scrollHeight>el.clientHeight),'long language lists scroll inside the dropdown');
+  await list.getByRole('option',{name:'English (en)',exact:true}).click();assert.match(await language.innerText(),/English/);assert.equal(await language.getAttribute('aria-expanded'),'false');
+  await language.focus();await page.keyboard.press('ArrowDown');assert.equal(await language.getAttribute('aria-expanded'),'true');await page.keyboard.press('Escape');assert.equal(await language.getAttribute('aria-expanded'),'false');
   await host.getByLabel('Selectable track').check();
   await host.locator('[role="tab"]',{hasText:'Video'}).click();
   await host.locator('.rows button').filter({hasText:'1080p'}).last().click();
