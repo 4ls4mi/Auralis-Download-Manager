@@ -462,6 +462,9 @@ pub struct Item {
     /// Server-provided checksums belong to this particular download version.
     #[serde(default)]
     pub checksum_from_server: bool,
+    /// A saved-data check found changed bytes; retained until explicitly redownloaded or repaired.
+    #[serde(default)]
+    pub recovery_damaged: bool,
     /// When the download was added ("Added" column), as `Last Try Date` is written. Downloads
     /// added before the column existed have none.
     #[serde(default)]
@@ -978,6 +981,7 @@ impl Item {
             resumable: None,
             checksum: None,
             checksum_from_server: false,
+            recovery_damaged: false,
             added: Some(now_stamp()),
             own_limit: None,
             chunk_count: None,
@@ -1756,6 +1760,19 @@ mod size_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recovery_damage_flag_persists_and_old_items_default_to_clear() {
+        let mut item = Item::new(1, "https://example.org/file".parse().unwrap(), PathBuf::from("file.bin"), Category::General);
+        item.recovery_damaged = true;
+        let value = serde_json::to_value(&item).unwrap();
+        let restored: Item = serde_json::from_value(value.clone()).unwrap();
+        assert!(restored.recovery_damaged);
+        let mut old = value;
+        old.as_object_mut().unwrap().remove("recovery_damaged");
+        let restored_old: Item = serde_json::from_value(old).unwrap();
+        assert!(!restored_old.recovery_damaged);
+    }
 
     /// A finished gallery's files join its written files in time linear in them, each once.
     #[test]

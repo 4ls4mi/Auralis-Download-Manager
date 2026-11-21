@@ -29,12 +29,18 @@ test('thumbnail control targets its own video and sends selected subtitle', {ski
     assert.ok(sections.some(text=>text.includes('100 MB')&&text.includes('Size unavailable')));
     assert.ok(sections.some(text=>text.includes('~10 MB')));
     assert.ok(sections.some(text=>text.includes('English')&&text.includes('Size unavailable')));
-    const anchorBefore=await host.boundingBox(), drag=await panel.locator('.dragbar').boundingBox(), before=await panel.locator('.menu').boundingBox();
-    await page.mouse.move(drag.x+40,drag.y+10);await page.mouse.down();await page.mouse.move(drag.x+120,drag.y+50,{steps:4});await page.mouse.up();
-    const moved=await panel.locator('.menu').boundingBox(), anchorAfter=await host.boundingBox();
-    assert.ok(moved.x>before.x+40&&moved.y>before.y+20,'panel moves independently');assert.equal(anchorAfter.x,anchorBefore.x);assert.equal(anchorAfter.y,anchorBefore.y);
-    await page.mouse.move(moved.x+moved.width-2,moved.y+moved.height/2);await page.mouse.down();await page.mouse.move(moved.x+moved.width+75,moved.y+moved.height/2,{steps:4});await page.mouse.up();
-    assert.ok((await panel.locator('.menu').boundingBox()).width>moved.width+40,'panel grows by dragging its edge');
+    const anchorBefore=await host.boundingBox(), header=await panel.locator('.dragbar').boundingBox(), before=await panel.locator('.menu').boundingBox();
+    assert.ok(before.width<=320&&before.height<=330,'quality panel is compact');
+    await page.mouse.move(header.x+40,header.y+10);await page.mouse.down();await page.mouse.move(header.x+120,header.y+50,{steps:4});await page.mouse.up();
+    const after=await panel.locator('.menu').boundingBox(), anchorAfter=await host.boundingBox();
+    assert.equal(after.x,before.x);assert.equal(after.y,before.y);assert.equal(anchorAfter.x,anchorBefore.x);assert.equal(anchorAfter.y,anchorBefore.y);
+    assert.equal(await panel.locator('[role="tab"][aria-selected="true"]').innerText(),'Video');
+    await panel.locator('[role="tab"]', {hasText:'Audio'}).click();
+    assert.equal(await panel.locator('[role="tab"][aria-selected="true"]').innerText(),'Audio');
+    await panel.locator('[role="tab"]', {hasText:'Subtitles'}).click();
+    await panel.locator('.subtitle-list button', {hasText:'English'}).click();
+    assert.equal(await panel.evaluate(e=>e.shadowRoot.querySelector('select[aria-label="Subtitles"]').value),'manual:en');
+    await panel.locator('[role="tab"]', {hasText:'Video'}).click();
     // Reopening and reinjecting must never leave an interactive old menu behind.
     await page.keyboard.press('Escape');
     assert.equal(await panel.count(),0);

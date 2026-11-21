@@ -29,7 +29,7 @@ export type DownloadVisual = {
   id: number; chunk_count: number; active_connections:number; segments: Segment[]; connections: Connection[]; resumable: boolean | null;
   server: {hostname:string|null;ip:string|null;country_code:string|null;place?:ServerPlace|null;rtt_ms:number|null;cdn:string|null;proxied:boolean};
   last_try:string|null;added:string|null;referer:string|null;page:string|null;
-  description:string;category:string;is_torrent:boolean
+  description:string;category:string;is_torrent:boolean;recovery_damaged?:boolean
 };
 export type VisualDashboard = {downloads:DownloadVisual[]};
 

@@ -1,0 +1,31 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {existsSync,readFileSync} from 'node:fs';
+import {chromium} from 'playwright-core';
+const browserPath=process.env.AURALIS_TEST_BROWSER||(process.platform==='linux'?'/usr/bin/chromium':'');
+test('in-player panel tabs preserve subtitle selection and stay anchored',{skip:!browserPath||!existsSync(browserPath)},async()=>{
+ const browser=await chromium.launch({headless:true,executablePath:browserPath,args:['--no-sandbox']});
+ try{const page=await browser.newPage({viewport:{width:1000,height:700}});
+  await page.route('https://www.youtube.com/**',r=>r.fulfill({contentType:'text/html',body:'<video controls style="width:640px;height:360px"></video>'}));
+  await page.addInitScript(()=>{const attach=Element.prototype.attachShadow;Element.prototype.attachShadow=function(init){return attach.call(this,{...init,mode:'open'})};window.sent=[];window.chrome={i18n:{getMessage:()=>'',getUILanguage:()=> 'en'},runtime:{id:'test',sendMessage:async m=>{window.sent.push(m);if(m.type==='panel')return {on:true};if(m.type==='video-lookup')return {lookup:{state:'ready',token:'t',title:'Sample',subtitles:[{code:'en',name:'English'}],choices:[{label:'1080p',size:104857600},{label:'128 kbps',audio:true,size:10485760}]}};if(m.type==='video-pick')return {lookup:{state:'sent'}};return {}}},storage:{local:{get:async defaults=>defaults,set:async()=>{}},onChanged:{addListener:()=>{}}}}});
+  await page.goto('https://www.youtube.com/watch?v=abcdef12345');
+  await page.addScriptTag({content:readFileSync(new URL('../../auralis-extension/video.js',import.meta.url),'utf8')});
+  await page.mouse.move(100,100);
+  const host=page.locator('mdm-video-button');await host.waitFor();
+  const more=host.locator('.more');await more.waitFor({state:'visible'});await more.click();
+  const tabs=host.locator('[role="tab"]');await tabs.first().waitFor();
+  assert.equal(await tabs.count(),3);
+  const menu=host.locator('.menu'),header=host.locator('.mh');const before=await menu.boundingBox(),drag=await header.boundingBox();
+  await page.mouse.move(drag.x+40,drag.y+10);await page.mouse.down();await page.mouse.move(drag.x+110,drag.y+40,{steps:4});await page.mouse.up();
+  const after=await menu.boundingBox();assert.equal(after.x,before.x);assert.equal(after.y,before.y);
+  await host.locator('[role="tab"]',{hasText:'Video'}).focus();await page.keyboard.press('ArrowRight');
+  assert.equal(await host.locator('[role="tab"][aria-selected="true"]').innerText(),'Audio');
+  await page.keyboard.press('ArrowRight');assert.equal(await host.locator('[role="tab"][aria-selected="true"]').innerText(),'Subtitles');
+  await host.locator('.subtitle-list button',{hasText:'English'}).click();
+  await host.locator('[role="tab"]',{hasText:'Video'}).click();
+  await host.locator('.rows button').filter({hasText:'1080p'}).last().click();
+  await page.waitForFunction(()=>window.sent.some(m=>m.type==='video-pick'));
+  const picked=await page.evaluate(()=>window.sent.find(m=>m.type==='video-pick'));
+  assert.deepEqual(picked.subs.langs,['en']);
+ }finally{await browser.close()}
+});

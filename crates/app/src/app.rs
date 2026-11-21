@@ -3277,7 +3277,7 @@ impl App {
         let damaged = self.glass_recovery_checks.get(&id).is_some_and(|slot| {
             slot.lock().ok().and_then(|result| result.as_ref().and_then(|r| r.as_ref().ok()).and_then(|report| report.get("damaged_ranges")).and_then(serde_json::Value::as_array).map(|ranges| !ranges.is_empty())).unwrap_or(false)
         });
-        if damaged {
+        if damaged || self.items.iter().any(|item| item.id == id && item.recovery_damaged) {
             self.notice = Some(("Saved-data check", "Saved data changed. Resume is blocked to protect the file; redownload it or wait for a repair option.".to_owned()));
             return;
         }
@@ -6085,6 +6085,7 @@ impl App {
                     "description": i.description,
                     "category": i.category.key(),
                     "is_torrent": i.torrent.is_some(),
+                    "recovery_damaged": i.recovery_damaged,
                 })
             }).collect::<Vec<_>>();
             return serde_json::json!({ "downloads": files }).to_string();
@@ -7512,6 +7513,14 @@ impl App {
             || !self.deferred_torrent_queue.is_empty()
         {
             ctx.request_repaint_after(Duration::from_millis(200));
+        }
+        // Persist a positive damage finding even if its progress window was closed.
+        for (id, slot) in &self.glass_recovery_checks {
+            let damaged = slot.lock().ok().and_then(|result| result.as_ref().and_then(|r| r.as_ref().ok()).and_then(|report| report.get("damaged_ranges")).and_then(serde_json::Value::as_array).map(|ranges| !ranges.is_empty())).unwrap_or(false);
+            if damaged && let Some(item) = self.items.iter_mut().find(|item| item.id == *id) && !item.recovery_damaged {
+                item.recovery_damaged = true;
+                self.dirty = true;
+            }
         }
         let mut finished = Vec::new();
         let mut failed = Vec::new();
@@ -10223,6 +10232,7 @@ impl App {
         item.downloaded = 0;
         item.status = Status::Stopped;
         item.error = None;
+        item.recovery_damaged = false;
         if item.checksum_from_server {
             item.checksum = None;
             item.checksum_from_server = false;

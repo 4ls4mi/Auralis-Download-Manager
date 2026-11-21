@@ -268,6 +268,7 @@ impl App {
                 if !state_path.exists() { return fail("No saved download state is available for this file"); }
                 let slot=std::sync::Arc::new(std::sync::Mutex::new(None));
                 self.glass_recovery_checks.insert(id,slot.clone());
+                let wake=self.ui_ctx.clone();
                 std::thread::spawn(move || {
                     let answer=(|| -> Result<Value,String> {
                         let saved=mdm_engine::state::ResumeState::load(&state_path)?;
@@ -276,6 +277,7 @@ impl App {
                         Ok(json!({"checked_bytes":report.checked_bytes,"unhashed_bytes":report.unhashed_bytes,"damaged_ranges":report.damaged_ranges}))
                     })();
                     if let Ok(mut result)=slot.lock() {*result=Some(answer);}
+                    wake.request_repaint();
                 });
                 return Some(json!({"ok":true,"pending":true}).to_string());
             }

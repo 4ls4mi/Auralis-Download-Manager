@@ -29,3 +29,19 @@ test('saved-data check reports changed and unhashed bytes without claiming repai
  assert.ok(await page.evaluate(()=>window.calls.some(c=>c.cmd==='file_operation'&&c.args.operation==='check-saved')));
  }finally{await browser.close();await server.close()}
 });
+
+test('known damaged data remains blocked when the progress window reopens',{skip:!executablePath||!existsSync(executablePath)},async()=>{
+ const server=await createServer({configFile:false,root:fileURLToPath(new URL('..',import.meta.url)),server:{host:'127.0.0.1',port:0},logLevel:'silent'});await server.listen();
+ const browser=await chromium.launch({headless:true,executablePath,args:['--no-sandbox']});
+ try{const page=await browser.newPage();await page.addInitScript(()=>{
+  window.__TAURI_EVENT_PLUGIN_INTERNALS__={unregisterListener:()=>{}};
+  window.__TAURI_INTERNALS__={metadata:{currentWindow:{label:'download-7'},currentWebview:{label:'download-7'}},transformCallback:()=>1,unregisterCallback:()=>{},invoke:async(cmd,args)=>{
+   if(cmd==='dashboard_snapshot')return {downloads:[{id:7,file:'file.zip',url:'https://example.com/file',path:'C:/file.zip',status:'Stopped',size:100,downloaded:60,speed:0,category:'General'}],queues:[],categories:[],speed:0};
+   if(cmd==='dashboard_visuals')return {downloads:[{id:7,segments:[],connections:[],is_torrent:false,recovery_damaged:true,server:{},resumable:true}]};
+   if(cmd==='file_operation'&&args.operation==='details')return {own_limit_kb:null,is_torrent:false};return null;
+  }};
+ });await page.goto(server.resolvedUrls.local[0]+'?detail=7');
+ await page.getByText(/Saved data was found changed/).waitFor();
+ assert.equal(await page.getByRole('button',{name:'Resume'}).isDisabled(),true);
+ }finally{await browser.close();await server.close()}
+});
