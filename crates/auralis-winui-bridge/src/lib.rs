@@ -277,20 +277,30 @@ fn queue_action(name: &str, action: u8) -> Result<serde_json::Value, String> {
     serde_json::to_value(result).map_err(|e|e.to_string())
 }
 fn item_queue_action(id: u64, name: Option<&str>) -> Result<serde_json::Value, String> {
-    if id==0 || !owned_backend() || ISOLATED_DATA.get().is_none() { return Err("The test download is unavailable.".into()); }
+    if id==0 || !owned_backend() { return Err("The download is unavailable.".into()); }
     if name.is_some_and(|name|name.is_empty() || name.len()>256) { return Err("Invalid queue name.".into()); }
-    let root=test_output_dir()?;
     let command=mdm_ipc::Command { query:Some("list".into()), ..Default::default() };
     let raw=mdm_ipc::request_checked(&command).map_err(|e|e.to_string())?;
     let list:mdm_ipc::api::ListAnswer=serde_json::from_str(&raw).map_err(|_|"Invalid download list.")?;
     let item=list.downloads.iter().find(|item|item.id==id).ok_or("The test download no longer exists.")?;
-    if std::path::Path::new(&item.path).parent().is_none_or(|parent|!same_path(parent,&root)) { return Err("The download is outside the test folder.".into()); }
+    allowed_destination(&item.path)?;
     if name.is_some_and(|name|!list.queues.iter().any(|queue|queue.name==name)) { return Err("The selected queue is unavailable.".into()); }
     let command=mdm_ipc::Command { action:Some("glass-item".into()), category:Some(if name.is_some(){"queue-add"}else{"queue-remove"}.into()), ids:vec![id], queue:name.map(str::to_owned), ..Default::default() };
     let raw=mdm_ipc::request_checked(&command).map_err(|e|e.to_string())?;
     let data:serde_json::Value=serde_json::from_str(&raw).map_err(|_|"Invalid queue response.")?;
     if data.get("error").is_some() { return Err("The download queue could not be changed.".into()); }
     Ok(data)
+}
+// The installed host works only with paths returned by the backend for an ID;
+// the development host additionally confines operations to its test folder.
+fn allowed_destination(path: &str) -> Result<std::path::PathBuf, String> {
+    let destination=std::path::PathBuf::from(path);
+    if !destination.is_absolute() { return Err("The download path is unavailable.".into()); }
+    if !installed_profile_selected() {
+        let root=test_output_dir()?;
+        if destination.parent().is_none_or(|parent|!same_path(parent,&root)) { return Err("The download is outside the test folder.".into()); }
+    }
+    Ok(destination)
 }
 /// # Safety
 /// When `len` is nonzero, `name` must point to `len` readable UTF-8 bytes.
@@ -322,19 +332,17 @@ fn file_details(id: u64) -> Result<serde_json::Value, String> {
     if data.get("error").is_some() { return Err("Download details are unavailable.".into()); }
     Ok(data)
 }
-// Check only a stopped ordinary test download owned by the isolated profile.
+// The backend owns the destination and checks whether the download is stopped.
 // The backend performs the read-only hash verification and returns its report.
 fn check_saved(id: u64, result: bool) -> Result<serde_json::Value, String> {
     if id==0 || !owned_backend() { return Err("The test download is unavailable.".into()); }
-    let root=test_output_dir()?;
-    let canonical_root=root.canonicalize().map_err(|_|"The test folder is unavailable.")?;
     let command=mdm_ipc::Command { query:Some("list".into()), ..Default::default() };
     let raw=mdm_ipc::request_checked(&command).map_err(|e|e.to_string())?;
     let list:mdm_ipc::api::ListAnswer=serde_json::from_str(&raw).map_err(|_|"Invalid download list.")?;
     let item=list.downloads.iter().find(|item|item.id==id).ok_or("The test download no longer exists.")?;
-    let destination=std::path::PathBuf::from(&item.path);
-    if destination.parent().is_none_or(|parent|!same_path(parent,&root)) { return Err("The download is outside the test folder.".into()); }
+    let destination=allowed_destination(&item.path)?;
     if !result {
+        let canonical_root=destination.parent().ok_or("The download folder is unavailable.")?.canonicalize().map_err(|_|"The download folder is unavailable.")?;
         for suffix in [".mdm.json",".mdm.part"] {
             let mut name=destination.as_os_str().to_owned(); name.push(suffix);
             let file=std::path::PathBuf::from(name);
@@ -381,20 +389,18 @@ fn refresh_address(id: u64, address: &str) -> Result<serde_json::Value, String> 
     if id==0 || !owned_backend() { return Err("The test download is unavailable.".into()); }
     let url=url::Url::parse(address).map_err(|_|"Enter a valid HTTP or HTTPS address.")?;
     if address.len()>8192 || !matches!(url.scheme(),"http"|"https") || url.host_str().is_none() { return Err("Enter a valid HTTP or HTTPS address.".into()); }
-    let root=test_output_dir()?;
     let command=mdm_ipc::Command { query:Some("list".into()), ..Default::default() };
     let raw=mdm_ipc::request_checked(&command).map_err(|e|e.to_string())?;
     let list:mdm_ipc::api::ListAnswer=serde_json::from_str(&raw).map_err(|_|"Invalid download list.")?;
     let item=list.downloads.iter().find(|item|item.id==id).ok_or("The test download no longer exists.")?;
-    let destination=std::path::PathBuf::from(&item.path);
-    if destination.parent().is_none_or(|parent|!same_path(parent,&root)) { return Err("The download is outside the test folder.".into()); }
+    allowed_destination(&item.path)?;
     let command=mdm_ipc::Command { action:Some("glass-item".into()), category:Some("refresh-address".into()), ids:vec![id], queue:Some(url.to_string()), ..Default::default() };
     let raw=mdm_ipc::request_checked(&command).map_err(|e|e.to_string())?;
     let data:serde_json::Value=serde_json::from_str(&raw).map_err(|_|"Invalid address update response")?;
     if let Some(error)=data.get("error") {
         return Err(if error.as_str()==Some("Stop this download before updating its address") {
-            "Stop this test download before updating its address."
-        } else { "Could not update the test download address." }.into());
+            "Stop this download before updating its address."
+        } else { "Could not update the download address." }.into());
     }
     Ok(data)
 }
