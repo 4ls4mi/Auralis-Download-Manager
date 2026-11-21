@@ -7,7 +7,7 @@ namespace Auralis.WinUI;
 /// invoke it yet; data-folder migration and lifecycle must be validated first.
 internal static class DownloaderBridge
 {
-    internal enum Operation : uint { Start = 1, Stop = 2, DownloadList = 3, Visuals = 4 }
+    internal enum Operation : uint { Start = 1, Stop = 2, DownloadList = 3, Visuals = 4, Settings = 5 }
 
     [DllImport("auralis_winui_bridge", CallingConvention = CallingConvention.Cdecl)]
     private static extern IntPtr auralis_bridge_call(Operation operation);
@@ -19,6 +19,9 @@ internal static class DownloaderBridge
     private static extern IntPtr auralis_bridge_add_download(byte[] url, nuint length, byte later);
 
     [DllImport("auralis_winui_bridge", CallingConvention = CallingConvention.Cdecl)]
+    private static extern IntPtr auralis_bridge_update_setting(byte[] input, nuint length);
+
+    [DllImport("auralis_winui_bridge", CallingConvention = CallingConvention.Cdecl)]
     private static extern void auralis_bridge_free(IntPtr response);
 
     internal static Task<JsonElement> CallAsync(Operation operation) => Task.Run(() => ReadResponse(auralis_bridge_call(operation)));
@@ -28,6 +31,12 @@ internal static class DownloaderBridge
     {
         byte[] bytes = System.Text.Encoding.UTF8.GetBytes(url);
         return ReadResponse(auralis_bridge_add_download(bytes, (nuint)bytes.Length, later ? (byte)1 : (byte)0));
+    });
+
+    internal static Task<JsonElement> UpdateSettingAsync(string key, string value) => Task.Run(() =>
+    {
+        byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(new { key, value });
+        return ReadResponse(auralis_bridge_update_setting(bytes, (nuint)bytes.Length));
     });
 
     private static JsonElement ReadResponse(IntPtr response)

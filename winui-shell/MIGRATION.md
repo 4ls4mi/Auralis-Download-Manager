@@ -17,7 +17,7 @@ preview is not yet the application and must not be packaged as a release.
 ## Downloader and command boundary
 
 - The Rust bridge currently has only start, stop, download-list, visual-state,
-  and single-download start/pause and add-link operations. Its isolated test must pass on Windows before it is integrated.
+  single-download start/pause and add-link operations, and a restricted subset of settings reads and writes. Its isolated test must pass on Windows before it is integrated.
   Do not expose an arbitrary IPC command or credentials to a web view.
 - Preserve the existing instance lock, data directory, authenticated local IPC,
   downloader shutdown and in-progress download state. Starting a second shell

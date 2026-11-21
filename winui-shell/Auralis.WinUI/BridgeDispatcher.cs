@@ -10,6 +10,8 @@ internal static class BridgeDispatcher
     {
         "dashboard_snapshot" => DownloaderBridge.CallAsync(DownloaderBridge.Operation.DownloadList),
         "dashboard_visuals" => DownloaderBridge.CallAsync(DownloaderBridge.Operation.Visuals),
+        "glass_settings" => DownloaderBridge.CallAsync(DownloaderBridge.Operation.Settings),
+        "update_glass_setting" when message.Key is not null && message.Value is not null => DownloaderBridge.UpdateSettingAsync(message.Key, message.Value),
         "start_download" => DownloaderBridge.StartDownloadAsync(message.DownloadId),
         "pause_download" => DownloaderBridge.PauseDownloadAsync(message.DownloadId),
         "add_download" when message.Url is not null => DownloaderBridge.AddDownloadAsync(message.Url, message.Later),

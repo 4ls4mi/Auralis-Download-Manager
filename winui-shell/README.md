@@ -9,7 +9,7 @@ settings. The preview has no connection to saved settings or download data.
 
 The existing Auralis app, Rust downloader, browser integration and release
 installer are unchanged by this prototype. A narrow Rust bridge for the embedded downloader, its list and visual state,
-and single-download start/pause and add-link controls is under development in `crates/auralis-winui-bridge`.
+single-download start/pause, add-link and a restricted set of settings controls is under development in `crates/auralis-winui-bridge`.
 The preview does not load it or touch the user’s data. The replacement still needs the
 real interface, the remaining secure bridge operations, the tray and
 multi-window lifecycle, settings and theme migration, window controls, update

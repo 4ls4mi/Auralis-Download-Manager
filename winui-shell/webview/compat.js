@@ -17,7 +17,9 @@
   });
   function invoke(command, args = {}) {
     let payload;
-    if (command === 'dashboard_snapshot' || command === 'dashboard_visuals') payload = {command};
+    if (command === 'dashboard_snapshot' || command === 'dashboard_visuals' || command === 'glass_settings') payload = {command};
+    else if (command === 'update_glass_setting' && typeof args.key === 'string' && typeof args.value === 'string')
+      payload = {command, key: args.key, value: args.value};
     else if (command === 'download_action' && ['start', 'pause'].includes(args.action) &&
              Array.isArray(args.ids) && args.ids.length === 1 && Number.isSafeInteger(args.ids[0]) && args.ids[0] > 0)
       payload = {command: args.action === 'start' ? 'start_download' : 'pause_download', downloadId: args.ids[0]};

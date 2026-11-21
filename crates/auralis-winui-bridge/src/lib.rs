@@ -1,3 +1,4 @@
+#![allow(unsafe_code)] // C ABI boundary; pointer ownership is documented below.
 //! Narrow native boundary for the future WinUI shell. It is not connected to
 //! the development preview yet. Do not expose arbitrary IPC commands to a webview.
 use std::{ffi::{c_char, CString}, sync::{Mutex, OnceLock}, thread::{self, JoinHandle}, time::{Duration, Instant}};
@@ -51,8 +52,8 @@ fn dispatch(operation: u32) -> Result<serde_json::Value, String> {
     match operation {
         1 => start(),
         2 => stop(),
-        3 | 4 if owned_backend() => request(if operation == 3 { "list" } else { "glass-visuals" }),
-        3 | 4 => Err("The embedded downloader is not running in this process.".into()),
+        3..=5 if owned_backend() => request(match operation { 3 => "list", 4 => "glass-visuals", _ => "glass-settings" }),
+        3..=5 => Err("The embedded downloader is not running in this process.".into()),
         _ => Err("Unsupported bridge operation".into()),
     }
 }
@@ -64,6 +65,34 @@ fn download_action(action: u32, id: u64) -> Result<serde_json::Value, String> {
     let raw = mdm_ipc::request_checked(&command).map_err(|e| e.to_string())?;
     let result: mdm_ipc::api::ActAnswer = serde_json::from_str(&raw).map_err(|_| "Invalid downloader action response")?;
     serde_json::to_value(result).map_err(|e| e.to_string())
+}
+fn update_setting(key: &str, value: &str) -> Result<serde_json::Value, String> {
+    const ALLOWED: &[&str] = &[
+        "max_connections", "speed_limit_on", "speed_limit_kb", "global_limit_on", "global_limit_kb",
+        "start_immediately", "only_add_to_queue", "confirm_delete", "torrent_keep_sharing", "torrent_dht",
+        "torrent_lsd", "proxy_from_browser", "capture_opened", "net_adapter", "show_complete",
+        "show_progress", "advanced_integration", "double_click_open",
+    ];
+    if !ALLOWED.contains(&key) || value.len() > 256 { return Err("Unsupported settings change.".into()); }
+    if !owned_backend() { return Err("The embedded downloader is not running in this process.".into()); }
+    let command = mdm_ipc::Command { action: Some("glass-setting".into()), category: Some(key.into()), queue: Some(value.into()), ..Default::default() };
+    let raw = mdm_ipc::request_checked(&command).map_err(|e| e.to_string())?;
+    let result: serde_json::Value = serde_json::from_str(&raw).map_err(|_| "Invalid settings response")?;
+    if result["saved"] != true { return Err("The downloader rejected the settings change.".into()); }
+    Ok(result)
+}
+/// # Safety
+/// `input` must point to `len` readable UTF-8 bytes for the duration of this call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn auralis_bridge_update_setting(input: *const u8, len: usize) -> *mut c_char {
+    encode(std::panic::catch_unwind(|| {
+        if input.is_null() || len == 0 || len > 2048 { return Err("Invalid settings request.".into()); }
+        let bytes = unsafe { std::slice::from_raw_parts(input, len) };
+        let data: serde_json::Value = serde_json::from_slice(bytes).map_err(|_| "Invalid settings request.")?;
+        let key = data["key"].as_str().ok_or("Invalid setting name.")?;
+        let value = data["value"].as_str().ok_or("Invalid setting value.")?;
+        update_setting(key, value)
+    }))
 }
 fn add_download(url: &str, later: bool) -> Result<serde_json::Value, String> {
     let url = url.trim();
@@ -125,6 +154,10 @@ mod tests {
         assert!(list["downloads"].is_array());
         let visual = dispatch(4).expect("read download visuals");
         assert!(visual["downloads"].is_array());
+        let settings = dispatch(5).expect("read downloader settings");
+        assert!(settings["max_connections"].is_number());
+        update_setting("show_complete", "false").expect("update isolated setting");
+        assert_eq!(dispatch(5).unwrap()["show_complete"], false);
         let unknown = download_action(1, u64::MAX).expect("unknown ID returns a skipped result");
         assert!(unknown["skipped"].is_array());
         let stopped = stop().expect("stop isolated embedded downloader");
@@ -135,6 +168,7 @@ mod tests {
 
     #[test]
     fn unsupported_operations_are_rejected_and_ffi_returns_json() {
+        assert!(update_setting("automation_api", "true").is_err());
         assert!(add_download("file:///local/private", false).is_err());
         assert!(add_download("http://", false).is_err());
         assert!(add_download("magnet:", false).is_err());

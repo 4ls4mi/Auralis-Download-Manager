@@ -18,3 +18,5 @@ mdm-app = { path = "../app", default-features = false }
 mdm-ipc.workspace = true
 serde_json.workspace = true
 url.workspace = true
+[lints]
+workspace = true
