@@ -11,6 +11,9 @@ internal static class LocalWebviewBridge
     internal static async Task AttachAsync(WebView2 view, string assetDirectory)
     {
         if (!Directory.Exists(assetDirectory)) throw new DirectoryNotFoundException("Packaged interface assets are missing.");
+        string adapterPath = Path.Combine(assetDirectory, "winui-compat.js");
+        if (!File.Exists(adapterPath)) throw new FileNotFoundException("The WinUI interface adapter is missing.");
+        string adapter = await File.ReadAllTextAsync(adapterPath);
         await view.EnsureCoreWebView2Async();
         view.DefaultBackgroundColor = Windows.UI.Color.FromArgb(0, 0, 0, 0);
         var core = view.CoreWebView2 ?? throw new InvalidOperationException("WebView2 is unavailable.");
@@ -24,6 +27,7 @@ internal static class LocalWebviewBridge
                 args.Cancel = true;
         };
         core.NewWindowRequested += (_, args) => args.Handled = true;
+        await core.AddScriptToExecuteOnDocumentCreatedAsync(adapter);
         core.WebMessageReceived += async (_, args) =>
         {
             long? requestId = null;
@@ -42,5 +46,6 @@ internal static class LocalWebviewBridge
                     core.PostWebMessageAsJson(JsonSerializer.Serialize(new { id = requestId, ok = false, error = "The requested operation could not be completed." }));
             }
         };
+        core.Navigate("https://auralis.local/index.html");
     }
 }

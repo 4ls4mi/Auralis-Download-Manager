@@ -19,6 +19,11 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+      - name: Test local interface adapter
+        shell: pwsh
+        run: |
+          node --test winui-shell/webview/compat.test.mjs
+          if ($LASTEXITCODE) { throw 'WinUI interface adapter test failed.' }
       - name: Test material mapping
         shell: pwsh
         run: |
