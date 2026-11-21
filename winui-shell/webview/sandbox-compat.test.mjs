@@ -3,6 +3,14 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
 const source=readFileSync(new URL('./sandbox-compat.js',import.meta.url),'utf8');
+test('release fallback and file pickers have time to complete',async()=>{
+ let listener;const sent=[],timeouts=[];
+ const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout:(_fn,delay)=>{timeouts.push(delay);return timeouts.length},clearTimeout(){}};runInNewContext(source,context);
+ for(const [command,args,delay] of [['glass_update_check',{},40000],['export_theme_file',{contents:'{}'},300000],['dashboard_snapshot',{},10000]]){
+  const pending=context.__TAURI_INTERNALS__.invoke(command,args);assert.equal(timeouts.at(-1),delay);
+  listener({data:{id:sent.at(-1).id,ok:true,value:{}}});await pending;
+ }
+});
 test('sandbox restricts downloader requests and allows isolated display preferences',async()=>{
  let listener;const messages=[];
  const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>messages.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);

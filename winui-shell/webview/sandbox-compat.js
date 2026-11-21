@@ -13,7 +13,9 @@
   let nextId=1;const pending=new Map();
   let boundsTimer;
   webview.addEventListener('message',event=>{const m=event.data;if(m?.event==='window_bounds_changed'){if(typeof window!=='undefined' && boundsTimer===undefined)boundsTimer=setTimeout(()=>{boundsTimer=undefined;window.dispatchEvent(new Event('resize'))},50);return}const request=pending.get(m?.id);if(!request)return;pending.delete(m.id);clearTimeout(request.timer);m.ok?request.resolve(m.value):request.reject(new Error(m.error || 'Native request failed.'))});
-  const request=(command,args={})=>new Promise((resolve,reject)=>{const id=nextId++;const timer=setTimeout(()=>{pending.delete(id);reject(new Error('Native request timed out.'))},10000);pending.set(id,{resolve,reject,timer});try{webview.postMessage({id,command,...args})}catch(error){pending.delete(id);clearTimeout(timer);reject(error)}});
+  // Release checks may use two feeds; native file pickers wait for the user.
+  const timeoutFor=command=>command==='update_check'?40000:['export_theme_file','export_material_file'].includes(command)?300000:10000;
+  const request=(command,args={})=>new Promise((resolve,reject)=>{const id=nextId++;const timer=setTimeout(()=>{pending.delete(id);reject(new Error('Native request timed out.'))},timeoutFor(command));pending.set(id,{resolve,reject,timer});try{webview.postMessage({id,command,...args})}catch(error){pending.delete(id);clearTimeout(timer);reject(error)}});
   const appearance=value=>request('set_native_appearance',{appearance:value});
   // The preview deliberately cannot contact the release push service.
   globalThis.WebSocket=class {constructor(){throw new Error('Network is disabled in visual preview.')}};
