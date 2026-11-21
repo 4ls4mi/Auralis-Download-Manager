@@ -18,7 +18,7 @@
   // The preview deliberately cannot contact the release push service.
   globalThis.WebSocket=class {constructor(){throw new Error('Network is disabled in visual preview.')}};
   const empty={downloads:[],queues:[],categories:[],speed:0};
-  const windowCommands={'plugin:window|minimize':'window_minimize','plugin:window|toggle_maximize':'window_toggle_maximize','plugin:window|close':'window_close','plugin:window|is_maximized':'window_is_maximized','plugin:window|outer_position':'window_outer_position','plugin:window|outer_size':'window_outer_size','plugin:window|current_monitor':'window_current_monitor'};
+  const windowCommands={'plugin:window|hide':'window_hide','plugin:window|minimize':'window_minimize','plugin:window|toggle_maximize':'window_toggle_maximize','plugin:window|close':'window_close','plugin:window|is_maximized':'window_is_maximized','plugin:window|outer_position':'window_outer_position','plugin:window|outer_size':'window_outer_size','plugin:window|current_monitor':'window_current_monitor'};
   const invoke=async(command,args={})=>{
     if(['export_theme_file','export_material_file'].includes(command) && typeof args.contents==='string' && args.contents.length<=32768) return windowRequest(command,{contents:args.contents});
     if(command==='clipboard_text')return windowRequest(command);

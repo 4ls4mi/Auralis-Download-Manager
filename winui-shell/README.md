@@ -15,16 +15,16 @@ preview window. Material and theme changes request native backdrops; they do
 not modify the installed app. Build the interface assets first with
 `cd glass-ui; npm install; npm run build`.
 
-The **Isolated downloader** button starts the Rust engine in a fresh temporary
+The **Isolated downloader** button starts the Rust engine in a separate development
 folder and shows its empty download list and settings through a restricted bridge. Display and selected connection preferences can be changed in the
-temporary profile. HTTP and HTTPS test downloads use its temporary downloads
+development profile. HTTP and HTTPS test downloads use its development downloads
 folder; the test interface supports adding URLs, start, pause, queue actions,
 removing list entries, per-file speed limits, and opening test files or their folder.
 Removing a list entry keeps the file; file-opening requests are restricted to the
 isolated downloads directory. Closing the window stops the test engine; this
 mode does not use the installed app's data. Windows validation is still needed.
 
-Test files remain in the temporary profile; this preview does not import or alter
+Test files remain in the development profile; this preview does not import or alter
 the installed app’s download list.
 
 The existing Auralis app, Rust downloader, browser integration and release

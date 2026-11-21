@@ -4,7 +4,7 @@
 use std::{ffi::{c_char, CString}, sync::{Mutex, OnceLock}, thread::{self, JoinHandle}, time::{Duration, Instant}};
 
 static ENGINE: OnceLock<Mutex<Option<JoinHandle<Result<(), String>>>>> = OnceLock::new();
-// The development host must explicitly choose an empty, private test data
+// The development host must explicitly choose its private test data
 // directory before starting. It cannot attach to an installed app's data.
 static ISOLATED_DATA: OnceLock<std::path::PathBuf> = OnceLock::new();
 fn initialize_sandbox() -> Result<serde_json::Value, String> {
@@ -27,6 +27,38 @@ fn initialize_sandbox() -> Result<serde_json::Value, String> {
         }
     }
     Err("Cannot choose an isolated test directory.".into())
+}
+/// The fixed development-only folder is separate from the installed app and
+/// survives restarts so interrupted test downloads can be resumed.
+fn development_profile_path(base: &std::path::Path) -> Result<std::path::PathBuf, String> {
+    if !base.is_absolute() { return Err("The local application data folder must be absolute.".into()); }
+    Ok(base.join("Auralis WinUI Development").join("Downloader"))
+}
+fn initialize_development_profile() -> Result<serde_json::Value, String> {
+    let worker=engine().lock().map_err(|_|"Downloader state unavailable")?;
+    if worker.is_some() { return Err("Stop the downloader before initializing its test data.".into()); }
+    if let Some(path)=ISOLATED_DATA.get() { return Ok(serde_json::json!({"isolated":true,"directory":path})); }
+    let base=std::env::var_os("LOCALAPPDATA").ok_or("The local application data folder is unavailable.")?;
+    let path=development_profile_path(std::path::Path::new(&base))?;
+    // Create and check each level before touching its children. Canonical
+    // comparison also rejects Windows junctions and other reparse redirects.
+    let parent=path.parent().ok_or("Invalid development profile")?;
+    let canonical_base=std::path::Path::new(&base).canonicalize().map_err(|e|e.to_string())?;
+    for (directory,expected) in [(parent,canonical_base.join("Auralis WinUI Development")),(path.as_path(),canonical_base.join("Auralis WinUI Development").join("Downloader"))] {
+        match std::fs::create_dir(directory) {
+            Ok(()) => (),
+            Err(e) if e.kind()==std::io::ErrorKind::AlreadyExists => (),
+            Err(e) => return Err(format!("Cannot create the isolated development profile: {e}")),
+        }
+        let meta=std::fs::symlink_metadata(directory).map_err(|e|e.to_string())?;
+        let actual=directory.canonicalize().map_err(|e|e.to_string())?;
+        let same=if cfg!(windows) { actual.to_string_lossy().eq_ignore_ascii_case(&expected.to_string_lossy()) } else { actual==expected };
+        if meta.file_type().is_symlink() || !meta.is_dir() || !same { return Err("The development profile cannot be a redirected folder.".into()); }
+    }
+    mdm_ipc::set_data_dir(path.clone());
+    if mdm_ipc::data_dir().as_ref()!=Some(&path) { return Err("Cannot isolate the downloader data directory.".into()); }
+    ISOLATED_DATA.set(path.clone()).map_err(|_|"Downloader data was already initialized.")?;
+    Ok(serde_json::json!({"isolated":true,"directory":path}))
 }
 fn engine() -> &'static Mutex<Option<JoinHandle<Result<(), String>>>> { ENGINE.get_or_init(|| Mutex::new(None)) }
 fn request(query: &str) -> Result<serde_json::Value, String> {
@@ -80,6 +112,7 @@ fn dispatch(operation: u32) -> Result<serde_json::Value, String> {
         3..=5 if owned_backend() => request(match operation { 3 => "list", 4 => "glass-visuals", _ => "glass-settings" }),
         3..=5 => Err("The embedded downloader is not running in this process.".into()),
         6 => initialize_sandbox(),
+        7 => initialize_development_profile(),
         _ => Err("Unsupported bridge operation".into()),
     }
 }
@@ -252,6 +285,13 @@ pub unsafe extern "C" fn auralis_bridge_free(value: *mut c_char) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn development_profile_is_fixed_and_separate() {
+        let base=std::env::temp_dir();
+        let profile=development_profile_path(&base).expect("absolute local data folder");
+        assert_eq!(profile,base.join("Auralis WinUI Development").join("Downloader"));
+        assert!(development_profile_path(std::path::Path::new("relative")).is_err());
+    }
     #[test]
     fn isolated_embedded_downloader_starts_reads_and_stops() {
         assert!(start().unwrap_err().contains("isolated test data"));

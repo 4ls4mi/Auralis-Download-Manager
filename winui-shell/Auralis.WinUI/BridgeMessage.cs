@@ -61,9 +61,16 @@ internal sealed record BridgeMessage(long Id, string Command, ulong DownloadId, 
             _=WindowDragPolicy.ResizeEdge(value);
             return new(id,command,0,null,false,Value:value);
         }
+        if (command == "progress_preferences")
+        {
+            if (!root.TryGetProperty("enabled",out var enabled) || enabled.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                throw new InvalidOperationException("Invalid progress preference.");
+            return new(id,command,0,null,false,Value:enabled.GetBoolean()?"true":"false");
+        }
+        if (command == "progress_ids") return new(id,command,0,null,false);
         if (command == "clipboard_text") return new(id,command,0,null,false);
         if (command == "window_start_drag") return new(id,command,0,null,false);
-        if (command is "window_minimize" or "window_toggle_maximize" or "window_close" or "window_is_maximized" or "window_outer_position" or "window_outer_size" or "window_current_monitor") return new(id, command, 0, null, false);
+        if (command is "window_hide" or "window_minimize" or "window_toggle_maximize" or "window_close" or "window_is_maximized" or "window_outer_position" or "window_outer_size" or "window_current_monitor") return new(id, command, 0, null, false);
         if (command is "dashboard_snapshot" or "dashboard_visuals" or "glass_settings") return new(id, command, 0, null, false);
         if (command == "queue_action")
         {
@@ -83,7 +90,7 @@ internal sealed record BridgeMessage(long Id, string Command, ulong DownloadId, 
                 throw new InvalidOperationException("Invalid speed limit request.");
             return new(id, command, itemId, null, false, Value: kb.ToString(System.Globalization.CultureInfo.InvariantCulture));
         }
-        if (command is "start_download" or "pause_download" or "remove_download" or "file_details" or "file_open" or "file_folder")
+        if (command is "start_download" or "pause_download" or "remove_download" or "file_details" or "file_open" or "file_folder" or "progress_hide" or "progress_restore")
         {
             if (!root.TryGetProperty("downloadId", out var downloadId) || !downloadId.TryGetUInt64(out ulong value) || value == 0)
                 throw new InvalidOperationException("Invalid download ID.");

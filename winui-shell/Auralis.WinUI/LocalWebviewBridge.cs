@@ -16,12 +16,17 @@ internal static class LocalWebviewBridge
 
     /// Isolated WebView profiles keep sample and test interfaces separate from
     /// installed settings and downloads; auxiliary views share their parent profile.
-    internal static async Task<CoreWebView2Environment> AttachPreviewAsync(WebView2 view, Microsoft.UI.Xaml.Window owner, string assetDirectory, Action<NativeAppearance> applyAppearance, Func<BridgeMessage, JsonElement> windowCommand, Func<BridgeMessage, Task<JsonElement>> openWindow, Func<BridgeMessage, Task<JsonElement>> exportFile, Func<BridgeMessage, Task<JsonElement>> openTestFile, bool sandbox=false, CoreWebView2Environment? sharedEnvironment=null)
+    internal static async Task<CoreWebView2Environment> AttachPreviewAsync(WebView2 view, Microsoft.UI.Xaml.Window owner, string assetDirectory, Action<NativeAppearance> applyAppearance, Func<BridgeMessage, JsonElement> windowCommand, Func<BridgeMessage, Task<JsonElement>> openWindow, Func<BridgeMessage, Task<JsonElement>> exportFile, Func<BridgeMessage, Task<JsonElement>> openTestFile, Func<BridgeMessage, Task<JsonElement>> progressTray, bool sandbox=false, CoreWebView2Environment? sharedEnvironment=null)
     {
         if (!Directory.Exists(assetDirectory)) throw new DirectoryNotFoundException("Build the local interface preview assets first.");
         var adapterPath=Path.Combine(assetDirectory,sandbox?"winui-sandbox-compat.js":"winui-preview-compat.js");
         if (!File.Exists(adapterPath) || !File.Exists(Path.Combine(assetDirectory,"index.html"))) throw new FileNotFoundException("Interface preview assets are missing.");
-        var profile=Path.Combine(Path.GetTempPath(),"auralis-winui-preview-"+Guid.NewGuid().ToString("N"));
+        string localData=Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        if (string.IsNullOrWhiteSpace(localData) || !Path.IsPathFullyQualified(localData)) throw new InvalidOperationException("The local application data folder is unavailable.");
+        string profileRoot=Path.Combine(localData,"Auralis WinUI Development");
+        EnsureDevelopmentDirectory(profileRoot);
+        var profile=Path.Combine(profileRoot,sandbox?"WebView-Downloads":"WebView-Sample");
+        EnsureDevelopmentDirectory(profile);
         var environment=sharedEnvironment ?? await CoreWebView2Environment.CreateWithOptionsAsync(null, profile, null);
         await view.EnsureCoreWebView2Async(environment);
         view.DefaultBackgroundColor=Windows.UI.Color.FromArgb(0,0,0,0);
@@ -54,11 +59,13 @@ internal static class LocalWebviewBridge
                         ? await ReadClipboardAsync()
                     : message.Command is "export_theme_file" or "export_material_file"
                         ? await exportFile(message)
+                    : sandbox && (message.Command is "progress_hide" or "progress_restore" or "progress_ids" or "progress_preferences")
+                        ? await progressTray(message)
                     : sandbox && (message.Command is "file_open" or "file_folder")
                         ? await openTestFile(message)
                     : message.Command == "open_glass_window"
                         ? await openWindow(message)
-                    : message.Command is "window_minimize" or "window_toggle_maximize" or "window_close" or "window_is_maximized" or "window_outer_position" or "window_outer_size" or "window_current_monitor" or "window_start_drag" or "window_start_resize"
+                    : message.Command is "window_hide" or "window_minimize" or "window_toggle_maximize" or "window_close" or "window_is_maximized" or "window_outer_position" or "window_outer_size" or "window_current_monitor" or "window_start_drag" or "window_start_resize"
                         ? windowCommand(message)
                     : sandbox && (message.Command is "dashboard_snapshot" or "dashboard_visuals" or "glass_settings" or "update_glass_setting" or "start_download" or "pause_download" or "remove_download" or "file_details" or "file_speed_limit" or "queue_action" or "add_download")
                         ? await BridgeDispatcher.DispatchAsync(message)
@@ -69,6 +76,16 @@ internal static class LocalWebviewBridge
             }
         };
         return environment;
+    }
+
+    private static void EnsureDevelopmentDirectory(string path)
+    {
+        // Do not follow a junction into an installed app profile.
+        if (Directory.Exists(path) && (File.GetAttributes(path) & FileAttributes.ReparsePoint)!=0)
+            throw new InvalidOperationException("The development profile cannot be a redirected folder.");
+        Directory.CreateDirectory(path);
+        if ((File.GetAttributes(path) & FileAttributes.ReparsePoint)!=0)
+            throw new InvalidOperationException("The development profile cannot be a redirected folder.");
     }
 
     private static async Task<JsonElement> ReadClipboardAsync()

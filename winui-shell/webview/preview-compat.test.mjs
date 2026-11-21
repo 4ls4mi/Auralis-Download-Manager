@@ -70,3 +70,9 @@ test('native movement coalesces interface layout refreshes',async()=>{
  listener({data:{event:'window_bounds_changed'}});listener({data:{event:'window_bounds_changed'}});
  await new Promise(resolve=>setTimeout(resolve,80));assert.equal(refreshes,1);
 });
+
+test('hide-to-tray is requested from the native window',async()=>{
+ let listener;const sent=[];
+ const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);
+ const pending=context.__TAURI_INTERNALS__.invoke('plugin:window|hide');assert.equal(sent[0].command,'window_hide');listener({data:{id:sent[0].id,ok:true,value:null}});assert.equal(await pending,null);
+});

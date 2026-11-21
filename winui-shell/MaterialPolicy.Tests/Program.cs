@@ -12,6 +12,15 @@ bool invalidDirectionRejected=false;
 try { WindowDragPolicy.ResizeEdge("unexpected"); } catch (InvalidOperationException) { invalidDirectionRejected=true; }
 if (!invalidDirectionRejected) throw new Exception("Invalid resize direction accepted.");
 
+if (!WindowClosePolicy.ShouldHide(true,true,false) || WindowClosePolicy.ShouldHide(true,false,false) ||
+    WindowClosePolicy.ShouldHide(true,true,true) || WindowClosePolicy.ShouldHide(false,true,false))
+    throw new Exception("Closing may hide only when a tray icon can restore the window and exit was not requested.");
+
+if (TrayMenuPolicy.Entries.Select(entry=>entry.Id).Distinct().Count()!=TrayMenuPolicy.Entries.Length ||
+    TrayMenuPolicy.Entries.Count(entry=>entry.Action=="start_queue")!=1 ||
+    TrayMenuPolicy.Entries.Count(entry=>entry.Action=="stop_queue")!=1)
+    throw new Exception("Tray actions must have unique identifiers and one entry per queue action.");
+
 var materials = MaterialPolicy.BuiltIns;
 if (materials.Length != 8 || materials.Select(m => m.Id).Distinct().Count() != materials.Length)
     throw new Exception("Every built-in material must have a unique backdrop policy.");
@@ -31,6 +40,21 @@ if (snapshot.Downloads.Count != 3 || snapshot.Downloads[0].Progress != 30 || sna
 using var invalidJson = System.Text.Json.JsonDocument.Parse("{} ");
 try { DownloadSnapshot.FromJson(invalidJson.RootElement); throw new Exception("Invalid snapshots must be rejected."); }
 catch (System.Text.Json.JsonException) { }
+string downloadingTip=TrayTooltipPolicy.ForDownload(snapshot.Downloads[0]);
+if (!downloadingTip.Contains("sample.zip") || !downloadingTip.Contains("30") || !downloadingTip.Contains("left"))
+    throw new Exception("The hidden download tooltip should include file, progress and remaining time.");
+if (!TrayTooltipPolicy.ForDownload(snapshot.Downloads[1]).Contains("size unknown"))
+    throw new Exception("Unknown download size must not appear as zero percent.");
+string longTip=new string('a',126)+"😀"+"b";
+string clamped=TrayTooltipPolicy.Clamp(longTip);
+if (clamped.Length>127 || char.IsHighSurrogate(clamped[^1])) throw new Exception("Tray tooltip truncation split a Unicode character.");
+var tracker=new DownloadTransitionTracker();
+if (tracker.Observe(snapshot).Count!=0) throw new Exception("Initial downloads must not trigger windows.");
+using var transitionedJson=System.Text.Json.JsonDocument.Parse("""{"downloads":[{"id":1,"status":"Complete"},{"id":2,"status":"Downloading"},{"id":4,"status":"Downloading"}]}""");
+var transitions=tracker.Observe(DownloadSnapshot.FromJson(transitionedJson.RootElement));
+if (transitions.Count!=2 || !transitions.Any(item=>item.Id==1 && item.Status=="Complete") || !transitions.Any(item=>item.Id==4 && item.Status=="Downloading"))
+    throw new Exception("Download transitions must fire once for new activity and completion.");
+if (tracker.Observe(DownloadSnapshot.FromJson(transitionedJson.RootElement)).Count!=0) throw new Exception("Unchanged states must not reopen windows.");
 Console.WriteLine("Downloader snapshot model checks passed.");
 
 var request = BridgeMessage.Parse("https://auralis.local/index.html", """{"id":1,"command":"dashboard_snapshot"}""");
@@ -46,7 +70,7 @@ foreach (var pair in new[] {
     try { BridgeMessage.Parse(pair.Item1, pair.Item2); throw new Exception("Unsafe bridge request was accepted."); }
     catch (InvalidOperationException error) when (error.Message != "Unsafe bridge request was accepted.") { }
 }
-foreach (var command in new[] { "window_minimize", "window_toggle_maximize", "window_close", "window_is_maximized", "window_outer_position", "window_outer_size", "window_current_monitor" })
+foreach (var command in new[] { "window_hide", "window_minimize", "window_toggle_maximize", "window_close", "window_is_maximized", "window_outer_position", "window_outer_size", "window_current_monitor" })
 {
     var windowRequest = BridgeMessage.Parse("https://auralis.local/index.html", "{\"id\":1,\"command\":\"" + command + "\"}");
     if (windowRequest.Command != command) throw new Exception("Window control was not validated.");
@@ -81,7 +105,7 @@ var lifecycleCalls = new List<DownloaderBridge.Operation>();
 var lifetime = new DownloaderLifetime(operation => { lifecycleCalls.Add(operation); return Task.FromResult(default(System.Text.Json.JsonElement)); });
 await Task.WhenAll(lifetime.StartAsync(), lifetime.StartAsync());
 await Task.WhenAll(lifetime.StopAsync(), lifetime.StopAsync());
-if (!lifecycleCalls.SequenceEqual(new[] { DownloaderBridge.Operation.InitializeSandbox, DownloaderBridge.Operation.Start, DownloaderBridge.Operation.Stop }))
+if (!lifecycleCalls.SequenceEqual(new[] { DownloaderBridge.Operation.InitializeDevelopmentProfile, DownloaderBridge.Operation.Start, DownloaderBridge.Operation.Stop }))
     throw new Exception("Downloader lifecycle must serialize and deduplicate start and stop.");
 lifecycleCalls.Clear();
 var failedStart = new DownloaderLifetime(operation => {
@@ -93,7 +117,7 @@ var failedStart = new DownloaderLifetime(operation => {
 try { await failedStart.StartAsync(); throw new Exception("Expected startup failure."); }
 catch (InvalidOperationException error) when (error.Message == "start timed out") { }
 await failedStart.StopAsync();
-if (!lifecycleCalls.SequenceEqual(new[] { DownloaderBridge.Operation.InitializeSandbox, DownloaderBridge.Operation.Start, DownloaderBridge.Operation.Stop }))
+if (!lifecycleCalls.SequenceEqual(new[] { DownloaderBridge.Operation.InitializeDevelopmentProfile, DownloaderBridge.Operation.Start, DownloaderBridge.Operation.Stop }))
     throw new Exception("A failed start must still be followed by a stop attempt.");
 Console.WriteLine("Downloader lifecycle checks passed.");
 

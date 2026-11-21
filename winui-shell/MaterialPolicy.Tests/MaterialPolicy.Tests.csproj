@@ -6,6 +6,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../Auralis.WinUI/DownloadTransitionTracker.cs" Link="DownloadTransitionTracker.cs" />
+    <Compile Include="../Auralis.WinUI/WindowClosePolicy.cs" Link="WindowClosePolicy.cs" />
+    <Compile Include="../Auralis.WinUI/TrayMenuPolicy.cs" Link="TrayMenuPolicy.cs" />
+    <Compile Include="../Auralis.WinUI/TrayTooltipPolicy.cs" Link="TrayTooltipPolicy.cs" />
     <Compile Include="../Auralis.WinUI/WindowDragPolicy.cs" Link="WindowDragPolicy.cs" />
     <Compile Include="../Auralis.WinUI/PreviewLayoutPolicy.cs" Link="PreviewLayoutPolicy.cs" />
     <Compile Include="../Auralis.WinUI/MaterialPolicy.cs" Link="MaterialPolicy.cs" />

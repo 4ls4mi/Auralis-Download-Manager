@@ -17,11 +17,15 @@
   const appearance=value=>request('set_native_appearance',{appearance:value});
   // The preview deliberately cannot contact the release push service.
   globalThis.WebSocket=class {constructor(){throw new Error('Network is disabled in visual preview.')}};
-  const windowCommands={'plugin:window|minimize':'window_minimize','plugin:window|toggle_maximize':'window_toggle_maximize','plugin:window|close':'window_close','plugin:window|is_maximized':'window_is_maximized','plugin:window|outer_position':'window_outer_position','plugin:window|outer_size':'window_outer_size','plugin:window|current_monitor':'window_current_monitor'};
+  const windowCommands={'plugin:window|hide':'window_hide','plugin:window|minimize':'window_minimize','plugin:window|toggle_maximize':'window_toggle_maximize','plugin:window|close':'window_close','plugin:window|is_maximized':'window_is_maximized','plugin:window|outer_position':'window_outer_position','plugin:window|outer_size':'window_outer_size','plugin:window|current_monitor':'window_current_monitor'};
   const invoke=async(command,args={})=>{
     if(['export_theme_file','export_material_file'].includes(command) && typeof args.contents==='string' && args.contents.length<=32768) return request(command,{contents:args.contents});
     if(command==='clipboard_text')return request(command);
     if(command==='open_glass_window' && typeof args.label==='string' && typeof args.url==='string' && Number.isInteger(args.width) && Number.isInteger(args.height))return request(command,{label:args.label,url:args.url,width:args.width,height:args.height});
+    if(command==='window_preferences' && typeof args.autoProgress==='boolean')return request('progress_preferences',{enabled:args.autoProgress});
+    if(command==='hidden_progress_window_ids')return request('progress_ids');
+    if(['hide_download_to_tray','restore_hidden_progress_window'].includes(command) && Number.isSafeInteger(args.id) && args.id>0)return request(command==='hide_download_to_tray'?'progress_hide':'progress_restore',{downloadId:args.id});
+    if(command==='plugin:window|available_monitors'){const monitor=await request('window_current_monitor');return monitor?[monitor]:[];}
     if(command==='boot_engine')return 'Isolated test downloader';
     if(command==='dashboard_snapshot'||command==='dashboard_visuals'||command==='glass_settings')return request(command);
     if(command==='add_download' && typeof args.url==='string' && /^https?:\/\//i.test(args.url.trim()) && typeof args.later==='boolean') return JSON.stringify(await request(command,{url:args.url.trim(),later:args.later}));
@@ -41,7 +45,7 @@
     if(command==='browser_connection_status')return {recently_connected:false};
     if(command==='plugin:app|version')return 'visual preview';
     if(command==='plugin:event|listen')return 1;
-    if(command==='plugin:event|unlisten'||command==='window_preferences'||command==='set_material_window_shape'||command==='plugin:window|set_effects')return null;
+    if(command==='plugin:event|unlisten'||command==='set_material_window_shape'||command==='plugin:window|set_effects')return null;
     if(command==='plugin:window|start_dragging')return request('window_start_drag');
     if(command==='plugin:window|start_resize_dragging' && ['North','South','East','West','NorthEast','NorthWest','SouthEast','SouthWest'].includes(args.value))return request('window_start_resize',{direction:args.value});
     if(Object.hasOwn(windowCommands,command))return request(windowCommands[command]);

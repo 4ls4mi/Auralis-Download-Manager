@@ -12,7 +12,9 @@
         </Grid.RowDefinitions>
         <StackPanel Spacing="6">
             <TextBlock Text="WinUI shell development" FontSize="24" FontWeight="SemiBold" />
-            <TextBlock Text="Development preview — test downloads use an isolated temporary folder." TextWrapping="Wrap" />
+            <TextBlock Text="Development preview — test downloads use an isolated development folder." TextWrapping="Wrap" />
+            <CheckBox x:Name="KeepInTray" Content="Keep test downloads running in the notification area when closing" IsEnabled="False" />
+            <TextBlock x:Name="TrayStatus" TextWrapping="Wrap" />
         </StackPanel>
         <ScrollViewer Grid.Row="1" HorizontalScrollMode="Auto" HorizontalScrollBarVisibility="Auto" VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled">
             <StackPanel Orientation="Horizontal" Spacing="12">

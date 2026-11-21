@@ -30,7 +30,7 @@ export default function CrystalAdd({ mode }: { mode:"url"|"torrent" }) {
   };
   return <CrystalWindow target="details"><WindowTop noMax title={mode==="torrent"?"Add Torrent — Auralis Download Manager":"Add URL — Auralis Download Manager"}/>
     <div className="cg-window-add"><h2>{mode==="torrent"?"Add a BitTorrent download":"Add a new download"}</h2>
-      <p>{mode==="torrent"?"Select a .torrent file or enter a magnet link. Uses your download folders and queue settings.":(isolated?"Enter an HTTP or HTTPS test download address. Files are saved in the isolated temporary folder.":"Enter a web download address. Browser captures open Download File Info automatically.")}</p>
+      <p>{mode==="torrent"?"Select a .torrent file or enter a magnet link. Uses your download folders and queue settings.":(isolated?"Enter an HTTP or HTTPS test download address. Files are saved in the isolated development folder.":"Enter a web download address. Browser captures open Download File Info automatically.")}</p>
       {mode==="torrent"&&<button className="cg-btn" style={{alignSelf:"flex-start",marginBottom:20}}
         onClick={()=>void pickFile()} disabled={busy}><FileArchive size={18}/> Choose .torrent file…</button>}
       <label className="cg-field">{mode==="torrent"?"Magnet link":"Download address"}
@@ -49,7 +49,7 @@ export default function CrystalAdd({ mode }: { mode:"url"|"torrent" }) {
         </button>
       </div>
       <div className="cg-muted" style={{fontSize:"var(--min-text-size)",marginTop:15}}>
-        <Link2 size={13}/>{mode==="url"?(isolated?"Test downloads use the isolated temporary folder.":"Choose the save location in the next window."):"Torrent metadata is read before transfer begins."}
+        <Link2 size={13}/>{mode==="url"?(isolated?"Test downloads use the isolated development folder.":"Choose the save location in the next window."):"Torrent metadata is read before transfer begins."}
       </div>
     </div>
   </CrystalWindow>;

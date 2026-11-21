@@ -103,3 +103,18 @@ test('clipboard text is only requested when the interface asks for it',async()=>
  const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);
  assert.equal(sent.length,0);const pending=context.__TAURI_INTERNALS__.invoke('clipboard_text');assert.equal(sent[0].command,'clipboard_text');listener({data:{id:sent[0].id,ok:true,value:'https://example.com/file'}});assert.equal(await pending,'https://example.com/file');
 });
+
+test('hidden progress tray controls use IDs and support restoring a window',async()=>{
+ let listener;const sent=[];
+ const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);
+ for(const [command,args,native,value] of [['hide_download_to_tray',{id:9},'progress_hide',null],['hidden_progress_window_ids',{},'progress_ids',[9]],['restore_hidden_progress_window',{id:9},'progress_restore',null]]){
+  const pending=context.__TAURI_INTERNALS__.invoke(command,args);const message=sent.at(-1);assert.equal(message.command,native);listener({data:{id:message.id,ok:true,value}});assert.equal(await pending,value);
+ }
+ await assert.rejects(context.__TAURI_INTERNALS__.invoke('hide_download_to_tray',{id:-1}),/unavailable/);
+});
+
+test('automatic progress-window preference is forwarded to the native host',async()=>{
+ let listener;const sent=[];
+ const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);
+ const pending=context.__TAURI_INTERNALS__.invoke('window_preferences',{autoProgress:false});assert.equal(sent[0].command,'progress_preferences');assert.equal(sent[0].enabled,false);listener({data:{id:sent[0].id,ok:true,value:null}});assert.equal(await pending,null);
+});
