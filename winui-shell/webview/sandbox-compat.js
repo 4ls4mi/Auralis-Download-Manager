@@ -1,5 +1,6 @@
 /* Isolated downloader: no installed user data. */
 (() => {
+  const installed=globalThis.__AURALIS_INSTALLED_HOST__===true;
   // Keep the WebView layers translucent enough to reveal the native backdrop,
   // while leaving individual panels readable. This is preview-only CSS.
   if(typeof document!=="undefined")document.addEventListener('DOMContentLoaded',()=>{
@@ -37,7 +38,7 @@
     if(command==='hidden_progress_window_ids')return request('progress_ids');
     if(['hide_download_to_tray','restore_hidden_progress_window'].includes(command) && Number.isSafeInteger(args.id) && args.id>0)return request(command==='hide_download_to_tray'?'progress_hide':'progress_restore',{downloadId:args.id});
     if(command==='plugin:window|available_monitors'){const monitor=await request('window_current_monitor');return monitor?[monitor]:[];}
-    if(command==='boot_engine')return 'Isolated test downloader';
+    if(command==='boot_engine')return installed?'Auralis integrated downloader':'Isolated test downloader';
     if(command==='dashboard_snapshot'||command==='dashboard_visuals'||command==='glass_settings')return request(command);
     if(command==='list_network_adapters')return request('network_adapters');
     if(command==='glass_tool' && args.action==='original-settings')return request('preferences');
@@ -51,7 +52,9 @@
         if(typeof clear==='boolean' && (!clear || key==='proxy_pass')) return request('update_preference',{key,value,clear});
       }
     }
-    if(command==='add_download' && typeof args.url==='string' && /^https?:\/\//i.test(args.url.trim()) && typeof args.later==='boolean') return JSON.stringify(await request(command,{url:args.url.trim(),later:args.later}));
+    if(command==='add_download' && typeof args.url==='string' && (installed?/^(?:https?|ftp):\/\//i:/^https?:\/\//i).test(args.url.trim()) && typeof args.later==='boolean') return JSON.stringify(await request(command,{url:args.url.trim(),later:args.later}));
+    if(installed && command==='pending_file_info')return request('pending_file_info');
+    if(installed && command==='file_info_action' && Number.isSafeInteger(args.id) && args.id>0 && ['commit','cancel','category'].includes(args.action) && (args.payload===null || typeof args.payload==='object')) return request('file_info_action',{downloadId:args.id,action:args.action,payload:args.payload});
     if(command==='queue_action' && typeof args.name==='string' && args.name.length>0 && args.name.length<=256 && ['start_queue','stop_queue'].includes(args.action)) return request(command,{name:args.name,action:args.action});
     if(command==='file_operation' && ['open','open-with','folder'].includes(args.operation) && Number.isSafeInteger(args.id) && args.id>0) return request(args.operation==='open'?'file_open':args.operation==='open-with'?'file_open_with':'file_folder',{downloadId:args.id});
     if(command==='file_operation' && args.operation==='speed-limit' && Number.isSafeInteger(args.id) && args.id>0) { const kb=args.value==='off'?0:Number(args.value); if(Number.isInteger(kb) && kb>=0 && kb<=10000000 && (kb>0 || args.value==='off')) return request('file_speed_limit',{downloadId:args.id,value:kb}); }
@@ -80,7 +83,7 @@
     if(Object.hasOwn(windowCommands,command))return request(windowCommands[command]);
     throw new Error('This action is unavailable in the isolated visual preview.');
   };
-  globalThis.__AURALIS_WINUI__={setAppearance:appearance,isolatedDownloads:true,notifyUpdate:version=>request('notify_update',{version})};
+  globalThis.__AURALIS_WINUI__={setAppearance:appearance,isolatedDownloads:!installed,updateInstallSupported:false,supportsComputerActions:false,limitedPreferences:true,usesNativeUpdateNotifications:true,notifyUpdate:version=>request('notify_update',{version})};
   globalThis.__TAURI_EVENT_PLUGIN_INTERNALS__={unregisterListener(){}};
   globalThis.__TAURI_INTERNALS__={invoke,transformCallback(){return 1},unregisterCallback(){},metadata:{currentWindow:{label:'main'},currentWebview:{label:'main'}},convertFileSrc(){return 'data:,'}};
 })();

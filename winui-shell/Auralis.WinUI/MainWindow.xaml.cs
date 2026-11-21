@@ -16,6 +16,14 @@ public sealed partial class MainWindow : Window
     {
         _notifications=notifications;
         InitializeComponent();
+        if (HostProfile.Installed)
+        {
+            Title="Auralis Download Manager";
+            DevelopmentHeader.Visibility=Visibility.Collapsed;
+            DevelopmentToolbar.Visibility=Visibility.Collapsed;
+            IntroHeading.Text="Starting Auralis";
+            IntroMessage.Text="Opening your download library and settings.";
+        }
         AppWindow.Closing += OnWindowClosing;
         AppWindow.Changed += (_, _) => UpdatePreviewLayout();
         _progressTrayTimer.Tick += async (_,_) => await RefreshProgressTrayAsync();
@@ -26,7 +34,7 @@ public sealed partial class MainWindow : Window
         MaterialSelector.SelectedIndex = 1;
         try
         {
-            _tray=new NativeTrayIcon(this,ShowMain,ExitFromTray,menuAction:HandleTrayAction,menuEnabled:TrayActionEnabled);
+            _tray=new NativeTrayIcon(this,ShowMain,ExitFromTray,tooltip:HostProfile.Installed?"Auralis Download Manager":"Auralis development preview",menuAction:HandleTrayAction,menuEnabled:TrayActionEnabled);
             KeepInTray.IsEnabled=true;
             StartMinimized.IsEnabled=true;
         }
@@ -34,16 +42,19 @@ public sealed partial class MainWindow : Window
         {
             TrayStatus.Text=$"Notification-area icon unavailable: {error.Message}";
         }
-        RestorePlacement();
-        try { LaunchWithWindows.IsChecked=StartupRegistration.IsEnabled(); }
-        catch (Exception error) { LaunchWithWindows.IsEnabled=false; TrayStatus.Text=$"Could not read test startup settings: {error.Message}"; }
+        if (!HostProfile.Installed)
+        {
+            RestorePlacement();
+            try { LaunchWithWindows.IsChecked=StartupRegistration.IsEnabled(); }
+            catch (Exception error) { LaunchWithWindows.IsEnabled=false; TrayStatus.Text=$"Could not read test startup settings: {error.Message}"; }
+        }
         _placementReady=true;
         RememberNormalBounds();
         UpdatePreviewLayout();
     }
 
     private bool _previewReady, _sandboxReady, _sandboxRequested, _closing, _allowClose, _openingSandbox, _openingPreview;
-    private readonly DownloaderLifetime _sandbox = new();
+    private readonly DownloaderLifetime _sandbox = new(profile: HostProfile.Installed ? DownloaderLifetime.Profile.Installed : DownloaderLifetime.Profile.Development);
     private readonly NativeUpdateNotifications? _notifications;
     private readonly UpdateService _updates = new();
     private readonly CancellationTokenSource _updatesCancellation = new();
@@ -54,6 +65,7 @@ public sealed partial class MainWindow : Window
     private readonly DispatcherTimer _downloadMonitor = new() { Interval=TimeSpan.FromMilliseconds(1200) };
     private readonly DownloadTransitionTracker _transitionTracker = new();
     private bool _refreshingDownloads, _autoProgress=true;
+    private ulong _lastPendingInfo;
     private int _viewRequest;
     private bool _placementReady, _changingStartup, _notificationRequested;
     private Task? _sandboxStartTask;
@@ -70,6 +82,13 @@ public sealed partial class MainWindow : Window
 
     private void UpdatePreviewLayout()
     {
+        if (HostProfile.Installed)
+        {
+            Root.Padding=new Thickness(0);
+            Root.RowSpacing=0;
+            RememberNormalBounds();
+            return;
+        }
         var area=DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Nearest);
         var maximized=AppWindow.Presenter is OverlappedPresenter presenter && presenter.State==OverlappedPresenterState.Maximized;
         var compact=PreviewLayoutPolicy.UseCompactLayout(maximized,AppWindow.Size.Width,area?.WorkArea.Width ?? 0);
@@ -119,6 +138,9 @@ public sealed partial class MainWindow : Window
 
     private void SavePlacement()
     {
+        // Installed-window migration uses its own settings; never overwrite
+        // development placement or startup preferences from the real app.
+        if (HostProfile.Installed) return;
         if (_normalBounds is not WindowBounds bounds) return;
         bool maximized=AppWindow.Presenter is OverlappedPresenter presenter && presenter.State==OverlappedPresenterState.Maximized;
         try { WindowPlacementStore.Save(PlacementPath(),new(1,bounds.X,bounds.Y,bounds.Width,bounds.Height,maximized,KeepInTray.IsChecked==true,StartMinimized.IsChecked==true)); }
@@ -127,6 +149,7 @@ public sealed partial class MainWindow : Window
 
     internal async Task ApplyStartupPreferencesAsync(bool launchedAtStartup)
     {
+        if (HostProfile.Installed) { await EnsureSandboxAsync(); return; }
         bool minimize=StartMinimized.IsChecked==true && _tray?.IsAvailable==true;
         if (!launchedAtStartup && !minimize) return;
         await EnsureSandboxAsync();
@@ -262,7 +285,24 @@ public sealed partial class MainWindow : Window
             if (_closing || request != _viewRequest) return;
             if (!_sandboxReady)
             {
-                _sandboxEnvironment=await LocalWebviewBridge.AttachPreviewAsync(SandboxView,this,Path.Combine(AppContext.BaseDirectory,"interface"),ApplyNativeAppearance,ApplyWindowCommand, message => OpenAuxiliaryAsync(message, true), message => ExportAppearanceAsync(this,message),message => OpenTestFileAsync(this,message),ProgressTrayCommandAsync,UpdateCommandAsync,sandbox:true);
+                _sandboxEnvironment=await LocalWebviewBridge.AttachPreviewAsync(SandboxView,this,Path.Combine(AppContext.BaseDirectory,"interface"),ApplyNativeAppearance,ApplyWindowCommand, message => OpenAuxiliaryAsync(message, true), message => ExportAppearanceAsync(this,message),message => OpenTestFileAsync(this,message),ProgressTrayCommandAsync,UpdateCommandAsync,sandbox:true,installed:HostProfile.Installed);
+                if (HostProfile.Installed)
+                {
+                    SandboxView.CoreWebView2.NavigationCompleted += (_,args) =>
+                    {
+                        if (_closing || AppWindow.Presenter is not OverlappedPresenter presenter) return;
+                        if (args.IsSuccess) presenter.SetBorderAndTitleBar(false,false);
+                        else
+                        {
+                            // Leave a usable native close button if the local
+                            // interface fails to load during startup.
+                            presenter.SetBorderAndTitleBar(true,true);
+                            SandboxView.Visibility=Visibility.Collapsed;
+                            PreviewIntro.Visibility=Visibility.Visible;
+                            BackdropStatus.Text="Auralis could not load its interface. Close the window and retry.";
+                        }
+                    };
+                }
                 _sandboxReady=true;
                 await RefreshDownloadTransitionsAsync();
                 if (!_closing) _downloadMonitor.Start();
@@ -270,7 +310,7 @@ public sealed partial class MainWindow : Window
             if (_closing || request != _viewRequest) return;
             PreviewIntro.Visibility=Visibility.Collapsed;
             InterfaceView.Visibility=Visibility.Collapsed;
-            SandboxControls.Visibility=Visibility.Visible;
+            SandboxControls.Visibility=HostProfile.Installed ? Visibility.Collapsed : Visibility.Visible;
             SandboxView.Visibility=Visibility.Visible;
             SandboxView.CoreWebView2.Navigate("https://auralis.local/index.html");
         }
@@ -281,7 +321,7 @@ public sealed partial class MainWindow : Window
             InterfaceView.Visibility=Visibility.Collapsed;
             SandboxView.Visibility=Visibility.Collapsed;
             SandboxControls.Visibility=Visibility.Collapsed;
-            BackdropStatus.Text=$"Isolated downloader unavailable: {error.Message}";
+            BackdropStatus.Text=HostProfile.Installed?$"Auralis could not start: {error.Message}":$"Isolated downloader unavailable: {error.Message}";
         }
         finally { _openingSandbox=false; }
     }
@@ -381,7 +421,7 @@ public sealed partial class MainWindow : Window
     {
         bool folder=message.Command=="file_folder";
         var result=await DownloaderBridge.SafeTestPathAsync(message.DownloadId,folder);
-        string path=result.GetProperty("path").GetString() ?? throw new InvalidOperationException("The test download is unavailable.");
+        string path=result.GetProperty("path").GetString() ?? throw new InvalidOperationException("The download is unavailable.");
         bool launched;
         if (folder)
         {
@@ -399,7 +439,7 @@ public sealed partial class MainWindow : Window
             }
             else launched=await Windows.System.Launcher.LaunchFileAsync(target);
         }
-        if (!launched && message.Command!="file_open_with") throw new InvalidOperationException("Windows could not open the test download.");
+        if (!launched && message.Command!="file_open_with") throw new InvalidOperationException("Windows could not open the download.");
         // The Windows app picker also returns false when the user cancels.
         return JsonSerializer.SerializeToElement(new { ok=launched });
     }
@@ -453,7 +493,7 @@ public sealed partial class MainWindow : Window
             if (sandbox && message.Label.StartsWith("download-",StringComparison.Ordinal) && ulong.TryParse(message.Label[9..],out var restoredId)) ForgetHiddenProgress(restoredId);
             return JsonSerializer.SerializeToElement(new { opened=true });
         }
-        var child=new Window { Title="Auralis — development preview" };
+        var child=new Window { Title=HostProfile.Installed?"Auralis Download Manager":"Auralis — development preview" };
         var root=new Grid { Background=new SolidColorBrush(Windows.UI.Color.FromArgb(0,0,0,0)) };
         var view=new WebView2();
         root.Children.Add(view);
@@ -493,9 +533,16 @@ public sealed partial class MainWindow : Window
         }
         var state=new AuxiliaryWindowState { Window=child, View=view, Route=message.Url };
         _auxiliaryWindows.Add(key,state);
-        child.Closed += (_,_) => {
+        child.Closed += async (_,_) => {
             if (_auxiliaryWindows.TryGetValue(key,out var current) && ReferenceEquals(current,state)) _auxiliaryWindows.Remove(key);
             if (sandbox && message.Label.StartsWith("download-",StringComparison.Ordinal) && ulong.TryParse(message.Label[9..],out var id)) ForgetHiddenProgress(id);
+            if (HostProfile.Installed && sandbox && message.Label.StartsWith("info-",StringComparison.Ordinal) && ulong.TryParse(message.Label[5..],out var requestId))
+            {
+                // The backend rejects stale IDs, so closing after a commit
+                // cannot cancel a newer queued download request.
+                try { await DownloaderBridge.FileInfoActionAsync(requestId,"cancel",null); }
+                catch (Exception) { /* The request may already be completed. */ }
+            }
         };
         if (isUpdateToast) child.AppWindow.Show(false);
         else child.Activate();
@@ -503,7 +550,7 @@ public sealed partial class MainWindow : Window
         {
             await LocalWebviewBridge.AttachPreviewAsync(view,child,Path.Combine(AppContext.BaseDirectory,"interface"),
                 appearance => { ApplyAppearance(child,root,appearance); }, message => ApplyWindowCommand(child,message),
-                next => OpenAuxiliaryAsync(next,sandbox), message => ExportAppearanceAsync(child,message),message => OpenTestFileAsync(child,message),ProgressTrayCommandAsync,UpdateCommandAsync,sandbox,environment);
+                next => OpenAuxiliaryAsync(next,sandbox), message => ExportAppearanceAsync(child,message),message => OpenTestFileAsync(child,message),ProgressTrayCommandAsync,UpdateCommandAsync,sandbox,environment,installed:HostProfile.Installed && sandbox);
             if (_closing || !_auxiliaryWindows.TryGetValue(key,out var current) || !ReferenceEquals(current,state)) throw new InvalidOperationException("The preview window was closed.");
             state.Ready=true;
             view.CoreWebView2.Navigate(WindowRoutePolicy.InterfaceUrl(state.Route));
@@ -534,6 +581,18 @@ public sealed partial class MainWindow : Window
             bool progress=settings.TryGetProperty("show_progress",out var showProgress) && showProgress.ValueKind==JsonValueKind.True;
             bool complete=settings.TryGetProperty("show_complete",out var showComplete) && showComplete.ValueKind==JsonValueKind.True;
             var snapshot=DownloadSnapshot.FromJson(await snapshotTask);
+            if (HostProfile.Installed)
+            {
+                var pending=await DownloaderBridge.CallAsync(DownloaderBridge.Operation.PendingFileInfo);
+                ulong requestId=pending.TryGetProperty("info",out var info) && info.ValueKind==JsonValueKind.Object &&
+                    pending.TryGetProperty("id",out var idValue) && idValue.TryGetUInt64(out var id) ? id : 0;
+                if (requestId==0) _lastPendingInfo=0;
+                else if (requestId!=_lastPendingInfo)
+                {
+                    await OpenAuxiliaryAsync(new BridgeMessage(1,"open_glass_window",0,$"/?request={requestId}",false,Label:$"info-{requestId}",Width:780,Height:560),true);
+                    _lastPendingInfo=requestId;
+                }
+            }
             var currentIds=snapshot.Downloads.Select(item=>item.Id).ToHashSet();
             foreach (var missing in _hiddenProgress.Where(id=>!currentIds.Contains(id)).ToArray())
             {

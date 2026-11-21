@@ -415,6 +415,8 @@ pub extern "C" fn auralis_bridge_file_details(id: u64) -> *mut c_char {
 }
 fn safe_test_path(id: u64, folder: bool) -> Result<serde_json::Value, String> {
     if id==0 || !owned_backend() { return Err("The test download is unavailable.".into()); }
+    #[cfg(feature = "installed-profile")]
+    if installed_profile_selected() { return installed_download_path(id,folder); }
     let requested_root=test_output_dir()?;
     let root=requested_root.canonicalize().map_err(|_|"The test folder is unavailable.")?;
     let command=mdm_ipc::Command { query:Some("list".into()), ..Default::default() };
@@ -427,6 +429,30 @@ fn safe_test_path(id: u64, folder: bool) -> Result<serde_json::Value, String> {
         if item.status!="Complete" { return Err("The test download is not complete.".into()); }
         let resolved=path.canonicalize().map_err(|_|"The downloaded file is unavailable.")?;
         if !resolved.starts_with(&root) || !resolved.is_file() { return Err("The downloaded file is outside the test folder.".into()); }
+        path
+    };
+    Ok(serde_json::json!({"path":target}))
+}
+#[cfg(feature = "installed-profile")]
+fn installed_download_path(id: u64, folder: bool) -> Result<serde_json::Value, String> {
+    let state_command=mdm_ipc::Command { query:Some("glass-move-status".into()), ids:vec![id], ..Default::default() };
+    let state_raw=mdm_ipc::request_checked(&state_command).map_err(|e|e.to_string())?;
+    let state:serde_json::Value=serde_json::from_str(&state_raw).map_err(|_|"Invalid download location status.")?;
+    if state.get("error").is_some() || state["moved_away"].as_bool()!=Some(false) {
+        return Err("The download's current location is unavailable.".into());
+    }
+    let command=mdm_ipc::Command { query:Some("list".into()), ..Default::default() };
+    let raw=mdm_ipc::request_checked(&command).map_err(|e|e.to_string())?;
+    let list:mdm_ipc::api::ListAnswer=serde_json::from_str(&raw).map_err(|_|"Invalid download list.")?;
+    let item=list.downloads.iter().find(|item|item.id==id).ok_or("The download no longer exists.")?;
+    let path=std::path::PathBuf::from(&item.path);
+    if !path.is_absolute() { return Err("The download path is unavailable.".into()); }
+    let target=if folder {
+        let parent=if path.is_dir(){path.as_path()}else{path.parent().ok_or("The download has no folder.")?};
+        if !parent.is_dir() { return Err("The download folder is unavailable.".into()); }
+        parent.to_path_buf()
+    } else {
+        if item.status!="Complete" || !path.is_file() { return Err("The completed download is unavailable.".into()); }
         path
     };
     Ok(serde_json::json!({"path":target}))

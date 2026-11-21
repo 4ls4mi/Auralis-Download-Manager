@@ -21,6 +21,23 @@ test('isolated preferences expose only validated scalar updates',async()=>{
  await assert.rejects(context.__TAURI_INTERNALS__.invoke('glass_tool',{action:'original-setting',payload:{key:'proxy_mode',value:5}}),/unavailable/);
  await assert.rejects(context.__TAURI_INTERNALS__.invoke('glass_tool',{action:'original-setting',payload:{key:'proxy_host',value:'x'.repeat(513)}}),/unavailable/);
 });
+
+test('installed host forwards the ordinary file-info flow without exposing it in the sandbox',async()=>{
+ let listener;const sent=[];
+ const context={__AURALIS_INSTALLED_HOST__:true,chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);
+ assert.equal(context.__AURALIS_WINUI__.isolatedDownloads,false);
+ assert.equal(context.__AURALIS_WINUI__.updateInstallSupported,false);
+ const add=context.__TAURI_INTERNALS__.invoke('add_download',{url:'ftp://example.test/file',later:false});
+ assert.equal(sent[0].command,'add_download');listener({data:{id:sent[0].id,ok:true,value:{pending:true}}});assert.equal(JSON.parse(await add).pending,true);
+ const pending=context.__TAURI_INTERNALS__.invoke('pending_file_info');assert.equal(sent[1].command,'pending_file_info');
+ listener({data:{id:sent[1].id,ok:true,value:{id:7,info:{}}}});assert.equal((await pending).id,7);
+ const commit=context.__TAURI_INTERNALS__.invoke('file_info_action',{id:7,action:'commit',payload:{save_as:'C:\\Downloads\\file.bin'}});
+ assert.equal(sent[2].command,'file_info_action');assert.equal(sent[2].downloadId,7);assert.equal(sent[2].action,'commit');
+ listener({data:{id:sent[2].id,ok:true,value:{ok:true,id:8}}});assert.equal((await commit).id,8);
+ await assert.rejects(context.__TAURI_INTERNALS__.invoke('file_info_action',{id:7,action:'other',payload:null}),/unavailable/);
+ const preview={chrome:{webview:{addEventListener(){},postMessage(){}}},setTimeout,clearTimeout};runInNewContext(source,preview);
+ await assert.rejects(preview.__TAURI_INTERNALS__.invoke('pending_file_info'),/unavailable/);
+});
 test('release fallback and file pickers have time to complete',async()=>{
  let listener;const sent=[],timeouts=[];
  const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout:(_fn,delay)=>{timeouts.push(delay);return timeouts.length},clearTimeout(){}};runInNewContext(source,context);

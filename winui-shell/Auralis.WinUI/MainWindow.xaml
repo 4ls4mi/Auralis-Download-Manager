@@ -10,7 +10,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
-        <StackPanel Spacing="6">
+        <StackPanel x:Name="DevelopmentHeader" Spacing="6">
             <TextBlock Text="WinUI shell development" FontSize="24" FontWeight="SemiBold" />
             <TextBlock Text="Development preview — test downloads use an isolated development folder." TextWrapping="Wrap" />
             <CheckBox x:Name="KeepInTray" Content="Keep test downloads running in the notification area when closing" IsEnabled="False" Checked="OnPlacementPreferenceChanged" Unchecked="OnPlacementPreferenceChanged" />
@@ -18,7 +18,7 @@
             <CheckBox x:Name="StartMinimized" Content="Start the test downloader minimized in the notification area" IsEnabled="False" Checked="OnPlacementPreferenceChanged" Unchecked="OnPlacementPreferenceChanged" />
             <TextBlock x:Name="TrayStatus" TextWrapping="Wrap" />
         </StackPanel>
-        <ScrollViewer Grid.Row="1" HorizontalScrollMode="Auto" HorizontalScrollBarVisibility="Auto" VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled">
+        <ScrollViewer x:Name="DevelopmentToolbar" Grid.Row="1" HorizontalScrollMode="Auto" HorizontalScrollBarVisibility="Auto" VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled">
             <StackPanel Orientation="Horizontal" Spacing="12">
                 <ComboBox x:Name="MaterialSelector" Header="Surface material" DisplayMemberPath="Label" SelectionChanged="OnMaterialChanged" />
                 <ComboBox x:Name="ThemeSelector" Header="Preview theme" SelectionChanged="OnThemeChanged" />
@@ -38,9 +38,9 @@
         <Grid Grid.Row="3">
             <Border x:Name="PreviewIntro" Padding="20" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
                 <StackPanel Spacing="12">
-                    <TextBlock Text="Backdrop preview" FontSize="18" FontWeight="SemiBold" />
+                    <TextBlock x:Name="IntroHeading" Text="Backdrop preview" FontSize="18" FontWeight="SemiBold" />
                     <TextBlock x:Name="BackdropStatus" TextWrapping="Wrap" />
-                    <TextBlock Text="The interface preview uses empty sample data. Downloads and account actions are disabled." TextWrapping="Wrap" />
+                    <TextBlock x:Name="IntroMessage" Text="The interface preview uses empty sample data. Downloads and account actions are disabled." TextWrapping="Wrap" />
                 </StackPanel>
             </Border>
             <WebView2 x:Name="InterfaceView" Visibility="Collapsed" />

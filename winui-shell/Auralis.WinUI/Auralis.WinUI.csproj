@@ -12,6 +12,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(AuralisInstalledHost)' == 'true'">
+    <DefineConstants>$(DefineConstants);AURALIS_INSTALLED_HOST</DefineConstants>
+  </PropertyGroup>
   <ItemGroup Condition="Exists('..\..\glass-ui\dist\index.html')">
     <Content Include="..\..\glass-ui\package.json" Link="interface\winui-package.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\glass-ui\dist\**\*" Link="interface\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />

@@ -16,16 +16,17 @@ internal static class LocalWebviewBridge
 
     /// Isolated WebView profiles keep sample and test interfaces separate from
     /// installed settings and downloads; auxiliary views share their parent profile.
-    internal static async Task<CoreWebView2Environment> AttachPreviewAsync(WebView2 view, Microsoft.UI.Xaml.Window owner, string assetDirectory, Action<NativeAppearance> applyAppearance, Func<BridgeMessage, JsonElement> windowCommand, Func<BridgeMessage, Task<JsonElement>> openWindow, Func<BridgeMessage, Task<JsonElement>> exportFile, Func<BridgeMessage, Task<JsonElement>> openTestFile, Func<BridgeMessage, Task<JsonElement>> progressTray, Func<BridgeMessage, Task<JsonElement>> updateCommand, bool sandbox=false, CoreWebView2Environment? sharedEnvironment=null)
+    internal static async Task<CoreWebView2Environment> AttachPreviewAsync(WebView2 view, Microsoft.UI.Xaml.Window owner, string assetDirectory, Action<NativeAppearance> applyAppearance, Func<BridgeMessage, JsonElement> windowCommand, Func<BridgeMessage, Task<JsonElement>> openWindow, Func<BridgeMessage, Task<JsonElement>> exportFile, Func<BridgeMessage, Task<JsonElement>> openTestFile, Func<BridgeMessage, Task<JsonElement>> progressTray, Func<BridgeMessage, Task<JsonElement>> updateCommand, bool sandbox=false, CoreWebView2Environment? sharedEnvironment=null, bool installed=false)
     {
+        if (installed && !sandbox) throw new InvalidOperationException("Invalid interface host mode.");
         if (!Directory.Exists(assetDirectory)) throw new DirectoryNotFoundException("Build the local interface preview assets first.");
         var adapterPath=Path.Combine(assetDirectory,sandbox?"winui-sandbox-compat.js":"winui-preview-compat.js");
         if (!File.Exists(adapterPath) || !File.Exists(Path.Combine(assetDirectory,"index.html"))) throw new FileNotFoundException("Interface preview assets are missing.");
         string localData=Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         if (string.IsNullOrWhiteSpace(localData) || !Path.IsPathFullyQualified(localData)) throw new InvalidOperationException("The local application data folder is unavailable.");
-        string profileRoot=Path.Combine(localData,"Auralis WinUI Development");
+        string profileRoot=Path.Combine(localData,installed?"Auralis Download Manager":"Auralis WinUI Development");
         EnsureDevelopmentDirectory(profileRoot);
-        var profile=Path.Combine(profileRoot,sandbox?"WebView-Downloads":"WebView-Sample");
+        var profile=Path.Combine(profileRoot,installed?"WebView-WinUI":sandbox?"WebView-Downloads":"WebView-Sample");
         EnsureDevelopmentDirectory(profile);
         var environment=sharedEnvironment ?? await CoreWebView2Environment.CreateWithOptionsAsync(null, profile, null);
         await view.EnsureCoreWebView2Async(environment);
@@ -43,6 +44,7 @@ internal static class LocalWebviewBridge
         core.NewWindowRequested+=(_,args)=>args.Handled=true;
         core.AddWebResourceRequestedFilter("*",CoreWebView2WebResourceContext.All);
         core.WebResourceRequested+=(_,args)=>{if(!IsLocal(args.Request.Uri))args.Response=environment.CreateWebResourceResponse(new Windows.Storage.Streams.InMemoryRandomAccessStream(),403,"Blocked","Content-Type: text/plain");};
+        if (installed) await core.AddScriptToExecuteOnDocumentCreatedAsync("globalThis.__AURALIS_INSTALLED_HOST__=true;");
         await core.AddScriptToExecuteOnDocumentCreatedAsync(await File.ReadAllTextAsync(adapterPath));
         Windows.Foundation.TypedEventHandler<Microsoft.UI.Windowing.AppWindow,Microsoft.UI.Windowing.AppWindowChangedEventArgs> changed = (_,args) =>
         {
@@ -75,6 +77,8 @@ internal static class LocalWebviewBridge
                         ? await openWindow(message)
                     : message.Command is "window_hide" or "window_minimize" or "window_toggle_maximize" or "window_close" or "window_is_maximized" or "window_outer_position" or "window_outer_size" or "window_current_monitor" or "window_start_drag" or "window_start_resize"
                         ? windowCommand(message)
+                    : installed && (message.Command is "pending_file_info" or "file_info_action")
+                        ? await BridgeDispatcher.DispatchAsync(message)
                     : sandbox && (message.Command is "dashboard_snapshot" or "dashboard_visuals" or "glass_settings" or "preferences" or "network_adapters" or "queue_schedules" or "save_schedule" or "update_preference" or "update_glass_setting" or "start_download" or "pause_download" or "remove_download" or "file_details" or "check_saved" or "check_saved_result" or "checksum" or "checksum_result" or "refresh_address" or "file_speed_limit" or "queue_action" or "queue_item_add" or "queue_item_remove" or "add_download")
                         ? await BridgeDispatcher.DispatchAsync(message)
                         : throw new InvalidOperationException("This isolated host does not support that command.");

@@ -28,7 +28,7 @@ test('WinUI scheduler edits the isolated queue without exposing computer actions
   const saved=await page.evaluate(()=>window.requests.find(m=>m.command==='save_schedule'));
   assert.equal(saved.payload.name,'Main download queue');assert.equal(saved.payload.files_at_once,2);assert.equal(saved.payload.schedule.wake,false);
   await page.getByRole('button',{name:'Completion',exact:true}).click();
-  await page.getByText('Computer and completion actions are unavailable in the development preview.').waitFor();
+  await page.getByText('Computer and completion actions are unavailable in this WinUI build.').waitFor();
   assert.equal(await page.getByText('Force applications to close').count(),0);
  }finally{await browser.close();await server.close()}
 });
