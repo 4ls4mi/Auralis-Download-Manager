@@ -65,6 +65,26 @@ fn download_action(action: u32, id: u64) -> Result<serde_json::Value, String> {
     let result: mdm_ipc::api::ActAnswer = serde_json::from_str(&raw).map_err(|_| "Invalid downloader action response")?;
     serde_json::to_value(result).map_err(|e| e.to_string())
 }
+fn add_download(url: &str, later: bool) -> Result<serde_json::Value, String> {
+    let url = url.trim();
+    if url.is_empty() || url.len() > 8192 || !["http://", "https://", "ftp://", "magnet:"].iter().any(|prefix| url.starts_with(prefix)) {
+        return Err("Enter a supported HTTP, HTTPS, FTP or magnet link.".into());
+    }
+    if !owned_backend() { return Err("The embedded downloader is not running in this process.".into()); }
+    mdm_ipc::send(&mdm_ipc::Command { url: Some(url.to_owned()), later, silent: false, ..Default::default() }).map_err(|e| e.to_string())?;
+    Ok(serde_json::json!({"pending":true}))
+}
+/// # Safety
+/// `url` must point to `len` readable bytes for the duration of this call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn auralis_bridge_add_download(url: *const u8, len: usize, later: u8) -> *mut c_char {
+    encode(std::panic::catch_unwind(|| {
+        if url.is_null() || len == 0 || len > 8192 || later > 1 { return Err("Invalid download request.".into()); }
+        let bytes = unsafe { std::slice::from_raw_parts(url, len) };
+        let url = std::str::from_utf8(bytes).map_err(|_| "The download link is not UTF-8.")?;
+        add_download(url, later == 1)
+    }))
+}
 fn encode(result: Result<Result<serde_json::Value, String>, Box<dyn std::any::Any + Send>>) -> *mut c_char {
     let value = match result { Ok(Ok(value)) => serde_json::json!({"ok":true,"value":value}), Ok(Err(error)) => serde_json::json!({"ok":false,"error":error}), Err(_) => serde_json::json!({"ok":false,"error":"Native bridge failed"}) };
     CString::new(value.to_string()).expect("JSON escapes zero bytes").into_raw()
@@ -110,6 +130,8 @@ mod tests {
 
     #[test]
     fn unsupported_operations_are_rejected_and_ffi_returns_json() {
+        assert!(add_download("file:///local/private", false).is_err());
+        assert!(add_download(&"x".repeat(8193), false).is_err());
         assert_eq!(download_action(999, 1).unwrap_err(), "Unsupported download action");
         assert_eq!(download_action(1, 0).unwrap_err(), "Invalid download ID");
         let pointer = auralis_bridge_call(999);

@@ -16,11 +16,19 @@ internal static class DownloaderBridge
     private static extern IntPtr auralis_bridge_download_action(uint action, ulong id);
 
     [DllImport("auralis_winui_bridge", CallingConvention = CallingConvention.Cdecl)]
+    private static extern IntPtr auralis_bridge_add_download(byte[] url, nuint length, byte later);
+
+    [DllImport("auralis_winui_bridge", CallingConvention = CallingConvention.Cdecl)]
     private static extern void auralis_bridge_free(IntPtr response);
 
     internal static Task<JsonElement> CallAsync(Operation operation) => Task.Run(() => ReadResponse(auralis_bridge_call(operation)));
     internal static Task<JsonElement> StartDownloadAsync(ulong id) => Task.Run(() => ReadResponse(auralis_bridge_download_action(1, id)));
     internal static Task<JsonElement> PauseDownloadAsync(ulong id) => Task.Run(() => ReadResponse(auralis_bridge_download_action(2, id)));
+    internal static Task<JsonElement> AddDownloadAsync(string url, bool later) => Task.Run(() =>
+    {
+        byte[] bytes = System.Text.Encoding.UTF8.GetBytes(url);
+        return ReadResponse(auralis_bridge_add_download(bytes, (nuint)bytes.Length, later ? (byte)1 : (byte)0));
+    });
 
     private static JsonElement ReadResponse(IntPtr response)
     {

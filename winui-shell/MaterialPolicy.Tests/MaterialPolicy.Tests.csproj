@@ -8,5 +8,6 @@
   <ItemGroup>
     <Compile Include="../Auralis.WinUI/MaterialPolicy.cs" Link="MaterialPolicy.cs" />
     <Compile Include="../Auralis.WinUI/DownloadSnapshot.cs" Link="DownloadSnapshot.cs" />
+    <Compile Include="../Auralis.WinUI/BridgeMessage.cs" Link="BridgeMessage.cs" />
   </ItemGroup>
 </Project>

@@ -20,3 +20,15 @@ using var invalidJson = System.Text.Json.JsonDocument.Parse("{} ");
 try { DownloadSnapshot.FromJson(invalidJson.RootElement); throw new Exception("Invalid snapshots must be rejected."); }
 catch (System.Text.Json.JsonException) { }
 Console.WriteLine("Downloader snapshot model checks passed.");
+
+var request = BridgeMessage.Parse("https://auralis.local/index.html", """{"id":1,"command":"dashboard_snapshot"}""");
+if (request.Command != "dashboard_snapshot") throw new Exception("Expected list request.");
+foreach (var pair in new[] {
+    ("https://evil.example/index.html", """{"id":1,"command":"dashboard_snapshot"}"""),
+    ("https://auralis.local/index.html", """{"id":1,"command":"delete_download"}"""),
+    ("https://auralis.local/index.html", """{"id":1,"command":"add_download","url":"file:///secret"}""") })
+{
+    try { BridgeMessage.Parse(pair.Item1, pair.Item2); throw new Exception("Unsafe bridge request was accepted."); }
+    catch (InvalidOperationException error) when (error.Message != "Unsafe bridge request was accepted.") { }
+}
+Console.WriteLine("Web interface request validation checks passed.");
