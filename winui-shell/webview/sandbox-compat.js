@@ -5,7 +5,16 @@
   if(typeof document!=="undefined")document.addEventListener('DOMContentLoaded',()=>{
     document.documentElement.dataset.auralisWinuiPreview='true';
     const style=document.createElement('style');
-    style.textContent=`html[data-auralis-winui-preview] .cg-window.cg-mode-desktop .cg-content{background:linear-gradient(145deg,var(--glass-tint),transparent 70%),rgba(var(--glass),.30)!important;backdrop-filter:none!important}html[data-auralis-winui-preview] .cg-window.cg-mode-desktop .cg-glass{background:rgba(var(--glass),.66)!important;backdrop-filter:none!important}html[data-auralis-winui-preview] .cg-window.cg-mode-desktop :is(.cg-frost-canvas,.cg-frost-fallback){display:none!important}`;
+    style.textContent=`
+      html[data-auralis-winui-preview] .cg-window.cg-mode-desktop {--native-content-opacity:.30;--native-panel-opacity:.66}
+      html[data-auralis-winui-preview] .cg-window.cg-mode-desktop:is(.cg-material-window-glass,.cg-finish-clear) {--native-content-opacity:.16;--native-panel-opacity:.56}
+      html[data-auralis-winui-preview] .cg-window.cg-mode-desktop:is(.cg-material-frosted-water-351,.cg-material-builtin-pearl-frost,.cg-finish-frosted) {--native-content-opacity:.35;--native-panel-opacity:.72}
+      html[data-auralis-winui-preview] .cg-window.cg-mode-desktop:is(.cg-material-builtin-smoked-glass) {--native-content-opacity:.42;--native-panel-opacity:.76}
+      html[data-auralis-winui-preview] .cg-window.cg-mode-desktop:is(.cg-material-rose-pine,.cg-material-oversimplified,.cg-material-builtin-obsidian-matte,.cg-finish-matte) {--native-content-opacity:.46;--native-panel-opacity:.82}
+      html[data-auralis-winui-preview] .cg-window.cg-mode-desktop.cg-high-contrast {--native-content-opacity:.96;--native-panel-opacity:.98}
+      html[data-auralis-winui-preview] .cg-window.cg-mode-desktop .cg-content{background:linear-gradient(145deg,var(--glass-tint),transparent 70%),rgba(var(--glass),var(--native-content-opacity))!important;backdrop-filter:none!important}
+      html[data-auralis-winui-preview] .cg-window.cg-mode-desktop .cg-glass{background:rgba(var(--glass),var(--native-panel-opacity))!important;backdrop-filter:none!important}
+      html[data-auralis-winui-preview] .cg-window.cg-mode-desktop :is(.cg-frost-canvas,.cg-frost-fallback){display:none!important}`;
     document.head.append(style);
   });
   const webview=globalThis.chrome?.webview;
