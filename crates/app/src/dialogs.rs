@@ -3371,7 +3371,7 @@ static DRAGGED_OUT: Mutex<Vec<Followed>> = Mutex::new(Vec::new());
 
 /// Queue a tracked Glass drag for the original app's move-following logic.
 pub fn record_dragged_out(id:u64, from:PathBuf, out:DraggedOut) {
-    DRAGGED_OUT.lock().unwrap_or_else(|e|e.into_inner()).push((id,from,out));
+    DRAGGED_OUT.lock().unwrap_or_else(|e|e.into_inner()).push(Followed { id, from, out, dragged_from: DraggedFrom::Complete });
 }
 
 /// What [`DRAGGED_OUT`] was given since the last call (the app updates its downloads).

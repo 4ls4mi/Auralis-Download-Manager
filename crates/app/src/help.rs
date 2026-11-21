@@ -209,7 +209,10 @@ pub fn check_glass(rt: &tokio::runtime::Handle, current: String) -> Slot {
             .map_err(|e| e.to_string())?
             .user_agent("MisterHybridGlass/updates")
             .timeout(Duration::from_secs(20)).build().map_err(|e| e.to_string())?;
-        fetch(&client, feed, &current).await
+        match mdm_tools::github::api_get(&client, feed).await.map_err(|e| e.to_string())? {
+            mdm_tools::github::Api::Answer(body) => parse_release(&String::from_utf8_lossy(&body), &current),
+            mdm_tools::github::Api::RateLimited(refusal) => Err(crate::errors::tools(&refusal)),
+        }
     });
     rt.spawn(async move { *out.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(settled(task.await)); });
     slot

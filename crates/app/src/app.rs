@@ -4020,9 +4020,11 @@ impl App {
         if item.dest!=prepared.source_dest || item.live.is_some() || item.status==Status::Complete || item.torrent.is_some() || item.direct_recovery.is_some() || item.context.private || item.checksum.is_some() || self.moving.iter().any(|(moving,_,_)|*moving==id) || self.renaming.iter().any(|(renaming,_)|*renaming==id) {
             return Err("Download changed while preparing recovery; the original partial was kept".into());
         }
+        // Wait for the older list write before committing the handoff. A failed
+        // write must not be mistaken for a durable recovery state.
+        if !self.saver.flush_until(None) { return Err("The previous download list save did not finish; the original partial was kept".into()); }
+        if let Some(Err(error))=self.saver.outcome() { return Err(format!("The previous download list save failed: {error}. The original partial was kept.")); }
         crate::torrents::save_recovery_torrent(&hash,&prepared.metadata.torrent).map_err(|e|format!("Could not save torrent metadata: {e}"))?;
-        // Ensure an older queued asynchronous save cannot overwrite the new state.
-        self.saver.flush();
         let item=self.items.iter_mut().find(|item|item.id==id).expect("item checked above");
         let before=(item.dest.clone(),item.downloaded,item.status,item.error.clone(),item.resumable,item.recovery_damaged);
         item.direct_recovery=Some(crate::model::DirectRecoveryOrigin{dest:item.dest.clone(),downloaded:prepared.source_downloaded,damaged:item.recovery_damaged});
@@ -4033,9 +4035,18 @@ impl App {
         item.resumable=Some(true);
         item.recovery_damaged=false;
         item.torrent=Some(crate::torrents::TorrentSpec{hash,files:Some(vec![prepared.file_index]),folder,uploaded:0,seeded_secs:0,peers:0,up_speed:0.0,upload_limit:None,in_order:false,ends_first:true});
-        if let Err(error)=store::save(self.next_id,&self.items,&self.list.layout(),&self.settings,&self.queues) {
+        let persisted=self.saver.save(self.next_id,&self.items,&self.list.layout(),&self.settings,&self.queues).and_then(|()| {
+            if !self.saver.flush_until(None) { return Err(std::io::Error::other("The recovery state write did not finish")); }
+            match self.saver.outcome() {
+                Some(Ok(()))=>Ok(()),
+                Some(Err(error))=>Err(std::io::Error::other(error)),
+                None=>Err(std::io::Error::other("The recovery state write has no result")),
+            }
+        });
+        if let Err(error)=persisted {
             let item=self.items.iter_mut().find(|item|item.id==id).expect("item checked above");
             item.dest=before.0;item.downloaded=before.1;item.status=before.2;item.error=before.3;item.resumable=before.4;item.recovery_damaged=before.5;item.torrent=None;item.direct_recovery=None;
+            self.dirty=true;
             return Err(format!("Could not save the recovery state: {error}. The original partial and prepared copy were kept."));
         }
         self.dirty=false;

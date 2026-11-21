@@ -305,7 +305,7 @@ impl App {
                 if item.status!=Status::Complete||!crate::extractq::archive_name(&item.file_name) {return fail("Select a completed archive");}
                 self.extracts.offer(item,&self.items,&self.settings,true);
             }
-            "extract-password" => { if !self.extracts.ask.as_ref().is_some_and(|a|a.glass_has(id)){return fail("No password request for this archive");} self.extracts.answer(Some(value.to_owned())); }
+            "extract-password" => { if !self.extracts.ask.as_ref().is_some_and(|a|a.glass_has(id)){return fail("No password request for this archive");} self.extracts.answer(Some((value.to_owned(), false))); }
             "extract-cancel" => { self.extracts.answer(None); }
             "extract-status" => {
                 let item=self.items.iter().find(|i|i.id==id).unwrap();
