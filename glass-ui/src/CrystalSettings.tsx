@@ -199,7 +199,7 @@ export default function CrystalSettings(){
         {appearanceTab==="Appearance"&&<>
         <h3>Translucency and blur</h3>
         <p>Choose a starting point, then fine-tune opacity, blur and tint. These presets do not change your selected material or color.</p>
-        <div className="cg-wall-choice">{([['Clear glass',65,0,18,false],['Soft glass',78,5,25,true],['Frosted glass',88,16,30,true],['Tinted glass',82,6,55,false]] as const).map(([name,opacity,blur,tint,acrylic])=><button key={name} className="cg-btn" onClick={()=>{set('opacity',opacity);set('blur',blur);set('tintStrength',tint);set('acrylic',acrylic)}}>{name}</button>)}</div>
+        <div className="cg-wall-choice">{([['Clear glass',55,0,12,false],['Soft glass',62,5,18,true],['Frosted glass',68,16,22,true],['Tinted glass',72,6,48,true]] as const).map(([name,opacity,blur,tint,acrylic])=><button key={name} className="cg-btn" onClick={()=>{set('opacity',opacity);set('blur',blur);set('tintStrength',tint);set('acrylic',acrylic)}}>{name}</button>)}</div>
         <h3>Independent translucent backgrounds</h3>
         {mode("main")}{mode("details")}
         </>}
@@ -209,7 +209,6 @@ export default function CrystalSettings(){
         {slider("dim","Wallpaper darkness",0,80,"%")}
         {slider("uiScale","Interface size",80,150,"%")}
         <label className="cg-toggle"><span><strong>Windows backdrop blur</strong><small>Use the Windows acrylic effect behind see-through windows when supported. Its blur strength is controlled by Windows.</small></span><input type="checkbox" checked={appearance.acrylic} onChange={e=>set("acrylic",e.target.checked)}/></label>
-        {appearance.material==='frosted-water-351'&&<p>Frosted Layers draws its own glass surface. Windows backdrop blur is not available for this material; wallpaper blur still applies to a chosen wallpaper.</p>}
         </>}
         {appearanceTab==="Typography"&&<>
         <h3>Typography and contrast</h3>

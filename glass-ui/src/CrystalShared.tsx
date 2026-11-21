@@ -336,24 +336,29 @@ export function CrystalWindow({ children, target = "main" }: {
   const video = /\.(mp4|webm|mov|m4v)$/i.test(path);
   useEffect(() => {
     const w = getCurrentWindow();let active=true;
-    if (mode === "desktop" && appearance.acrylic && appearance.material !== "frosted-water-351")
+    if (mode === "desktop" && appearance.acrylic)
       void w.setEffects({ effects: [Effect.Acrylic], state: EffectState.Active }).catch(()=>{if(active)setWindowError("Windows backdrop blur is unavailable; transparent glass is being used.");return w.clearEffects().catch(()=>undefined)});
     else void w.clearEffects().catch(() => undefined);
     return()=>{active=false};
   }, [mode, appearance.acrylic, appearance.material]);
-  // Glass designs have one appearance; the light setting applies to solid backgrounds.
-  const effectiveLight = false;
+  // White palettes need light surfaces and dark foregrounds in every material.
+  const effectiveLight = theme.id === "white-frost" || theme.id === "white-pearl";
+  const lightAccent = theme.id === "white-pearl" ? "#655643" : "#405b70";
+  const lightAccentRgb = theme.id === "white-pearl" ? "101,86,67" : "64,91,112";
   const style = {
-    "--accent": effectiveLight ? (({plexo:"#086e84",ocean:"#146c9b",purple:"#7050b5",pink:"#b73962",gold:"#8a5b05",green:"#19765b",silver:"#4c6680",navy:"#394ea2",orange:"#ad4700",rose:"#a42b70"} as Record<string,string>)[theme.id]??"#086e84") : theme.accent,
+    "--accent": effectiveLight ? lightAccent : theme.accent,
     "--accent-secondary": theme.secondary,
-    "--theme-action-rgb": mixColor(theme.rgb.split(",").map(Number),[255,255,255],.20),
-    "--theme-primary-rgb": mixColor(theme.rgb.split(",").map(Number),[255,255,255],.10),
-    "--theme-warn-rgb": mixColor(theme.rgb.split(",").map(Number),secondaryRgb(theme),.55),
-    "--theme-danger-rgb": mixColor(theme.rgb.split(",").map(Number),secondaryRgb(theme),.80),
-    "--theme-tool-rgb": mixColor(secondaryRgb(theme),[255,255,255],.18),
-    "--accent-rgb": effectiveLight ? (({plexo:"8,110,132",ocean:"20,108,155",purple:"112,80,181",pink:"183,57,98",gold:"138,91,5",green:"25,118,91",silver:"76,102,128",navy:"57,78,162",orange:"173,71,0",rose:"164,43,112"} as Record<string,string>)[theme.id]??"8,110,132") : theme.rgb,
-    "--glass": (theme.neutralTint??theme.rgb.split(",").map(Number)).map(n=>Math.round(n*.14)).join(","),
+    "--theme-action-rgb": effectiveLight ? lightAccentRgb : mixColor(theme.rgb.split(",").map(Number),[255,255,255],.20),
+    "--theme-primary-rgb": effectiveLight ? lightAccentRgb : mixColor(theme.rgb.split(",").map(Number),[255,255,255],.10),
+    "--theme-warn-rgb": effectiveLight ? lightAccentRgb : mixColor(theme.rgb.split(",").map(Number),secondaryRgb(theme),.55),
+    "--theme-danger-rgb": effectiveLight ? lightAccentRgb : mixColor(theme.rgb.split(",").map(Number),secondaryRgb(theme),.80),
+    "--theme-tool-rgb": effectiveLight ? lightAccentRgb : mixColor(secondaryRgb(theme),[255,255,255],.18),
+    "--accent-rgb": effectiveLight ? lightAccentRgb : theme.rgb,
+    "--glass": effectiveLight ? themeTintRgb.join(",") : themeTintRgb.map(n=>Math.round(n*(theme.neutralTint ? .65 : .20))).join(","),
     "--glass-tint": `rgba(${(theme.neutralTint??theme.rgb.split(",").map(Number)).join(",")},${Math.max(0,Math.min(65,appearance.tintStrength))/100})`,
+    "--surface": effectiveLight ? `rgba(${themeTintRgb.join(",")},.75)` : `rgba(${themeTintRgb.join(",")},.13)`,
+    "--field": effectiveLight ? `rgba(${themeTintRgb.join(",")},.92)` : `rgba(${themeTintRgb.map(n=>Math.round(n*.12)).join(",")},.82)`,
+    "--popover": effectiveLight ? `rgb(${themeTintRgb.join(",")})` : `rgb(${themeTintRgb.map(n=>Math.round(n*(theme.neutralTint ? .65 : .18))).join(",")})`,
     "--panel-opacity": Math.min(1, Math.max(.45, appearance.opacity / 100)),
     "--material-opacity": customMaterial ? Math.max(.12,(1-customMaterial.translucency/125)*appearance.opacity/100) : undefined,
     "--material-shading": customMaterial ? customMaterial.shading/100 : undefined,

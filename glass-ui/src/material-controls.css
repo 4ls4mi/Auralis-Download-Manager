@@ -65,3 +65,14 @@
 .cg-window.cg-material-frosted-water-351 .cg-fit-content :is(input:not([type=range]):not([type=checkbox]),select,textarea){background:linear-gradient(180deg,rgba(var(--accent-rgb),.24),rgba(var(--glass),.96))!important;color:#fff!important;border-color:rgba(var(--accent-rgb),.55)!important;text-shadow:0 1px 2px #000!important}
 .cg-window.cg-material-frosted-water-351 .cg-fit-content select option{background:rgb(var(--glass))!important;color:#fff!important}
 .cg-window.cg-dark .cg-fit-content .cg-settings-nav button:nth-of-type(n) svg,.cg-window.cg-dark .cg-fit-content .cg-winbuttons button svg{color:var(--accent)!important}
+
+/* Theme-owned title and readable light surfaces across all window materials. */
+.cg-window.cg-dark .cg-window-top,.cg-window.cg-light .cg-window-top{background:rgba(var(--glass),.88)!important;border-color:var(--edge-strong)!important;color:var(--ink)!important}
+.cg-window.cg-light .cg-fit-content .cg-glass{background:linear-gradient(150deg,rgba(255,255,255,.28),transparent 55%),rgba(var(--glass),.78)!important;border-color:var(--edge-strong)!important}
+.cg-window.cg-light .cg-fit-content :is(h1,h2,h3,h4,strong,p,small,label,button,span,.cg-title){text-shadow:none!important}
+.cg-window.cg-light .cg-fit-content :is(.cg-btn,.cg-toolbar>button,.cg-sidebar button.selected,.cg-settings-nav button.selected,.cg-appearance-tabs button.selected,.cg-page-tabs button.active){color:var(--ink)!important;text-shadow:none!important}
+.cg-window.cg-light .cg-fit-content :is(.cg-btn,.cg-toolbar>button) svg,.cg-window.cg-light .cg-fit-content :is(.cg-sidebar,.cg-settings-nav,.cg-winbuttons) button svg{color:var(--accent)!important;filter:none!important}
+.cg-window.cg-light .cg-fit-content :is(input:not([type=range]):not([type=checkbox]),select,textarea){background:var(--field)!important;color:var(--ink)!important;border-color:var(--edge-strong)!important;text-shadow:none!important}
+.cg-window.cg-light .cg-fit-content select option{background:rgb(var(--glass))!important;color:var(--ink)!important}
+.cg-window.cg-light .cg-solid{background:rgb(var(--glass))!important}
+.cg-window.cg-dark .cg-solid{background:linear-gradient(145deg,rgba(var(--accent-rgb),.22),transparent 70%),rgb(var(--glass))!important}
