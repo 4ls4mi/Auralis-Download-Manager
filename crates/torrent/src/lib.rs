@@ -127,6 +127,59 @@ fn check_bytes(torrent: &[u8]) -> Result<(), TorrentError> {
     )
 }
 
+/// Compare a saved HTTP download with a single-file v1 torrent's piece hashes.
+/// Matching pieces are evidence only for the compared bytes, not proof that the
+/// unknown remainder is the intended file. No file or state is modified.
+pub fn compare_saved_download(
+    torrent: &[u8],
+    saved: &mdm_engine::state::ResumeState,
+) -> Result<mdm_engine::recovery::PieceComparison, TorrentError> {
+    if torrent.len() as u64 > MAX_TORRENT_FILE {
+        return Err(engine("torrent metadata is too large"));
+    }
+    let meta = librqbit::torrent_from_bytes(torrent).map_err(|_| TorrentError::NotATorrent)?;
+    // Check zero before librqbit's piece-count calculation.
+    if meta.info.data.piece_length == 0 {
+        return Err(TorrentError::NotATorrent);
+    }
+    let info = meta.info.data.validate().map_err(engine)?;
+    safe_names(info.iter_file_details())?;
+    let raw = info.info();
+    if raw.files.is_some() || raw.length != Some(saved.size) {
+        return Err(engine(
+            "torrent does not contain one file of the expected size",
+        ));
+    }
+    let file = info
+        .iter_file_details()
+        .next()
+        .ok_or(TorrentError::NotATorrent)?;
+    if file.attrs().padding || file.attrs().symlink {
+        return Err(engine("torrent file is padding or a symbolic link"));
+    }
+    let bytes: &[u8] = raw.pieces.as_ref();
+    if bytes.len() % 20 != 0 {
+        return Err(TorrentError::NotATorrent);
+    }
+    let hashes: Vec<[u8; 20]> = bytes
+        .chunks_exact(20)
+        .map(|piece| piece.try_into().expect("20-byte piece"))
+        .collect();
+    let part = mdm_engine::naming::part_path(&saved.dest);
+    let mut file = std::fs::File::open(part).map_err(engine)?;
+    if file.metadata().map_err(engine)?.len() != saved.size {
+        return Err(engine("partial file has the wrong size"));
+    }
+    mdm_engine::recovery::compare_v1_pieces(
+        &mut file,
+        saved.size,
+        &saved.segments,
+        u64::from(raw.piece_length),
+        &hashes,
+    )
+    .map_err(engine)
+}
+
 /// A magnet link for a .torrent: its hash, its name and its trackers (`trackers::listed`).
 pub fn magnet_link(torrent: &[u8]) -> Option<String> {
     let meta = librqbit::torrent_from_bytes(torrent).ok()?;
@@ -1681,6 +1734,44 @@ mod tests {
         }
         tokio::time::sleep(Duration::from_millis(300)).await;
         assert!(dht.seen().is_empty(), "nothing was sent");
+    }
+
+    #[test]
+    fn compare_saved_download_uses_torrent_pieces_without_modifying_partial_file() {
+        let pieces: [u8; 60] = [
+            129, 254, 139, 254, 135, 87, 108, 62, 203, 34, 66, 111, 142, 87, 132, 115, 130, 145,
+            122, 207, 42, 237, 138, 169, 248, 38, 194, 30, 240, 125, 94, 225, 91, 72, 238, 160,
+            110, 156, 138, 98, 96, 78, 189, 235, 141, 59, 229, 48, 60, 15, 200, 145, 119, 63, 105,
+            252, 58, 55, 32, 250,
+        ];
+        let mut torrent =
+            b"d4:infod6:lengthi12e4:name8:file.bin12:piece lengthi4e6:pieces60:".to_vec();
+        torrent.extend_from_slice(&pieces);
+        torrent.extend_from_slice(b"ee");
+        let dir = tempfile::tempdir().unwrap();
+        let dest = dir.path().join("saved.bin");
+        let part = mdm_engine::naming::part_path(&dest);
+        std::fs::write(&part, b"abcdefghijkl").unwrap();
+        let url = "https://example.org/file".parse().unwrap();
+        let mut saved = mdm_engine::state::ResumeState::new(
+            url,
+            url::Url::parse("https://example.org/file").unwrap(),
+            dest,
+            12,
+            Default::default(),
+        );
+        saved.segments = vec![mdm_engine::planner::SavedSegment {
+            start: 0,
+            cursor: 6,
+            end: 12,
+        }];
+        let evidence = compare_saved_download(&torrent, &saved).unwrap();
+        assert_eq!(evidence.matching, vec![0]);
+        assert!(evidence.mismatching.is_empty());
+        assert_eq!(evidence.unavailable, vec![1, 2]);
+        assert_eq!(std::fs::read(part).unwrap(), b"abcdefghijkl");
+        saved.size = 11;
+        assert!(compare_saved_download(&torrent, &saved).is_err());
     }
 
     #[test]
