@@ -1,0 +1,27 @@
+name: Auralis WinUI shell validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/auralis-winui-shell]
+    paths:
+      - 'winui-shell/**'
+      - '.github/workflows/auralis-winui-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Build WinUI development shell
+        shell: pwsh
+        run: |
+          dotnet --info
+          dotnet build winui-shell/Auralis.WinUI/Auralis.WinUI.csproj -c Debug -p:Platform=x64
+          if ($LASTEXITCODE) { throw 'WinUI shell build failed.' }
