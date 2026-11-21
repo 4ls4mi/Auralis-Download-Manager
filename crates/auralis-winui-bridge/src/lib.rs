@@ -10,10 +10,10 @@ fn request(query: &str) -> Result<serde_json::Value, String> {
     serde_json::from_str(&raw).map_err(|_| "Invalid downloader response".to_owned())
 }
 fn owned_backend() -> bool {
-    let Some(path) = mdm_ipc::data_dir().map(|p| p.join("ipc.json")) else { return false };
-    let Some(pid) = std::fs::read(path).ok().and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok()).and_then(|v| v.get("pid").and_then(|v| v.as_u64())) else { return false };
-    pid == u64::from(std::process::id()) && request("glass-backend").is_ok_and(|v| v["headless"] == true && v["glass"] == true)
+    mdm_ipc::app_pid() == Some(std::process::id())
+        && request("glass-backend").is_ok_and(|v| v["headless"] == true && v["glass"] == true)
 }
+
 fn start() -> Result<serde_json::Value, String> {
     let mut worker = engine().lock().map_err(|_| "Downloader state unavailable")?;
     if worker.as_ref().is_some_and(|w| !w.is_finished()) {

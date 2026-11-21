@@ -16,10 +16,10 @@ multi-window lifecycle, settings and theme migration, window controls, update
 and installer integration, accessibility, and end-to-end Windows tests before
 it can replace the current shell.
 
-To build on Windows x64 with .NET 8 and the Windows App SDK prerequisites:
+To build on Windows x64 with .NET 8, Visual Studio MSBuild and the Windows App SDK prerequisites:
 
 ```powershell
-dotnet build winui-shell/Auralis.WinUI/Auralis.WinUI.csproj -c Debug -p:Platform=x64
+MSBuild winui-shell/Auralis.WinUI/Auralis.WinUI.csproj /restore /p:Configuration=Debug /p:Platform=x64
 ```
 
 Native backdrop visibility must be checked on Windows; a successful build alone

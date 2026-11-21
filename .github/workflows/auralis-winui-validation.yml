@@ -19,6 +19,11 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+      - name: Test material mapping
+        shell: pwsh
+        run: |
+          dotnet run --project winui-shell/MaterialPolicy.Tests/MaterialPolicy.Tests.csproj -c Release
+          if ($LASTEXITCODE) { throw 'WinUI material mapping test failed.' }
       - name: Build WinUI development shell
         shell: pwsh
         run: |
