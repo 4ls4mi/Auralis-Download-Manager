@@ -22,7 +22,7 @@ fn same_path(left: &std::path::Path, right: &std::path::Path) -> bool {
 fn remember_isolated_data(path: &std::path::Path) -> Result<(), String> {
     let canonical=path.canonicalize().map_err(|e|e.to_string())?;
     ISOLATED_DATA_CANONICAL.set(canonical).map_err(|_|"Downloader data was already initialized.")?;
-    ISOLATED_DATA.set(path.to_path_buf()).map_err(|_|"Downloader data was already initialized.")
+    ISOLATED_DATA.set(path.to_path_buf()).map_err(|_|"Downloader data was already initialized.".to_owned())
 }
 fn prepare_test_output(data: &std::path::Path, expected: &std::path::Path) -> Result<std::path::PathBuf, String> {
     let current=data.canonicalize().map_err(|_|"The development profile is unavailable.")?;
