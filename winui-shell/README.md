@@ -8,8 +8,10 @@ controls their supported versions and may reduce effects according to system
 settings. The preview has no connection to saved settings or download data.
 
 The existing Auralis app, Rust downloader, browser integration and release
-installer are unchanged by this prototype. The replacement still needs the
-real interface, a secure bridge to the existing downloader, the tray and
+installer are unchanged by this prototype. A narrow Rust bridge for starting and stopping an embedded downloader and reading
+its list and visual state is under development in `crates/auralis-winui-bridge`.
+The preview does not load it or touch the user’s data. The replacement still needs the
+real interface, the remaining secure bridge operations, the tray and
 multi-window lifecycle, settings and theme migration, window controls, update
 and installer integration, accessibility, and end-to-end Windows tests before
 it can replace the current shell.

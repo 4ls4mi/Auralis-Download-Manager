@@ -633,6 +633,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "auralis-winui-bridge"
+version = "0.5.2"
+dependencies = [
+ "mdm-app",
+ "mdm-ipc",
+ "serde_json",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
