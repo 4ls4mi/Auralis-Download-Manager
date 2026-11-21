@@ -296,6 +296,91 @@ fn piece_file(dir: &Path, i: usize) -> PathBuf {
     dir.join(format!("{i:06}"))
 }
 
+fn piece_hash_file(file: &Path) -> PathBuf {
+    let mut name = file.as_os_str().to_owned();
+    name.push(".sha256");
+    PathBuf::from(name)
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum SavedPieceIntegrity { Verified, Legacy, Changed }
+
+/// Read a bounded sidecar. None denotes an older piece with no saved hash.
+fn expected_piece_hash(file: &Path) -> std::io::Result<Option<[u8; 32]>> {
+    let hash_path = piece_hash_file(file);
+    match std::fs::symlink_metadata(&hash_path) {
+        Ok(meta) if !meta.file_type().is_file() || meta.len() > 256 => return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid video piece hash")),
+        Ok(_) => {},
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error),
+    }
+    let raw = std::fs::read(hash_path)?;
+    let bytes = std::str::from_utf8(&raw).ok().and_then(|v| hex::decode(v.trim()).ok())
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid video piece hash"))?;
+    let hash: [u8; 32] = bytes.try_into().map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid video piece hash"))?;
+    Ok(Some(hash))
+}
+
+/// A local hash proves only that saved bytes have not changed since the hash
+/// was recorded. It is not a publisher checksum.
+fn saved_piece_integrity(file: &Path) -> std::io::Result<SavedPieceIntegrity> {
+    use std::io::Read;
+    use sha2::{Digest, Sha256};
+    let metadata = std::fs::symlink_metadata(file)?;
+    if !metadata.file_type().is_file() { return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "saved piece is not a regular file")); }
+    let expected = match expected_piece_hash(file) {
+        Ok(Some(hash)) => hash,
+        Ok(None) => return Ok(SavedPieceIntegrity::Legacy),
+        Err(error) if error.kind() == std::io::ErrorKind::InvalidData => return Ok(SavedPieceIntegrity::Changed),
+        Err(error) => return Err(error),
+    };
+    let mut input = std::fs::File::open(file)?;
+    let mut digest = Sha256::new();
+    let mut buffer = [0; 64 * 1024];
+    loop { let n = input.read(&mut buffer)?; if n == 0 { break; } digest.update(&buffer[..n]); }
+    Ok(if digest.finalize().as_slice() == expected { SavedPieceIntegrity::Verified } else { SavedPieceIntegrity::Changed })
+}
+
+/// Hash the bytes actually copied, rather than relying on an earlier check of
+/// a file that may have changed in the meantime.
+fn append_saved_piece(file: &Path, output: &mut impl std::io::Write) -> std::io::Result<u64> {
+    use std::io::Read;
+    use sha2::{Digest, Sha256};
+    let expected = expected_piece_hash(file)?;
+    let mut input = std::fs::File::open(file)?;
+    let mut digest = Sha256::new();
+    let mut buffer = [0; 64 * 1024];
+    let mut total = 0u64;
+    loop {
+        let n = input.read(&mut buffer)?; if n == 0 { break; }
+        output.write_all(&buffer[..n])?;
+        if expected.is_some() { digest.update(&buffer[..n]); }
+        total += n as u64;
+    }
+    if let Some(expected) = expected && digest.finalize().as_slice() != expected {
+        return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "a saved video piece changed while assembling"));
+    }
+    Ok(total)
+}
+
+fn quarantine_piece(file: &Path) -> std::io::Result<()> {
+    for index in 0..1000 {
+        let mut name = file.as_os_str().to_owned();
+        name.push(format!(".changed-{index}"));
+        let target = PathBuf::from(name);
+        match mdm_engine::safe_move::rename_no_replace(file, &target) {
+            Ok(()) => {
+                let hash = piece_hash_file(file);
+                if hash.exists() { let _ = mdm_engine::safe_move::rename_no_replace(&hash, &piece_hash_file(&target)); }
+                return Ok(());
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error),
+        }
+    }
+    Err(std::io::Error::new(std::io::ErrorKind::AlreadyExists, "cannot reserve a changed piece's backup name"))
+}
+
 impl Run {
     /// "the piece", or "the file" for a gallery's.
     fn one(&self) -> &'static str {
@@ -457,6 +542,17 @@ pub async fn download(
         Target::Join(p) => (Some(p), None),
         Target::Files(f) => (None, Some(f)),
     };
+    // A segmented stream must not reuse a partial file owned by another
+    // ordinary download, or run beside another writer of the same target.
+    let _reservation = if let Some(path) = path.as_ref() {
+        let Some(held) = mdm_engine::naming::reserve(path) else {
+            return Ended::Failed("The stream's destination is already in use".into());
+        };
+        if mdm_engine::state::state_path(path).exists() {
+            return Ended::Failed("The stream's destination has another saved download".into());
+        }
+        Some(held)
+    } else { None };
     let dir = match (&path, &files) {
         (Some(p), _) => folder(p),
         (None, Some(f)) => f
@@ -480,6 +576,34 @@ pub async fn download(
         Err(e) => return Ended::Failed(e.to_string()),
     };
     let n = pieces.len();
+    if path.is_some() {
+        let check_dir = dir.clone();
+        let checked = tokio::task::spawn_blocking(move || -> std::io::Result<(usize,usize)> {
+            let (mut changed, mut legacy) = (0, 0);
+            for index in 0..n {
+                let file = piece_file(&check_dir, index);
+                match std::fs::symlink_metadata(&file) {
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                    Err(error) => return Err(error),
+                    Ok(_) => {},
+                }
+                match saved_piece_integrity(&file)? {
+                    SavedPieceIntegrity::Verified => {},
+                    SavedPieceIntegrity::Legacy => legacy += 1,
+                    SavedPieceIntegrity::Changed => { quarantine_piece(&file)?; changed += 1; },
+                }
+            }
+            Ok((changed, legacy))
+        }).await;
+        match checked {
+            Ok(Ok((changed, legacy))) => {
+                if changed > 0 { shared.note(format!("{changed} changed video piece(s) were preserved separately and will be fetched again")); }
+                if legacy > 0 { shared.note(format!("{legacy} older video piece(s) have no saved hash and cannot be checked")); }
+            }
+            Ok(Err(error)) => return Ended::Failed(format!("Cannot check saved video pieces: {error}")),
+            Err(_) => return Ended::Failed("Cannot check saved video pieces".into()),
+        }
+    }
     // The pieces already whole (an earlier run's).
     {
         let mut each = shared.each.lock().unwrap();
@@ -598,40 +722,52 @@ pub async fn download(
 /// source pieces until successful sync and rename, so a stop or crash is resumable.
 fn join_progressively(dir: &Path, n: usize, path: &Path, rx: std::sync::mpsc::Receiver<JoinEvent>) -> std::io::Result<Option<u64>> {
     use std::io::Write;
-    let part = mdm_engine::naming::part_path(path);
-    let mut out = std::io::BufWriter::with_capacity(256 * 1024, std::fs::File::create(&part)?);
-    let mut size = 0;
-    let mut next = 0;
-    let mut finished = false;
-    loop {
-        while next < n {
-            let file = piece_file(dir, next);
-            if !file.try_exists()? { break; }
-            let mut input = std::fs::File::open(file)?;
-            size += std::io::copy(&mut input, &mut out)?;
-            next += 1;
-        }
-        out.flush()?;
-        if finished {
-            if next != n { return Err(std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "missing video piece")); }
-            break;
-        }
-        match rx.recv() {
-            Ok(JoinEvent::PieceReady) => {},
-            Ok(JoinEvent::Finish(true)) => finished = true,
-            Ok(JoinEvent::Finish(false)) | Err(_) => {
-                drop(out);
-                let _ = std::fs::remove_file(part);
-                return Ok(None);
-            }
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let mut temporary = None;
+    for _ in 0..100 {
+        let serial = NEXT.fetch_add(1, Ordering::Relaxed);
+        let candidate = dir.join(format!(".auralis-join-{}-{serial}", std::process::id()));
+        match std::fs::OpenOptions::new().write(true).create_new(true).open(&candidate) {
+            Ok(file) => { temporary = Some((candidate, file)); break; }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error),
         }
     }
-    out.into_inner()
-        .map_err(std::io::IntoInnerError::into_error)?
-        .sync_all()?;
-    std::fs::rename(&part, path)?;
-    let _ = std::fs::remove_dir_all(dir);
-    Ok(Some(size))
+    let (part, file) = temporary.ok_or_else(|| std::io::Error::new(std::io::ErrorKind::AlreadyExists, "cannot reserve a video assembly file"))?;
+    let result = (|| -> std::io::Result<Option<u64>> {
+        let mut out = std::io::BufWriter::with_capacity(256 * 1024, file);
+        let mut size = 0;
+        let mut next = 0;
+        let mut finished = false;
+        loop {
+            while next < n {
+                let file = piece_file(dir, next);
+                if !file.try_exists()? { break; }
+                if saved_piece_integrity(&file)? == SavedPieceIntegrity::Changed {
+                    return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "a saved video piece changed while assembling"));
+                }
+                size += append_saved_piece(&file, &mut out)?;
+                next += 1;
+            }
+            out.flush()?;
+            if finished {
+                if next != n { return Err(std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "missing video piece")); }
+                break;
+            }
+            match rx.recv() {
+                Ok(JoinEvent::PieceReady) => {},
+                Ok(JoinEvent::Finish(true)) => finished = true,
+                Ok(JoinEvent::Finish(false)) | Err(_) => return Ok(None),
+            }
+        }
+        out.into_inner().map_err(std::io::IntoInnerError::into_error)?.sync_all()?;
+        mdm_engine::safe_move::rename_no_replace(&part, path)?;
+        for index in 0..n { let file = piece_file(dir, index); let _ = std::fs::remove_file(piece_hash_file(&file)); let _ = std::fs::remove_file(file); }
+        let _ = std::fs::remove_dir(dir);
+        Ok(Some(size))
+    })();
+    if !matches!(result, Ok(Some(_))) { let _ = std::fs::remove_file(&part); }
+    result
 }
 
 /// One connection: the next piece not taken, until none is left.
@@ -853,6 +989,16 @@ fn dead_or_again(status: u16, what: &str, retry_after: Option<Duration>) -> Piec
     }
 }
 
+fn valid_piece_range(status: u16, headers: &HeaderMap, start: u64, len: u64) -> bool {
+    let Some(end) = len.checked_sub(1).and_then(|n| start.checked_add(n)) else { return false };
+    if status != 206 { return false; }
+    let Some(raw) = headers.get(reqwest::header::CONTENT_RANGE).and_then(|v| v.to_str().ok()) else { return false };
+    let Some((range, total)) = raw.strip_prefix("bytes ").and_then(|v| v.split_once('/')) else { return false };
+    let Some((first, last)) = range.split_once('-') else { return false };
+    first.parse::<u64>().ok() == Some(start) && last.parse::<u64>().ok() == Some(end)
+        && (total == "*" || total.parse::<u64>().ok().is_some_and(|size| size > end))
+}
+
 /// `Retry-After` in seconds (a date isn't read: the backoff stands then).
 fn retry_after(resp: &reqwest::Response) -> Option<Duration> {
     resp.headers()
@@ -872,7 +1018,8 @@ async fn fetch_piece(run: &Run, c: usize, i: usize, piece: &Piece) -> Result<(),
         .get(piece.url.clone())
         .headers(run.headers.clone());
     if let Some((start, len)) = piece.range {
-        let r = format!("bytes={start}-{}", start + len.max(1) - 1);
+        let end = len.checked_sub(1).and_then(|n| start.checked_add(n)).ok_or_else(|| PieceError::Dead("invalid piece byte range".into()))?;
+        let r = format!("bytes={start}-{end}");
         req = req.header(RANGE, HeaderValue::from_str(&r).expect("ascii"));
     }
     let sent = tokio::select! {
@@ -883,6 +1030,9 @@ async fn fetch_piece(run: &Run, c: usize, i: usize, piece: &Piece) -> Result<(),
     let status = resp.status().as_u16();
     if !(200..300).contains(&status) {
         return Err(dead_or_again(status, run.one(), retry_after(&resp)));
+    }
+    if let Some((start, length)) = piece.range && !valid_piece_range(status, resp.headers(), start, length) {
+        return Err(PieceError::Dead("the server did not return the requested piece range".into()));
     }
     let len = resp.content_length();
     let mut body = Vec::with_capacity(len.unwrap_or(0) as usize);
@@ -934,7 +1084,7 @@ async fn fetch_piece(run: &Run, c: usize, i: usize, piece: &Piece) -> Result<(),
             v.speed = (got as f64 / secs) as u64;
         });
     }
-    if len.is_some_and(|l| l != got) {
+    if len.is_some_and(|l| l != got) || piece.range.is_some_and(|(_, expected)| expected != got) {
         undo(got);
         return Err(PieceError::Again(format!("{} came short", run.one())));
     }
@@ -954,8 +1104,17 @@ async fn fetch_piece(run: &Run, c: usize, i: usize, piece: &Piece) -> Result<(),
         PathBuf::from(s)
     };
     let size = data.len() as u64;
+    let needs_hash = run.files.is_none();
     let written = tokio::task::spawn_blocking(move || {
-        std::fs::write(&part, &data).and_then(|_| std::fs::rename(&part, &file))
+        use sha2::{Digest, Sha256};
+        let hash = needs_hash.then(|| hex::encode(Sha256::digest(&data)));
+        std::fs::write(&part, &data)?;
+        mdm_engine::safe_move::rename_no_replace(&part, &file)?;
+        if let Some(hash) = hash && let Err(error) = craft_atomic::atomic_write(&piece_hash_file(&file), hash.as_bytes()) {
+            let _ = std::fs::remove_file(&file);
+            return Err(error);
+        }
+        Ok(())
     })
     .await;
     if !matches!(written, Ok(Ok(()))) {
@@ -973,6 +1132,56 @@ mod tests {
     use super::*;
 
     #[test]
+    fn ranged_piece_requires_the_exact_partial_response() {
+        let mut headers = HeaderMap::new();
+        headers.insert(reqwest::header::CONTENT_RANGE, HeaderValue::from_static("bytes 10-19/100"));
+        assert!(valid_piece_range(206, &headers, 10, 10));
+        assert!(!valid_piece_range(200, &headers, 10, 10));
+        assert!(!valid_piece_range(206, &headers, 11, 10));
+        assert!(!valid_piece_range(206, &headers, 10, 0));
+        headers.insert(reqwest::header::CONTENT_RANGE, HeaderValue::from_static("bytes 10-19/19"));
+        assert!(!valid_piece_range(206, &headers, 10, 10));
+        headers.remove(reqwest::header::CONTENT_RANGE);
+        assert!(!valid_piece_range(206, &headers, 10, 10));
+    }
+
+    #[test]
+    fn saved_piece_hash_detects_changes_and_preserves_the_changed_file() {
+        use sha2::{Digest, Sha256};
+        let dir = tempfile::tempdir().unwrap();
+        let piece = piece_file(dir.path(), 0);
+        std::fs::write(&piece, b"original").unwrap();
+        assert_eq!(saved_piece_integrity(&piece).unwrap(), SavedPieceIntegrity::Legacy);
+        std::fs::write(piece_hash_file(&piece), hex::encode(Sha256::digest(b"original"))).unwrap();
+        assert_eq!(saved_piece_integrity(&piece).unwrap(), SavedPieceIntegrity::Verified);
+        std::fs::write(&piece, b"corrupt!").unwrap();
+        assert_eq!(saved_piece_integrity(&piece).unwrap(), SavedPieceIntegrity::Changed);
+        let mut output = Vec::new();
+        assert!(append_saved_piece(&piece, &mut output).is_err());
+        quarantine_piece(&piece).unwrap();
+        assert!(!piece.exists());
+        assert_eq!(std::fs::read(dir.path().join("000000.changed-0")).unwrap(), b"corrupt!");
+        assert!(dir.path().join("000000.changed-0.sha256").exists());
+    }
+
+    #[test]
+    fn progressive_join_does_not_publish_changed_hashed_piece() {
+        use sha2::{Digest, Sha256};
+        let root = tempfile::tempdir().unwrap();
+        let dir = root.path().join("pieces");
+        std::fs::create_dir(&dir).unwrap();
+        let piece = piece_file(&dir, 0);
+        std::fs::write(&piece, b"changed").unwrap();
+        std::fs::write(piece_hash_file(&piece), hex::encode(Sha256::digest(b"original"))).unwrap();
+        let output = root.path().join("video.ts");
+        let (tx, rx) = std::sync::mpsc::channel();
+        tx.send(JoinEvent::Finish(true)).unwrap();
+        assert!(join_progressively(&dir, 1, &output, rx).is_err());
+        assert!(!output.exists());
+        assert_eq!(std::fs::read(&piece).unwrap(), b"changed");
+    }
+
+    #[test]
     fn progressively_joins_in_order_and_keeps_pieces_until_finish() {
         use std::sync::mpsc;
         let root = tempfile::tempdir().unwrap();
@@ -986,10 +1195,11 @@ mod tests {
         tx.send(JoinEvent::PieceReady).unwrap();
         std::fs::write(piece_file(&dir, 0), b"first").unwrap();
         tx.send(JoinEvent::PieceReady).unwrap();
-        let part = mdm_engine::naming::part_path(&output);
         let deadline = std::time::Instant::now() + Duration::from_secs(5);
         loop {
-            if std::fs::read(&part).is_ok_and(|v| v == b"firstsecond") { break; }
+            let assembled = std::fs::read_dir(&dir).unwrap().filter_map(Result::ok)
+                .any(|entry| entry.file_name().to_string_lossy().starts_with(".auralis-join-") && std::fs::read(entry.path()).is_ok_and(|v| v == b"firstsecond"));
+            if assembled { break; }
             assert!(std::time::Instant::now() < deadline, "completed prefix wasn't assembled while downloading");
             std::thread::sleep(Duration::from_millis(10));
         }
@@ -1001,6 +1211,40 @@ mod tests {
         assert_eq!(worker.join().unwrap().unwrap(), Some(16));
         assert_eq!(std::fs::read(output).unwrap(), b"firstsecondthird");
         assert!(!dir.exists());
+    }
+
+    #[test]
+    fn progressive_join_keeps_unrelated_files_in_piece_folder() {
+        let root = tempfile::tempdir().unwrap();
+        let dir = root.path().join("pieces");
+        std::fs::create_dir(&dir).unwrap();
+        let output = root.path().join("video.ts");
+        std::fs::write(piece_file(&dir, 0), b"video").unwrap();
+        std::fs::write(dir.join("keep.txt"), b"user data").unwrap();
+        let other_partial = mdm_engine::naming::part_path(&output);
+        std::fs::write(&other_partial, b"other download").unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        tx.send(JoinEvent::Finish(true)).unwrap();
+        assert_eq!(join_progressively(&dir, 1, &output, rx).unwrap(), Some(5));
+        assert_eq!(std::fs::read(&output).unwrap(), b"video");
+        assert_eq!(std::fs::read(dir.join("keep.txt")).unwrap(), b"user data");
+        assert_eq!(std::fs::read(other_partial).unwrap(), b"other download");
+        assert!(!piece_file(&dir, 0).exists());
+    }
+
+    #[test]
+    fn progressive_join_keeps_an_existing_destination() {
+        let root = tempfile::tempdir().unwrap();
+        let dir = root.path().join("pieces");
+        std::fs::create_dir(&dir).unwrap();
+        let output = root.path().join("video.ts");
+        std::fs::write(piece_file(&dir, 0), b"new video").unwrap();
+        std::fs::write(&output, b"existing").unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        tx.send(JoinEvent::Finish(true)).unwrap();
+        assert_eq!(join_progressively(&dir, 1, &output, rx).unwrap_err().kind(), std::io::ErrorKind::AlreadyExists);
+        assert_eq!(std::fs::read(&output).unwrap(), b"existing");
+        assert!(piece_file(&dir, 0).exists());
     }
 
     #[test]
@@ -1062,6 +1306,58 @@ mod tests {
             expected.extend(piece);
         }
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn resumes_with_verified_pieces_and_refetches_only_changed_piece() {
+        use sha2::{Digest, Sha256};
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let lab = rt.block_on(mdm_labserver::LabServer::start(Default::default())).unwrap();
+        let root = tempfile::tempdir().unwrap();
+        let output = root.path().join("stream.ts");
+        let dir = folder(&output);
+        std::fs::create_dir(&dir).unwrap();
+        let mut expected = Vec::new();
+        for index in 0..3 {
+            let mut data = vec![0; 128 * 1024];
+            mdm_labserver::content::fill(200 + index as u64, 0, &mut data);
+            if index < 2 {
+                let file = piece_file(&dir, index);
+                std::fs::write(&file, &data).unwrap();
+                std::fs::write(piece_hash_file(&file), hex::encode(Sha256::digest(&data))).unwrap();
+            }
+            expected.extend(data);
+        }
+        std::fs::write(piece_file(&dir, 1), vec![7; 128 * 1024]).unwrap();
+        let pieces: Vec<Piece> = (0..3).map(|i| Piece {
+            url: Url::parse(&lab.url(&format!("/gen/128K/recover{i}.ts?seed={}", 200 + i))).unwrap(),
+            range: None, key: None,
+        }).collect();
+        let ended = rt.block_on(download(pieces, Target::Join(output.clone()), HeaderMap::new(), Default::default(),
+            Arc::new(Limiter::new(None)), CancellationToken::new(), Arc::new(Shared::default()), Arc::new(|| Err("no relist".into()))));
+        assert!(matches!(ended, Ended::Done(_)), "{ended:?}");
+        assert_eq!(std::fs::read(output).unwrap(), expected);
+        assert_eq!(std::fs::read(dir.join("000001.changed-0")).unwrap(), vec![7; 128 * 1024]);
+        rt.block_on(async { tokio::time::timeout(Duration::from_secs(20), lab.settled()).await.unwrap() });
+        let paths: Vec<_> = lab.log().into_iter().map(|entry| entry.path).collect();
+        assert!(!paths.iter().any(|p| p.ends_with("recover0.ts")), "verified piece was fetched again: {paths:?}");
+        assert!(paths.iter().any(|p| p.ends_with("recover1.ts")));
+        assert!(paths.iter().any(|p| p.ends_with("recover2.ts")));
+    }
+
+    #[test]
+    fn ranged_video_piece_is_not_saved_when_server_ignores_range() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let config = mdm_labserver::Config { faults: mdm_labserver::Faults::parse("no_range=1").unwrap(), ..Default::default() };
+        let lab = rt.block_on(mdm_labserver::LabServer::start(config)).unwrap();
+        let root = tempfile::tempdir().unwrap();
+        let output = root.path().join("stream.ts");
+        let pieces = vec![Piece { url: Url::parse(&lab.url("/gen/128K/range.ts?seed=21")).unwrap(), range: Some((8, 64)), key: None }];
+        let ended = rt.block_on(download(pieces, Target::Join(output.clone()), HeaderMap::new(), Default::default(),
+            Arc::new(Limiter::new(None)), CancellationToken::new(), Arc::new(Shared::default()), Arc::new(|| Err("no relist".into()))));
+        assert!(matches!(ended, Ended::Failed(_)), "{ended:?}");
+        assert!(!output.exists());
+        assert!(!piece_file(&folder(&output), 0).exists());
     }
 
     fn base() -> Url {

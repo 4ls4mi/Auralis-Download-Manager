@@ -61,7 +61,24 @@ async function quitApp(preferred,label){
  let page=preferred,lastError='';
  for(let attempt=0;attempt<3&&app.exitCode===null;attempt++){
   if(!page||page.isClosed()){
-   const next=await until(()=>app.exitCode!==null?'exited':browser.contexts().flatMap(c=>c.pages()).find(p=>!p.isClosed()&&!p.url().includes('?')),`${label}: no main window for shutdown`,10000);
+   // WebView2 may replace its DevTools connection after a restart. A stale
+   // Playwright connection can have no pages even while the new process is alive.
+   // Reconnect to the same local endpoint, but still require a real main page.
+   let lastReconnect=0;
+   const next=await until(async()=>{
+    if(app.exitCode!==null)return 'exited';
+    let found=browser.contexts().flatMap(c=>c.pages()).find(p=>!p.isClosed()&&!p.url().includes('?'));
+    if(found)return found;
+    if(Date.now()-lastReconnect<1000)return null;
+    lastReconnect=Date.now();
+    try{
+     const fresh=await chromium.connectOverCDP(`http://127.0.0.1:${port}`,{timeout:1500});
+     found=fresh.contexts().flatMap(c=>c.pages()).find(p=>!p.isClosed()&&!p.url().includes('?'));
+     if(found){browser=fresh;return found}
+     await fresh.close().catch(()=>{});
+    }catch{/* Keep waiting for the replacement DevTools endpoint. */}
+    return null;
+   },`${label}: no main window for shutdown`,20000);
    if(next==='exited')break;page=next;
   }
   try{await page.evaluate(()=>window.__TAURI_INTERNALS__.invoke('quit_glass'));break}

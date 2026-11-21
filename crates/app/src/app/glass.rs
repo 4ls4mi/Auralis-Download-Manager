@@ -8,6 +8,18 @@ use super::*;
 use serde_json::{Value, json};
 
 pub(super) type CheckSlots = HashMap<u64, std::sync::Arc<std::sync::Mutex<Option<Result<bool,String>>>>>;
+pub(super) type RecoverySlots = HashMap<u64, std::sync::Arc<std::sync::Mutex<Option<Result<Value,String>>>>>;
+#[derive(Default)]
+pub(super) struct RepairSlot { pub result: Option<Result<Value,String>>, pub applied: bool }
+pub(super) type RepairSlots = HashMap<u64, std::sync::Arc<std::sync::Mutex<RepairSlot>>>;
+pub(super) type TorrentRecoverySlots = HashMap<u64, std::sync::Arc<std::sync::Mutex<Option<Result<mdm_torrent::candidate_search::SearchReport,String>>>>>;
+#[derive(Default)]
+pub(super) struct HandoffSlot {
+    pub prepared: Option<Result<mdm_torrent::PreparedRecovery,String>>,
+    pub result: Option<Result<Value,String>>,
+    pub cancelled: bool,
+}
+pub(super) type HandoffSlots = HashMap<u64, std::sync::Arc<std::sync::Mutex<HandoffSlot>>>;
 
 impl App {
     pub(super) fn glass_owned(&self) -> bool {
@@ -34,6 +46,53 @@ impl App {
         if let Some(answer)=self.glass_prompts(cmd){return Some(answer);}
         if let Some(answer)=self.glass_accounts(cmd){return Some(answer);}
         if let Some(answer)=self.glass_tools(cmd){return Some(answer);}
+        if cmd.action.as_deref()==Some("glass-recovery-torrent-file") {
+            let Some(id)=cmd.ids.first().copied() else {return Some(json!({"error":"Missing download"}).to_string());};
+            let Some(item)=self.items.iter().find(|i|i.id==id) else {return Some(json!({"error":"Download not found"}).to_string());};
+            if item.live.is_some() || item.status==Status::Complete || item.torrent.is_some() || item.video.is_some() || item.gallery.is_some() || item.remote.is_some() {
+                return Some(json!({"error":"Stop an incomplete ordinary download before checking a torrent"}).to_string());
+            }
+            if self.recovery_check_running(id) || self.repair_check_running(id) || self.glass_torrent_recovery.values().any(|slot|slot.lock().map_or(true,|result|result.is_none())) {
+                return Some(json!({"error":"Wait for the other saved-data operation to finish"}).to_string());
+            }
+            let Some(path)=cmd.dir.as_deref().map(PathBuf::from) else {return Some(json!({"error":"Choose a torrent file"}).to_string());};
+            let dest=item.dest.clone();
+            let state_path=mdm_engine::state::state_path(&dest);
+            if !state_path.exists() {return Some(json!({"error":"No saved download state is available for this file"}).to_string());}
+            let slot=std::sync::Arc::new(std::sync::Mutex::new(None));
+            self.glass_torrent_recovery.clear();
+            self.glass_torrent_handoffs.remove(&id);
+            self.glass_torrent_recovery.insert(id,slot.clone());
+            let wake=self.ui_ctx.clone();
+            std::thread::spawn(move || {
+                let answer=(|| -> Result<mdm_torrent::candidate_search::SearchReport,String> {
+                    let saved=mdm_engine::state::ResumeState::load(&state_path)?;
+                    if saved.dest!=dest {return Err("Saved state does not belong to this file".into());}
+                    let torrent=mdm_torrent::read_file(&path).map_err(|e|e.to_string())?;
+                    let files=mdm_torrent::candidate_search::matching_files(&torrent,&saved)?;
+                    let mut report=mdm_torrent::candidate_search::SearchReport{searched:1,..Default::default()};
+                    if !files.is_empty() {
+                        let info_hash=mdm_torrent::metadata_from_bytes(&torrent).map_err(|e|e.to_string())?.info_hash;
+                        report.matches.push(mdm_torrent::candidate_search::MatchedCandidate {
+                            candidate:mdm_torrent::candidate_search::Candidate{identifier:String::new(),title:"Chosen torrent file".into(),torrent_url:url::Url::parse("about:blank").expect("fixed URL")},info_hash,torrent,files
+                        });
+                    }
+                    Ok(report)
+                })();
+                if let Ok(mut result)=slot.lock(){*result=Some(answer);}
+                wake.request_repaint();
+            });
+            return Some(json!({"ok":true,"pending":true}).to_string());
+        }
+        if cmd.query.as_deref()==Some("glass-full-backup-preflight") {
+            if !self.moving.is_empty() || !self.renaming.is_empty() || !self.deferred_torrent_queue.is_empty() {
+                return Some(json!({"error":"Wait for file moves and renames to finish before backing up."}).to_string());
+            }
+            return Some(match crate::backup_snapshot::prepare(&self.items, &self.queues, &self.settings) {
+                Ok(snapshot)=>json!({"ok":true,"downloads":self.items.len(),"files":snapshot.contents.len()}),
+                Err(error)=>json!({"error":error})
+            }.to_string());
+        }
         if cmd.query.as_deref()==Some("glass-backup-settings") {
             let mut value=match serde_json::to_value(&self.settings) { Ok(v)=>v, Err(e)=>return Some(json!({"error":e.to_string()}).to_string()) };
             if let Some(map)=value.as_object_mut() { for key in ["proxy_pass","site_logins","debrid_accounts"] { map.remove(key); } }
@@ -251,6 +310,205 @@ impl App {
             "extract-status" => {
                 let item=self.items.iter().find(|i|i.id==id).unwrap();
                 return Some(json!({"running":self.extracts.extracting(id),"password_required":self.extracts.ask.as_ref().is_some_and(|a|a.glass_has(id)),"needs_7zip":self.extracts.needs_7zip.is_some(),"message":item.log.last().map(|(_,text)|text)}).to_string());
+            }
+            "check-saved-result" => {
+                let result=self.glass_recovery_checks.get(&id).and_then(|slot|slot.lock().ok().and_then(|v|v.clone()));
+                return Some(match result {Some(Ok(report))=>json!({"complete":true,"report":report}),Some(Err(error))=>json!({"complete":true,"failure":error}),None=>json!({"complete":false})}.to_string());
+            }
+            "check-saved" => {
+                let item=self.items.iter().find(|i|i.id==id).unwrap();
+                if item.live.is_some() || item.status==Status::Complete || item.torrent.is_some() || item.video.is_some() || item.gallery.is_some() {
+                    return fail("Stop an incomplete ordinary download before checking its saved data");
+                }
+                if self.recovery_check_running(id) || self.repair_check_running(id) { return fail("A saved-data operation is already running"); }
+                let dest=item.dest.clone();
+                let state_path=mdm_engine::state::state_path(&dest);
+                if !state_path.exists() { return fail("No saved download state is available for this file"); }
+                let slot=std::sync::Arc::new(std::sync::Mutex::new(None));
+                self.glass_recovery_checks.insert(id,slot.clone());
+                let wake=self.ui_ctx.clone();
+                std::thread::spawn(move || {
+                    let answer=(|| -> Result<Value,String> {
+                        let saved=mdm_engine::state::ResumeState::load(&state_path)?;
+                        if saved.dest != dest {return Err("Saved state does not belong to this file".into());}
+                        let report=saved.verify_saved_blocks().map_err(|e|e.to_string())?;
+                        Ok(json!({"checked_bytes":report.checked_bytes,"unhashed_bytes":report.unhashed_bytes,"damaged_ranges":report.damaged_ranges,"repair_prepared":saved.repair_strict && saved.repair_source.as_ref()==Some(&saved.final_url)}))
+                    })();
+                    if let Ok(mut result)=slot.lock() {*result=Some(answer);}
+                    wake.request_repaint();
+                });
+                return Some(json!({"ok":true,"pending":true}).to_string());
+            }
+            "repair-saved-result" => {
+                let result=self.glass_repair_checks.get(&id).and_then(|slot|slot.lock().ok().and_then(|s|s.applied.then(||s.result.clone()).flatten()));
+                return Some(match result {Some(Ok(report))=>json!({"complete":true,"report":report}),Some(Err(error))=>json!({"complete":true,"failure":error}),None=>json!({"complete":false})}.to_string());
+            }
+            "find-recovery-torrents-result" => {
+                let slot=self.glass_torrent_recovery.get(&id);
+                return Some(match slot.and_then(|slot|slot.lock().ok()) {
+                    Some(result) => match result.as_ref() {
+                        Some(Ok(report)) => json!({"complete":true,"searched":report.searched,"failed":report.failed,"matches":report.matches.iter().enumerate().flat_map(|(candidate_index,candidate)|candidate.files.iter().map(move |file|json!({"candidate":candidate_index,"file_index":file.file_index,"info_hash":candidate.info_hash,"title":candidate.candidate.title,"path":file.path.to_string_lossy(),"matching_pieces":file.evidence.matching.len(),"unavailable_pieces":file.evidence.unavailable.len()}))).collect::<Vec<_>>()}),
+                        Some(Err(error))=>json!({"complete":true,"failure":error}),
+                        None=>json!({"complete":false})
+                    },
+                    None=>json!({"complete":true,"failure":"No torrent search is available"})
+                }.to_string());
+            }
+            "start-recovery-torrent-result" => {
+                let result=self.glass_torrent_handoffs.get(&id).and_then(|slot|slot.lock().ok().and_then(|value|value.result.clone()));
+                return Some(match result { Some(Ok(report))=>json!({"complete":true,"report":report}),Some(Err(error))=>json!({"complete":true,"failure":error}),None=>json!({"complete":false}) }.to_string());
+            }
+            "cancel-recovery-torrent" => {
+                let Some(slot)=self.glass_torrent_handoffs.get(&id) else {return Some(json!({"ok":true,"already_started":false}).to_string())};
+                let Ok(mut value)=slot.lock() else {return fail("Could not cancel torrent recovery")};
+                let already_started=value.result.as_ref().is_some_and(Result::is_ok);
+                if value.result.is_none(){value.cancelled=true;}
+                drop(value);
+                if already_started {
+                    self.stop_by_hand(id);
+                    self.quota.held.retain(|held|*held!=id);
+                    self.limit_restarts.retain(|held|*held!=id);
+                    if let Some(item)=self.items.iter_mut().find(|item|item.id==id) {
+                        if item.live.is_none() && item.status==Status::Queued {item.status=Status::Stopped;}
+                    }
+                    self.dirty=true;
+                }
+                return Some(json!({"ok":true,"already_started":already_started}).to_string());
+            }
+            "start-recovery-torrent" => {
+                let selection:Value=match serde_json::from_str(value){Ok(v)=>v,Err(_)=>return fail("Choose a matching torrent file")};
+                if selection["accept_partial_match"]!=true {return fail("Confirm that matching saved pieces do not verify the rest of the file");}
+                let Some(candidate_index)=selection["candidate"].as_u64().and_then(|n|usize::try_from(n).ok()) else{return fail("Choose a matching torrent file")};
+                let Some(file_index)=selection["file_index"].as_u64().and_then(|n|usize::try_from(n).ok()) else{return fail("Choose a matching torrent file")};
+                let Some(info_hash)=selection["info_hash"].as_str().filter(|s|s.len()==40&&s.bytes().all(|b|b.is_ascii_hexdigit())) else{return fail("The selected torrent identity is invalid")};
+                if self.torrent_hashes().contains(info_hash) || self.torrent_host.get().is_some_and(|session|session.has(info_hash)) {return fail("This torrent is already active or listed")}
+                let item=self.items.iter().find(|i|i.id==id).unwrap();
+                if item.live.is_some() || item.status==Status::Complete || item.torrent.is_some() || item.direct_recovery.is_some() || item.video.is_some() || item.gallery.is_some() || item.remote.is_some() || item.context.private || self.moving.iter().any(|(moving,_,_)|*moving==id) || self.renaming.iter().any(|(renaming,_)|*renaming==id) {
+                    return fail("Stop a non-private ordinary download before starting torrent recovery");
+                }
+                if item.checksum.is_some() {return fail("Torrent recovery cannot yet verify this download's expected whole-file checksum");}
+                if self.recovery_check_running(id) || self.repair_check_running(id) {return fail("A saved-data operation is already running");}
+                let Some(torrent)=self.glass_torrent_recovery.get(&id).and_then(|slot|slot.lock().ok().and_then(|result|result.as_ref().and_then(|r|r.as_ref().ok()).and_then(|report|report.matches.get(candidate_index)).and_then(|candidate|(candidate.info_hash==info_hash&&candidate.files.iter().any(|file|file.file_index==file_index)).then(||candidate.torrent.clone())))) else {return fail("The matching torrent is no longer available; check it again");};
+                let expected_hash=info_hash.to_owned();
+                let dest=item.dest.clone();
+                let state_path=mdm_engine::state::state_path(&dest);
+                let Some(parent)=dest.parent().map(PathBuf::from) else{return fail("The download has no recovery folder")};
+                let host=self.torrent_host.clone();
+                let known=self.session_hashes();
+                let slot=std::sync::Arc::new(std::sync::Mutex::new(HandoffSlot::default()));
+                self.glass_torrent_handoffs.insert(id,slot.clone());
+                let wake=self.ui_ctx.clone();
+                self.rt.spawn(async move {
+                    // Initialize the session with the currently known list
+                    // before adding this hash. This clears stale persisted
+                    // torrents rather than resuming one at an unrelated folder.
+                    let answer=match host.session(known).await {
+                      Err(error)=>Err(error),
+                      Ok(session) if session.has(&expected_hash)=>Err("This torrent is already active or listed; the original partial was kept".into()),
+                      Ok(_) if slot.lock().map_or(true,|value|value.cancelled)=>Err("Torrent recovery was cancelled; the original partial was kept".into()),
+                      Ok(_)=>tokio::task::spawn_blocking(move || -> Result<mdm_torrent::PreparedRecovery,String> {
+                        let saved=mdm_engine::state::ResumeState::load(&state_path)?;
+                        if saved.dest!=dest {return Err("Saved state does not belong to this file".into());}
+                        let stamp=std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_err(|e|e.to_string())?.as_millis();
+                        let folder=(0..100).map(|n|parent.join(format!(".auralis-recovery-{id}-{stamp}-{n}"))).find(|path|!path.exists()).ok_or("Cannot choose a recovery folder")?;
+                        let prepared=mdm_torrent::prepare_saved_recovery(&torrent,&saved,file_index,&folder).map_err(|e|e.to_string())?;
+                        if prepared.metadata.info_hash!=expected_hash {return Err(format!("The selected torrent changed; the original partial was kept. Prepared files remain at {}.",folder.display()));}
+                        Ok(prepared)
+                      }).await.map_err(|_|"Torrent preparation task failed".to_owned()).and_then(|result|result),
+                    };
+                    if let Ok(mut value)=slot.lock(){value.prepared=Some(answer);}
+                    wake.request_repaint();
+                });
+                return Some(json!({"ok":true,"pending":true}).to_string());
+            }
+            "check-recovery-magnet" => {
+                if value.len()>8192 {return fail("Magnet link is too long");}
+                let Some(source)=mdm_torrent::Source::magnet(value) else {return fail("Enter a valid magnet link");};
+                let item=self.items.iter().find(|i|i.id==id).unwrap();
+                if item.live.is_some() || item.status==Status::Complete || item.torrent.is_some() || item.video.is_some() || item.gallery.is_some() || item.remote.is_some() {
+                    return fail("Stop an incomplete ordinary download before checking a magnet link");
+                }
+                if self.recovery_check_running(id) || self.repair_check_running(id) || self.glass_torrent_recovery.values().any(|slot|slot.lock().map_or(true,|result|result.is_none())) {
+                    return fail("Wait for the other saved-data operation to finish");
+                }
+                let dest=item.dest.clone();
+                let state_path=mdm_engine::state::state_path(&dest);
+                if !state_path.exists() {return fail("No saved download state is available for this file");}
+                let host=self.torrent_host.clone();
+                let known=self.session_hashes();
+                let slot=std::sync::Arc::new(std::sync::Mutex::new(None));
+                self.glass_torrent_recovery.clear();
+                self.glass_torrent_handoffs.remove(&id);
+                self.glass_torrent_recovery.insert(id,slot.clone());
+                let wake=self.ui_ctx.clone();
+                self.rt.spawn(async move {
+                    let answer=async {
+                        let saved=mdm_engine::state::ResumeState::load(&state_path)?;
+                        if saved.dest!=dest {return Err("Saved state does not belong to this file".to_owned());}
+                        let session=host.session(known).await?;
+                        let meta=session.metadata(&source,crate::torrentdlg::METADATA_WAIT,None).await.map_err(|e|e.to_string())?;
+                        tokio::task::spawn_blocking(move || -> Result<_,String> {
+                            let files=mdm_torrent::candidate_search::matching_files(&meta.torrent,&saved)?;
+                            let mut report=mdm_torrent::candidate_search::SearchReport{searched:1,..Default::default()};
+                            if !files.is_empty() {
+                                report.matches.push(mdm_torrent::candidate_search::MatchedCandidate {
+                                    candidate:mdm_torrent::candidate_search::Candidate{identifier:String::new(),title:meta.name,torrent_url:url::Url::parse("about:blank").expect("fixed URL")},info_hash:meta.info_hash,torrent:meta.torrent,files
+                                });
+                            }
+                            Ok(report)
+                        }).await.map_err(|_|"Torrent comparison task failed".to_owned())?
+                    }.await;
+                    if let Ok(mut result)=slot.lock(){*result=Some(answer);}
+                    wake.request_repaint();
+                });
+                return Some(json!({"ok":true,"pending":true}).to_string());
+            }
+            "find-recovery-torrents" => {
+                let item=self.items.iter().find(|i|i.id==id).unwrap();
+                if item.live.is_some() || item.status==Status::Complete || item.torrent.is_some() || item.video.is_some() || item.gallery.is_some() || item.remote.is_some() {
+                    return fail("Stop an incomplete ordinary download before searching for recovery torrents");
+                }
+                if self.recovery_check_running(id) || self.repair_check_running(id) { return fail("A saved-data operation is already running"); }
+                if self.glass_torrent_recovery.values().any(|slot|slot.lock().map_or(true,|result|result.is_none())) { return fail("Wait for the other torrent search to finish"); }
+                let dest=item.dest.clone();
+                let name=item.file_name.clone();
+                let state_path=mdm_engine::state::state_path(&dest);
+                if !state_path.exists() {return fail("No saved download state is available for this file");}
+                let archive=url::Url::parse("https://archive.org/").expect("fixed URL");
+                let opts=self.request_parts(&archive,None,&ipc::Command::default(),true).opts;
+                let slot=std::sync::Arc::new(std::sync::Mutex::new(None));
+                self.glass_torrent_recovery.clear();
+                self.glass_torrent_handoffs.remove(&id);
+                self.glass_torrent_recovery.insert(id,slot.clone());
+                let wake=self.ui_ctx.clone();
+                self.rt.spawn(async move {
+                    let answer=match mdm_engine::state::ResumeState::load(&state_path) {
+                        Ok(saved) if saved.dest==dest => mdm_torrent::candidate_search::find_archive_matches(&name,&saved,&opts).await,
+                        Ok(_) => Err("Saved state does not belong to this file".to_owned()),
+                        Err(error)=>Err(error),
+                    };
+                    if let Ok(mut result)=slot.lock(){*result=Some(answer);}
+                    wake.request_repaint();
+                });
+                return Some(json!({"ok":true,"pending":true}).to_string());
+            }
+            "repair-saved" => {
+                let item=self.items.iter().find(|i|i.id==id).unwrap();
+                if item.live.is_some() || item.status==Status::Complete || item.torrent.is_some() || item.video.is_some() || item.gallery.is_some() || item.remote.is_some() {
+                    return fail("Stop an incomplete ordinary download before repairing its saved data");
+                }
+                if self.recovery_check_running(id) || self.repair_check_running(id) { return fail("A saved-data operation is already running"); }
+                let path=mdm_engine::state::state_path(&item.dest);
+                let parts=self.request_parts(&item.url,item.login.as_ref(),&item.context,item.direct);
+                let slot=std::sync::Arc::new(std::sync::Mutex::new(RepairSlot::default()));
+                self.glass_repair_checks.insert(id,slot.clone());
+                let wake=self.ui_ctx.clone();
+                self.rt.spawn(async move {
+                    let answer=mdm_engine::repair::prepare_http_repair(&path,parts.headers,&parts.opts).await.map(|report|json!({"prepared":true,"damaged_ranges":report.damaged_ranges,"retained_bytes":report.retained_bytes,"unhashed_bytes":report.unhashed_bytes})).map_err(|e|e.to_string());
+                    if let Ok(mut value)=slot.lock(){value.result=Some(answer);}
+                    wake.request_repaint();
+                });
+                return Some(json!({"ok":true,"pending":true}).to_string());
             }
             "checksum-result" => {
                 let result=self.glass_checks.get(&id).and_then(|slot|slot.lock().ok().and_then(|v|v.clone()));

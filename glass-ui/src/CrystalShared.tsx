@@ -2,7 +2,8 @@ import {isTiledWindow} from "./windowTiling";
 import {LiquidProgress, LiquidChunk, isLiquidMaterial} from "./LiquidIndicators";
 import {ConnectionTubes} from "./ConnectionTubes";
 import {receivingTubeSlots} from "./tubeNetwork";
-import {loadMaterials,materialId,extraMaterials} from "./customMaterials";
+import {loadMaterials,materialId,extraMaterials,materialPresets,materialBackdrop} from "./customMaterials";
+import {loadThemes,paletteForTheme} from "./themeFiles";
 import FrostedRibbon from "./FrostedRibbon";
 import FrostedLayers from "./FrostedLayers";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
@@ -29,7 +30,7 @@ export type DownloadVisual = {
   id: number; chunk_count: number; active_connections:number; segments: Segment[]; connections: Connection[]; resumable: boolean | null;
   server: {hostname:string|null;ip:string|null;country_code:string|null;place?:ServerPlace|null;rtt_ms:number|null;cdn:string|null;proxied:boolean};
   last_try:string|null;added:string|null;referer:string|null;page:string|null;
-  description:string;category:string;is_torrent:boolean
+  description:string;category:string;is_torrent:boolean;direct_recovery?:boolean;original_partial?:string|null;recovery_search_available?:boolean;recovery_handoff_available?:boolean;is_video?:boolean;is_gallery?:boolean;is_remote?:boolean;recovery_damaged?:boolean
 };
 export type VisualDashboard = {downloads:DownloadVisual[]};
 
@@ -37,7 +38,7 @@ export type Dashboard = {
   downloads: Download[]; speed: number; queues: Queue[];
   categories: { name: string; key: string }[]; free?: number | null
 };
-export type Theme = { id: string; name: string; accent: string; secondary: string; rgb: string; neutralTint?: [number,number,number] };
+export type Theme = { id: string; name: string; accent: string; secondary: string; rgb: string; neutralTint?: [number,number,number]; light?: boolean };
 export const themes: Theme[] = [
   { id: "plexo", name: "Crystal Teal", accent: "#0fe6d5", secondary: "#4b9cfc", rgb: "15,230,213" },
   { id: "ocean", name: "Glacier Blue", accent: "#4bb8fa", secondary: "#7c83f8", rgb: "75,184,250" },
@@ -126,7 +127,7 @@ export function CrystalProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(key + keys[name], String(value));
     setAppearance(prev => ({ ...prev, [name]: value }));
   };
-  const theme = themes.find(t => t.id === appearance.theme) ?? themes[0];
+  const theme = themes.find(t => t.id === appearance.theme) ?? loadThemes().map(t=>paletteForTheme(t.palette)).find(t=>t.id===appearance.theme) ?? themes[0];
   return <Context.Provider value={{ appearance, set, theme }}>{children}</Context.Provider>;
 }
 // Progress colors deliberately do NOT follow the selected theme.
@@ -190,7 +191,7 @@ export function GradientBar({percent,showLabel=false,size,active=true}:{percent:
         width:`${fill}%`,
         backgroundImage:`linear-gradient(90deg,${colors.join(",")})`,
         backgroundSize:`${10000/fill}% 100%`,
-        boxShadow:`inset 0 1px 2px #ffffffb0, 0 0 10px ${colors[1]}, 0 0 20px ${colors[0]}88`
+        boxShadow:"none"
       }}/>}
     </div>{showLabel&&<strong>{fill.toFixed(0)}%</strong>}
   </div>;
@@ -212,7 +213,7 @@ export function ConnectionMap({segments,connections,downloading,paused=false,com
     <div ref={gridRef} className={`cg-chunk-map cg-connection-track-${appearance.connectionTrackFinish} cg-connection-tint-${appearance.connectionTrackColor} ${backdropPalette(appearance.connectionTrackColor)?"cg-palette-track":""} `+(compact?"compact":"cg-fixed-connections")+(tubes&&!compact?" cg-piped-connections":"")} style={{...backdropStyle(appearance.connectionTrackColor),...(compact?{gridTemplateColumns:`repeat(${Math.max(1,slots.length)},minmax(0,1fr))`}:{})}} role="group" aria-label={connections?`${visible.length} engine connections${visible.length>32?', first 32 shown':''}`:"Connections unavailable"}>
      {tubes&&!compact&&<ConnectionTubes container={gridRef} slots={receivingTubeSlots(connections,downloading&&!paused)} colors={indicatorColors(appearance.indicator)}/>}
      {slots.map((c,index)=>{if(!c)return <span key={`empty-${index}`} className="cg-connection-empty" aria-hidden="true"/>;
-      const fill=c.percent;const active=downloading&&c.state==="Receiving";const lost=connectionLost(c,downloading);const label=`Connection ${c.id+1}: ${paused?"Paused":lost?"Connection lost or retrying":downloading?c.state:"Not active"}; downloaded ${units(c.downloaded)}; ${rate(c.speed)}; ${fill===null?"assigned range unavailable":`${units(c.received)} of ${units(c.assigned)} (${fill.toFixed(1)}%)`}`;
+      const fill=c.percent;const active=downloading&&c.state==="Receiving";const lost=connectionLost(c,downloading);const label=`Connection ${c.id+1}: ${paused?"Paused":lost?"Connection lost or retrying":downloading?c.state:"Not active"}; downloaded ${units(c.downloaded)}; ${rate(c.speed)}; ${fill===null?"assigned range unavailable":`${units(c.received)} of ${units(c.assigned)} (${fill.toFixed(1)}%)`}. Assigned sections can change as work is redistributed.`;
       return <span key={c.id} data-worker={c.id} className={paused?"paused":lost?"lost":active?"active":""} title={label} aria-label={label} tabIndex={0}>{!paused&&fill!==null&&(fill>0||(active&&!lost&&isLiquidMaterial(appearance.connectionMaterial)))&&(isLiquidMaterial(appearance.connectionMaterial)?<LiquidChunk percent={fill} colors={colors} material={appearance.connectionMaterial} animate={active&&!lost} index={c.id}/>:<i style={{height:`${fill}%`,backgroundImage:`linear-gradient(0deg,${colors.join(",")})`,boxShadow:`0 0 8px ${colors[1]}, inset 0 1px 2px #ffffff99`}}/>)}</span>})}
     </div>
   </div>;
@@ -333,21 +334,29 @@ export function CrystalWindow({ children, target = "main" }: {
   },[appearance.material,maximized,tiled]);
   const main = target === "main", mode = main ? appearance.mainMode : appearance.detailMode;
   const customMaterial=extraMaterials[appearance.material]??loadMaterials().find(m=>materialId(m)===appearance.material);
+  const selectedMaterial=customMaterial??materialPresets[appearance.material]??materialPresets["frosted-water-351"];
+  const surfaceStyle=materialBackdrop(appearance.material,selectedMaterial);
+  const surfaceOpacity=Math.min(1,Math.max(.2,1-selectedMaterial.translucency/125));
   const themeTintRgb=useMemo(()=>(theme.neutralTint??theme.rgb.split(",").map(Number)) as [number,number,number],[theme]);
   const path = main ? appearance.wallMain : (appearance.wallDetail || appearance.wallMain);
   const src = path ? convertFileSrc(path) : "/alpine.svg";
   const video = /\.(mp4|webm|mov|m4v)$/i.test(path);
   useEffect(() => {
     const w = getCurrentWindow();let active=true;
-    if (mode === "desktop" && (appearance.acrylic || ["soft","frosted","tinted"].includes(appearance.surfaceStyle)))
-      void w.setEffects({ effects: [Effect.Acrylic], state: EffectState.Active }).catch(()=>{if(active)setWindowError("Windows backdrop blur is unavailable; transparent glass is being used.");return w.clearEffects().catch(()=>undefined)});
+    // Explicit backdrop choices override the legacy material-default switch.
+    const effect = mode !== "desktop" ? null : surfaceStyle === "clear" ? null
+      : surfaceStyle === "soft" ? Effect.Blur
+      : ["frosted", "tinted"].includes(surfaceStyle) ? Effect.Acrylic
+      : null;
+    if (effect)
+      void w.setEffects({ effects: [effect], state: EffectState.Active }).catch(()=>{if(active)setWindowError("Windows backdrop blur is unavailable; transparent glass is being used.");return w.clearEffects().catch(()=>undefined)});
     else void w.clearEffects().catch(() => undefined);
     return()=>{active=false};
-  }, [mode, appearance.acrylic, appearance.material, appearance.surfaceStyle]);
+  }, [mode, appearance.material, surfaceStyle]);
   // White palettes need light surfaces and dark foregrounds in every material.
-  const effectiveLight = theme.id === "white-frost" || theme.id === "white-pearl";
-  const lightAccent = theme.id === "white-pearl" ? "#655643" : "#405b70";
-  const lightAccentRgb = theme.id === "white-pearl" ? "101,86,67" : "64,91,112";
+  const effectiveLight = theme.light === true || theme.id === "white-frost" || theme.id === "white-pearl";
+  const lightAccentRgb = theme.light ? theme.rgb.split(",").map(v=>Math.round(Number(v)*.36)).join(",") : theme.id === "white-pearl" ? "101,86,67" : "64,91,112";
+  const lightAccent = `rgb(${lightAccentRgb})`;
   const style = {
     "--accent": effectiveLight ? lightAccent : theme.accent,
     "--accent-secondary": theme.secondary,
@@ -363,8 +372,9 @@ export function CrystalWindow({ children, target = "main" }: {
     "--surface": effectiveLight ? `rgba(${themeTintRgb.join(",")},.75)` : `rgba(${themeTintRgb.join(",")},.13)`,
     "--field": effectiveLight ? `rgba(${themeTintRgb.join(",")},.92)` : `rgba(${themeTintRgb.map(n=>Math.round(n*.12)).join(",")},.82)`,
     "--popover": effectiveLight ? `rgb(${themeTintRgb.join(",")})` : `rgb(${themeTintRgb.map(n=>Math.round(n*(theme.neutralTint ? .65 : .18))).join(",")})`,
-    "--panel-opacity": Math.min(1, Math.max(.45, appearance.opacity / 100)),
-    "--material-opacity": customMaterial ? Math.max(.12,(1-customMaterial.translucency/125)*appearance.opacity/100) : undefined,
+    "--panel-opacity": surfaceOpacity,
+    "--backdrop-opacity": surfaceOpacity,
+    "--material-opacity": customMaterial ? Math.max(.12,(1-customMaterial.translucency/125)) : undefined,
     "--material-shading": customMaterial ? customMaterial.shading/100 : undefined,
     "--crystal-blur": appearance.blur + "px",
     "--ui-scale": 1,
@@ -375,14 +385,14 @@ export function CrystalWindow({ children, target = "main" }: {
     "--min-window-button": (30/Math.min(1,Math.max(.4,fit)))+"px",
     "--font-size": Math.max(Math.min(20,Math.max(12,appearance.fontSize)),12/Math.max(.4,fit))+"px"
   } as CSSProperties;
-  return <div className={`cg-window cg-mode-${mode} cg-material-${appearance.material} cg-surface-${appearance.surfaceStyle} cg-theme-${theme.id} ${customMaterial?`cg-custom-material cg-finish-${customMaterial.finish} cg-controls-${customMaterial.controls} cg-layout-${customMaterial.layout??'standard'} cg-text-${customMaterial.text??'crisp'}`:""} cg-progress-shape-${appearance.progressShape} cg-connection-shape-${appearance.connectionShape} ${maximized?"cg-maximized":""} ${tiled?"cg-tiled":""} ${effectiveLight?"cg-light":"cg-dark"} ${appearance.highContrast?"cg-high-contrast":""}`} style={style}>
+  return <div className={`cg-window cg-mode-${mode} cg-material-${appearance.material} cg-surface-${surfaceStyle} cg-theme-${theme.id} ${theme.light?"cg-custom-light":""} ${customMaterial?`cg-custom-material cg-finish-${customMaterial.finish} cg-controls-${customMaterial.controls} cg-layout-${customMaterial.layout??'standard'} cg-text-${customMaterial.text??'crisp'}`:""} cg-progress-shape-${appearance.progressShape} cg-connection-shape-${appearance.connectionShape} ${maximized?"cg-maximized":""} ${tiled?"cg-tiled":""} ${effectiveLight?"cg-light":"cg-dark"} ${appearance.highContrast?"cg-high-contrast":""}`} style={style}>
     {mode === "wallpaper" && <div className="cg-wallpaper">
       {video ? <video key={src} autoPlay loop muted playsInline src={src} /> :
         <div style={{ backgroundImage: `url("${src}")` }} />}
       <span style={{ background: `rgba(3,9,19,${appearance.dim / 100})` }} />
     </div>}
     {mode === "solid" && <div className="cg-solid" />}
-    <div className="cg-content" ref={frame}>{appearance.material === "frosted-water-351" && !maximized && !tiled && <FrostedLayers maskBackdrop={mode!=="desktop"} tintHue={appearance.tintHue} tintRgb={themeTintRgb} tintStrength={appearance.tintStrength} opacity={appearance.opacity * ({material:1,clear:.45,soft:.58,frosted:.72,tinted:.82}[appearance.surfaceStyle]??1)}/>}<div className="cg-fit-content">{children}</div></div>
+    <div className="cg-content" ref={frame}>{appearance.material === "frosted-water-351" && !maximized && !tiled && <FrostedLayers maskBackdrop={mode!=="desktop"} tintHue={appearance.tintHue} tintRgb={themeTintRgb} tintStrength={appearance.tintStrength} opacity={surfaceOpacity * 100}/>}<div className="cg-fit-content">{children}</div></div>
     {windowError&&<aside className="cg-window-notice cg-error" role="alert"><span>{windowError}</span><button title="Dismiss" onClick={()=>setWindowError("")}><X size={15}/></button></aside>}
     <ResizeGrips />
   </div>;

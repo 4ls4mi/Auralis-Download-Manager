@@ -28,7 +28,7 @@ jobs:
     permissions:
       contents: read
     # Only explicitly named, owner-maintained branches may run on a personal computer.
-    if: github.ref == 'refs/heads/feature/auralis-frosted-candidate' || (github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/feature/auralis-embedded-engine' || github.ref == 'refs/heads/feature/auralis-preferences-ui'))
+    if: github.ref == 'refs/heads/feature/auralis-frosted-candidate' || (github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/feature/auralis-embedded-engine' || github.ref == 'refs/heads/feature/auralis-preferences-ui' || github.ref == 'refs/heads/feature/auralis-recovery-validation'))
     runs-on: [self-hosted, Windows, X64, auralis]
     timeout-minutes: 180
     steps:
@@ -164,6 +164,14 @@ jobs:
         run: |
           cargo test -p mdm-app --target x86_64-pc-windows-msvc --test embedded_service
           if ($LASTEXITCODE) { throw 'Embedded downloader smoke test failed.' }
+
+      - name: Test backup snapshot and torrent comparison
+        shell: pwsh
+        run: |
+          cargo test -p mdm-app --target x86_64-pc-windows-msvc --lib backup_snapshot::
+          if ($LASTEXITCODE) { throw 'Backup snapshot tests failed.' }
+          cargo test -p mdm-torrent --target x86_64-pc-windows-msvc --lib compare_saved_download
+          if ($LASTEXITCODE) { throw 'Torrent comparison test failed.' }
 
       - name: Install and test interface
         working-directory: glass-ui

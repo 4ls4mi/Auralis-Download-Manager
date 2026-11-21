@@ -63,9 +63,8 @@ async fn a_file_comes_over_several_connections() {
 }
 
 #[tokio::test]
-async fn ftp_connections_keep_their_fixed_ranges() {
-    // On a healthy server each of the four connections downloads one fixed range,
-    // even if the other connections finish first.
+async fn ftp_connections_redistribute_slow_ranges() {
+    // Faster connections can take more work from slower ranges.
     let s = server(FtpConfig {
         rate: Some(4 << 20),
         slow_every: Some(2),
@@ -78,8 +77,7 @@ async fn ftp_connections_keep_their_fixed_ranges() {
         ..opts(&s)
     };
     fetch(&s, "/gen/8M/s2/z.bin", 2, o, HeaderMap::new()).await;
-    assert_eq!(s.transfers(), 4, "one transfer per fixed range");
-    assert_eq!(s.sessions(), 4, "one FTP session per connection");
+    assert!(s.transfers() > 4, "remaining work was reassigned: {} transfers", s.transfers());
 }
 
 #[tokio::test]

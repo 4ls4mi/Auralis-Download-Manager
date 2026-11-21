@@ -6,6 +6,7 @@
 pub mod gdrive;
 mod gofile;
 mod mediafire;
+mod sourceforge;
 
 use url::Url;
 
@@ -96,7 +97,7 @@ pub(crate) fn read_page(at: &Url, page: &[u8]) -> PageSays {
 /// expire (MediaFire's, a few hours after its page gave one, #952): the download's origin
 /// (`download::Ctx::refresh_target`). None: `url` itself is all there is.
 pub(crate) fn origin(url: &Url) -> Option<Url> {
-    mediafire::origin(url)
+    mediafire::origin(url).or_else(|| sourceforge::origin(url))
 }
 
 /// An answer that is a site's refusal by where it ended (`at`, asked as `asked`) and its status.

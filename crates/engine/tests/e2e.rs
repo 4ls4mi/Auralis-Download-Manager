@@ -1000,6 +1000,37 @@ async fn pause_and_resume_continues_where_it_stopped() {
     );
 }
 
+/// The backed-up committed ranges can be restored under a different path and
+/// completed from the server without downloading those ranges a second time.
+#[tokio::test]
+async fn restored_partial_backup_resumes_without_replacing_saved_bytes() {
+    use std::io::{Seek, SeekFrom};
+    let server = server("rate=1M").await;
+    let (_original_dir, state_path) = paused(&server, "/gen/8M/backup.bin?seed=73").await;
+    let original = mdm_engine::state::ResumeState::load(&state_path).unwrap();
+    assert!(original.downloaded() > 0 && original.downloaded() < original.size);
+    let restored_dir = tempfile::tempdir().unwrap();
+    let backup_path = restored_dir.path().join("backup.auralis");
+    let mut backup = std::fs::OpenOptions::new().read(true).write(true).create_new(true).open(&backup_path).unwrap();
+    mdm_engine::backup_partial::write_partial(&mut backup, &original).unwrap();
+    backup.seek(SeekFrom::Start(0)).unwrap();
+    let target = restored_dir.path().join("restored.bin");
+    let report = mdm_engine::backup_partial::restore_partial(&mut backup, &restored_dir.path().join("stage"), &target).unwrap();
+    assert_eq!(report.unhashed_bytes, 0);
+    assert!(report.damaged_ranges.is_empty());
+    let restored_path = mdm_engine::state::state_path(&target);
+    let restored = mdm_engine::state::ResumeState::load(&restored_path).unwrap();
+    assert_eq!(restored.downloaded(), original.downloaded());
+    server.set_faults(Faults::default());server.clear_log();
+    let completed=Download::resume(restored_path.clone(),Default::default(),fast_opts()).unwrap().wait().await.unwrap();
+    let mut expected=vec![0;8<<20];content::fill(73,0,&mut expected);
+    assert_eq!(std::fs::read(completed.path).unwrap(),expected);
+    tokio::time::timeout(SETTLE,server.settled()).await.unwrap();
+    for entry in server.log() {
+        assert!(on_disk(entry.range.as_deref(),&restored)<=fast_opts().verify_overlap,"restored saved data was requested again: {:?}",entry.range);
+    }
+}
+
 #[tokio::test]
 async fn resume_detects_changed_file() {
     let s = server("rate=1M").await;
@@ -2409,4 +2440,152 @@ async fn a_scripts_video_is_named_by_what_it_is() {
     content::fill_with_head(5, 0, &mut want, mp4);
     assert!(data == want, "the kept answer's first bytes are the file's");
     assert_eq!(out.path.file_name().unwrap(), "Lecture one.mp4");
+}
+
+#[tokio::test]
+async fn restored_bundle_resumes_partial_and_preserves_completed_file() {
+    use std::io::{Seek, SeekFrom};
+    use mdm_engine::backup_bundle::{self, BackupItem};
+    let server = server("rate=1M").await;
+    let (_original_dir, state_path) = paused(&server, "/gen/8M/bundle.bin?seed=74").await;
+    let original = mdm_engine::state::ResumeState::load(&state_path).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let complete = dir.path().join("completed.txt");
+    std::fs::write(&complete, b"previously completed").unwrap();
+    let mut archive = std::fs::OpenOptions::new().read(true).write(true).create_new(true).open(dir.path().join("bundle.auralis")).unwrap();
+    backup_bundle::write_bundle(&mut archive, serde_json::json!({"list":["done", "partial"]}), &[BackupItem::Completed(&complete), BackupItem::Partial(&original)]).unwrap();
+    archive.seek(SeekFrom::Start(0)).unwrap();
+    let restored = backup_bundle::restore_bundle(&mut archive, &dir.path().join("restored")).unwrap();
+    assert_eq!(std::fs::read(&restored.items[0].path).unwrap(), b"previously completed");
+    assert_eq!(restored.items[1].unhashed_bytes, 0);
+    let state_path = mdm_engine::state::state_path(&restored.items[1].path);
+    let state = mdm_engine::state::ResumeState::load(&state_path).unwrap();
+    assert_eq!(state.downloaded(), original.downloaded());
+    server.set_faults(Faults::default());
+    server.clear_log();
+    let completed = Download::resume(state_path, Default::default(), fast_opts()).unwrap().wait().await.unwrap();
+    let mut expected = vec![0; 8 << 20];
+    content::fill(74, 0, &mut expected);
+    assert_eq!(std::fs::read(completed.path).unwrap(), expected);
+    tokio::time::timeout(SETTLE, server.settled()).await.unwrap();
+    for entry in server.log() {
+        assert!(on_disk(entry.range.as_deref(), &state) <= fast_opts().verify_overlap);
+    }
+}
+
+/// Check the validator and range support before repairing only the damaged data.
+#[tokio::test]
+async fn damaged_checkpoint_range_can_be_refetched_without_discarding_good_ranges() {
+    use std::io::{Read, Seek, SeekFrom, Write};
+    let server = server("rate=1M").await;
+    let (_dir, state_path) = paused(&server, "/gen/8M/repair.bin?seed=81").await;
+    let saved = mdm_engine::state::ResumeState::load(&state_path).unwrap();
+    let block = saved.block_hashes.first().expect("checkpoint has saved data").clone();
+    let part_path = mdm_engine::naming::part_path(&saved.dest);
+    let mut part = std::fs::OpenOptions::new().read(true).write(true).open(&part_path).unwrap();
+    part.seek(SeekFrom::Start(block.start)).unwrap();
+    let mut byte = [0u8; 1];
+    part.read_exact(&mut byte).unwrap();
+    part.seek(SeekFrom::Start(block.start)).unwrap();
+    part.write_all(&[byte[0] ^ 0xff]).unwrap();
+    part.sync_all().unwrap();
+    drop(part);
+    let original_state = std::fs::read(&state_path).unwrap();
+    let (plan, report) = saved.proposed_repair().unwrap();
+    assert_eq!(report.damaged_ranges, vec![(block.start, block.end)]);
+    assert_eq!(std::fs::read(&state_path).unwrap(), original_state, "planning must not change the checkpoint");
+    assert_eq!(plan.downloaded(), saved.downloaded() - (block.end - block.start));
+    let before_repair = std::fs::read(&part_path).unwrap();
+    server.set_faults(Faults::parse("no_range=1").unwrap());
+    assert!(mdm_engine::repair::prepare_http_repair(&state_path, Default::default(), &fast_opts()).await.is_err());
+    assert_eq!(std::fs::read(&state_path).unwrap(), original_state);
+    assert_eq!(std::fs::read(&part_path).unwrap(), before_repair);
+    server.set_faults(Faults::default());
+    let prepared = mdm_engine::repair::prepare_http_repair(&state_path, Default::default(), &fast_opts()).await.unwrap();
+    assert_eq!(prepared.damaged_ranges, report.damaged_ranges);
+    assert_eq!(std::fs::read(&prepared.state_backup).unwrap(), original_state);
+    let repaired = mdm_engine::state::ResumeState::load(&state_path).unwrap();
+    assert!(repaired.repair_strict);
+    assert_eq!(repaired.repair_source.as_ref(), Some(&repaired.final_url));
+    assert_eq!(repaired.segments, plan.segments);
+    let mut changed_source = repaired.clone();
+    changed_source.final_url = server.url("/gen/8M/different.bin?seed=99").parse().unwrap();
+    changed_source.write(&state_path).unwrap();
+    assert!(Download::resume(state_path.clone(), Default::default(), fast_opts()).unwrap().wait().await.is_err());
+    assert_eq!(std::fs::read(&part_path).unwrap(), before_repair);
+    repaired.write(&state_path).unwrap();
+    server.set_faults(Faults::parse("etag=per-request").unwrap());
+    assert!(Download::resume(state_path.clone(), Default::default(), fast_opts()).unwrap().wait().await.is_err());
+    assert_eq!(std::fs::read(&part_path).unwrap(), before_repair, "changed source must not overwrite saved data");
+    server.set_faults(Faults::default());
+    server.clear_log();
+    let out = Download::resume(state_path, Default::default(), fast_opts()).unwrap().wait().await.unwrap();
+    let mut expected = vec![0; 8 << 20];
+    content::fill(81, 0, &mut expected);
+    assert_eq!(std::fs::read(out.path).unwrap(), expected);
+    tokio::time::timeout(SETTLE, server.settled()).await.unwrap();
+    for entry in server.log() {
+        assert!(on_disk(entry.range.as_deref(), &plan) <= fast_opts().verify_overlap, "an intact range was requested again: {:?}", entry.range);
+    }
+}
+
+#[tokio::test]
+async fn redirected_repair_uses_saved_target_without_leaking_origin_cookie() {
+    use std::io::{Read, Seek, SeekFrom, Write};
+    let server = server("rate=1M").await;
+    let target = format!("http://localhost:{}/gen/8M/redirect-repair.bin?seed=82", server.addr().port());
+    let (_dir, path) = paused(&server, &redirect_path(&target)).await;
+    let mut saved = mdm_engine::state::ResumeState::load(&path).unwrap();
+    assert_ne!(saved.url.host_str(), saved.final_url.host_str());
+    let block = &saved.block_hashes[0];
+    let mut part = std::fs::OpenOptions::new().read(true).write(true).open(mdm_engine::naming::part_path(&saved.dest)).unwrap();
+    part.seek(SeekFrom::Start(block.start)).unwrap();
+    let mut byte = [0]; part.read_exact(&mut byte).unwrap();
+    part.seek(SeekFrom::Start(block.start)).unwrap(); part.write_all(&[byte[0] ^ 0xff]).unwrap(); part.sync_all().unwrap(); drop(part);
+    saved.final_url = format!("{target}&expires=1").parse().unwrap();
+    saved.write(&path).unwrap();
+    server.set_faults(Faults::default()); server.clear_log();
+    let mut headers = reqwest::header::HeaderMap::new();
+    headers.insert(reqwest::header::COOKIE, "sid=secret".parse().unwrap());
+    mdm_engine::repair::prepare_http_repair(&path, headers.clone(), &fast_opts()).await.unwrap();
+    let out = Download::resume(path, headers, fast_opts()).unwrap().wait().await.unwrap();
+    let mut expected = vec![0; 8 << 20]; content::fill(82, 0, &mut expected);
+    assert_eq!(std::fs::read(out.path).unwrap(), expected);
+    tokio::time::timeout(SETTLE, server.settled()).await.unwrap();
+    assert!(!server.log().is_empty());
+    assert!(server.log().iter().all(|entry| entry.cookie.is_none()), "origin cookie reached the redirected host");
+}
+
+#[tokio::test]
+async fn repair_refreshes_expired_redirect_only_after_checking_same_validator() {
+    use std::io::{Read, Seek, SeekFrom, Write};
+    let server = server("rate=1M").await;
+    let target = server.url("/gen/8M/refresh-repair.bin?seed=83");
+    let (_dir, path) = paused(&server, &redirect_path(&target)).await;
+    let mut saved = mdm_engine::state::ResumeState::load(&path).unwrap();
+    let block = saved.block_hashes[0].clone();
+    let part_path = mdm_engine::naming::part_path(&saved.dest);
+    let mut part = std::fs::OpenOptions::new().read(true).write(true).open(&part_path).unwrap();
+    part.seek(SeekFrom::Start(block.start)).unwrap(); let mut byte = [0]; part.read_exact(&mut byte).unwrap();
+    part.seek(SeekFrom::Start(block.start)).unwrap(); part.write_all(&[byte[0] ^ 0xff]).unwrap(); part.sync_all().unwrap(); drop(part);
+    saved.final_url = format!("{target}&expires=1").parse().unwrap();
+    server.set_faults(Faults::default());
+    let original_url = saved.url.clone();
+    let other = server.url("/gen/8M/other-repair.bin?seed=99");
+    saved.url = server.url(&redirect_path(&other)).parse().unwrap();
+    saved.write(&path).unwrap();
+    let state_before = std::fs::read(&path).unwrap();
+    let data_before = std::fs::read(&part_path).unwrap();
+    assert!(mdm_engine::repair::prepare_http_repair(&path, Default::default(), &fast_opts()).await.is_err());
+    assert_eq!(std::fs::read(&path).unwrap(), state_before);
+    assert_eq!(std::fs::read(&part_path).unwrap(), data_before);
+    saved.url = original_url;
+    saved.write(&path).unwrap();
+    mdm_engine::repair::prepare_http_repair(&path, Default::default(), &fast_opts()).await.unwrap();
+    let prepared = mdm_engine::state::ResumeState::load(&path).unwrap();
+    assert_eq!(prepared.final_url.as_str(), target);
+    assert_eq!(prepared.repair_source.as_ref(), Some(&prepared.final_url));
+    let result = Download::resume(path, Default::default(), fast_opts()).unwrap().wait().await.unwrap();
+    let mut expected = vec![0; 8 << 20]; content::fill(83, 0, &mut expected);
+    assert_eq!(std::fs::read(result.path).unwrap(), expected);
 }

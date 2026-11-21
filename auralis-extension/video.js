@@ -850,7 +850,6 @@
   let lastMove = 0;
   let pointer = { x: -1, y: -1 };
   let menuOpen = false;
-  let menuPosition = null;
   let dragging = null;
   let busy = false;
   let raf = 0;
@@ -1039,9 +1038,10 @@ button:focus-visible { outline: none; }
 .pill,.menu {--accent:#d0b4ff;--tx:#f5f8ff;--tx2:#c4cee4;--hov:rgba(176,143,255,.24);--bd:rgba(213,228,255,.30);--go:#65e4d0;--warn:#ffce79;--err:#ff9ba8}
 .pill {background:linear-gradient(145deg,rgba(73,56,112,.94),rgba(15,28,45,.96));border:1px solid #dfd2ff77;box-shadow:inset 0 1px #ffffff55,0 6px 18px #0009}
 .pill:not(.bare) .go:hover,.pill .more:hover {background:#b48dff55}
-.menu {width:min(360px,calc(100vw - 16px));height:min(440px,calc(100vh - 16px));min-width:min(260px,calc(100vw - 16px));min-height:180px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);resize:both;overflow:auto;overscroll-behavior:contain;padding:8px;border-radius:16px;background:linear-gradient(145deg,rgba(55,80,114,.87),rgba(18,28,49,.94));border-color:#c8e8ff80;backdrop-filter:blur(22px) saturate(135%);box-shadow:inset 0 1px #fff8,0 18px 42px #000b}
-.menu .mh{cursor:move;touch-action:none;user-select:none;border-radius:10px;background:linear-gradient(110deg,#a9e4ff35,#bd9cff20)}.menu .rows{max-height:none;overflow:visible}
+.menu {width:min(310px,calc(100vw - 16px));height:min(320px,calc(100vh - 16px));min-width:min(260px,calc(100vw - 16px));min-height:180px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);resize:both;overflow:auto;overscroll-behavior:contain;padding:8px;border-radius:16px;background:linear-gradient(145deg,rgba(55,80,114,.87),rgba(18,28,49,.94));border-color:#c8e8ff80;backdrop-filter:blur(22px) saturate(135%);box-shadow:inset 0 1px #fff8,0 18px 42px #000b}
+.menu .mh{cursor:default;user-select:none;border-radius:10px;background:linear-gradient(110deg,#a9e4ff35,#bd9cff20)}.menu .rows{max-height:none;overflow:visible}
 .menu button {height:32px;border-radius:8px;cursor:pointer}.menu button:hover {background:#b99aff3d}.menu .cap{color:#d9c6ff}.menu .rows{scrollbar-width:thin;scrollbar-color:#a98ee2 transparent}
+.menu .quality-tabs{display:flex;gap:4px;margin:4px 0}.menu .quality-tabs button{flex:1;justify-content:center;padding:4px;font-size:12px}.menu .quality-tabs button[aria-selected="true"]{background:#8467d96b;box-shadow:inset 0 -2px #d6c1ff}
 .menu .subtitle-section{margin:5px 2px;padding:5px;border:1px solid #ffffff30;border-radius:9px;background:#ffffff0b}.menu .subtitle-list{max-height:140px;overflow:auto}.menu .subtitle-list button[aria-pressed="true"]{background:#a886fa66;box-shadow:inset 3px 0 #dbcbff}.menu [data-act="window"] {display:none!important}
 .cookie-controls {padding:6px;display:flex;gap:5px;align-items:center;flex-wrap:wrap}.cookie-controls button {width:auto;height:auto;background:#355983;padding:5px 7px}.cookie-controls input {max-width:150px}.cookie-controls select,.cookie-controls input,.rows select {background:#20334f;color:#fff;border:1px solid #8ab3d788;border-radius:5px;padding:4px}
 @media (prefers-reduced-motion: reduce) {
@@ -1115,9 +1115,6 @@ button:focus-visible { outline: none; }
   const tip = $(".tip");
   const guide = $(".guide");
   const menu = $(".menu");
-  menu.addEventListener('pointerdown',e=>{const r=menu.getBoundingClientRect(),edge={l:e.clientX-r.left<7,r:r.right-e.clientX<7,t:e.clientY-r.top<7,b:r.bottom-e.clientY<7};if(e.button!==0||!Object.values(edge).some(Boolean))return;e.preventDefault();e.stopPropagation();const x=e.clientX,y=e.clientY;menu.setPointerCapture(e.pointerId);const move=ev=>{const dx=ev.clientX-x,dy=ev.clientY-y,w=Math.max(260,Math.min(innerWidth-16,r.width+(edge.r?dx:edge.l?-dx:0))),h=Math.max(180,Math.min(innerHeight-16,r.height+(edge.b?dy:edge.t?-dy:0)));menu.style.width=w+'px';menu.style.height=h+'px';menuPosition={left:edge.l?r.right-w:r.left,top:edge.t?r.bottom-h:r.top};position()};const end=()=>{menu.removeEventListener('pointermove',move);menu.removeEventListener('pointerup',end);menu.removeEventListener('pointercancel',end)};menu.addEventListener('pointermove',move);menu.addEventListener('pointerup',end);menu.addEventListener('pointercancel',end)});
-  const menuHeader=menu.querySelector('.mh');menuHeader.title='Drag to move';
-  menuHeader.addEventListener('pointerdown',e=>{if(e.button!==0)return;e.preventDefault();e.stopPropagation();const rect=menu.getBoundingClientRect(),x=e.clientX,y=e.clientY;menuHeader.setPointerCapture(e.pointerId);const move=event=>{menuPosition={left:rect.left+event.clientX-x,top:rect.top+event.clientY-y};position()};const end=()=>{menuHeader.removeEventListener('pointermove',move);menuHeader.removeEventListener('pointerup',end);menuHeader.removeEventListener('pointercancel',end)};menuHeader.addEventListener('pointermove',move);menuHeader.addEventListener('pointerup',end);menuHeader.addEventListener('pointercancel',end)});
   const note = $(".note");
   const cookieMode = $(".cookie-mode"), cookieHeader = $(".cookie-header"), cookieFetch = $(".cookie-fetch");
   cookieMode.addEventListener("change", () => { cookieHeader.hidden = cookieMode.value !== "file"; });
@@ -1606,8 +1603,8 @@ button:focus-visible { outline: none; }
   function placeMenu(top, left, w) {
     const h = menu.offsetHeight;
     const width = menu.offsetWidth;
-    const desiredTop = menuPosition?.top ?? (top + 36 + h <= innerHeight - 8 ? top + 36 : top - h - 6);
-    const desiredLeft = menuPosition?.left ?? (towardEnd(left, w) ? left + w - width : left);
+    const desiredTop = (top + 36 + h <= innerHeight - 8 ? top + 36 : top - h - 6);
+    const desiredLeft = (towardEnd(left, w) ? left + w - width : left);
     menu.style.top = `${Math.max(8, Math.min(desiredTop, innerHeight - h - 8)) - top}px`;
     menu.style.left = `${Math.max(8, Math.min(desiredLeft, innerWidth - width - 8)) - left}px`;
   }
@@ -2002,6 +1999,7 @@ button:focus-visible { outline: none; }
   // line per quality (video, then sound); MDM's whole window; hiding and settings. Filled as it
   // opens and again when the look-up ends.
   let subtitleChoice = "none";
+  let qualityTab = "video";
   function fillMenu() {
     const c = video ? describeNow(video) : null;
     const look = lookOf(c);
@@ -2027,28 +2025,23 @@ button:focus-visible { outline: none; }
       }
     } else if (look && look.state === "ready" && Array.isArray(look.choices) && look.choices.length) {
       const groups = groupChoices(look.choices, 100);
-      rows.append(topRow(best, { choice: look.choices.indexOf(best) }));
-      let n = 0;
-      for (const [kind, words] of [["video", "video_tab_video"], ["audio", "video_tab_audio"]]) {
-        if (!groups[kind].length) continue;
-        const cap = document.createElement("div");
-        cap.className = "cap";
-        cap.dataset.kind = kind;
-        cap.textContent = t(words);
-        rows.append(cap);
-        for (const i of groups[kind]) rows.append(row(look.choices[i], i, (n += 1), look.choices[i] === best));
+      const tabs=document.createElement("div");tabs.className="quality-tabs";tabs.setAttribute("role","tablist");tabs.setAttribute("aria-label","Quality categories");
+      for(const [kind,title] of [["video",t("video_tab_video")],["audio",t("video_tab_audio")],["subtitles","Subtitles"]]){const button=document.createElement("button");button.type="button";button.textContent=title;button.setAttribute("role","tab");button.setAttribute("aria-selected",String(qualityTab===kind));button.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();qualityTab=kind;fillMenu()});tabs.append(button)}
+      rows.append(tabs);
+      if(qualityTab!=="subtitles") {
+        if(qualityTab==="video")rows.append(topRow(best, { choice: look.choices.indexOf(best) }));
+        const choices=groups[qualityTab]||[];
+        if(!choices.length){const empty=document.createElement("div");empty.className="note";empty.textContent="No qualities available";rows.append(empty)}
+        let n=0;for(const i of choices)rows.append(row(look.choices[i],i,(n+=1),look.choices[i]===best));
+      } else {
+        const subtitleSection=document.createElement("section");subtitleSection.className="subtitle-section";
+        const list=document.createElement("div");list.className="subtitle-list";list.setAttribute("aria-label","Available subtitles");
+        const add=(value,text)=>{const button=document.createElement("button");button.type="button";button.textContent=text;button.setAttribute("aria-pressed",String(value===subtitleChoice));button.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();subtitleChoice=value;for(const b of list.querySelectorAll("button"))b.setAttribute("aria-pressed",String(b===button));});list.append(button)};
+        add("none","No subtitles");let count=0;
+        for(const [kind,tracks] of [["manual",look.subtitles||[]],["auto",look.automatic_subtitles||[]]]){if(tracks.length)add(`${kind}:all`,kind==="auto"?"All automatic captions":"All subtitles");for(const track of tracks){add(`${kind}:${track.code}`,`${track.name||track.code} (${track.code})${kind==="auto"?" · automatic":""} · ${choiceSize(track, lang)||"Size unavailable"}`);count++;}}
+        if(!count){const text=document.createElement("div");text.className="note";text.textContent="No subtitle languages available";subtitleSection.append(text)}
+        subtitleSection.append(list);rows.append(subtitleSection);
       }
-      const subtitleSection=document.createElement("section");subtitleSection.className="subtitle-section";
-      const subtitleTitle=document.createElement("div");subtitleTitle.className="cap";subtitleTitle.textContent="Subtitles";subtitleSection.append(subtitleTitle);
-      const list=document.createElement("div");list.className="subtitle-list";list.setAttribute("aria-label","Available subtitles");
-      const add=(value,text)=>{const button=document.createElement("button");button.type="button";button.textContent=text;button.setAttribute("aria-pressed",String(value===subtitleChoice));button.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();subtitleChoice=value;for(const b of list.querySelectorAll("button"))b.setAttribute("aria-pressed",String(b===button));});list.append(button)};
-      add("none","No subtitles");let count=0;
-      for(const [kind,tracks] of [["manual",look.subtitles||[]],["auto",look.automatic_subtitles||[]]]){
-        if(tracks.length)add(`${kind}:all`,kind==="auto"?"All automatic captions":"All subtitles");
-        for(const track of tracks){add(`${kind}:${track.code}`,`${track.name||track.code} (${track.code})${kind==="auto"?" · automatic":""} · ${choiceSize(track, lang)||"Size unavailable"}`);count++;}
-      }
-      if(!count){const text=document.createElement("div");text.className="note";text.textContent="No subtitle languages available";subtitleSection.append(text)}
-      subtitleSection.append(list);rows.prepend(subtitleSection);
       tell(noticeOf(look));
     } else if (look) {
       // What the look-up came to, in its words; the window does the rest.
@@ -2248,6 +2241,19 @@ button:focus-visible { outline: none; }
     if (inMenu && focused !== menu && (focused.matches("input, select") || focused === cookieFetch) && e.key !== "Escape") {
       e.stopPropagation();
       return;
+    }
+    if (inMenu && focused.matches('[role="tab"]') && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+      const tabs=[...rows.querySelectorAll('[role="tab"]')], index=tabs.indexOf(focused);
+      const next=tabs[(index+(e.key==="ArrowRight"?1:tabs.length-1))%tabs.length];
+      const title=next.textContent;next.click();
+      [...rows.querySelectorAll('[role="tab"]')].find(button=>button.textContent===title)?.focus();
+      e.preventDefault();e.stopPropagation();return;
+    }
+    if (inMenu && focused.matches('[role="tab"], .subtitle-list button') && (e.key === "Enter" || e.key === " ")) {
+      const tab=focused.getAttribute("role")==="tab" ? focused.textContent : null;
+      focused.click();
+      if(tab) [...rows.querySelectorAll('[role="tab"]')].find(button=>button.textContent===tab)?.focus();
+      e.preventDefault();e.stopPropagation();return;
     }
     if (e.key === "Escape" && menuOpen) {
       closeMenu();

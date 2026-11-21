@@ -13,11 +13,12 @@ fn parse_reply(text: &str) -> ApiResult<Value> {
 #[tauri::command]
 pub async fn export_preferences(app: AppHandle, ui: Value) -> ApiResult<Option<String>> {
     tauri::async_runtime::spawn_blocking(move||{
-        if !ui.is_object() || ui.to_string().len()>262144 {return Err("Invalid appearance settings".into())}
+        if !ui.is_object() || ui.to_string().len()>3*1024*1024 {return Err("Invalid appearance settings".into())}
         let Some(path)=rfd::FileDialog::new().set_title("Save Auralis preferences backup").set_file_name("auralis-preferences.json").add_filter("Auralis backup", &["json"]).save_file() else{return Ok(None)};
         let settings=parse_reply(&send_ipc(&mdm_ipc::Command{query:Some("glass-backup-settings".into()),..Default::default()})?)?;
         let startup=crate::startup::startup_settings(app)?;
         let body=serde_json::to_vec_pretty(&json!({"format":"auralis-preferences","version":1,"appearance":ui,"settings":settings["settings"],"startup":startup})).map_err(|e|e.to_string())?;
+        if body.len()>4*1024*1024 {return Err("Preferences backup is too large".into())}
         mdm_ipc::private_write(&path,&body).map_err(|e|format!("Could not save backup: {e}"))?;
         Ok(Some(path.to_string_lossy().into_owned()))
     }).await.map_err(|e|e.to_string())?

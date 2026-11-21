@@ -869,6 +869,10 @@ pub struct App {
     glass_duplicate_serial:u64,
     glass_account: Option<(mdm_debrid::ServiceKind,crate::debrid::SignIn)>,
     glass_checks: glass::CheckSlots,
+    glass_recovery_checks: glass::RecoverySlots,
+    glass_repair_checks: glass::RepairSlots,
+    glass_torrent_recovery: glass::TorrentRecoverySlots,
+    glass_torrent_handoffs: glass::HandoffSlots,
     glass_exit_requested: bool,
     glass_power_serial: u64,
     /// Addresses (and their browser context) waiting for Download File Info to close.
@@ -1569,7 +1573,7 @@ impl App {
         // D-021: torrents are a category of their own (lists from before had them by file
         // type); their files stay where they are.
         for i in &mut items {
-            if i.torrent.is_some() {
+            if i.torrent.is_some() && i.direct_recovery.is_none() {
                 i.category = Category::Torrents;
             }
             // A user's category that is gone: General.
@@ -1647,6 +1651,10 @@ impl App {
             glass_duplicate_serial:0,
             glass_account: None,
             glass_checks: Default::default(),
+            glass_recovery_checks: Default::default(),
+            glass_repair_checks: Default::default(),
+            glass_torrent_recovery: Default::default(),
+            glass_torrent_handoffs: Default::default(),
             glass_exit_requested: false,
             glass_power_serial: 0,
             file_info_waiting: Default::default(),
@@ -3265,7 +3273,77 @@ impl App {
 
     /// Start or resume a download; `show` opens its progress dialog (IDM's default), unless
     /// Options → Downloads → Customize "Download progress" dialog turned it off (#1041).
+    fn recovery_check_running(&self, id: u64) -> bool {
+        self.glass_recovery_checks.get(&id).is_some_and(|slot| {
+            slot.lock().map_or(true, |result| result.is_none())
+        }) || self.glass_torrent_recovery.get(&id).is_some_and(|slot| {
+            slot.lock().map_or(true, |result| result.is_none())
+        }) || self.glass_torrent_handoffs.get(&id).is_some_and(|slot| {
+            slot.lock().map_or(true, |slot| slot.result.is_none())
+        })
+    }
+
+    fn repair_check_running(&self, id: u64) -> bool {
+        self.glass_repair_checks.get(&id).is_some_and(|slot| slot.lock().map_or(true, |s| !s.applied))
+    }
+
+    /// Persist the torrent handoff before starting it. The original resume
+    /// state and partial file remain at their old destination.
+    fn commit_torrent_recovery(&mut self, id:u64, prepared:mdm_torrent::PreparedRecovery) -> Result<serde_json::Value,String> {
+        let hash=prepared.metadata.info_hash.clone();
+        let folder=prepared.folder.clone();
+        let staged=prepared.staged.file.clone();
+        let verified=prepared.staged.verified_bytes;
+        if store::path().is_none() {return Err("Cannot save download history; the original partial was kept".into());}
+        if self.torrent_hashes().contains(&hash) || self.torrent_host.get().is_some_and(|session|session.has(&hash)) {
+            return Err("This torrent is already active or listed; the original partial was kept".into());
+        }
+        let Some(item)=self.items.iter().find(|item|item.id==id) else{return Err("Download no longer exists".into())};
+        if item.dest!=prepared.source_dest || item.live.is_some() || item.status==Status::Complete || item.torrent.is_some() || item.direct_recovery.is_some() || item.context.private || item.checksum.is_some() || self.moving.iter().any(|(moving,_,_)|*moving==id) || self.renaming.iter().any(|(renaming,_)|*renaming==id) {
+            return Err("Download changed while preparing recovery; the original partial was kept".into());
+        }
+        crate::torrents::save_recovery_torrent(&hash,&prepared.metadata.torrent).map_err(|e|format!("Could not save torrent metadata: {e}"))?;
+        // Ensure an older queued asynchronous save cannot overwrite the new state.
+        self.saver.flush();
+        let item=self.items.iter_mut().find(|item|item.id==id).expect("item checked above");
+        let before=(item.dest.clone(),item.downloaded,item.status,item.error.clone(),item.resumable,item.recovery_damaged);
+        item.direct_recovery=Some(crate::model::DirectRecoveryOrigin{dest:item.dest.clone(),downloaded:prepared.source_downloaded,damaged:item.recovery_damaged});
+        item.dest=staged.clone();
+        item.downloaded=verified;
+        item.status=Status::Stopped;
+        item.error=None;
+        item.resumable=Some(true);
+        item.recovery_damaged=false;
+        item.torrent=Some(crate::torrents::TorrentSpec{hash,files:Some(vec![prepared.file_index]),folder,uploaded:0,seeded_secs:0,peers:0,up_speed:0.0,upload_limit:None,in_order:false,ends_first:true});
+        if let Err(error)=store::save(self.next_id,&self.items,&self.list.layout(),&self.settings,&self.queues) {
+            let item=self.items.iter_mut().find(|item|item.id==id).expect("item checked above");
+            item.dest=before.0;item.downloaded=before.1;item.status=before.2;item.error=before.3;item.resumable=before.4;item.recovery_damaged=before.5;item.torrent=None;item.direct_recovery=None;
+            return Err(format!("Could not save the recovery state: {error}. The original partial and prepared copy were kept."));
+        }
+        self.dirty=false;
+        self.last_save=Instant::now();
+        if let Some(item)=self.items.iter_mut().find(|item|item.id==id) {item.note("Continuing as a torrent; the original partial was preserved.");}
+        self.dirty=true;
+        Ok(serde_json::json!({"verified_bytes":verified,"path":staged.to_string_lossy()}))
+    }
+
     fn start(&mut self, id: u64, show: bool) {
+        if self.repair_check_running(id) {
+            self.notice = Some(("Saved-data repair", "Wait for the repair check to finish before resuming.".to_owned()));
+            return;
+        }
+        let damaged = self.glass_recovery_checks.get(&id).is_some_and(|slot| {
+            slot.lock().ok().and_then(|result| result.as_ref().and_then(|r| r.as_ref().ok()).and_then(|report| report.get("damaged_ranges")).and_then(serde_json::Value::as_array).map(|ranges| !ranges.is_empty())).unwrap_or(false)
+        });
+        if damaged || self.items.iter().any(|item| item.id == id && item.recovery_damaged) {
+            self.notice = Some(("Saved-data check", "Saved data changed. Resume is blocked to protect the file; redownload it or wait for a repair option.".to_owned()));
+            return;
+        }
+        if self.recovery_check_running(id) {
+            self.notice = Some(("Saved-data check", "Wait for the saved-data check to finish before resuming.".to_owned()));
+            return;
+        }
+        self.glass_torrent_recovery.remove(&id);
         let show = show && self.settings.show_progress;
         self.stopped_by_hand.remove(&id);
         let rt = self.rt.clone();
@@ -3604,6 +3682,10 @@ impl App {
     /// Take a download off the list (not while it runs); with `files`, its file goes from disk
     /// too: a finished file, or the data so far (a torrent's files when its session runs).
     fn remove_download(&mut self, id: u64, files: bool) {
+        if self.repair_check_running(id) || self.recovery_check_running(id) {
+            self.notice = Some(("Saved-data check", "Wait for the saved-data operation to finish before removing this download.".to_owned()));
+            return;
+        }
         if self.item(id).is_some_and(|i| i.live.is_none()) {
             self.release_link(id);
             if let Some(spec) = self.item(id).and_then(|i| i.torrent.clone()) {
@@ -3639,6 +3721,8 @@ impl App {
                 }
             }
             self.items.retain(|i| i.id != id);
+            self.glass_torrent_recovery.remove(&id);
+            self.glass_torrent_handoffs.remove(&id);
             for q in &mut self.queues {
                 q.items.retain(|i| *i != id);
             }
@@ -4269,6 +4353,16 @@ impl App {
 
     /// File Properties → OK.
     fn apply_properties(&mut self, c: crate::properties::Changes) {
+        if self.repair_check_running(c.id) || self.recovery_check_running(c.id) {
+            self.notice = Some(("Saved-data check", "Wait for the saved-data operation to finish before changing this download.".to_owned()));
+            return;
+        }
+        if (c.address.is_some() || c.direct.is_some()) && self.items.iter().find(|i| i.id == c.id)
+            .and_then(|i| mdm_engine::state::ResumeState::load(&state_path(&i.dest)).ok())
+            .is_some_and(|saved| saved.repair_strict) {
+            self.notice = Some(("Saved-data repair", "The checked source must remain unchanged until this repair finishes.".to_owned()));
+            return;
+        }
         let Some(item) = self.item(c.id) else { return };
         item.description = c.description;
         item.login = c.login;
@@ -4329,6 +4423,10 @@ impl App {
     /// own (a copy to another drive takes a while), one not started just takes the new place.
     /// A failure says why.
     fn start_move(&mut self, id: u64, target: PathBuf) {
+        if self.repair_check_running(id) || self.recovery_check_running(id) {
+            self.notice = Some(("Saved-data check", "Wait for the saved-data operation to finish before moving this download.".to_owned()));
+            return;
+        }
         let Some(item) = self.item(id) else { return };
         if target == item.dest {
             return;
@@ -6066,6 +6164,14 @@ impl App {
                     "description": i.description,
                     "category": i.category.key(),
                     "is_torrent": i.torrent.is_some(),
+                    "direct_recovery": i.direct_recovery.is_some(),
+                    "original_partial": i.direct_recovery.as_ref().map(|origin|mdm_engine::naming::part_path(&origin.dest).to_string_lossy().into_owned()),
+                    "recovery_search_available": self.glass_torrent_recovery.contains_key(&i.id),
+                    "recovery_handoff_available": self.glass_torrent_handoffs.contains_key(&i.id),
+                    "is_video": i.video.is_some(),
+                    "is_gallery": i.gallery.is_some(),
+                    "is_remote": i.remote.is_some(),
+                    "recovery_damaged": i.recovery_damaged,
                 })
             }).collect::<Vec<_>>();
             return serde_json::json!({ "downloads": files }).to_string();
@@ -7493,6 +7599,52 @@ impl App {
             || !self.deferred_torrent_queue.is_empty()
         {
             ctx.request_repaint_after(Duration::from_millis(200));
+        }
+        // Persist a positive damage finding even if its progress window was closed.
+        for (id, slot) in &self.glass_recovery_checks {
+            let result = slot.lock().ok().and_then(|result| result.clone()).and_then(Result::ok);
+            let damaged = result.as_ref().and_then(|report| report.get("damaged_ranges")).and_then(serde_json::Value::as_array).is_some_and(|ranges| !ranges.is_empty());
+            if damaged && let Some(item) = self.items.iter_mut().find(|item| item.id == *id) && !item.recovery_damaged {
+                item.recovery_damaged = true;
+                self.dirty = true;
+            }
+            if !damaged && result.as_ref().is_some_and(|report| report["repair_prepared"] == true && report["damaged_ranges"].is_array())
+                && let Some(item) = self.items.iter_mut().find(|item| item.id == *id) && item.recovery_damaged {
+                item.recovery_damaged = false;
+                self.dirty = true;
+            }
+        }
+        let mut repaired = Vec::new();
+        for (id, slot) in &self.glass_repair_checks {
+            if let Ok(mut slot) = slot.lock() && !slot.applied && let Some(result) = slot.result.clone() {
+                if let Ok(report) = result && let Some(item) = self.items.iter_mut().find(|item| item.id == *id) {
+                    item.recovery_damaged = false;
+                    item.downloaded = report["retained_bytes"].as_u64().unwrap_or(item.downloaded);
+                    item.status = Status::Stopped;
+                    item.error = None;
+                    item.note("Damaged ranges are ready to be downloaded again from the checked source.");
+                    self.dirty = true;
+                    repaired.push(*id);
+                }
+                slot.applied = true;
+            }
+        }
+        for id in repaired { self.glass_recovery_checks.remove(&id); }
+        let ready:Vec<_>=self.glass_torrent_handoffs.iter().filter_map(|(id,slot)| {
+            slot.lock().ok().and_then(|mut value|value.prepared.take().map(|result|(result,value.cancelled))).map(|(result,cancelled)|(*id,slot.clone(),result,cancelled))
+        }).collect();
+        for (id,slot,prepared,cancelled) in ready {
+            let result=prepared.and_then(|value| {
+                let folder=value.folder.clone();
+                if cancelled {return Err(format!("Torrent recovery was cancelled. The original partial and prepared files at {} were kept.",folder.display()));}
+                self.commit_torrent_recovery(id,value).map_err(|error|format!("{error} Prepared files were kept at {}.",folder.display()))
+            });
+            let success=result.is_ok();
+            if let Ok(mut value)=slot.lock(){value.result=Some(result);}
+            if success {
+                self.glass_recovery_checks.remove(&id);
+                self.start(id,true);
+            }
         }
         let mut finished = Vec::new();
         let mut failed = Vec::new();
@@ -10190,15 +10342,23 @@ impl App {
     /// Download again from the start: the partial state goes; a finished file is replaced when
     /// the new download completes.
     fn redownload(&mut self, id: u64) {
+        if self.recovery_check_running(id) || self.repair_check_running(id) {
+            self.notice = Some(("Saved-data check", "Wait for the saved-data check to finish before redownloading.".to_owned()));
+            return;
+        }
         if !self.can_redownload(id) {
             return;
         }
+        self.glass_recovery_checks.remove(&id);
+        self.glass_torrent_recovery.remove(&id);
+        self.glass_torrent_handoffs.remove(&id);
         let Some(item) = self.item(id) else { return };
         let _ = std::fs::remove_file(state_path(&item.dest));
         let _ = std::fs::remove_file(mdm_engine::naming::part_path(&item.dest));
         item.downloaded = 0;
         item.status = Status::Stopped;
         item.error = None;
+        item.recovery_damaged = false;
         if item.checksum_from_server {
             item.checksum = None;
             item.checksum_from_server = false;
@@ -12852,6 +13012,156 @@ mod deferred_rename_guard_tests {
             let zone = std::fs::read_to_string(stream).unwrap_or_default();
             assert!(zone.contains("ZoneId=3"), "{}: {zone}", f.display());
         }
+    }
+}
+
+#[cfg(test)]
+mod torrent_recovery_handoff_tests {
+    use super::*;
+
+    #[test]
+    fn recovery_handoff_persists_origin_and_refuses_metadata_overwrite() {
+        let tmp=tempfile::tempdir().unwrap();
+        mdm_ipc::set_data_dir(tmp.path().join("app-data"));
+        let dest=tmp.path().join("original.bin");
+        let part=mdm_engine::naming::part_path(&dest);
+        std::fs::write(&part,b"abcdefghijkl").unwrap();
+        let url:url::Url="https://example.org/file".parse().unwrap();
+        let mut saved=mdm_engine::state::ResumeState::new(url.clone(),url.clone(),dest.clone(),12,Default::default());
+        saved.segments=vec![mdm_engine::planner::SavedSegment{start:0,cursor:6,end:12}];
+        let state=mdm_engine::state::state_path(&dest);
+        std::fs::write(&state,serde_json::to_vec(&saved).unwrap()).unwrap();
+        let pieces:[u8;60]=[129,254,139,254,135,87,108,62,203,34,66,111,142,87,132,115,130,145,122,207,42,237,138,169,248,38,194,30,240,125,94,225,91,72,238,160,110,156,138,98,96,78,189,235,141,59,229,48,60,15,200,145,119,63,105,252,58,55,32,250];
+        let mut torrent=b"d4:infod6:lengthi12e4:name8:file.bin12:piece lengthi4e6:pieces60:".to_vec();
+        torrent.extend_from_slice(&pieces);torrent.extend_from_slice(b"ee");
+        let first=mdm_torrent::prepare_saved_recovery(&torrent,&saved,0,&tmp.path().join("stage-one")).unwrap();
+        let torrent_file=crate::torrents::torrent_file(&first.metadata.info_hash).unwrap();
+        std::fs::create_dir_all(torrent_file.parent().unwrap()).unwrap();
+        std::fs::write(&torrent_file,b"unrelated metadata").unwrap();
+        let mut item=Item::new(1,url,dest.clone(),Category::General);
+        item.status=Status::Stopped;item.size=Some(12);item.downloaded=6;
+        let loaded=store::Loaded{next_id:2,items:vec![item],columns:None,settings:Settings::default(),queues:vec![]};
+        let rt=Box::leak(Box::new(tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap()));
+        let (_,commands)=std::sync::mpsc::channel();
+        let mut app=std::mem::ManuallyDrop::new(App::assemble(&egui::Context::default(),rt.handle().clone(),commands,loaded,crate::Start::Shown));
+        let matches=mdm_torrent::candidate_search::matching_files(&torrent,&saved).unwrap();
+        let report=mdm_torrent::candidate_search::SearchReport{searched:1,failed:0,matches:vec![mdm_torrent::candidate_search::MatchedCandidate{
+            candidate:mdm_torrent::candidate_search::Candidate{identifier:String::new(),title:"chosen".into(),torrent_url:"about:blank".parse().unwrap()},info_hash:first.metadata.info_hash.clone(),torrent:torrent.clone(),files:matches
+        }]};
+        app.glass_torrent_recovery.insert(1,std::sync::Arc::new(std::sync::Mutex::new(Some(Ok(report)))));
+        let command=|payload:serde_json::Value|ipc::Command{action:Some("glass-item".into()),category:Some("start-recovery-torrent".into()),ids:vec![1],queue:Some(payload.to_string()),..Default::default()};
+        let rejected=app.glass_answer(&command(serde_json::json!({"candidate":0,"file_index":0,"info_hash":first.metadata.info_hash}))).unwrap();
+        assert!(rejected.contains("Confirm"));
+        let rejected=app.glass_answer(&command(serde_json::json!({"candidate":0,"file_index":0,"info_hash":"0000000000000000000000000000000000000000","accept_partial_match":true}))).unwrap();
+        assert!(rejected.contains("no longer available"));
+        assert!(app.glass_torrent_handoffs.is_empty());
+        let mut offline=mdm_torrent::Config::new(tmp.path().join("preparation-session"));
+        offline.offline=true;offline.dht=false;app.torrent_host.set_config(Some(offline));
+        let accepted=app.glass_answer(&command(serde_json::json!({"candidate":0,"file_index":0,"info_hash":first.metadata.info_hash,"accept_partial_match":true}))).unwrap();
+        assert!(accepted.contains("pending"));
+        let cancelled=app.glass_answer(&ipc::Command{action:Some("glass-item".into()),category:Some("cancel-recovery-torrent".into()),ids:vec![1],..Default::default()}).unwrap();
+        assert!(cancelled.contains("already_started\":false"));
+        let cancel_deadline=Instant::now()+Duration::from_secs(30);
+        loop {
+            rt.block_on(async {tokio::time::sleep(Duration::from_millis(50)).await});
+            app.poll(&egui::Context::default());
+            if let Some(result)=app.glass_torrent_handoffs.get(&1).and_then(|slot|slot.lock().ok().and_then(|slot|slot.result.clone())) {
+                assert!(result.unwrap_err().contains("cancelled"));
+                break;
+            }
+            assert!(Instant::now()<cancel_deadline,"handoff cancellation did not finish");
+        }
+        assert_eq!(app.items[0].dest,dest);
+        assert!(app.items[0].torrent.is_none());
+        let accepted=app.glass_answer(&command(serde_json::json!({"candidate":0,"file_index":0,"info_hash":first.metadata.info_hash,"accept_partial_match":true}))).unwrap();
+        assert!(accepted.contains("pending"));
+        let deadline=Instant::now()+Duration::from_secs(30);
+        loop {
+            rt.block_on(async {tokio::time::sleep(Duration::from_millis(50)).await});
+            app.poll(&egui::Context::default());
+            if let Some(result)=app.glass_torrent_handoffs.get(&1).and_then(|slot|slot.lock().ok().and_then(|slot|slot.result.clone())) {
+                assert!(result.is_err());
+                break;
+            }
+            assert!(Instant::now()<deadline,"handoff preparation did not finish");
+        }
+        assert_eq!(app.items[0].dest,dest);
+        assert!(app.items[0].torrent.is_none());
+        assert!(app.commit_torrent_recovery(1,first).is_err());
+        assert_eq!(std::fs::read(&torrent_file).unwrap(),b"unrelated metadata");
+        assert_eq!(app.items[0].dest,dest);
+        assert!(app.items[0].torrent.is_none());
+        std::fs::remove_file(&torrent_file).unwrap();
+        let second=mdm_torrent::prepare_saved_recovery(&torrent,&saved,0,&tmp.path().join("stage-two")).unwrap();
+        let stage_two=second.staged.file.clone();
+        let history=store::path().unwrap();
+        app.saver.flush();
+        if history.is_file(){std::fs::remove_file(&history).unwrap();}
+        std::fs::create_dir(&history).unwrap();
+        assert!(app.commit_torrent_recovery(1,second).is_err());
+        assert_eq!(app.items[0].dest,dest);
+        assert!(app.items[0].torrent.is_none());
+        assert!(app.items[0].direct_recovery.is_none());
+        assert_eq!(std::fs::read(&stage_two).unwrap(),b"abcd\0\0\0\0\0\0\0\0");
+        std::fs::remove_dir(&history).unwrap();
+        let third=mdm_torrent::prepare_saved_recovery(&torrent,&saved,0,&tmp.path().join("stage-three")).unwrap();
+        let staged=third.staged.file.clone();
+        app.commit_torrent_recovery(1,third).unwrap();
+        app.glass_torrent_handoffs.get(&1).unwrap().lock().unwrap().result=Some(Ok(serde_json::json!({})));
+        app.items[0].status=Status::Queued;
+        app.quota.held.push(1);
+        let cancelled=app.glass_answer(&ipc::Command{action:Some("glass-item".into()),category:Some("cancel-recovery-torrent".into()),ids:vec![1],..Default::default()}).unwrap();
+        assert!(cancelled.contains("already_started\":true"));
+        assert_eq!(app.items[0].status,Status::Stopped);
+        assert!(!app.quota.held.contains(&1));
+        assert_eq!(std::fs::read(&part).unwrap(),b"abcdefghijkl");
+        assert!(state.is_file());
+        assert_eq!(std::fs::read(&staged).unwrap(),b"abcd\0\0\0\0\0\0\0\0");
+        let loaded=store::load();
+        assert_eq!(loaded.items.len(),1);
+        assert_eq!(loaded.items[0].dest,staged);
+        assert_eq!(loaded.items[0].direct_recovery.as_ref().unwrap().dest,dest);
+        assert!(loaded.items[0].torrent.is_some());
+        assert_eq!(loaded.items[0].status,Status::Stopped);
+        // Recreate the app from its persisted list and continue from a local
+        // peer. DHT and discovery stay disabled; the original partial must
+        // remain intact even after the recovered torrent finishes.
+        let (_,commands)=std::sync::mpsc::channel();
+        let mut restarted=std::mem::ManuallyDrop::new(App::assemble(&egui::Context::default(),rt.handle().clone(),commands,loaded,crate::Start::Shown));
+        assert_eq!(restarted.items[0].category,Category::General);
+        let mut config=mdm_torrent::Config::new(tmp.path().join("leecher-state"));
+        config.offline=true;config.dht=false;
+        restarted.torrent_host.set_config(Some(config));
+        let seed_dir=tmp.path().join("seed");std::fs::create_dir(&seed_dir).unwrap();
+        std::fs::write(seed_dir.join("file.bin"),b"abcdefghijkl").unwrap();
+        let mut seed_config=mdm_torrent::Config::new(tmp.path().join("seeder-state"));
+        seed_config.offline=true;seed_config.dht=false;
+        let (seeder,session)=rt.block_on(async {
+            let seed=mdm_torrent::Torrents::start(seed_config).await.unwrap();
+            let hash=seed.add(&torrent,&seed_dir,None,Vec::new(),false).await.unwrap();
+            let deadline=Instant::now()+Duration::from_secs(20);
+            while seed.stats(&hash).unwrap().phase!=mdm_torrent::Phase::Finished {
+                assert!(Instant::now()<deadline,"seed did not finish checking");
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+            let peer=seed.listen_addr().unwrap();
+            let session=restarted.torrent_host.session(restarted.session_hashes()).await.unwrap();
+            let spec=restarted.items[0].torrent.as_ref().unwrap();
+            session.add(&torrent,&spec.folder,spec.files.clone(),vec![peer],true).await.unwrap();
+            (seed,session)
+        });
+        restarted.start(1,false);
+        let deadline=Instant::now()+Duration::from_secs(30);
+        while restarted.items[0].status!=Status::Complete {
+            rt.block_on(async {tokio::time::sleep(Duration::from_millis(50)).await});
+            restarted.items[0].poll();
+            assert!(Instant::now()<deadline,"recovered torrent did not finish: {:?}",restarted.items[0].error);
+            assert_ne!(restarted.items[0].status,Status::Error,"recovery failed: {:?}",restarted.items[0].error);
+        }
+        assert_eq!(std::fs::read(&staged).unwrap(),b"abcdefghijkl");
+        assert_eq!(std::fs::read(&part).unwrap(),b"abcdefghijkl");
+        assert!(state.is_file());
+        rt.block_on(async {session.stop().await;seeder.stop().await;});
     }
 }
 

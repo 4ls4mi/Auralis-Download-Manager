@@ -441,6 +441,17 @@ pub enum Status {
     Error,
 }
 
+/// The original partial is retained when a direct download continues through
+/// a torrent. The completed torrent file is kept in its separate recovery
+/// folder; the original partial is never overwritten by the handoff.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DirectRecoveryOrigin {
+    pub dest: PathBuf,
+    pub downloaded: u64,
+    #[serde(default)]
+    pub damaged: bool,
+}
+
 /// One row of the download list. The persisted part is everything but `live`.
 #[derive(Serialize, Deserialize)]
 pub struct Item {
@@ -462,6 +473,9 @@ pub struct Item {
     /// Server-provided checksums belong to this particular download version.
     #[serde(default)]
     pub checksum_from_server: bool,
+    /// A saved-data check found changed bytes; retained until explicitly redownloaded or repaired.
+    #[serde(default)]
+    pub recovery_damaged: bool,
     /// When the download was added ("Added" column), as `Last Try Date` is written. Downloads
     /// added before the column existed have none.
     #[serde(default)]
@@ -479,6 +493,8 @@ pub struct Item {
     /// A torrent or magnet (M15): its `url` is a magnet link, `dest` its folder or one file.
     #[serde(default)]
     pub torrent: Option<crate::torrents::TorrentSpec>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub direct_recovery: Option<DirectRecoveryOrigin>,
     /// An image gallery downloaded by gallery-dl (#58): its `url` is the gallery's page, `dest`
     /// the folder its files go into.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -951,6 +967,7 @@ impl Item {
         c.downloaded = self.downloaded;
         c.video.clone_from(&self.video);
         c.torrent.clone_from(&self.torrent);
+        c.direct_recovery.clone_from(&self.direct_recovery);
         c.gallery.clone_from(&self.gallery);
         c.remote.clone_from(&self.remote);
         c.preexisting_folder = self.preexisting_folder;
@@ -978,6 +995,8 @@ impl Item {
             resumable: None,
             checksum: None,
             checksum_from_server: false,
+            recovery_damaged: false,
+            direct_recovery: None,
             added: Some(now_stamp()),
             own_limit: None,
             chunk_count: None,
@@ -1756,6 +1775,31 @@ mod size_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recovery_damage_flag_persists_and_old_items_default_to_clear() {
+        let mut item = Item::new(1, "https://example.org/file".parse().unwrap(), PathBuf::from("file.bin"), Category::General);
+        item.recovery_damaged = true;
+        let value = serde_json::to_value(&item).unwrap();
+        let restored: Item = serde_json::from_value(value.clone()).unwrap();
+        assert!(restored.recovery_damaged);
+        let mut old = value;
+        old.as_object_mut().unwrap().remove("recovery_damaged");
+        let restored_old: Item = serde_json::from_value(old).unwrap();
+        assert!(!restored_old.recovery_damaged);
+    }
+
+    #[test]
+    fn direct_recovery_origin_survives_restart_and_old_records_remain_valid() {
+        let mut item=Item::new(1,"https://example.org/file".parse().unwrap(),PathBuf::from("recovery/file.bin"),Category::General);
+        item.direct_recovery=Some(DirectRecoveryOrigin{dest:PathBuf::from("original.bin"),downloaded:42,damaged:true});
+        let value=serde_json::to_value(&item).unwrap();
+        let restored:Item=serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(restored.direct_recovery,item.direct_recovery);
+        let mut old=value;old.as_object_mut().unwrap().remove("direct_recovery");
+        let restored:Item=serde_json::from_value(old).unwrap();
+        assert!(restored.direct_recovery.is_none());
+    }
 
     /// A finished gallery's files join its written files in time linear in them, each once.
     #[test]

@@ -23,6 +23,7 @@ use librqbit::{
 };
 
 pub mod blocklist;
+pub mod candidate_search;
 mod names;
 pub mod rename_plugin;
 pub mod trackers;
@@ -125,6 +126,232 @@ fn check_bytes(torrent: &[u8]) -> Result<(), TorrentError> {
             .map_err(engine)?
             .iter_file_details(),
     )
+}
+
+/// Compare a saved HTTP download with a single-file v1 torrent's piece hashes.
+/// Matching pieces are evidence only for the compared bytes, not proof that the
+/// unknown remainder is the intended file. No file or state is modified.
+pub fn compare_saved_download(
+    torrent: &[u8],
+    saved: &mdm_engine::state::ResumeState,
+) -> Result<mdm_engine::recovery::PieceComparison, TorrentError> {
+    if torrent.len() as u64 > MAX_TORRENT_FILE {
+        return Err(engine("torrent metadata is too large"));
+    }
+    let meta = librqbit::torrent_from_bytes(torrent).map_err(|_| TorrentError::NotATorrent)?;
+    // Check zero before librqbit's piece-count calculation.
+    if meta.info.data.piece_length == 0 {
+        return Err(TorrentError::NotATorrent);
+    }
+    let info = meta.info.data.validate().map_err(engine)?;
+    safe_names(info.iter_file_details())?;
+    let raw = info.info();
+    if raw.files.is_some() || raw.length != Some(saved.size) {
+        return Err(engine(
+            "torrent does not contain one file of the expected size",
+        ));
+    }
+    let file = info
+        .iter_file_details()
+        .next()
+        .ok_or(TorrentError::NotATorrent)?;
+    if file.attrs().padding || file.attrs().symlink {
+        return Err(engine("torrent file is padding or a symbolic link"));
+    }
+    let bytes: &[u8] = raw.pieces.as_ref();
+    if bytes.len() % 20 != 0 {
+        return Err(TorrentError::NotATorrent);
+    }
+    let hashes: Vec<[u8; 20]> = bytes
+        .chunks_exact(20)
+        .map(|piece| piece.try_into().expect("20-byte piece"))
+        .collect();
+    let part = mdm_engine::naming::part_path(&saved.dest);
+    let mut file = std::fs::File::open(part).map_err(engine)?;
+    if file.metadata().map_err(engine)?.len() != saved.size {
+        return Err(engine("partial file has the wrong size"));
+    }
+    mdm_engine::recovery::compare_v1_pieces(
+        &mut file,
+        saved.size,
+        &saved.segments,
+        u64::from(raw.piece_length),
+        &hashes,
+    )
+    .map_err(engine)
+}
+
+/// Compare a saved ordinary download with one selected file inside a v1
+/// multi-file torrent. Pieces crossing file boundaries cannot be verified using
+/// this file alone and are reported as unavailable.
+pub fn compare_saved_torrent_file(
+    torrent: &[u8],
+    saved: &mdm_engine::state::ResumeState,
+    file_index: usize,
+) -> Result<mdm_engine::recovery::PieceComparison, TorrentError> {
+    if torrent.len() as u64 > MAX_TORRENT_FILE { return Err(engine("torrent metadata is too large")); }
+    let meta = librqbit::torrent_from_bytes(torrent).map_err(|_| TorrentError::NotATorrent)?;
+    if meta.info.data.piece_length == 0 { return Err(TorrentError::NotATorrent); }
+    let info = meta.info.data.validate().map_err(engine)?;
+    safe_names(info.iter_file_details())?;
+    let mut offset = 0u64;
+    let mut selected = None;
+    for (index, file) in info.iter_file_details().enumerate() {
+        if index == file_index {
+            if file.attrs().padding || file.attrs().symlink || file.len != saved.size {
+                return Err(engine("torrent file does not match the expected size or type"));
+            }
+            selected = Some(offset);
+        }
+        offset = offset.checked_add(file.len).ok_or_else(|| engine("torrent size is invalid"))?;
+    }
+    let selected = selected.ok_or_else(|| engine("torrent file was not found"))?;
+    let raw = info.info();
+    let bytes: &[u8] = raw.pieces.as_ref();
+    if bytes.len() % 20 != 0 { return Err(TorrentError::NotATorrent); }
+    let hashes: Vec<[u8; 20]> = bytes.chunks_exact(20).map(|p| p.try_into().expect("20-byte piece")).collect();
+    let mut file = std::fs::File::open(mdm_engine::naming::part_path(&saved.dest)).map_err(engine)?;
+    if file.metadata().map_err(engine)?.len() != saved.size { return Err(engine("partial file has the wrong size")); }
+    mdm_engine::recovery::compare_v1_file_pieces(&mut file, saved.size, &saved.segments, offset, selected, u64::from(raw.piece_length), &hashes).map_err(engine)
+}
+
+/// A separate file prepared for a torrent client to recheck before downloading.
+/// Matching pieces are evidence about those pieces only, not the unseen file.
+pub struct StagedRecovery {
+    pub file: PathBuf,
+    pub evidence: mdm_engine::recovery::PieceComparison,
+    pub verified_bytes: u64,
+}
+
+/// Everything required to add the staged file to a torrent session. The output
+/// directory is new, and the original direct-download partial remains intact.
+pub struct PreparedRecovery {
+    pub metadata: Meta,
+    pub file_index: usize,
+    pub folder: PathBuf,
+    pub staged: StagedRecovery,
+    pub source_dest: PathBuf,
+    pub source_downloaded: u64,
+}
+
+/// Prepare one matched torrent file for a subsequent torrent-session recheck.
+/// This does not connect to peers, add the torrent, or modify the original.
+pub fn prepare_saved_recovery(
+    torrent: &[u8],
+    saved: &mdm_engine::state::ResumeState,
+    file_index: usize,
+    folder: &Path,
+) -> Result<PreparedRecovery, TorrentError> {
+    let metadata = metadata_from_bytes(torrent)?;
+    let entry = metadata.files.get(file_index).ok_or_else(|| engine("torrent file was not found"))?;
+    if entry.padding || entry.size != saved.size {
+        return Err(engine("torrent file does not match the expected size or type"));
+    }
+    // An existing rename rule can change where librqbit writes. Until recovery
+    // explicitly supports that mapping, refuse it instead of staging bytes at
+    // a path the session will not use.
+    let effective = files_from_bytes(torrent)?;
+    if effective.get(file_index).is_none_or(|file| file.path != entry.path) {
+        return Err(engine("torrent has an existing rename rule that cannot be used for recovery"));
+    }
+    let staged = stage_saved_torrent_file(torrent, saved, file_index, folder)?;
+    Ok(PreparedRecovery { metadata, file_index, folder: folder.to_owned(), staged, source_dest:saved.dest.clone(), source_downloaded:saved.downloaded() })
+}
+
+/// A failed staging attempt may leave empty directories it created. Remove
+/// only empty directories, never unrelated files another process placed there.
+fn cleanup_staging_directories(root: &Path, file: &Path) {
+    let mut current = file.parent();
+    while let Some(dir) = current {
+        if !dir.starts_with(root) { break; }
+        if std::fs::remove_dir(dir).is_err() { break; }
+        if dir == root { break; }
+        current = dir.parent();
+    }
+}
+
+/// Stage one selected file from a multi-file torrent into a new torrent root.
+/// Only pieces entirely inside that file can be copied and verified.
+pub fn stage_saved_torrent_file(
+    torrent: &[u8], saved: &mdm_engine::state::ResumeState, file_index: usize, directory: &Path,
+) -> Result<StagedRecovery, TorrentError> {
+    let _reservation = mdm_engine::naming::reserve(&saved.dest).ok_or_else(|| engine("the original download is in use"))?;
+    let evidence = compare_saved_torrent_file(torrent, saved, file_index)?;
+    if evidence.matching.is_empty() || !evidence.mismatching.is_empty() { return Err(engine("the torrent does not match the available complete pieces")); }
+    let meta = librqbit::torrent_from_bytes(torrent).map_err(|_| TorrentError::NotATorrent)?;
+    let info = meta.info.data.validate().map_err(engine)?;
+    let mut total = 0u64;
+    let mut chosen = None;
+    for (index, file) in info.iter_file_details().enumerate() {
+        if file.attrs().symlink { return Err(engine("torrent contains a symbolic link")); }
+        if index == file_index { chosen = Some((total, file.filename.to_pathbuf())); }
+        total = total.checked_add(file.len).ok_or_else(|| engine("torrent size is invalid"))?;
+    }
+    let (offset, _) = chosen.ok_or_else(|| engine("torrent file was not found"))?;
+    let name = files_from_bytes(torrent)?.get(file_index).ok_or_else(|| engine("torrent file was not found"))?.path.clone();
+    check_relative_path(&name).map_err(TorrentError::UnsafeName)?;
+    let raw = info.info();
+    let bytes: &[u8] = raw.pieces.as_ref();
+    let hashes: Vec<[u8; 20]> = bytes.chunks_exact(20).map(|p| p.try_into().expect("20-byte piece")).collect();
+    std::fs::create_dir(directory).map_err(engine)?;
+    let destination = directory.join(name);
+    let result = (|| -> Result<_, TorrentError> {
+        if let Some(parent) = destination.parent() { std::fs::create_dir_all(parent).map_err(engine)?; }
+        mdm_engine::recovery::stage_matching_file_pieces(&mdm_engine::naming::part_path(&saved.dest), &destination, saved.size, &saved.segments, total, offset, u64::from(raw.piece_length), &hashes).map_err(engine)
+    })();
+    match result {
+        Ok(evidence) => {
+            let piece_length = u64::from(raw.piece_length);
+            let verified_bytes = evidence.matching.iter().map(|&index| {
+                let start = (index as u64) * piece_length;
+                total.saturating_sub(start).min(piece_length)
+            }).sum();
+            Ok(StagedRecovery { file: destination, evidence, verified_bytes })
+        }
+        Err(error) => { cleanup_staging_directories(directory, &destination); Err(error) }
+    }
+}
+
+/// Copy matching whole pieces into a new directory. Never overwrites either the
+/// original partial download or an existing recovery directory.
+pub fn stage_saved_download(
+    torrent: &[u8],
+    saved: &mdm_engine::state::ResumeState,
+    directory: &Path,
+) -> Result<StagedRecovery, TorrentError> {
+    let _reservation = mdm_engine::naming::reserve(&saved.dest)
+        .ok_or_else(|| engine("the original download is in use"))?;
+    let evidence = compare_saved_download(torrent, saved)?;
+    if evidence.matching.is_empty() || !evidence.mismatching.is_empty() {
+        return Err(engine("the torrent does not match the available complete pieces"));
+    }
+    let meta = librqbit::torrent_from_bytes(torrent).map_err(|_| TorrentError::NotATorrent)?;
+    let info = meta.info.data.validate().map_err(engine)?;
+    let name = files_from_bytes(torrent)?.into_iter().next().ok_or(TorrentError::NotATorrent)?.path;
+    check_relative_path(&name).map_err(TorrentError::UnsafeName)?;
+    if name.components().count() != 1 {
+        return Err(engine("expected one file name in the torrent"));
+    }
+    let raw = info.info();
+    let bytes: &[u8] = raw.pieces.as_ref();
+    let hashes: Vec<[u8; 20]> = bytes.chunks_exact(20).map(|p| p.try_into().expect("20-byte piece")).collect();
+    std::fs::create_dir(directory).map_err(engine)?;
+    let destination = directory.join(name);
+    let result = mdm_engine::recovery::stage_matching_pieces(
+        &mdm_engine::naming::part_path(&saved.dest), &destination, saved.size,
+        &saved.segments, u64::from(raw.piece_length), &hashes,
+    );
+    match result {
+        Ok(evidence) => {
+            let piece_length = u64::from(raw.piece_length);
+            let verified_bytes = evidence.matching.iter().map(|&index| {
+                let start = (index as u64) * piece_length;
+                saved.size.saturating_sub(start).min(piece_length)
+            }).sum();
+            Ok(StagedRecovery { file: destination, evidence, verified_bytes })
+        },
+        Err(error) => { cleanup_staging_directories(directory, &destination); Err(engine(error)) }
+    }
 }
 
 /// A magnet link for a .torrent: its hash, its name and its trackers (`trackers::listed`).
@@ -320,6 +547,33 @@ impl Meta {
             .filter(|p| p.exists())
             .collect()
     }
+}
+
+/// Read metadata from a local torrent without starting a peer session. This is
+/// useful when preparing a recovery: inspecting a candidate should not start
+/// a download or announce it to a swarm.
+pub fn metadata_from_bytes(torrent: &[u8]) -> Result<Meta, TorrentError> {
+    if torrent.len() as u64 > MAX_TORRENT_FILE {
+        return Err(engine("torrent metadata is too large"));
+    }
+    let meta = librqbit::torrent_from_bytes(torrent).map_err(|_| TorrentError::NotATorrent)?;
+    if meta.info.data.piece_length == 0 {
+        return Err(TorrentError::NotATorrent);
+    }
+    let hash = meta.info_hash.as_string();
+    let info = meta.info.data.validate().map_err(engine)?;
+    safe_names(info.iter_file_details())?;
+    let files = info.iter_file_details().map(|f| FileEntry {
+        path: f.filename.to_pathbuf(), size: f.len, padding: f.attrs().padding,
+    }).collect();
+    Ok(Meta {
+        name: info.name().map(|n| n.into_owned()).unwrap_or_else(|| hash.clone()),
+        info_hash: hash,
+        files,
+        piece_length: info.lengths().default_piece_length(),
+        torrent: torrent.to_vec(),
+        peers: Vec::new(),
+    })
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1681,6 +1935,222 @@ mod tests {
         }
         tokio::time::sleep(Duration::from_millis(300)).await;
         assert!(dht.seen().is_empty(), "nothing was sent");
+    }
+
+    #[test]
+    fn compare_saved_download_uses_torrent_pieces_without_modifying_partial_file() {
+        let pieces: [u8; 60] = [
+            129, 254, 139, 254, 135, 87, 108, 62, 203, 34, 66, 111, 142, 87, 132, 115, 130, 145,
+            122, 207, 42, 237, 138, 169, 248, 38, 194, 30, 240, 125, 94, 225, 91, 72, 238, 160,
+            110, 156, 138, 98, 96, 78, 189, 235, 141, 59, 229, 48, 60, 15, 200, 145, 119, 63, 105,
+            252, 58, 55, 32, 250,
+        ];
+        let mut torrent =
+            b"d4:infod6:lengthi12e4:name8:file.bin12:piece lengthi4e6:pieces60:".to_vec();
+        torrent.extend_from_slice(&pieces);
+        torrent.extend_from_slice(b"ee");
+        let dir = tempfile::tempdir().unwrap();
+        let dest = dir.path().join("saved.bin");
+        let part = mdm_engine::naming::part_path(&dest);
+        std::fs::write(&part, b"abcdefghijkl").unwrap();
+        let url: url::Url = "https://example.org/file".parse().unwrap();
+        let mut saved = mdm_engine::state::ResumeState::new(
+            url,
+            url::Url::parse("https://example.org/file").unwrap(),
+            dest,
+            12,
+            Default::default(),
+        );
+        saved.segments = vec![mdm_engine::planner::SavedSegment {
+            start: 0,
+            cursor: 6,
+            end: 12,
+        }];
+        let evidence = compare_saved_download(&torrent, &saved).unwrap();
+        assert_eq!(evidence.matching, vec![0]);
+        assert!(evidence.mismatching.is_empty());
+        assert_eq!(evidence.unavailable, vec![1, 2]);
+        let staging = dir.path().join("torrent-recovery");
+        let reservation = mdm_engine::naming::reserve(&saved.dest).unwrap();
+        assert!(stage_saved_download(&torrent, &saved, &staging).is_err());
+        assert!(!staging.exists());
+        drop(reservation);
+        let staged = stage_saved_download(&torrent, &saved, &staging).unwrap();
+        assert_eq!(staged.evidence.matching, vec![0]);
+        assert_eq!(staged.verified_bytes, 4);
+        assert_eq!(staged.file.file_name().unwrap(), "file.bin");
+        assert_eq!(std::fs::read(&staged.file).unwrap(), b"abcd\0\0\0\0\0\0\0\0");
+        assert!(stage_saved_download(&torrent, &saved, &staging).is_err());
+        assert_eq!(std::fs::read(&staged.file).unwrap(), b"abcd\0\0\0\0\0\0\0\0");
+        assert_eq!(std::fs::read(part).unwrap(), b"abcdefghijkl");
+        saved.size = 11;
+        assert!(compare_saved_download(&torrent, &saved).is_err());
+    }
+
+    #[test]
+    fn compares_one_file_in_a_multi_file_torrent_without_trusting_boundary_pieces() {
+        let hashes: [u8; 60] = [
+            129,254,139,254,135,87,108,62,203,34,66,111,142,87,132,115,130,145,122,207,
+            42,237,138,169,248,38,194,30,240,125,94,225,91,72,238,160,110,156,138,98,
+            96,78,189,235,141,59,229,48,60,15,200,145,119,63,105,252,58,55,32,250,
+        ];
+        let mut torrent = b"d4:infod5:filesld6:lengthi2e4:pathl5:a.bineed6:lengthi8e4:pathl10:target.bineed6:lengthi2e4:pathl5:c.bineee4:name3:set12:piece lengthi4e6:pieces60:".to_vec();
+        torrent.extend_from_slice(&hashes); torrent.extend_from_slice(b"ee");
+        let dir = tempfile::tempdir().unwrap();
+        let dest = dir.path().join("download.bin");
+        std::fs::write(mdm_engine::naming::part_path(&dest), b"cdefghij").unwrap();
+        let url: url::Url = "https://example.org/file".parse().unwrap();
+        let mut saved = mdm_engine::state::ResumeState::new(url.clone(), url, dest, 8, Default::default());
+        saved.segments = vec![mdm_engine::planner::SavedSegment { start: 0, cursor: 8, end: 8 }];
+        let evidence = compare_saved_torrent_file(&torrent, &saved, 1).unwrap();
+        assert_eq!(evidence.matching, vec![1]);
+        assert_eq!(evidence.unavailable, vec![0, 2]);
+        let reservation = mdm_engine::naming::reserve(&saved.dest).unwrap();
+        assert!(candidate_search::matching_files(&torrent, &saved).is_err());
+        drop(reservation);
+        let candidates = candidate_search::matching_files(&torrent, &saved).unwrap();
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].file_index, 1);
+        assert_eq!(candidates[0].evidence.matching, vec![1]);
+        assert!(candidate_search::matching_files(&vec![0; MAX_TORRENT_FILE as usize + 1], &saved).unwrap_err().contains("too large"));
+        assert!(compare_saved_torrent_file(&torrent, &saved, 0).is_err());
+        let staged = stage_saved_torrent_file(&torrent, &saved, 1, &dir.path().join("multi-recovery")).unwrap();
+        assert_eq!(staged.verified_bytes, 4);
+        assert_eq!(staged.file.file_name().unwrap(), "target.bin");
+        assert_eq!(std::fs::read(staged.file).unwrap(), b"\0\0efgh\0\0");
+        assert_eq!(std::fs::read(mdm_engine::naming::part_path(&saved.dest)).unwrap(), b"cdefghij");
+        std::fs::write(mdm_engine::naming::part_path(&saved.dest), b"cdXXghij").unwrap();
+        assert!(candidate_search::matching_files(&torrent, &saved).unwrap().is_empty());
+    }
+
+    #[test]
+    fn failed_staging_cleanup_keeps_unrelated_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("recovery");
+        let nested = root.join("subdir");
+        std::fs::create_dir_all(&nested).unwrap();
+        let keep = root.join("other-file");
+        std::fs::write(&keep, b"keep").unwrap();
+        cleanup_staging_directories(&root, &nested.join("staged"));
+        assert!(!nested.exists());
+        assert_eq!(std::fs::read(&keep).unwrap(), b"keep");
+        std::fs::remove_file(&keep).unwrap();
+        cleanup_staging_directories(&root, &root.join("staged"));
+        assert!(!root.exists());
+    }
+
+    /// A saved direct-download prefix is staged, rechecked by the torrent
+    /// client, and the missing pieces arrive from a local peer. The original
+    /// direct-download partial must remain untouched throughout.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn staged_direct_download_can_continue_from_a_torrent_peer() {
+        let dir = tempfile::tempdir().unwrap();
+        let seed_dir = dir.path().join("seed");
+        std::fs::create_dir(&seed_dir).unwrap();
+        let seed_file = seed_dir.join("file.bin");
+        let data: Vec<u8> = (0..180_000u32).map(|i| (i % 251) as u8).collect();
+        std::fs::write(&seed_file, &data).unwrap();
+        let spawner = librqbit::spawn_utils::BlockingSpawner::new(1);
+        let torrent = librqbit::create_torrent(&seed_file, librqbit::CreateTorrentOptions {
+            name: None, trackers: Vec::new(), piece_length: Some(16 * 1024),
+        }, &spawner).await.unwrap().as_bytes().unwrap().to_vec();
+        let metadata = metadata_from_bytes(&torrent).unwrap();
+        assert_eq!(metadata.files.len(), 1);
+        assert_eq!(metadata.files[0].path, std::path::Path::new("file.bin"));
+        assert_eq!(metadata.files[0].size, data.len() as u64);
+        assert!(metadata.peers.is_empty());
+        let seeder = Torrents::start(offline(&dir.path().join("seed-state"))).await.unwrap();
+        let hash = seeder.add(&torrent, &seed_dir, None, Vec::new(), false).await.unwrap();
+        assert_eq!(metadata.info_hash, hash);
+        let deadline = std::time::Instant::now() + Duration::from_secs(20);
+        while seeder.stats(&hash).unwrap().phase != Phase::Finished {
+            assert!(std::time::Instant::now() < deadline, "seeder never checked its file");
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        let original = dir.path().join("original-download.bin");
+        let partial = mdm_engine::naming::part_path(&original);
+        let mut original_bytes = vec![0; data.len()];
+        original_bytes[..65536].copy_from_slice(&data[..65536]);
+        std::fs::write(&partial, &original_bytes).unwrap();
+        let url: url::Url = "https://example.org/file.bin".parse().unwrap();
+        let mut saved = mdm_engine::state::ResumeState::new(url.clone(), url, original, data.len() as u64, Default::default());
+        saved.segments = vec![mdm_engine::planner::SavedSegment {start:0,cursor:65536,end:data.len() as u64}];
+        let staging = dir.path().join("recovery");
+        let staged = stage_saved_download(&torrent, &saved, &staging).unwrap();
+        assert_eq!(staged.verified_bytes, 65536);
+        let leecher = Torrents::start(offline(&dir.path().join("leech-state"))).await.unwrap();
+        let peer = seeder.listen_addr().expect("local seed listens");
+        let recovered_hash = leecher.add(&torrent, &staging, None, vec![peer], false).await.unwrap();
+        assert_eq!(recovered_hash, hash);
+        let deadline = std::time::Instant::now() + Duration::from_secs(30);
+        loop {
+            let stats = leecher.stats(&hash).unwrap();
+            if stats.phase == Phase::Finished {
+                assert!(stats.fetched < data.len() as u64, "verified saved pieces were fetched again");
+                break;
+            }
+            assert!(std::time::Instant::now() < deadline, "recovery did not finish: {stats:?}");
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        assert_eq!(std::fs::read(&staged.file).unwrap(), data);
+        assert_eq!(std::fs::read(&partial).unwrap(), original_bytes);
+        leecher.stop().await;
+        seeder.stop().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn staged_direct_download_can_continue_inside_a_multi_file_torrent() {
+        let dir = tempfile::tempdir().unwrap();
+        let seed_dir = dir.path().join("seed-set");
+        std::fs::create_dir(&seed_dir).unwrap();
+        std::fs::write(seed_dir.join("a.bin"), vec![42; 7_000]).unwrap();
+        let data: Vec<u8> = (0..180_000u32).map(|i| (i % 251) as u8).collect();
+        std::fs::write(seed_dir.join("b.bin"), &data).unwrap();
+        let torrent = make_torrent(&seed_dir).await;
+        let meta = metadata_from_bytes(&torrent).unwrap();
+        let index = meta.files.iter().position(|f|f.path.file_name().is_some_and(|n|n=="b.bin")).unwrap();
+        let seeder = Torrents::start(offline(&dir.path().join("seed-state"))).await.unwrap();
+        let hash = seeder.add(&torrent, &seed_dir, None, Vec::new(), false).await.unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(20);
+        while seeder.stats(&hash).unwrap().phase != Phase::Finished {
+            assert!(std::time::Instant::now() < deadline, "seeder never checked its files");
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        let original = dir.path().join("original-download.bin");
+        let partial = mdm_engine::naming::part_path(&original);
+        let mut original_bytes = vec![0; data.len()];
+        original_bytes[..100_000].copy_from_slice(&data[..100_000]);
+        std::fs::write(&partial, &original_bytes).unwrap();
+        let url: url::Url = "https://example.org/file.bin".parse().unwrap();
+        let mut saved = mdm_engine::state::ResumeState::new(url.clone(), url, original, data.len() as u64, Default::default());
+        saved.segments = vec![mdm_engine::planner::SavedSegment {start:0,cursor:100_000,end:data.len() as u64}];
+        let staging = dir.path().join("recovery");
+        let prepared = prepare_saved_recovery(&torrent, &saved, index, &staging).unwrap();
+        assert_eq!(prepared.metadata.info_hash, hash);
+        assert_eq!(prepared.file_index, index);
+        assert_eq!(prepared.folder, staging);
+        let staged = prepared.staged;
+        assert!(staged.verified_bytes > 0 && staged.verified_bytes < 100_000);
+        let staged_before = std::fs::read(&staged.file).unwrap();
+        assert!(prepare_saved_recovery(&torrent, &saved, index, &staging).is_err());
+        assert_eq!(std::fs::read(&staged.file).unwrap(), staged_before);
+        let leecher = Torrents::start(offline(&dir.path().join("leech-state"))).await.unwrap();
+        let peer = seeder.listen_addr().expect("local seed listens");
+        leecher.add(&torrent, &staging, Some(vec![index]), vec![peer], false).await.unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(30);
+        loop {
+            let stats = leecher.stats(&hash).unwrap();
+            if stats.phase == Phase::Finished {
+                assert!(stats.fetched < data.len() as u64, "verified saved pieces were fetched again");
+                break;
+            }
+            assert!(std::time::Instant::now() < deadline, "recovery did not finish: {stats:?}");
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        assert_eq!(std::fs::read(&staged.file).unwrap(), data);
+        assert_eq!(std::fs::read(&partial).unwrap(), original_bytes);
+        leecher.stop().await;
+        seeder.stop().await;
     }
 
     #[test]

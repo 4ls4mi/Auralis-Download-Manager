@@ -1,6 +1,7 @@
 import {savePreferences,restorePreferences} from "./preferencesBackup";
 import { liquidMaterials } from "./LiquidIndicators";
 import {loadMaterials,materialId,materialPresets,extraMaterials,parseMaterial,MATERIALS_KEY} from "./customMaterials";
+import {loadThemes,parseTheme,paletteForTheme,themeId,THEMES_KEY,type ThemeFile,type ThemeSettings} from "./themeFiles";
 import { listen } from "@tauri-apps/api/event";
 import CrystalAccounts from "./CrystalAccounts";
 import CrystalHelpers from "./CrystalHelpers";
@@ -39,6 +40,8 @@ export default function CrystalSettings(){
   },[]);
   const [appearanceTab,setAppearanceTab]=useState("Appearance");
   const [customMaterials,setCustomMaterials]=useState(loadMaterials);
+  const [customThemes,setCustomThemes]=useState(loadThemes);
+  useEffect(()=>{const update=(e:StorageEvent)=>{if(!e.key||e.key===THEMES_KEY)setCustomThemes(loadThemes())};window.addEventListener('storage',update);return()=>window.removeEventListener('storage',update)},[]);
   useEffect(()=>{const update=(e:StorageEvent)=>{if(!e.key||e.key===MATERIALS_KEY)setCustomMaterials(loadMaterials())};window.addEventListener('storage',update);return()=>window.removeEventListener('storage',update)},[]);
   const [indicatorTab,setIndicatorTab]=useState("Progress");
   const [cfg,setCfg]=useState<EngineSettings|null>(null);
@@ -57,7 +60,22 @@ export default function CrystalSettings(){
   const adapterPicker=()=>cfg&&<label className="cg-field">Preferred network adapter<select value={cfg.net_adapter} disabled={busy||Boolean(adapterError)} onChange={e=>void change("net_adapter",e.target.value)}><option value="">Automatic — Windows chooses</option>{cfg.net_adapter&&!adapters.some(a=>a.name===cfg.net_adapter)&&<option value={cfg.net_adapter}>{cfg.net_adapter} (not connected)</option>}{adapters.map(a=><option key={a.name} value={a.name}>{a.name} {a.address?`— ${a.address}`:"(not connected)"}</option>)}</select><small>Choose Automatic unless you need to route downloads through a specific adapter or VPN. Downloads may stop if that adapter disconnects.</small>{adapterError&&<small>Unable to list adapters: {adapterError}</small>}</label>;
 
   const [connection,setConnection]=useState<{recently_connected:boolean;previously_connected:boolean}|null>(null);
-  const {appearance,set}=useCrystal();
+  const {appearance,theme,set}=useCrystal();
+  const applyTheme=(file:ThemeFile)=>{
+    const material=file.customMaterial;
+    if(material){const existing=loadMaterials();const sameName=existing.find(m=>materialId(m)===materialId(material));if(sameName&&JSON.stringify(sameName)!==JSON.stringify(material))throw Error('A different custom material already has this name. Rename customMaterial.name in the theme file.');const updated=[...existing.filter(m=>materialId(m)!==materialId(material)),material];if(updated.length>32)throw Error('A maximum of 32 custom materials is supported.');localStorage.setItem(MATERIALS_KEY,JSON.stringify(updated));setCustomMaterials(updated)}
+    set('material',material?materialId(material):file.material);
+    for(const [key,value] of Object.entries(file.settings)){set(key as keyof Appearance,value as Appearance[keyof Appearance])}
+    set('tintHue',themeHue(paletteForTheme(file.palette)));
+    set('theme',themeId(file.palette));
+  };
+  const exportTheme=async()=>{
+    const custom=customMaterials.find(m=>materialId(m)===appearance.material)??null;
+    const settingsKeys:(keyof ThemeSettings)[]=['tintStrength','fontFamily','fontSize','highContrast','uiScale','dim','blur','indicator','connectionIndicator','graphIndicator','progressMaterial','connectionMaterial','graphMaterial','progressShape','connectionShape','graphShape','trackFinish','trackColor','connectionTrackFinish','connectionTrackColor'];
+    const settings=Object.fromEntries(settingsKeys.map(key=>[key,appearance[key]]));
+    const data=parseTheme({format:'auralis-theme',version:1,palette:{name:theme.name,accent:theme.accent,secondary:theme.secondary,surface:theme.neutralTint??null,light:theme.light===true||theme.id==='white-frost'||theme.id==='white-pearl'},material:custom?'custom':appearance.material,customMaterial:custom,settings});
+    const file=await invoke<string|null>('export_theme_file',{contents:JSON.stringify(data,null,2)+'\n'});if(file)setNotice('Theme exported. Edit the JSON file and import it here.');
+  };
   const load=useCallback(async()=>{
     try{
       const [settings,data]=await Promise.all([
@@ -181,9 +199,10 @@ export default function CrystalSettings(){
         <nav className="cg-appearance-tabs" aria-label="Appearance sections">{["Appearance","Indicators","Typography"].map(name=><button key={name} className={appearanceTab===name?"selected":""} onClick={()=>setAppearanceTab(name)}>{name}</button>)}</nav>
         {appearanceTab==="Appearance"&&<>
         <h3>Color themes</h3>
-        <div className="cg-color-choices">{themes.map(t=><button key={t.id} className={appearance.theme===t.id?"selected":""}
-          onClick={()=>{set("theme",t.id);if(!t.neutralTint)set("tintHue",themeHue(t))}}><i style={{background:t.neutralTint?`linear-gradient(140deg,rgb(${t.neutralTint.join(',')}),${t.secondary})`:`linear-gradient(140deg,${t.accent},${t.secondary})`}}/>{t.name}
+        <div className="cg-color-choices">{[...themes,...customThemes.map(f=>paletteForTheme(f.palette))].map(t=><button key={t.id} className={appearance.theme===t.id?"selected":""}
+          onClick={()=>{const file=customThemes.find(f=>themeId(f.palette)===t.id);if(file){try{applyTheme(file)}catch(e){setError(String(e))}}else{set("theme",t.id);if(!t.neutralTint)set("tintHue",themeHue(t))}}}><i style={{background:t.neutralTint?`linear-gradient(140deg,rgb(${t.neutralTint.join(',')}),${t.secondary})`:`linear-gradient(140deg,${t.accent},${t.secondary})`}}/>{t.name}
         </button>)}</div>
+        <div className="cg-wall-choice"><button className="cg-btn" onClick={()=>{setError('');void exportTheme().catch(e=>setError(`Could not export theme: ${String(e)}`))}}>Export current theme…</button><label className="cg-btn cg-material-import">Import theme…<input type="file" accept=".json,application/json" onChange={async e=>{const file=e.currentTarget.files?.[0];e.currentTarget.value='';if(!file)return;setError('');try{if(file.size>32768)throw Error('Theme file exceeds 32 KB.');const value=parseTheme(JSON.parse(await file.text()));const updated=[...customThemes.filter(t=>themeId(t.palette)!==themeId(value.palette)),value];if(updated.length>32)throw Error('A maximum of 32 custom themes is supported.');applyTheme(value);localStorage.setItem(THEMES_KEY,JSON.stringify(updated));setCustomThemes(updated);setNotice(`Imported ${value.palette.name}.`)}catch(err){setError(`Could not import theme: ${String(err)}`)}}}/></label>{appearance.theme.startsWith('user-')&&<button className="cg-btn" onClick={()=>{const updated=customThemes.filter(t=>themeId(t.palette)!==appearance.theme);localStorage.setItem(THEMES_KEY,JSON.stringify(updated));setCustomThemes(updated);set('theme','silver')}}>Remove imported theme</button>}</div>
         <div className="cg-settings-fallback">Your color theme controls the surfaces, buttons and highlights. Indicator colors remain separately adjustable.</div>
         </>}
         {appearanceTab==="Appearance"&&<><h3>Surface material</h3>
@@ -192,18 +211,14 @@ export default function CrystalSettings(){
         <small>Material files define a finish, control shape, translucency and shading. They do not contain code. The Frosted Layers template approximates its animated glass using these editable settings.</small>{slider("tintStrength","Theme tint strength",0,65,"%")}</>}
         {appearanceTab==="Indicators"&&<><h3>Indicator styles</h3><p>Choose each indicator independently. Previews update as you choose.</p><nav className="cg-indicator-tabs" aria-label="Indicator preview">{["Progress","Connections","Graph"].map(name=><button key={name} type="button" aria-pressed={indicatorTab===name} className={indicatorTab===name?"selected":""} onClick={()=>setIndicatorTab(name)}>{name}</button>)}</nav><div className="cg-indicator-cards">{([ ["Progress", "progressShape", "indicator"], ["Connections", "connectionShape", "connectionIndicator"] ] as const).map(([label,shapeKey,colorKey])=><section className="cg-indicator-card" key={label} hidden={indicatorTab!==label}><strong>{label}</strong>{label==="Progress"&&<label className="cg-field">Fill<select value={appearance.progressMaterial} onChange={e=>set("progressMaterial",e.target.value)}><option value="gradient">Color gradient</option><option value="frosted-ribbon">Approved ice ribbon</option>{liquidMaterials.map(([id,name])=><option key={id} value={id}>{name}</option>)}</select></label>}{label==="Connections"&&<label className="cg-field">Fill<select value={appearance.connectionMaterial} onChange={e=>set("connectionMaterial",e.target.value)}><option value="gradient">Color gradient</option>{liquidMaterials.map(([id,name])=><option key={id} value={id}>{name}</option>)}</select></label>}<label className="cg-field">Shape<select value={appearance[shapeKey]} onChange={e=>set(shapeKey,e.target.value)}>{[["rounded","Rounded"],["faceted","Faceted"],["droplet","Water droplet"],["square","Square"]].map(([id,name])=><option key={id} value={id}>{name}</option>)}</select></label><label className="cg-field">Gradient<select value={appearance[colorKey]} onChange={e=>set(colorKey,e.target.value)}>{Object.entries(indicatorPalettes).map(([id,p])=><option key={id} value={id}>{p.label}</option>)}</select></label><div className="cg-card-preview">{label==="Progress"?<GradientBar percent={64} showLabel/>:<ConnectionMap compact downloading connections={Array.from({length:8},(_,id)=>({id,downloaded:40+id*5,speed:2,state:"Receiving"}))} segments={Array.from({length:8},(_,id)=>({start:0,cursor:40+id*5,end:100,worker:id}))}/>}</div></section>)}<section className="cg-indicator-card" hidden={indicatorTab!=="Progress"}><strong>Progress backdrop</strong><label className="cg-field">Finish<select value={appearance.trackFinish} onChange={e=>set("trackFinish",e.target.value)}><option value="default">Default</option><option value="clear">Clear glass</option><option value="frosted">Frosted</option><option value="recessed">Recessed</option></select></label><label className="cg-field">Backdrop tint<select value={appearance.trackColor} onChange={e=>set("trackColor",e.target.value)}><option value="ice">Ice</option><option value="violet">Violet</option><option value="teal">Teal</option><option value="amber">Amber</option><optgroup label="Gradient and solid palettes">{Object.entries(indicatorPalettes).map(([id,p])=><option key={id} value={`palette:${id}`}>{p.label}</option>)}</optgroup></select></label><div className="cg-card-preview"><GradientBar percent={64} showLabel/></div></section><section className="cg-indicator-card" hidden={indicatorTab!=="Connections"}><strong>Connections backdrop</strong><label className="cg-field">Finish<select value={appearance.connectionTrackFinish} onChange={e=>set("connectionTrackFinish",e.target.value)}><option value="default">Default</option><option value="clear">Clear glass</option><option value="frosted">Frosted</option><option value="recessed">Recessed</option></select></label><label className="cg-field">Backdrop tint<select value={appearance.connectionTrackColor} onChange={e=>set("connectionTrackColor",e.target.value)}><option value="ice">Ice</option><option value="violet">Violet</option><option value="teal">Teal</option><option value="amber">Amber</option><optgroup label="Gradient and solid palettes">{Object.entries(indicatorPalettes).map(([id,p])=><option key={id} value={`palette:${id}`}>{p.label}</option>)}</optgroup></select></label><div className="cg-card-preview"><ConnectionMap compact downloading connections={Array.from({length:8},(_,id)=>({id,downloaded:40+id*5,speed:2,state:"Receiving"}))} segments={Array.from({length:8},(_,id)=>({start:0,cursor:40+id*5,end:100,worker:id}))}/></div></section><section className="cg-indicator-card" hidden={indicatorTab!=="Graph"}><strong>Graph</strong><label className="cg-field">Material<select value={appearance.graphMaterial} onChange={e=>set("graphMaterial",e.target.value)}><option value="gradient">Color gradient</option>{liquidMaterials.map(([id,name])=><option key={id} value={id}>{name}</option>)}</select></label><label className="cg-field">Shape<select value={appearance.graphShape} onChange={e=>set("graphShape",e.target.value)}><option value="area">Filled area</option><option value="line">Line</option><option value="bars">Bars</option></select></label><label className="cg-field">Gradient<select value={appearance.graphIndicator} onChange={e=>set("graphIndicator",e.target.value)}>{Object.entries(indicatorPalettes).map(([id,p])=><option key={id} value={id}>{p.label}</option>)}</select></label><div className="cg-card-preview"><SpeedGraph values={[2,4,3,7,6,10,8,11,9,12]}/></div></section></div></>}
         {appearanceTab==="Appearance"&&<>
-        <h3>Translucency and blur</h3>
-        <p>Choose an independent backdrop style. Windows controls desktop blur; wallpaper blur is adjusted separately. Frosted Layers keeps its shaped edges.</p>
-        <div className="cg-wall-choice">{([['material','Material default'],['clear','Clear'],['soft','Soft blur'],['frosted','Frosted blur'],['tinted','Tinted blur']] as const).map(([id,name])=><button key={id} className={`cg-btn ${appearance.surfaceStyle===id?'cg-btn-primary':''}`} aria-pressed={appearance.surfaceStyle===id} onClick={()=>set('surfaceStyle',id)}>{name}</button>)}</div>
+        <p>The selected material automatically controls its translucency and Windows backdrop effect. Your color theme supplies the tint.</p>
         <h3>Independent translucent backgrounds</h3>
         {mode("main")}{mode("details")}
         </>}
         {appearanceTab==="Appearance"&&<>
-        {slider("opacity","Surface opacity",45,100,"%")}
-        {slider("blur","Wallpaper and supported glass blur",0,20," px")}
+        {slider("blur","Wallpaper blur",0,20," px")}
         {slider("dim","Wallpaper darkness",0,80,"%")}
         {slider("uiScale","Interface size",80,150,"%")}
-        <label className="cg-toggle"><span><strong>Windows backdrop blur</strong><small>Use the Windows acrylic effect behind see-through windows when supported. Its blur strength is controlled by Windows.</small></span><input type="checkbox" checked={appearance.acrylic} onChange={e=>set("acrylic",e.target.checked)}/></label>
         </>}
         {appearanceTab==="Typography"&&<>
         <h3>Typography and contrast</h3>

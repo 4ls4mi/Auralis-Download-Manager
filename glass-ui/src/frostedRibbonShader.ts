@@ -248,21 +248,21 @@ export const ribbonFragment = `
       vec3 chosen=mix(mix(fillColorA,fillColorB,smoothstep(0.,.5,along)),fillColorC,smoothstep(.5,1.,along));
       float brightness=dot(liquid,vec3(.2126,.7152,.0722));
       vec3 colored=chosen*(.42+brightness*.85)+vec3(max(0.,brightness-.65)*.60);
-      liquid=mix(liquid,colored,.68);
+      liquid=chosen;
       float nose = sqrt(max(0.,1.-sq(clamp(y*.98,-1.,1.))));
       float cap = end-19.*(1.-nose);
       float full = smoothstep(.982,1.,progress);
       float fill = mix((1.-smoothstep(-.6,.85,p.x-cap))*smoothstep(0.,.031,progress),1.,full);
       float endDepth = cap-p.x;
-      liquid += vec3(.37,.48,.51)*band(endDepth,1.,1.35)*(1.-full);
-      liquid += vec3(.078,.20,.26)*band(endDepth,4.2,6.)*(1.-full);
-      liquid += vec3(.08,.14,.17)*inner;
+
+
+
       vec3 face = mix(track,liquid,fill);
       if (unknown>.5) {
         float pulse = pow(.5+.5*cos(q.x*.024-seconds*3.),6.);
         face = mix(track,liquid,.11+.45*pulse);
       }
-      face = mix(face,vec3(.865,.943,.974),rim*(.44+.20*max(0.,-y)));
+      face = mix(face,vec3(.865,.943,.974),rim*(.44+.20*max(0.,-y))*(1.-fill));
       return over(background,face,aa(d)*(.79+.115*fill));
     }
     void main() {

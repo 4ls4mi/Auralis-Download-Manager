@@ -1452,6 +1452,8 @@ const REFRESH_EVERY: Duration = Duration::from_secs(120);
 struct Ctx {
     /// The download's client: every connection's requests go through its pool.
     client: Client,
+    /// A repaired checkpoint requires its original strong validator on every range.
+    repair_source: Option<Url>,
     /// The file's version; each range request's `If-Range` is chosen from them.
     validators: Mutex<Validators>,
     /// Where ranges come from now (after redirects); switched when it expires.
@@ -2126,6 +2128,7 @@ async fn run_fresh(
         saved.browser_like = browser.is_some();
         let ctx = Arc::new(Ctx {
             client: client0.clone(),
+            repair_source: None,
             validators: Mutex::new(validators),
             target: Mutex::new(Target {
                 url: final_url.clone(),
@@ -2357,6 +2360,7 @@ async fn run_fresh_ftp(
         let ctx = Arc::new(Ctx {
             // FTP's connections are its own (`ftp`): this client's are none of the server's.
             client: client(&opts, &req.url, &AsGet::default(), &Default::default())?,
+            repair_source: None,
             validators: Mutex::new(validators),
             target: Mutex::new(Target {
                 url,
@@ -2419,6 +2423,9 @@ async fn run_resume(
     if state_file != state_path(&saved.dest) {
         return Err(bad("does not belong to the file it names"));
     }
+    if saved.repair_strict && saved.repair_source.as_ref() != Some(&saved.final_url) {
+        return Err(bad("the checked repair source changed; saved data was preserved"));
+    }
     let _reservation =
         naming::reserve(&saved.dest).ok_or_else(|| Error::InUse(saved.dest.clone()))?;
     let part = naming::part_path(&saved.dest);
@@ -2453,7 +2460,7 @@ async fn run_resume(
     // Through a service account (#44), the service is asked for today's link even when the
     // state holds none of its links (the download went directly until now).
     let refreshed =
-        if browser.is_none() && (saved.url != saved.final_url || opts.unlocker.is_some()) {
+        if !saved.repair_strict && browser.is_none() && (saved.url != saved.final_url || opts.unlocker.is_some()) {
             let post = opts.post.as_ref();
             let agent = opts.site_agent();
             refresh_final_url(
@@ -2476,7 +2483,7 @@ async fn run_resume(
         Some((url, h)) => (url.clone(), as_get.contains(&url), Some(h)),
         None => (saved.final_url.clone(), saved.final_get, None),
     };
-    let origin = origin_of(&saved.url, &headers, &url, browser.is_some());
+    let origin = if saved.repair_strict { None } else { origin_of(&saved.url, &headers, &url, browser.is_some()) };
     // Credentials stay with the host they were given for (the refresh's own way there scoped
     // them as it went).
     headers = refreshed_headers.unwrap_or_else(|| scoped_headers(&headers, &saved.url, &url));
@@ -2540,6 +2547,7 @@ async fn run_resume(
     );
     let ctx = Arc::new(Ctx {
         client,
+        repair_source: saved.repair_source.clone().filter(|_| saved.repair_strict),
         validators: Mutex::new({
             let mut v = saved.validators.clone();
             if opts.ignore_mtime {
@@ -2624,6 +2632,31 @@ async fn refresh_final_url(
     }
     let (_, _, total) = parse_content_range(resp.headers()).ok()?;
     (total == Some(size)).then(|| (resp.url().clone(), headers))
+}
+
+/// Re-obtain a redirected repair URL, but only from the same final origin and
+/// only when the response confirms the exact saved validator and byte range.
+pub(crate) async fn refresh_repair_url(saved: &ResumeState, headers: &HeaderMap, opts: &Options) -> Option<Url> {
+    let expected = saved.validators.if_range(saved.final_url.host_str())?;
+    if opts.ignore_mtime && saved.validators.etag.as_deref() != Some(expected) { return None; }
+    let expected_header = HeaderValue::from_str(expected).ok()?;
+    let field = if expected.as_bytes().starts_with(b"\"") { header::ETAG } else { header::LAST_MODIFIED };
+    let client = http_client(opts, &saved.url).ok()?;
+    let mut asked = headers.clone();
+    asked.remove(header::RANGE);
+    asked.remove(header::IF_RANGE);
+    asked.insert(header::RANGE, HeaderValue::from_static("bytes=0-0"));
+    asked.insert(header::IF_RANGE, expected_header.clone());
+    let (response, _, _) = get(&client, saved.url.clone(), asked, None, opts.site_agent(), false, &CancellationToken::new()).await.ok()?;
+    let url = response.url();
+    if response.status() != StatusCode::PARTIAL_CONTENT
+        || url.scheme() != saved.final_url.scheme()
+        || url.host_str() != saved.final_url.host_str()
+        || url.port_or_known_default() != saved.final_url.port_or_known_default()
+        || response.headers().get(field) != Some(&expected_header)
+        || parse_content_range(response.headers()).ok()? != (0, 0, Some(saved.size))
+    { return None; }
+    Some(url.clone())
 }
 
 /// Check the finished part file against `hash` (at most two files at once: it reads them
@@ -3506,11 +3539,9 @@ async fn supervise(ctx: Arc<Ctx>, first: Option<Body>) -> Result<(), Error> {
     // A POST the server hasn't shown to take ranges: one connection, until a 206 says the
     // others may follow (a second POST may do the form's work twice).
     let mut held = ctx.wait_for_ranges;
-    // A POST awaiting proof of range support must retain the existing single-stream
-    // negotiation. Ordinary downloads reserve their ranges before any worker starts.
-    if !held {
-        ctx.shared.with_planner(|p| p.reserve_fixed_ranges(max));
-    }
+    // Use the dynamic planner for fresh and resumed transfers. Workers split and
+    // reassign unfinished ranges as they become free. POSTs still wait for proof
+    // of range support before starting additional workers.
     if let Some(body) = first {
         ctx.shared.with_planner(|p| p.assign(0, None));
         set.spawn(worker(ctx.clone(), 0, Some(body)));
@@ -3869,11 +3900,14 @@ async fn request(ctx: &Ctx, target: &Target, from: u64, to: u64) -> Result<Body,
     }
     match head.status {
         StatusCode::PARTIAL_CONTENT => {
+            if let Some(source) = &ctx.repair_source {
+                if target.url != *source || !repair_response_matches(source, &head.url, if_range.as_ref(), &head.headers) { return Err(Error::FileChanged); }
+            }
             ctx.learn_ranges(true);
             ctx.range_answered.notify_one();
         }
         // The same file under another ETag (each CDN node has its own): go on with the date.
-        StatusCode::OK if per_node_etag(ctx, if_range.as_ref(), &head) => {
+        StatusCode::OK if ctx.repair_source.is_none() && per_node_etag(ctx, if_range.as_ref(), &head) => {
             return Err(Error::RangesUnavailable);
         }
         // A full body for a ranged request once ranges are known to work: If-Range failed (the
@@ -3906,6 +3940,32 @@ async fn request(ctx: &Ctx, target: &Target, from: u64, to: u64) -> Result<Body,
         )));
     }
     Ok(body)
+}
+
+fn repair_response_matches(target: &Url, actual: &Url, validator: Option<&HeaderValue>, headers: &HeaderMap) -> bool {
+    let Some(expected) = validator else { return false };
+    let field = if expected.as_bytes().starts_with(b"\"") { header::ETAG } else { header::LAST_MODIFIED };
+    target == actual && headers.get(field) == Some(expected)
+}
+
+#[cfg(test)]
+mod repair_validator_tests {
+    use super::*;
+    #[test]
+    fn rejects_partial_response_from_changed_source_or_validator() {
+        let url = Url::parse("https://example.org/file").unwrap();
+        let different = Url::parse("https://example.org/other").unwrap();
+        let expected = HeaderValue::from_static("\"original\"");
+        let mut headers = HeaderMap::new();
+        headers.insert(header::ETAG, expected.clone());
+        assert!(repair_response_matches(&url, &url, Some(&expected), &headers));
+        assert!(!repair_response_matches(&url, &different, Some(&expected), &headers));
+        assert!(!repair_response_matches(&url, &url, None, &headers));
+        headers.insert(header::ETAG, HeaderValue::from_static("\"changed\""));
+        assert!(!repair_response_matches(&url, &url, Some(&expected), &headers));
+        headers.remove(header::ETAG);
+        assert!(!repair_response_matches(&url, &url, Some(&expected), &headers));
+    }
 }
 
 /// A full answer that still describes the file being downloaded: the same length and, when the
