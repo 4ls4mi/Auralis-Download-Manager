@@ -1043,6 +1043,19 @@ button:focus-visible { outline: none; }
 .menu button {height:32px;border-radius:8px;cursor:pointer}.menu button:hover {background:#b99aff3d}.menu .cap{color:#d9c6ff}.menu .rows{scrollbar-width:thin;scrollbar-color:#a98ee2 transparent}
 .menu .quality-tabs{display:flex;gap:4px;margin:4px 0}.menu .quality-tabs button{flex:1;justify-content:center;padding:4px;font-size:12px}.menu .quality-tabs button[aria-selected="true"]{background:#8467d96b;box-shadow:inset 0 -2px #d6c1ff}
 .menu .subtitle-section{margin:5px 2px;padding:5px;border:1px solid #ffffff30;border-radius:9px;background:#ffffff0b}.menu .subtitle-list{max-height:140px;overflow:auto}.menu .subtitle-list button[aria-pressed="true"]{background:#a886fa66;box-shadow:inset 3px 0 #dbcbff}.menu [data-act="window"] {display:none!important}
+/* Keep the compact panel fixed while its contents scroll inside it. */
+.menu.open{display:flex;flex-direction:column;box-sizing:border-box;overflow:hidden;white-space:normal}
+.menu > *{flex-shrink:0;min-width:0}
+.menu .mh > div{flex:1;min-width:0;overflow:hidden}
+.menu .mh .t,.menu .mh .s{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.menu .rows{flex:1 1 auto;min-height:32px;max-height:none;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:#a98ee2 transparent}
+.menu .rows::-webkit-scrollbar,.menu .subtitle-list::-webkit-scrollbar{width:4px;height:4px}
+.menu .rows::-webkit-scrollbar-thumb,.menu .subtitle-list::-webkit-scrollbar-thumb{background:#a98ee2;border-radius:8px}
+.menu .rows button,.menu .subtitle-list button{min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.menu .subtitle-list{max-height:none;overflow:visible}
+.menu .cookie-controls{padding:4px;gap:4px;font-size:11px}
+.menu .cookie-controls select{max-width:135px}
+.menu [data-act="hide"],.menu [data-act="never"],.menu [data-act="settings"]{height:25px;font-size:11px}
 .cookie-controls {padding:6px;display:flex;gap:5px;align-items:center;flex-wrap:wrap}.cookie-controls button {width:auto;height:auto;background:#355983;padding:5px 7px}.cookie-controls input {max-width:150px}.cookie-controls select,.cookie-controls input,.rows select {background:#20334f;color:#fff;border:1px solid #8ab3d788;border-radius:5px;padding:4px}
 @media (prefers-reduced-motion: reduce) {
   .pill { transition: none; transform: none; }
