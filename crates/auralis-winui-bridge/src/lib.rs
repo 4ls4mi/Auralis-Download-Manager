@@ -413,6 +413,9 @@ mod tests {
         assert!(preferences["fields"].as_array().unwrap().iter().all(|field|field["key"].as_str().is_some_and(safe_preference_key)));
         assert!(update_preference("many_connections",&serde_json::json!(true)).expect("save isolated preference")["ok"]==true);
         assert!(dispatch(8).unwrap()["fields"].as_array().unwrap().iter().any(|field|field["key"]=="many_connections" && field["value"]==true));
+        assert!(update_preference("proxy_host",&serde_json::json!("proxy.example.test")).expect("save proxy host")["ok"]==true);
+        assert!(dispatch(8).unwrap()["fields"].as_array().unwrap().iter().any(|field|field["key"]=="proxy_host" && field["value"]=="proxy.example.test"));
+        assert!(update_preference("proxy_host",&serde_json::json!("")).expect("clear proxy host")["ok"]==true);
         assert!(update_setting("advanced_integration", "true").unwrap_err().contains("disabled"));
         update_setting("max_connections", "8").expect("update isolated connection limit");
         assert_eq!(dispatch(5).unwrap()["max_connections"],8);

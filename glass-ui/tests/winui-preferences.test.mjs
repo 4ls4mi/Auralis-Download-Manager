@@ -10,10 +10,10 @@ test('isolated connection preferences load and save through the native bridge',{
  const browser=await chromium.launch({headless:true,executablePath:executable,args:['--no-sandbox']});
  try{
   const page=await browser.newPage();
-  await page.addInitScript(()=>{let listener,enabled=false;window.requests=[];window.chrome={webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:message=>{
+  await page.addInitScript(()=>{let listener,enabled=false,proxy='';window.requests=[];window.chrome={webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:message=>{
    window.requests.push(message);let value={applied:true};
-   if(message.command==='preferences')value={fields:[{key:'many_connections',label:'Allow more than 32 connections',section:'Connection',kind:'boolean',value:enabled}]};
-   else if(message.command==='update_preference'){enabled=message.value;value={ok:true}}
+   if(message.command==='preferences')value={fields:[{key:'many_connections',label:'Allow more than 32 connections',section:'Connection',kind:'boolean',value:enabled},{key:'proxy_host',label:'Proxy server',section:'Connection',kind:'text',value:proxy}]};
+   else if(message.command==='update_preference'){if(message.key==='many_connections')enabled=message.value;if(message.key==='proxy_host')proxy=message.value;value={ok:true}}
    else if(message.command==='glass_settings')value={net_adapter:''};
    else if(message.command==='network_adapters')value={adapters:[{name:'Test VPN',address:'127.0.0.1'}]};
    else if(message.command==='update_glass_setting')value={saved:true};
@@ -35,5 +35,10 @@ test('isolated connection preferences load and save through the native bridge',{
   await page.waitForFunction(()=>window.requests.some(m=>m.command==='update_preference' && m.key==='many_connections' && m.value===true));
   await page.getByRole('status').filter({hasText:'Saved.'}).waitFor();
   assert.equal(await input.isChecked(),true);
+  await page.getByRole('button',{name:'Proxy server',exact:true}).click();
+  await page.getByLabel('Proxy server',{exact:true}).fill('proxy.example.test');
+  await page.getByRole('button',{name:'Save preference'}).click();
+  await page.waitForFunction(()=>window.requests.some(m=>m.command==='update_preference' && m.key==='proxy_host' && m.value==='proxy.example.test'));
+  await page.getByRole('status').filter({hasText:'Saved.'}).waitFor();
  }finally{await browser.close();await server.close()}
 });
