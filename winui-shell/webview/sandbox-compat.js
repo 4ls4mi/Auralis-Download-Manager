@@ -43,8 +43,9 @@
     if(command==='glass_tool' && args.action==='original-settings')return request('preferences');
     if(command==='glass_tool' && args.action==='original-setting') {
       const {key,value}=args.payload??{};
-      if((['limiter_on_startup','global_only_active','set_creation_date','mark_downloads','ignore_mtime','many_connections'].includes(key) && typeof value==='boolean') ||
-         (key==='duplicate_action' && Number.isInteger(value) && value>=0 && value<=3)) return request('update_preference',{key,value});
+      if((['limiter_on_startup','global_only_active','set_creation_date','mark_downloads','ignore_mtime','many_connections','proxy_http','proxy_https','proxy_ftp','dns_fallback','ftp_passive'].includes(key) && typeof value==='boolean') ||
+         (['duplicate_action','proxy_mode','dns_mode'].includes(key) && Number.isInteger(value) && value>=0 && value<=3) ||
+         (['proxy_script','proxy_host','proxy_port','proxy_user','user_agent','dns_provider','dns_servers','dns_tls_name','dns_doh_url','dns_nextdns_id'].includes(key) && typeof value==='string' && value.length<=512 && !value.includes('\0'))) return request('update_preference',{key,value});
     }
     if(command==='add_download' && typeof args.url==='string' && /^https?:\/\//i.test(args.url.trim()) && typeof args.later==='boolean') return JSON.stringify(await request(command,{url:args.url.trim(),later:args.later}));
     if(command==='queue_action' && typeof args.name==='string' && args.name.length>0 && args.name.length<=256 && ['start_queue','stop_queue'].includes(args.action)) return request(command,{name:args.name,action:args.action});

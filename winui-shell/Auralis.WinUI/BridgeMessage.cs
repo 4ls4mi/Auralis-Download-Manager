@@ -86,9 +86,12 @@ internal sealed record BridgeMessage(long Id, string Command, ulong DownloadId, 
             if (!root.TryGetProperty("key",out var key) || key.ValueKind!=JsonValueKind.String ||
                 !root.TryGetProperty("value",out var value)) throw new InvalidOperationException("Invalid preference.");
             string name=key.GetString()!;
-            string[] booleans={"limiter_on_startup","global_only_active","set_creation_date","mark_downloads","ignore_mtime","many_connections"};
+            string[] booleans={"limiter_on_startup","global_only_active","set_creation_date","mark_downloads","ignore_mtime","many_connections","proxy_http","proxy_https","proxy_ftp","dns_fallback","ftp_passive"};
+            string[] choices={"duplicate_action","proxy_mode","dns_mode"};
+            string[] strings={"proxy_script","proxy_host","proxy_port","proxy_user","user_agent","dns_provider","dns_servers","dns_tls_name","dns_doh_url","dns_nextdns_id"};
             if (!(booleans.Contains(name) && value.ValueKind is (JsonValueKind.True or JsonValueKind.False)) &&
-                !(name=="duplicate_action" && value.ValueKind==JsonValueKind.Number && value.TryGetInt32(out int choice) && choice is >= 0 and <= 3))
+                !(choices.Contains(name) && value.ValueKind==JsonValueKind.Number && value.TryGetInt32(out int choice) && choice is >= 0 and <= 3) &&
+                !(strings.Contains(name) && value.ValueKind==JsonValueKind.String && value.GetString() is string text && !text.Contains('\0') && System.Text.Encoding.UTF8.GetByteCount(text)<=512))
                 throw new InvalidOperationException("Unsupported preference.");
             return new(id,command,0,null,false,Key:name,Value:value.GetRawText());
         }

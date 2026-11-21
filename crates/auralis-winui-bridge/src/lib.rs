@@ -154,10 +154,17 @@ fn dispatch(operation: u32) -> Result<serde_json::Value, String> {
     }
 }
 fn safe_preference_key(key: &str) -> bool {
-    matches!(key, "limiter_on_startup" | "global_only_active" | "set_creation_date" | "mark_downloads" | "ignore_mtime" | "many_connections" | "duplicate_action")
+    matches!(key, "limiter_on_startup" | "global_only_active" | "set_creation_date" | "mark_downloads" | "ignore_mtime" | "many_connections" | "duplicate_action" |
+        "proxy_mode" | "proxy_script" | "proxy_host" | "proxy_port" | "proxy_user" | "proxy_http" | "proxy_https" | "proxy_ftp" |
+        "user_agent" | "dns_mode" | "dns_provider" | "dns_servers" | "dns_tls_name" | "dns_doh_url" | "dns_nextdns_id" | "dns_fallback" | "ftp_passive")
 }
 fn update_preference(key: &str, value: &serde_json::Value) -> Result<serde_json::Value, String> {
-    if !safe_preference_key(key) || if key == "duplicate_action" { !value.as_u64().is_some_and(|n| n <= 3) } else { !value.is_boolean() } {
+    let valid=match key {
+        "duplicate_action" | "proxy_mode" | "dns_mode" => value.as_u64().is_some_and(|n| n <= 3),
+        "proxy_script" | "proxy_host" | "proxy_port" | "proxy_user" | "user_agent" | "dns_provider" | "dns_servers" | "dns_tls_name" | "dns_doh_url" | "dns_nextdns_id" => value.as_str().is_some_and(|s|s.len()<=512 && !s.contains('\0')),
+        _ => value.is_boolean(),
+    };
+    if !safe_preference_key(key) || !valid {
         return Err("Unsupported preference change.".into());
     }
     if ISOLATED_DATA.get().is_none() || !owned_backend() { return Err("The isolated downloader is not running.".into()); }
@@ -356,6 +363,8 @@ mod tests {
         assert!(update_preference("proxy_pass", &serde_json::json!("secret")).is_err());
         assert!(update_preference("many_connections", &serde_json::json!("true")).is_err());
         assert!(update_preference("duplicate_action", &serde_json::json!(4)).is_err());
+        assert!(update_preference("proxy_mode", &serde_json::json!(4)).is_err());
+        assert!(update_preference("proxy_host", &serde_json::json!("x".repeat(513))).is_err());
     }
     #[cfg(unix)]
     #[test]
