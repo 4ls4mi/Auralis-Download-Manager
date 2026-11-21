@@ -63,10 +63,10 @@ internal static class DownloaderBridge
         return ReadResponse(auralis_bridge_update_setting(bytes, (nuint)bytes.Length));
     });
 
-    internal static Task<JsonElement> UpdatePreferenceAsync(string key, string value) => Task.Run(() =>
+    internal static Task<JsonElement> UpdatePreferenceAsync(string key, string value, bool clear) => Task.Run(() =>
     {
         using var parsed=JsonDocument.Parse(value);
-        byte[] bytes=JsonSerializer.SerializeToUtf8Bytes(new { key, value=parsed.RootElement });
+        byte[] bytes=JsonSerializer.SerializeToUtf8Bytes(new { key, value=parsed.RootElement, clear });
         return ReadResponse(auralis_bridge_update_preference(bytes,(nuint)bytes.Length));
     });
 

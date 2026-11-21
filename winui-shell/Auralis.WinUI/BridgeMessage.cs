@@ -5,7 +5,7 @@ namespace Auralis.WinUI;
 /// Parses the narrow set of commands that the future packaged web interface
 /// can ask the native host to perform. The host must also enforce that no
 /// untrusted navigation is allowed and must never expose the downloader token.
-internal sealed record BridgeMessage(long Id, string Command, ulong DownloadId, string? Url, bool Later, string? Key = null, string? Value = null, NativeAppearance? Appearance = null, string? Label = null, int Width = 0, int Height = 0)
+internal sealed record BridgeMessage(long Id, string Command, ulong DownloadId, string? Url, bool Later, string? Key = null, string? Value = null, NativeAppearance? Appearance = null, string? Label = null, int Width = 0, int Height = 0, bool Clear = false)
 {
     internal const string TrustedOrigin = "https://auralis.local";
     internal static BridgeMessage Parse(string source, string json)
@@ -88,12 +88,19 @@ internal sealed record BridgeMessage(long Id, string Command, ulong DownloadId, 
             string name=key.GetString()!;
             string[] booleans={"limiter_on_startup","global_only_active","set_creation_date","mark_downloads","ignore_mtime","many_connections","proxy_http","proxy_https","proxy_ftp","dns_fallback","ftp_passive"};
             string[] choices={"duplicate_action","proxy_mode","dns_mode"};
-            string[] strings={"proxy_script","proxy_host","proxy_port","proxy_user","user_agent","dns_provider","dns_servers","dns_tls_name","dns_doh_url","dns_nextdns_id"};
+            string[] strings={"proxy_script","proxy_host","proxy_port","proxy_user","proxy_pass","user_agent","dns_provider","dns_servers","dns_tls_name","dns_doh_url","dns_nextdns_id"};
             if (!(booleans.Contains(name) && value.ValueKind is (JsonValueKind.True or JsonValueKind.False)) &&
                 !(choices.Contains(name) && value.ValueKind==JsonValueKind.Number && value.TryGetInt32(out int choice) && choice is >= 0 and <= 3) &&
                 !(strings.Contains(name) && value.ValueKind==JsonValueKind.String && value.GetString() is string text && !text.Contains('\0') && System.Text.Encoding.UTF8.GetByteCount(text)<=512))
                 throw new InvalidOperationException("Unsupported preference.");
-            return new(id,command,0,null,false,Key:name,Value:value.GetRawText());
+            bool clear=false;
+            if (root.TryGetProperty("clear",out var clearValue))
+            {
+                if (clearValue.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) throw new InvalidOperationException("Invalid clear flag.");
+                clear=clearValue.GetBoolean();
+            }
+            if (clear && name!="proxy_pass") throw new InvalidOperationException("Invalid clear flag.");
+            return new(id,command,0,null,false,Key:name,Value:value.GetRawText(),Clear:clear);
         }
         if (command == "queue_action")
         {

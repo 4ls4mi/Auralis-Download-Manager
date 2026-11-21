@@ -126,9 +126,11 @@ if (smallCorner!=new WindowBounds(0,0,300,100)) throw new Exception("Update noti
 var preference=BridgeMessage.Parse("https://auralis.local/index.html", """{"id":8,"command":"update_preference","key":"many_connections","value":true}""");
 if (preference.Key!="many_connections" || preference.Value!="true") throw new Exception("Preference was not preserved.");
 bool rejectedSecret=false;
-try { BridgeMessage.Parse("https://auralis.local/index.html", """{"id":8,"command":"update_preference","key":"proxy_pass","value":"secret"}"""); }
+try { BridgeMessage.Parse("https://auralis.local/index.html", """{"id":8,"command":"update_preference","key":"site_logins","value":"secret"}"""); }
 catch (InvalidOperationException) { rejectedSecret=true; }
 if (!rejectedSecret) throw new Exception("Sensitive preference accepted.");
+var clearPassword=BridgeMessage.Parse("https://auralis.local/index.html", """{"id":8,"command":"update_preference","key":"proxy_pass","value":"","clear":true}""");
+if (!clearPassword.Clear) throw new Exception("Password clearing was not preserved.");
 if (queueRequest.Key != "Main download queue" || queueRequest.Value != "stop_queue") throw new Exception("Queue request was not preserved.");
 var limitRequest = BridgeMessage.Parse("https://auralis.local/index.html", """{"id":5,"command":"file_speed_limit","downloadId":7,"value":512}""");
 if (limitRequest.DownloadId != 7 || limitRequest.Value != "512") throw new Exception("Speed limit request was not preserved.");

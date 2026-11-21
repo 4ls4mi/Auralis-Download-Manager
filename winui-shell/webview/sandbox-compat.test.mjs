@@ -11,10 +11,13 @@ test('isolated preferences expose only validated scalar updates',async()=>{
  const save=context.__TAURI_INTERNALS__.invoke('glass_tool',{action:'original-setting',payload:{key:'many_connections',value:true}});
  assert.equal(sent[1].command,'update_preference');assert.equal(sent[1].value,true);
  listener({data:{id:sent[1].id,ok:true,value:{ok:true}}});await save;
- await assert.rejects(context.__TAURI_INTERNALS__.invoke('glass_tool',{action:'original-setting',payload:{key:'proxy_pass',value:'secret'}}),/unavailable/);
+ await assert.rejects(context.__TAURI_INTERNALS__.invoke('glass_tool',{action:'original-setting',payload:{key:'site_logins',value:'secret'}}),/unavailable/);
  await assert.rejects(context.__TAURI_INTERNALS__.invoke('glass_tool',{action:'original-setting',payload:{key:'duplicate_action',value:4}}),/unavailable/);
  const proxy=context.__TAURI_INTERNALS__.invoke('glass_tool',{action:'original-setting',payload:{key:'proxy_host',value:'proxy.example.test'}});
  assert.equal(sent[2].key,'proxy_host');listener({data:{id:sent[2].id,ok:true,value:{ok:true}}});await proxy;
+ const clear=context.__TAURI_INTERNALS__.invoke('glass_tool',{action:'original-setting',payload:{key:'proxy_pass',value:'',clear:true}});
+ assert.equal(sent[3].key,'proxy_pass');assert.equal(sent[3].clear,true);listener({data:{id:sent[3].id,ok:true,value:{ok:true}}});await clear;
+ await assert.rejects(context.__TAURI_INTERNALS__.invoke('glass_tool',{action:'original-setting',payload:{key:'proxy_host',value:'',clear:true}}),/unavailable/);
  await assert.rejects(context.__TAURI_INTERNALS__.invoke('glass_tool',{action:'original-setting',payload:{key:'proxy_mode',value:5}}),/unavailable/);
  await assert.rejects(context.__TAURI_INTERNALS__.invoke('glass_tool',{action:'original-setting',payload:{key:'proxy_host',value:'x'.repeat(513)}}),/unavailable/);
 });

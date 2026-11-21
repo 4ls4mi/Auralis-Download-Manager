@@ -147,6 +147,9 @@ fn dispatch(operation: u32) -> Result<serde_json::Value, String> {
             let mut settings = request("glass-original-settings")?;
             let fields = settings["fields"].as_array_mut().ok_or("Invalid preferences response")?;
             fields.retain(|field| field["key"].as_str().is_some_and(safe_preference_key));
+            // Never return a stored secret to the interface, even if the
+            // underlying settings response changes in a future version.
+            for field in fields.iter_mut().filter(|field|field["key"]=="proxy_pass") { field["value"]=serde_json::json!(""); }
             Ok(settings)
         },
         9 if owned_backend() => request("glass-network-adapters"),
@@ -155,20 +158,20 @@ fn dispatch(operation: u32) -> Result<serde_json::Value, String> {
 }
 fn safe_preference_key(key: &str) -> bool {
     matches!(key, "limiter_on_startup" | "global_only_active" | "set_creation_date" | "mark_downloads" | "ignore_mtime" | "many_connections" | "duplicate_action" |
-        "proxy_mode" | "proxy_script" | "proxy_host" | "proxy_port" | "proxy_user" | "proxy_http" | "proxy_https" | "proxy_ftp" |
+        "proxy_mode" | "proxy_script" | "proxy_host" | "proxy_port" | "proxy_user" | "proxy_pass" | "proxy_http" | "proxy_https" | "proxy_ftp" |
         "user_agent" | "dns_mode" | "dns_provider" | "dns_servers" | "dns_tls_name" | "dns_doh_url" | "dns_nextdns_id" | "dns_fallback" | "ftp_passive")
 }
-fn update_preference(key: &str, value: &serde_json::Value) -> Result<serde_json::Value, String> {
+fn update_preference(key: &str, value: &serde_json::Value, clear: bool) -> Result<serde_json::Value, String> {
     let valid=match key {
         "duplicate_action" | "proxy_mode" | "dns_mode" => value.as_u64().is_some_and(|n| n <= 3),
-        "proxy_script" | "proxy_host" | "proxy_port" | "proxy_user" | "user_agent" | "dns_provider" | "dns_servers" | "dns_tls_name" | "dns_doh_url" | "dns_nextdns_id" => value.as_str().is_some_and(|s|s.len()<=512 && !s.contains('\0')),
+        "proxy_script" | "proxy_host" | "proxy_port" | "proxy_user" | "proxy_pass" | "user_agent" | "dns_provider" | "dns_servers" | "dns_tls_name" | "dns_doh_url" | "dns_nextdns_id" => value.as_str().is_some_and(|s|s.len()<=512 && !s.contains('\0')),
         _ => value.is_boolean(),
     };
-    if !safe_preference_key(key) || !valid {
+    if !safe_preference_key(key) || !valid || (clear && key!="proxy_pass") {
         return Err("Unsupported preference change.".into());
     }
     if ISOLATED_DATA.get().is_none() || !owned_backend() { return Err("The isolated downloader is not running.".into()); }
-    let payload=serde_json::json!({"key":key,"value":value}).to_string();
+    let payload=serde_json::json!({"key":key,"value":value,"clear":clear}).to_string();
     let command=mdm_ipc::Command { action:Some("glass-original-setting".into()), queue:Some(payload), ..Default::default() };
     let raw=mdm_ipc::request_checked(&command).map_err(|e|e.to_string())?;
     let result:serde_json::Value=serde_json::from_str(&raw).map_err(|_|"Invalid preferences response")?;
@@ -182,7 +185,8 @@ pub unsafe extern "C" fn auralis_bridge_update_preference(input: *const u8, len:
     encode(std::panic::catch_unwind(|| {
         if input.is_null() || len == 0 || len > 1024 { return Err("Invalid preference request.".into()); }
         let data:serde_json::Value=serde_json::from_slice(unsafe { std::slice::from_raw_parts(input,len) }).map_err(|_|"Invalid preference request.")?;
-        update_preference(data["key"].as_str().ok_or("Invalid preference name.")?, &data["value"])
+        let clear=match data.get("clear") { None => false, Some(v)=>v.as_bool().ok_or("Invalid clear flag.")? };
+        update_preference(data["key"].as_str().ok_or("Invalid preference name.")?, &data["value"],clear)
     }))
 }
 fn download_action(action: u32, id: u64) -> Result<serde_json::Value, String> {
@@ -359,12 +363,12 @@ mod tests {
     use super::*;
     #[test]
     fn preferences_reject_secrets_and_invalid_values_before_backend_access() {
-        assert!(!safe_preference_key("proxy_pass"));
-        assert!(update_preference("proxy_pass", &serde_json::json!("secret")).is_err());
-        assert!(update_preference("many_connections", &serde_json::json!("true")).is_err());
-        assert!(update_preference("duplicate_action", &serde_json::json!(4)).is_err());
-        assert!(update_preference("proxy_mode", &serde_json::json!(4)).is_err());
-        assert!(update_preference("proxy_host", &serde_json::json!("x".repeat(513))).is_err());
+        assert!(!safe_preference_key("site_logins"));
+        assert!(update_preference("site_logins", &serde_json::json!("secret"),false).is_err());
+        assert!(update_preference("many_connections", &serde_json::json!("true"),false).is_err());
+        assert!(update_preference("duplicate_action", &serde_json::json!(4),false).is_err());
+        assert!(update_preference("proxy_mode", &serde_json::json!(4),false).is_err());
+        assert!(update_preference("proxy_host", &serde_json::json!("x".repeat(513)),false).is_err());
     }
     #[cfg(unix)]
     #[test]
@@ -411,11 +415,21 @@ mod tests {
         assert_eq!(update_setting("net_adapter","").expect("select automatic network adapter")["saved"],true);
         let preferences=dispatch(8).expect("read isolated preferences");
         assert!(preferences["fields"].as_array().unwrap().iter().all(|field|field["key"].as_str().is_some_and(safe_preference_key)));
-        assert!(update_preference("many_connections",&serde_json::json!(true)).expect("save isolated preference")["ok"]==true);
+        assert!(update_preference("many_connections",&serde_json::json!(true),false).expect("save isolated preference")["ok"]==true);
         assert!(dispatch(8).unwrap()["fields"].as_array().unwrap().iter().any(|field|field["key"]=="many_connections" && field["value"]==true));
-        assert!(update_preference("proxy_host",&serde_json::json!("proxy.example.test")).expect("save proxy host")["ok"]==true);
+        assert!(update_preference("proxy_host",&serde_json::json!("proxy.example.test"),false).expect("save proxy host")["ok"]==true);
         assert!(dispatch(8).unwrap()["fields"].as_array().unwrap().iter().any(|field|field["key"]=="proxy_host" && field["value"]=="proxy.example.test"));
-        assert!(update_preference("proxy_host",&serde_json::json!("")).expect("clear proxy host")["ok"]==true);
+        assert!(update_preference("proxy_host",&serde_json::json!(""),false).expect("clear proxy host")["ok"]==true);
+        assert!(update_preference("proxy_pass",&serde_json::json!("example-secret"),false).expect("save isolated proxy password")["ok"]==true);
+        let fields=dispatch(8).unwrap();
+        let password=fields["fields"].as_array().unwrap().iter().find(|field|field["key"]=="proxy_pass").unwrap();
+        assert_eq!(password["value"],"");
+        assert_eq!(password["saved"],true);
+        assert!(!fields.to_string().contains("example-secret"));
+        assert!(update_preference("proxy_pass",&serde_json::json!(""),false).is_ok());
+        assert!(dispatch(8).unwrap()["fields"].as_array().unwrap().iter().any(|field|field["key"]=="proxy_pass" && field["saved"]==true));
+        assert!(update_preference("proxy_pass",&serde_json::json!(""),true).is_ok());
+        assert!(dispatch(8).unwrap()["fields"].as_array().unwrap().iter().any(|field|field["key"]=="proxy_pass" && field["saved"]==false));
         assert!(update_setting("advanced_integration", "true").unwrap_err().contains("disabled"));
         update_setting("max_connections", "8").expect("update isolated connection limit");
         assert_eq!(dispatch(5).unwrap()["max_connections"],8);
