@@ -1,5 +1,5 @@
 import {isTiledWindow} from "./windowTiling";
-import {LiquidProgress, LiquidChunk, isLiquidMaterial} from "./LiquidIndicators";
+import {LiquidProgress, LiquidChunk, InletDroplet, isLiquidMaterial} from "./LiquidIndicators";
 import {ConnectionTubes} from "./ConnectionTubes";
 import {receivingTubeSlots} from "./tubeNetwork";
 import {loadMaterials,materialId,extraMaterials,materialPresets,materialBackdrop} from "./customMaterials";
@@ -214,7 +214,7 @@ export function ConnectionMap({segments,connections,downloading,paused=false,com
      {tubes&&!compact&&<ConnectionTubes container={gridRef} slots={receivingTubeSlots(connections,downloading&&!paused)} colors={indicatorColors(appearance.indicator)}/>}
      {slots.map((c,index)=>{if(!c)return <span key={`empty-${index}`} className="cg-connection-empty" aria-hidden="true"/>;
       const fill=c.percent;const active=downloading&&c.state==="Receiving";const lost=connectionLost(c,downloading);const label=`Connection ${c.id+1}: ${paused?"Paused":lost?"Connection lost or retrying":downloading?c.state:"Not active"}; downloaded ${units(c.downloaded)}; ${rate(c.speed)}; ${fill===null?"assigned range unavailable":`${units(c.received)} of ${units(c.assigned)} (${fill.toFixed(1)}%)`}. Assigned sections can change as work is redistributed.`;
-      return <span key={c.id} data-worker={c.id} className={paused?"paused":lost?"lost":active?"active":""} title={label} aria-label={label} tabIndex={0}>{!paused&&fill!==null&&(fill>0||(active&&!lost&&isLiquidMaterial(appearance.connectionMaterial)))&&(isLiquidMaterial(appearance.connectionMaterial)?<LiquidChunk percent={fill} colors={colors} material={appearance.connectionMaterial} animate={active&&!lost} index={c.id}/>:<i style={{height:`${fill}%`,backgroundImage:`linear-gradient(0deg,${colors.join(",")})`,boxShadow:`0 0 8px ${colors[1]}, inset 0 1px 2px #ffffff99`}}/>)}</span>})}
+      return <span key={c.id} data-worker={c.id} className={paused?"paused":lost?"lost":active?"active":""} title={label} aria-label={label} tabIndex={0}>{!paused&&fill!==null&&(fill>0||(active&&!lost&&isLiquidMaterial(appearance.connectionMaterial)))&&(isLiquidMaterial(appearance.connectionMaterial)?<LiquidChunk percent={fill} colors={colors} material={appearance.connectionMaterial} animate={active&&!lost} index={c.id}/>:<i style={{height:`${fill}%`,backgroundImage:`linear-gradient(0deg,${colors.join(",")})`,boxShadow:`0 0 8px ${colors[1]}, inset 0 1px 2px #ffffff99`}}/>)}{active&&!lost&&<InletDroplet percent={fill??0} colors={colors} index={c.id}/>}</span>})}
     </div>
   </div>;
 }

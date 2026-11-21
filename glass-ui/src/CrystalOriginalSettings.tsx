@@ -13,11 +13,12 @@ const fieldHints:Record<string,string>={
 };
 
 export default function CrystalOriginalSettings({section}:{section:string}){
- const [fields,setFields]=useState<Field[]>([]),[key,setKey]=useState(''),[error,setError]=useState(''),[revision,setRevision]=useState(0);
+ const [fields,setFields]=useState<Field[]>([]),[key,setKey]=useState(''),[query,setQuery]=useState(''),[error,setError]=useState(''),[revision,setRevision]=useState(0);
  const load=async()=>{const data=await invoke<{fields:Field[]}>('glass_tool',{action:'original-settings',payload:null});setFields(data.fields.filter(f=>f.section===section));setRevision(n=>n+1)};
- useEffect(()=>{setKey('');void load().catch(e=>setError(String(e)))},[section]);
- const field=fields.find(f=>f.key===key)??fields[0];
- return <div className="cg-original-settings"><label className="cg-field">Preference<select value={field?.key??''} onChange={e=>setKey(e.target.value)}>{fields.map(f=><option key={f.key} value={f.key}>{f.label}</option>)}</select></label>{field&&<Editor key={field.key+'-'+revision} field={field} onSaved={load}/>} {error&&<p className="cg-error">{error}</p>}</div>;
+ useEffect(()=>{setKey('');setQuery('');void load().catch(e=>setError(String(e)))},[section]);
+ const filtered=fields.filter(f=>`${f.label} ${fieldHints[f.key]??''}`.toLowerCase().includes(query.toLowerCase()));
+ const field=filtered.find(f=>f.key===key)??filtered[0];
+ return <div className="cg-original-settings"><label className="cg-field">Search preferences<input type="search" value={query} placeholder="Search this section…" onChange={e=>setQuery(e.target.value)}/></label><div className="cg-preference-layout"><nav className="cg-preference-list" aria-label="Preferences">{filtered.map(f=><button type="button" key={f.key} className={field?.key===f.key?'selected':''} aria-current={field?.key===f.key?'true':undefined} onClick={()=>setKey(f.key)}>{f.label}</button>)}{!filtered.length&&<p>No matching preferences.</p>}</nav>{field&&<Editor key={field.key+'-'+revision} field={field} onSaved={load}/>}</div>{error&&<p className="cg-error">{error}</p>}</div>;
 }
 function Editor({field,onSaved}:{field:Field;onSaved:()=>Promise<void>}){
  const [value,setValue]=useState<unknown>(structuredClone(field.value)),[clear,setClear]=useState(false),[clearPasswords,setClearPasswords]=useState<number[]>([]);
