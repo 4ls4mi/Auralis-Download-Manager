@@ -48,7 +48,7 @@ impl App {
         if let Some(answer)=self.glass_tools(cmd){return Some(answer);}
         if cmd.action.as_deref()==Some("glass-recovery-torrent-file") {
             let Some(id)=cmd.ids.first().copied() else {return Some(json!({"error":"Missing download"}).to_string());};
-            if !cmd.silent { self.auto_recovery_pending.remove(&id); }
+            if !cmd.silent { self.auto_recovery_pending.remove(&id); self.auto_recovery_searches.remove(&id); }
             let Some(item)=self.items.iter().find(|i|i.id==id) else {return Some(json!({"error":"Download not found"}).to_string());};
             if item.live.is_some() || item.status==Status::Complete || item.torrent.is_some() || item.video.is_some() || item.gallery.is_some() || item.remote.is_some() {
                 return Some(json!({"error":"Stop an incomplete ordinary download before checking a torrent"}).to_string());
@@ -360,6 +360,9 @@ impl App {
                 return Some(match result { Some(Ok(report))=>json!({"complete":true,"report":report}),Some(Err(error))=>json!({"complete":true,"failure":error}),None=>json!({"complete":false}) }.to_string());
             }
             "cancel-recovery-torrent" => {
+                // Cancelling while candidate lookup is still running must also
+                // prevent the automatic handoff when the result arrives later.
+                self.auto_recovery_pending.remove(&id);
                 let Some(slot)=self.glass_torrent_handoffs.get(&id) else {return Some(json!({"ok":true,"already_started":false}).to_string())};
                 let Ok(mut value)=slot.lock() else {return fail("Could not cancel torrent recovery")};
                 let already_started=value.result.as_ref().is_some_and(Result::is_ok);
@@ -377,6 +380,7 @@ impl App {
                 return Some(json!({"ok":true,"already_started":already_started}).to_string());
             }
             "start-recovery-torrent" => {
+                if !cmd.silent { self.auto_recovery_pending.remove(&id); }
                 let selection:Value=match serde_json::from_str(value){Ok(v)=>v,Err(_)=>return fail("Choose a matching torrent file")};
                 if selection["accept_partial_match"]!=true {return fail("Confirm that matching saved pieces do not verify the rest of the file");}
                 let Some(candidate_index)=selection["candidate"].as_u64().and_then(|n|usize::try_from(n).ok()) else{return fail("Choose a matching torrent file")};
@@ -423,7 +427,7 @@ impl App {
                 return Some(json!({"ok":true,"pending":true}).to_string());
             }
             "check-recovery-magnet" => {
-                if !cmd.silent { self.auto_recovery_pending.remove(&id); }
+                if !cmd.silent { self.auto_recovery_pending.remove(&id); self.auto_recovery_searches.remove(&id); }
                 if value.len()>8192 {return fail("Magnet link is too long");}
                 let Some(source)=mdm_torrent::Source::magnet(value) else {return fail("Enter a valid magnet link");};
                 let item=self.items.iter().find(|i|i.id==id).unwrap();
@@ -466,7 +470,7 @@ impl App {
                 return Some(json!({"ok":true,"pending":true}).to_string());
             }
             "find-recovery-torrents" => {
-                if !cmd.silent { self.auto_recovery_pending.remove(&id); }
+                if !cmd.silent { self.auto_recovery_pending.remove(&id); self.auto_recovery_searches.remove(&id); }
                 let item=self.items.iter().find(|i|i.id==id).unwrap();
                 if item.live.is_some() || item.status==Status::Complete || item.torrent.is_some() || item.video.is_some() || item.gallery.is_some() || item.remote.is_some() {
                     return fail("Stop an incomplete ordinary download before searching for recovery torrents");

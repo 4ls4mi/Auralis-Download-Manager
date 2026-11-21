@@ -876,6 +876,7 @@ pub struct App {
     /// Per-session automatic searches and the ones awaiting automatic handoff.
     auto_recovery_attempted: std::collections::HashSet<u64>,
     auto_recovery_pending: std::collections::HashSet<u64>,
+    auto_recovery_searches: std::collections::HashSet<u64>,
     glass_exit_requested: bool,
     glass_power_serial: u64,
     /// Addresses (and their browser context) waiting for Download File Info to close.
@@ -1699,6 +1700,7 @@ impl App {
             glass_torrent_handoffs: Default::default(),
             auto_recovery_attempted: Default::default(),
             auto_recovery_pending: Default::default(),
+            auto_recovery_searches: Default::default(),
             glass_exit_requested: false,
             glass_power_serial: 0,
             file_info_waiting: Default::default(),
@@ -3390,6 +3392,7 @@ impl App {
         self.glass_torrent_recovery.remove(&id);
         self.auto_recovery_attempted.remove(&id);
         self.auto_recovery_pending.remove(&id);
+        self.auto_recovery_searches.remove(&id);
         let show = show && self.settings.show_progress;
         self.stopped_by_hand.remove(&id);
         let rt = self.rt.clone();
@@ -3769,6 +3772,9 @@ impl App {
             self.items.retain(|i| i.id != id);
             self.glass_torrent_recovery.remove(&id);
             self.glass_torrent_handoffs.remove(&id);
+            self.auto_recovery_attempted.remove(&id);
+            self.auto_recovery_pending.remove(&id);
+            self.auto_recovery_searches.remove(&id);
             for q in &mut self.queues {
                 q.items.retain(|i| *i != id);
             }
@@ -6213,6 +6219,7 @@ impl App {
                     "direct_recovery": i.direct_recovery.is_some(),
                     "original_partial": i.direct_recovery.as_ref().map(|origin|mdm_engine::naming::part_path(&origin.dest).to_string_lossy().into_owned()),
                     "recovery_search_available": self.glass_torrent_recovery.contains_key(&i.id),
+                    "recovery_auto_search": self.auto_recovery_searches.contains(&i.id) && self.glass_torrent_recovery.contains_key(&i.id),
                     "recovery_handoff_available": self.glass_torrent_handoffs.contains_key(&i.id),
                     "is_video": i.video.is_some(),
                     "is_gallery": i.gallery.is_some(),
@@ -7680,6 +7687,7 @@ impl App {
             let answer=self.glass_answer(&cmd).unwrap_or_default();
             if serde_json::from_str::<serde_json::Value>(&answer).is_ok_and(|v|v["pending"]==true) {
                 self.auto_recovery_attempted.insert(id);
+                self.auto_recovery_searches.insert(id);
                 if self.settings.torrent_recovery_mode=="auto" {self.auto_recovery_pending.insert(id);}
                 if let Some(item)=self.items.iter_mut().find(|item|item.id==id) {item.note("Download cannot resume; searching Internet Archive for matching torrents.");}
                 self.dirty=true;
@@ -10452,6 +10460,9 @@ impl App {
         self.glass_recovery_checks.remove(&id);
         self.glass_torrent_recovery.remove(&id);
         self.glass_torrent_handoffs.remove(&id);
+        self.auto_recovery_attempted.remove(&id);
+        self.auto_recovery_pending.remove(&id);
+        self.auto_recovery_searches.remove(&id);
         let Some(item) = self.item(id) else { return };
         let _ = std::fs::remove_file(state_path(&item.dest));
         let _ = std::fs::remove_file(mdm_engine::naming::part_path(&item.dest));
@@ -13144,6 +13155,12 @@ mod torrent_recovery_handoff_tests {
         let rt=Box::leak(Box::new(tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap()));
         let (_,commands)=std::sync::mpsc::channel();
         let mut app=std::mem::ManuallyDrop::new(App::assemble(&egui::Context::default(),rt.handle().clone(),commands,loaded,crate::Start::Shown));
+        // Cancellation while the search is still pending must prevent its
+        // eventual result from launching an automatic torrent handoff.
+        app.auto_recovery_pending.insert(1);
+        let cancelled=app.glass_answer(&ipc::Command{action:Some("glass-item".into()),category:Some("cancel-recovery-torrent".into()),ids:vec![1],..Default::default()}).unwrap();
+        assert!(cancelled.contains("already_started\":false"));
+        assert!(!app.auto_recovery_pending.contains(&1));
         let matches=mdm_torrent::candidate_search::matching_files(&torrent,&saved).unwrap();
         let report=mdm_torrent::candidate_search::SearchReport{searched:1,failed:0,matches:vec![mdm_torrent::candidate_search::MatchedCandidate{
             candidate:mdm_torrent::candidate_search::Candidate{identifier:String::new(),title:"chosen".into(),torrent_url:"about:blank".parse().unwrap()},info_hash:first.metadata.info_hash.clone(),torrent:torrent.clone(),files:matches

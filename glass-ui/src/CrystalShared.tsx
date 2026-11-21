@@ -31,7 +31,7 @@ export type DownloadVisual = {
   id: number; chunk_count: number; active_connections:number; segments: Segment[]; connections: Connection[]; resumable: boolean | null;
   server: {hostname:string|null;ip:string|null;country_code:string|null;place?:ServerPlace|null;rtt_ms:number|null;cdn:string|null;proxied:boolean};
   last_try:string|null;added:string|null;referer:string|null;page:string|null;
-  description:string;category:string;is_torrent:boolean;direct_recovery?:boolean;original_partial?:string|null;recovery_search_available?:boolean;recovery_handoff_available?:boolean;is_video?:boolean;is_gallery?:boolean;is_remote?:boolean;recovery_damaged?:boolean
+  description:string;category:string;is_torrent:boolean;direct_recovery?:boolean;original_partial?:string|null;recovery_search_available?:boolean;recovery_auto_search?:boolean;recovery_handoff_available?:boolean;is_video?:boolean;is_gallery?:boolean;is_remote?:boolean;recovery_damaged?:boolean
 };
 export type VisualDashboard = {downloads:DownloadVisual[]};
 
