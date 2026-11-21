@@ -120,7 +120,15 @@ internal sealed record BridgeMessage(long Id, string Command, ulong DownloadId, 
                 throw new InvalidOperationException("Invalid speed limit request.");
             return new(id, command, itemId, null, false, Value: kb.ToString(System.Globalization.CultureInfo.InvariantCulture));
         }
-        if (command is "start_download" or "pause_download" or "remove_download" or "file_details" or "check_saved" or "check_saved_result" or "file_open" or "file_folder" or "progress_hide" or "progress_restore")
+        if (command == "checksum")
+        {
+            if (!root.TryGetProperty("downloadId",out var downloadId) || !downloadId.TryGetUInt64(out ulong target) || target==0 ||
+                !root.TryGetProperty("value",out var value) || value.ValueKind!=JsonValueKind.String || value.GetString() is not string checksum ||
+                checksum.Length is < 1 or > 256 || checksum.Any(c=>!char.IsAscii(c) || char.IsControl(c)))
+                throw new InvalidOperationException("Invalid checksum request.");
+            return new(id,command,target,null,false,Value:checksum);
+        }
+        if (command is "start_download" or "pause_download" or "remove_download" or "file_details" or "check_saved" or "check_saved_result" or "checksum_result" or "file_open" or "file_folder" or "progress_hide" or "progress_restore")
         {
             if (!root.TryGetProperty("downloadId", out var downloadId) || !downloadId.TryGetUInt64(out ulong value) || value == 0)
                 throw new InvalidOperationException("Invalid download ID.");

@@ -20,6 +20,8 @@ internal static class BridgeDispatcher
         "file_details" => DownloaderBridge.FileDetailsAsync(message.DownloadId),
         "check_saved" => DownloaderBridge.CheckSavedAsync(message.DownloadId,false),
         "check_saved_result" => DownloaderBridge.CheckSavedAsync(message.DownloadId,true),
+        "checksum" when message.Value is not null => DownloaderBridge.ChecksumAsync(message.DownloadId,message.Value),
+        "checksum_result" => DownloaderBridge.ChecksumAsync(message.DownloadId,null),
         "start_download" => DownloaderBridge.StartDownloadAsync(message.DownloadId),
         "remove_download" => DownloaderBridge.RemoveDownloadAsync(message.DownloadId),
         "pause_download" => DownloaderBridge.PauseDownloadAsync(message.DownloadId),

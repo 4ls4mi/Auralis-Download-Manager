@@ -75,6 +75,17 @@ test('saved-data checking uses only the download ID and does not expose repair o
  await assert.rejects(context.__TAURI_INTERNALS__.invoke('file_operation',{id:7,operation:'find-recovery-torrents'}),/unavailable/);
 });
 
+test('completed-file checksum checks use a bounded value and the download ID',async()=>{
+ let listener;const sent=[];
+ const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);
+ const start=context.__TAURI_INTERNALS__.invoke('file_operation',{id:7,operation:'checksum',value:'a'.repeat(64)});
+ assert.equal(sent[0].command,'checksum');assert.equal(sent[0].downloadId,7);
+ listener({data:{id:sent[0].id,ok:true,value:{pending:true}}});assert.equal((await start).pending,true);
+ const poll=context.__TAURI_INTERNALS__.invoke('file_operation',{id:7,operation:'checksum-result'});
+ assert.equal(sent[1].command,'checksum_result');listener({data:{id:sent[1].id,ok:true,value:{complete:true,matches:true}}});assert.equal((await poll).matches,true);
+ await assert.rejects(context.__TAURI_INTERNALS__.invoke('file_operation',{id:7,operation:'checksum',value:'x'.repeat(257)}),/unavailable/);
+});
+
 test('multiple selected downloads preserve each start result',async()=>{
  let listener;const sent=[];
  const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);

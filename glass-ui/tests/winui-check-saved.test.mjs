@@ -33,3 +33,29 @@ test('WinUI progress window requests and displays a saved-data check',{skip:!exe
   assert.match(await page.locator('body').innerText(),/Local hashes do not prove the original download was correct/);
  }finally{await browser.close();await server.close()}
 });
+
+test('WinUI checksum window checks an available checksum for a completed download',{skip:!executable||!existsSync(executable)},async()=>{
+ const server=await createServer({configFile:false,root:fileURLToPath(new URL('..',import.meta.url)),server:{host:'127.0.0.1',port:0},logLevel:'silent'});await server.listen();
+ const browser=await chromium.launch({headless:true,executablePath:executable,args:['--no-sandbox']});
+ try{
+  const page=await browser.newPage();
+  await page.addInitScript(()=>{let listener;window.requests=[];window.chrome={webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:message=>{
+   window.requests.push(message);let value={applied:true};
+   if(message.command==='file_details')value={file:'test.zip',url:'https://example.test/file',checksum:'a'.repeat(64)};
+   else if(message.command==='checksum')value={pending:true};
+   else if(message.command==='checksum_result')value={complete:true,matches:true};
+   else if(message.command==='window_is_maximized')value=false;
+   else if(message.command==='window_current_monitor')value=null;
+   else if(message.command==='window_outer_position')value={x:0,y:0};
+   else if(message.command==='window_outer_size')value={width:680,height:480};
+   queueMicrotask(()=>listener({data:{id:message.id,ok:true,value}}));
+  }}}});
+  await page.addInitScript({content:readFileSync(new URL('../../winui-shell/webview/sandbox-compat.js',import.meta.url),'utf8')});
+  await page.goto(server.resolvedUrls.local[0]+'?tool=checksum&id=7');
+  await page.getByRole('button',{name:'Verify',exact:true}).click();
+  await page.getByText('The file matches its available checksum.').waitFor();
+  const calls=await page.evaluate(()=>window.requests.filter(m=>m.command==='checksum'||m.command==='checksum_result'));
+  assert.deepEqual(calls.map(m=>m.command),['checksum','checksum_result']);
+  assert.equal(calls[0].value,'a'.repeat(64));assert.ok(calls.every(m=>m.downloadId===7));
+ }finally{await browser.close();await server.close()}
+});

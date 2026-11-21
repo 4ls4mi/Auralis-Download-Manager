@@ -135,6 +135,8 @@ if (queueRequest.Key != "Main download queue" || queueRequest.Value != "stop_que
 var limitRequest = BridgeMessage.Parse("https://auralis.local/index.html", """{"id":5,"command":"file_speed_limit","downloadId":7,"value":512}""");
 var checkRequest=BridgeMessage.Parse("https://auralis.local/index.html", """{"id":6,"command":"check_saved","downloadId":7}""");
 if (checkRequest.DownloadId!=7) throw new Exception("Saved-data check lost its download ID.");
+var checksumRequest=BridgeMessage.Parse("https://auralis.local/index.html", """{"id":6,"command":"checksum","downloadId":7,"value":"01234567"}""");
+if (checksumRequest.DownloadId!=7 || checksumRequest.Value!="01234567") throw new Exception("Checksum request was not preserved.");
 if (limitRequest.DownloadId != 7 || limitRequest.Value != "512") throw new Exception("Speed limit request was not preserved.");
 try { BridgeMessage.Parse("https://auralis.local/index.html", """{"id":5,"command":"file_speed_limit","downloadId":7,"value":10000001}"""); throw new Exception("Unbounded speed limit was accepted."); }
 catch (InvalidOperationException) { }

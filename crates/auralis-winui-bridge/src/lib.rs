@@ -270,6 +270,28 @@ fn check_saved(id: u64, result: bool) -> Result<serde_json::Value, String> {
 pub extern "C" fn auralis_bridge_check_saved(id: u64, result: u8) -> *mut c_char {
     encode(std::panic::catch_unwind(|| if result>1 { Err("Invalid saved-data request.".into()) } else { check_saved(id,result==1) }))
 }
+fn checksum(id: u64, expected: Option<&str>) -> Result<serde_json::Value, String> {
+    // The development host verifies only its own completed files.
+    safe_test_path(id,false)?;
+    if expected.is_some_and(|v|v.is_empty() || v.len()>256 || !v.is_ascii() || v.chars().any(|c|c.is_control())) {
+        return Err("Invalid checksum.".into());
+    }
+    let command=mdm_ipc::Command { action:Some("glass-item".into()), category:Some(if expected.is_some() {"checksum"} else {"checksum-result"}.into()), ids:vec![id], queue:expected.map(str::to_owned), ..Default::default() };
+    let raw=mdm_ipc::request_checked(&command).map_err(|e|e.to_string())?;
+    let data:serde_json::Value=serde_json::from_str(&raw).map_err(|_|"Invalid checksum response")?;
+    if data.get("error").is_some() { return Err("The checksum could not be verified.".into()); }
+    Ok(data)
+}
+/// # Safety
+/// When `len` is nonzero, `input` must point to `len` readable UTF-8 bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn auralis_bridge_checksum(id: u64, input: *const u8, len: usize) -> *mut c_char {
+    encode(std::panic::catch_unwind(|| {
+        if len>256 || (len>0 && input.is_null()) { return Err("Invalid checksum request.".into()); }
+        let expected=if len==0 { None } else { Some(std::str::from_utf8(unsafe { std::slice::from_raw_parts(input,len) }).map_err(|_|"Invalid checksum.")?) };
+        checksum(id,expected)
+    }))
+}
 /// Returns details for one download; no file paths or operations are accepted from the caller.
 #[unsafe(no_mangle)]
 pub extern "C" fn auralis_bridge_file_details(id: u64) -> *mut c_char {
@@ -539,6 +561,14 @@ mod tests {
             thread::sleep(Duration::from_millis(100));
         }
         assert_eq!(std::fs::read(&destination).expect("read test download"),b"isolated WinUI test download");
+        assert_eq!(checksum(id,Some("6ac9dd29d34969b8e09a5f989251be3693e2b00cc5b437409e96f613b79a9695")).unwrap()["pending"],true);
+        let checksum_deadline=Instant::now()+Duration::from_secs(10);
+        loop {
+            let result=checksum(id,None).expect("read checksum result");
+            if result["complete"]==true { assert_eq!(result["matches"],true); break; }
+            assert!(Instant::now()<checksum_deadline,"checksum did not finish");
+            thread::sleep(Duration::from_millis(50));
+        }
         assert!(check_saved(id,false).is_err(),"a completed download must not be treated as partial data");
         assert!(check_saved(u64::MAX,false).is_err(),"unknown downloads cannot be checked");
         assert!(std::path::PathBuf::from(safe_test_path(id,false).unwrap()["path"].as_str().unwrap()).starts_with(data.join("downloads")));
