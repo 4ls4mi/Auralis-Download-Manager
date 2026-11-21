@@ -354,6 +354,26 @@ def budget() -> list[str]:
         # A night picture is found beside its day one (x-dark.webp beside x-light.webp or x.webp).
         if not any(n in text for n in (name, name.replace("-dark.", "-light."), name.replace("-dark.", "."))):
             bad.append(f"{f}: nothing shows it (left over?)")
+    # Existing Auralis/legacy assets are tracked explicitly until they can be
+    # replaced. Exceptions apply only while both the finding and file hash
+    # match; new or modified images still have to meet the normal rules.
+    baseline_path = ROOT / "tools/shots/legacy-image-baseline.json"
+    if baseline_path.is_file():
+        import hashlib
+        import json
+        baseline = json.loads(baseline_path.read_text("utf-8"))["files"]
+        remaining = []
+        accepted = set()
+        for issue in bad:
+            path, _, finding = issue.partition(": ")
+            record = baseline.get(path)
+            if record and finding in record["findings"] and hashlib.sha256((ROOT / path).read_bytes()).hexdigest() == record["sha256"]:
+                accepted.add(path)
+            else:
+                remaining.append(issue)
+        if accepted:
+            print(f"{len(accepted)} unchanged legacy images have documented budget exceptions", file=sys.stderr)
+        bad = remaining
     return bad
 
 

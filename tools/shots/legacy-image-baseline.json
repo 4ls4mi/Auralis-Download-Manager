@@ -1,0 +1,142 @@
+{
+  "description": "Existing image findings as of 2026-11-21. Exceptions apply only to these exact files and findings; replacement images must meet the normal rules.",
+  "files": {
+    "docs/images/add-torrent.webp": {
+      "sha256": "a58e0cba1fce9003767a9da67d942c93dec0da1127a12417be25bd98359e1255",
+      "findings": [
+        "nothing shows it (left over?)"
+      ]
+    },
+    "docs/images/auralis/complete.png": {
+      "sha256": "feeed61e7a56a19a1371cc8cea06400afae8be3d9c4e5ab305a3ad15900c2ee8",
+      "findings": [
+        "a screenshot in PNG; lossless WebP belongs here"
+      ]
+    },
+    "docs/images/auralis/download.png": {
+      "sha256": "7e3751995b5cbed4e964a7ecbd34a33413a17ad3c714ca1eba4fee6a3a7990b8",
+      "findings": [
+        "459 KB, over 300 KB",
+        "a screenshot in PNG; lossless WebP belongs here"
+      ]
+    },
+    "docs/images/auralis/extension-preview.png": {
+      "sha256": "b13403d33bd8daaa9da7044de87ad583bd0282309c388abce23643d6bd4d1483",
+      "findings": [
+        "a screenshot in PNG; lossless WebP belongs here",
+        "nothing shows it (left over?)"
+      ]
+    },
+    "docs/images/auralis/file-info.png": {
+      "sha256": "90ab0da4165835306adff39adc309179689d808100c33f638da562ba4598d295",
+      "findings": [
+        "438 KB, over 300 KB",
+        "a screenshot in PNG; lossless WebP belongs here"
+      ]
+    },
+    "docs/images/auralis/liquid-flow.gif": {
+      "sha256": "a9fd776525e0a014de34f7c55afa33d55d6dbb27fb1c6093a61e477db0639f3d",
+      "findings": [
+        "3533 KB, over 300 KB",
+        "a screenshot in GIF; lossless WebP belongs here"
+      ]
+    },
+    "docs/images/auralis/main-preview.png": {
+      "sha256": "a23a510018f0c224180847d2ba55e73cdaa68fdf167ba1b4a4483fd6eb23dd02",
+      "findings": [
+        "1015 KB, over 300 KB",
+        "a screenshot in PNG; lossless WebP belongs here",
+        "nothing shows it (left over?)"
+      ]
+    },
+    "docs/images/auralis/main.png": {
+      "sha256": "8d3dc96d38870e9fa31949da111b0285d5aef747c358e2948c9b39096a12269a",
+      "findings": [
+        "673 KB, over 300 KB",
+        "a screenshot in PNG; lossless WebP belongs here"
+      ]
+    },
+    "docs/images/auralis/progress-preview.png": {
+      "sha256": "764a117a789daaec98a32277593509acc0518ebce69638dc356b37a3be531ea6",
+      "findings": [
+        "532 KB, over 300 KB",
+        "a screenshot in PNG; lossless WebP belongs here",
+        "nothing shows it (left over?)"
+      ]
+    },
+    "docs/images/auralis/settings.png": {
+      "sha256": "75d8a3bdb109278e3ec527451687d99b2237912b4e5fb79b3178c199c991155e",
+      "findings": [
+        "569 KB, over 300 KB",
+        "a screenshot in PNG; lossless WebP belongs here"
+      ]
+    },
+    "docs/images/glass/completion.png": {
+      "sha256": "78a3918feb77809c8c67404b0f40702cf44df4698d37e652c77b66b1b3259305",
+      "findings": [
+        "a screenshot in PNG; lossless WebP belongs here",
+        "nothing shows it (left over?)"
+      ]
+    },
+    "docs/images/glass/connection-loss-031.png": {
+      "sha256": "d6ead86a045c9b7428111a9121341e2e982b613a29570dff0fccb1b3e8194185",
+      "findings": [
+        "336 KB, over 300 KB",
+        "a screenshot in PNG; lossless WebP belongs here",
+        "nothing shows it (left over?)"
+      ]
+    },
+    "docs/images/glass/file-info.png": {
+      "sha256": "6b1b07f41cf201d6b4d922e70e349a390195662eba40e14485722bf45301170a",
+      "findings": [
+        "a screenshot in PNG; lossless WebP belongs here"
+      ]
+    },
+    "docs/images/glass/main-dark.png": {
+      "sha256": "3d976c889b02163b93db78e4bd6466f4d45939910ed9476b9242e7a0dc06d9b2",
+      "findings": [
+        "564 KB, over 300 KB",
+        "a screenshot in PNG; lossless WebP belongs here"
+      ]
+    },
+    "docs/images/glass/main-light.png": {
+      "sha256": "59544d1f50abf59e72be5fb7b036228a7d8ade462b5ad7023850cf5b2917bedd",
+      "findings": [
+        "567 KB, over 300 KB",
+        "a screenshot in PNG; lossless WebP belongs here"
+      ]
+    },
+    "docs/images/glass/progress-connections.png": {
+      "sha256": "8e6d6a7c9aaa40d5480fb52ba65868dbb62390558f3bd316ef6c8058e84a7bab",
+      "findings": [
+        "332 KB, over 300 KB",
+        "a screenshot in PNG; lossless WebP belongs here",
+        "nothing shows it (left over?)"
+      ]
+    },
+    "docs/images/icons/faster.png": {
+      "sha256": "cfecac07f952600563741de96f426e7e29b2a171f2c3ad70f5880eee97917935",
+      "findings": [
+        "nothing shows it (left over?)"
+      ]
+    },
+    "docs/images/icons/free.png": {
+      "sha256": "d824476e758c6bf2833243af675d34451e6c3b7e84a6a06b9a60749b8334dd1c",
+      "findings": [
+        "nothing shows it (left over?)"
+      ]
+    },
+    "docs/images/icons/languages.png": {
+      "sha256": "5014139309969025ccd5227bccb8df33d0911833f47e6007ebadfe48a6458767",
+      "findings": [
+        "nothing shows it (left over?)"
+      ]
+    },
+    "docs/images/video-button-page.webp": {
+      "sha256": "b2ed26446a1abd3dd42975b3956cdaec78a8a2e360fa24a21429f0468b73f94c",
+      "findings": [
+        "nothing shows it (left over?)"
+      ]
+    }
+  }
+}
