@@ -18,7 +18,7 @@ This is a working checklist, not release notes. Do not describe a feature as shi
 
 ## WinUI 3 shell migration
 - [ ] Replace the Tauri shell with WinUI 3 while retaining the downloader, browser integration, tray, updates, settings, all windows and existing user data. The isolated development shell in `winui-shell/` builds on Windows and maps material names to native Acrylic, Mica and Mica Alt; it is a backdrop preview, not a working downloader.
-- [ ] Connect the real interface and migrate the native command/event/window bridge securely. The new `auralis-winui-bridge` has only start, stop, list and visual-state operations; its isolated local start/read/stop test passes with browser-compatibility disabled. Production browser compatibility, Windows bridge verification and all remaining operations are outstanding. The preview deliberately does not start the bridge or touch user data.
+- [ ] Connect the real interface and migrate the native command/event/window bridge securely. The new `auralis-winui-bridge` has only start, stop, list, visual-state and single-download start/pause operations; its isolated local start/read/stop test passes with browser-compatibility disabled. Production browser compatibility, Windows bridge verification and all remaining operations are outstanding. The preview deliberately does not start the bridge or touch user data.
 - [ ] Verify native backdrop appearance, readability, themes, resizing and multiple windows on the user's Windows configuration. Windows can vary or suppress system backdrops; Mica samples wallpaper while Acrylic can blur content behind the window. Do not describe a successful compilation as visual verification.
 
 ## Backup and appearance
