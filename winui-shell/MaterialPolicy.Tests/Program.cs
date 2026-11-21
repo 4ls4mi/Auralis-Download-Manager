@@ -1,5 +1,11 @@
 using Auralis.WinUI;
 
+if (!PreviewLayoutPolicy.UseCompactLayout(true,1920,1920) ||
+    !PreviewLayoutPolicy.UseCompactLayout(false,960,1920) ||
+    PreviewLayoutPolicy.UseCompactLayout(false,1600,1920) ||
+    PreviewLayoutPolicy.UseCompactLayout(false,0,1920))
+    throw new Exception("Preview window layout should adapt to maximized and narrow windows.");
+
 var materials = MaterialPolicy.BuiltIns;
 if (materials.Length != 8 || materials.Select(m => m.Id).Distinct().Count() != materials.Length)
     throw new Exception("Every built-in material must have a unique backdrop policy.");

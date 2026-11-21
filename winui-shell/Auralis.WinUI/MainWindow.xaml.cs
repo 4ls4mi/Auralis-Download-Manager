@@ -14,10 +14,12 @@ public sealed partial class MainWindow : Window
     {
         InitializeComponent();
         AppWindow.Closing += OnWindowClosing;
+        AppWindow.Changed += (_, _) => UpdatePreviewLayout();
         MaterialSelector.ItemsSource = MaterialPolicy.BuiltIns;
         ThemeSelector.ItemsSource = new[] { "Dark", "Light", "Teal", "Amethyst" };
         ThemeSelector.SelectedIndex = 0;
         MaterialSelector.SelectedIndex = 1;
+        UpdatePreviewLayout();
     }
 
     private bool _previewReady, _sandboxReady, _sandboxRequested, _closing, _allowClose, _openingSandbox, _openingPreview;
@@ -25,6 +27,15 @@ public sealed partial class MainWindow : Window
     private int _viewRequest;
     private CoreWebView2Environment? _previewEnvironment, _sandboxEnvironment;
     private readonly Dictionary<string, Window> _auxiliaryWindows = new();
+
+    private void UpdatePreviewLayout()
+    {
+        var area=DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Nearest);
+        var maximized=AppWindow.Presenter is OverlappedPresenter presenter && presenter.State==OverlappedPresenterState.Maximized;
+        var compact=PreviewLayoutPolicy.UseCompactLayout(maximized,AppWindow.Size.Width,area?.WorkArea.Width ?? 0);
+        Root.Padding=new Thickness(compact ? 6 : 24);
+        Root.RowSpacing=compact ? 6 : 16;
+    }
 
     private async void OnWindowClosing(Microsoft.UI.Windowing.AppWindow sender, Microsoft.UI.Windowing.AppWindowClosingEventArgs args)
     {
@@ -63,7 +74,7 @@ public sealed partial class MainWindow : Window
             if (_closing || request != _viewRequest) return;
             if (!_sandboxReady)
             {
-                _sandboxEnvironment=await LocalWebviewBridge.AttachPreviewAsync(SandboxView,Path.Combine(AppContext.BaseDirectory,"interface"),ApplyNativeAppearance,ApplyWindowCommand, message => OpenAuxiliaryAsync(message, true), message => ExportAppearanceAsync(this,message),sandbox:true);
+                _sandboxEnvironment=await LocalWebviewBridge.AttachPreviewAsync(SandboxView,Path.Combine(AppContext.BaseDirectory,"interface"),ApplyNativeAppearance,ApplyWindowCommand, message => OpenAuxiliaryAsync(message, true), message => ExportAppearanceAsync(this,message),OpenTestFileAsync,sandbox:true);
                 _sandboxReady=true;
             }
             if (_closing || request != _viewRequest) return;
@@ -111,7 +122,7 @@ public sealed partial class MainWindow : Window
         {
             if (!_previewReady)
             {
-                _previewEnvironment=await LocalWebviewBridge.AttachPreviewAsync(InterfaceView,Path.Combine(AppContext.BaseDirectory,"interface"),ApplyNativeAppearance,ApplyWindowCommand, message => OpenAuxiliaryAsync(message, false), message => ExportAppearanceAsync(this,message));
+                _previewEnvironment=await LocalWebviewBridge.AttachPreviewAsync(InterfaceView,Path.Combine(AppContext.BaseDirectory,"interface"),ApplyNativeAppearance,ApplyWindowCommand, message => OpenAuxiliaryAsync(message, false), message => ExportAppearanceAsync(this,message),OpenTestFileAsync);
                 _previewReady=true;
             }
             if (_closing || request != _viewRequest) return;
@@ -131,6 +142,26 @@ public sealed partial class MainWindow : Window
             BackdropStatus.Text=$"Interface preview unavailable: {error.Message}";
         }
         finally { _openingPreview=false; }
+    }
+
+    private static async Task<JsonElement> OpenTestFileAsync(BridgeMessage message)
+    {
+        bool folder=message.Command=="file_folder";
+        var result=await DownloaderBridge.SafeTestPathAsync(message.DownloadId,folder);
+        string path=result.GetProperty("path").GetString() ?? throw new InvalidOperationException("The test download is unavailable.");
+        bool launched;
+        if (folder)
+        {
+            var target=await Windows.Storage.StorageFolder.GetFolderFromPathAsync(path);
+            launched=await Windows.System.Launcher.LaunchFolderAsync(target);
+        }
+        else
+        {
+            var target=await Windows.Storage.StorageFile.GetFileFromPathAsync(path);
+            launched=await Windows.System.Launcher.LaunchFileAsync(target);
+        }
+        if (!launched) throw new InvalidOperationException("Windows could not open the test download.");
+        return JsonSerializer.SerializeToElement(new { ok=true });
     }
 
     private static async Task<JsonElement> ExportAppearanceAsync(Window owner, BridgeMessage message)
@@ -178,7 +209,7 @@ public sealed partial class MainWindow : Window
         {
             await LocalWebviewBridge.AttachPreviewAsync(view,Path.Combine(AppContext.BaseDirectory,"interface"),
                 appearance => { ApplyAppearance(child,root,appearance); }, command => ApplyWindowCommand(child,command),
-                next => OpenAuxiliaryAsync(next,sandbox), message => ExportAppearanceAsync(child,message),sandbox,environment);
+                next => OpenAuxiliaryAsync(next,sandbox), message => ExportAppearanceAsync(child,message),OpenTestFileAsync,sandbox,environment);
             if (_closing || !_auxiliaryWindows.ContainsKey(key)) throw new InvalidOperationException("The preview window was closed.");
             view.CoreWebView2.Navigate(BridgeMessage.TrustedOrigin + message.Url);
             return JsonSerializer.SerializeToElement(new { opened=true });

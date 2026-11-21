@@ -84,7 +84,7 @@ fn dispatch(operation: u32) -> Result<serde_json::Value, String> {
     }
 }
 fn download_action(action: u32, id: u64) -> Result<serde_json::Value, String> {
-    let action = match action { 1 => "start", 2 => "pause", _ => return Err("Unsupported download action".into()) };
+    let action = match action { 1 => "start", 2 => "pause", 3 => "remove", _ => return Err("Unsupported download action".into()) };
     if id == 0 { return Err("Invalid download ID".into()); }
     if !owned_backend() { return Err("The embedded downloader is not running in this process.".into()); }
     let command = mdm_ipc::Command { action: Some(action.into()), ids: vec![id], ..Default::default() };
@@ -126,6 +126,32 @@ fn file_details(id: u64) -> Result<serde_json::Value, String> {
 pub extern "C" fn auralis_bridge_file_details(id: u64) -> *mut c_char {
     encode(std::panic::catch_unwind(|| file_details(id)))
 }
+fn safe_test_path(id: u64, folder: bool) -> Result<serde_json::Value, String> {
+    if id==0 || !owned_backend() { return Err("The test download is unavailable.".into()); }
+    let data=ISOLATED_DATA.get().ok_or("The isolated test folder is unavailable.")?;
+    let requested_root=data.join("downloads");
+    let root=requested_root.canonicalize().map_err(|_|"The test folder is unavailable.")?;
+    let command=mdm_ipc::Command { query:Some("list".into()), ..Default::default() };
+    let raw=mdm_ipc::request_checked(&command).map_err(|e|e.to_string())?;
+    let list:mdm_ipc::api::ListAnswer=serde_json::from_str(&raw).map_err(|_|"Invalid download list.")?;
+    let item=list.downloads.iter().find(|item|item.id==id).ok_or("The test download no longer exists.")?;
+    let path=std::path::PathBuf::from(&item.path);
+    if !path.starts_with(&requested_root) { return Err("The download is outside the test folder.".into()); }
+    let target=if folder { requested_root } else {
+        if item.status!="Complete" { return Err("The test download is not complete.".into()); }
+        let resolved=path.canonicalize().map_err(|_|"The downloaded file is unavailable.")?;
+        if !resolved.starts_with(&root) || !resolved.is_file() { return Err("The downloaded file is outside the test folder.".into()); }
+        path
+    };
+    Ok(serde_json::json!({"path":target}))
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn auralis_bridge_safe_test_path(id: u64, folder: u8) -> *mut c_char {
+    encode(std::panic::catch_unwind(|| {
+        if folder>1 { return Err("Invalid test file request.".into()); }
+        safe_test_path(id,folder==1)
+    }))
+}
 fn set_speed_limit(id: u64, kb: u64) -> Result<serde_json::Value, String> {
     if id == 0 || kb > 10_000_000 { return Err("Invalid download speed limit.".into()); }
     if !owned_backend() { return Err("The embedded downloader is not running in this process.".into()); }
@@ -148,9 +174,9 @@ fn update_setting(key: &str, value: &str) -> Result<serde_json::Value, String> {
         "show_progress", "advanced_integration", "double_click_open",
     ];
     if !ALLOWED.contains(&key) || value.len() > 256 { return Err("Unsupported settings change.".into()); }
-    // Keep development settings changes limited to harmless UI preferences.
+    // Keep development settings changes limited to the isolated downloader.
     // In particular, never enable integration, networking or startup behavior.
-    if ISOLATED_DATA.get().is_some() && !["show_complete", "show_progress", "confirm_delete", "double_click_open"].contains(&key) {
+    if ISOLATED_DATA.get().is_some() && !["show_complete", "show_progress", "confirm_delete", "double_click_open", "max_connections", "speed_limit_on", "speed_limit_kb", "global_limit_on", "global_limit_kb", "start_immediately", "only_add_to_queue"].contains(&key) {
         return Err("This setting is disabled in the development sandbox.".into());
     }
     if !owned_backend() { return Err("The embedded downloader is not running in this process.".into()); }
@@ -206,7 +232,7 @@ fn encode(result: Result<Result<serde_json::Value, String>, Box<dyn std::any::An
     let value = match result { Ok(Ok(value)) => serde_json::json!({"ok":true,"value":value}), Ok(Err(error)) => serde_json::json!({"ok":false,"error":error}), Err(_) => serde_json::json!({"ok":false,"error":"Native bridge failed"}) };
     CString::new(value.to_string()).expect("JSON escapes zero bytes").into_raw()
 }
-/// Starts or pauses a single download. Arbitrary and destructive commands are not exposed.
+/// Starts, pauses or removes a single isolated download from the list.
 #[unsafe(no_mangle)]
 pub extern "C" fn auralis_bridge_download_action(action: u32, id: u64) -> *mut c_char {
     encode(std::panic::catch_unwind(|| download_action(action, id)))
@@ -246,6 +272,8 @@ mod tests {
         let settings = dispatch(5).expect("read downloader settings");
         assert!(settings["max_connections"].is_number());
         assert!(update_setting("advanced_integration", "true").unwrap_err().contains("disabled"));
+        update_setting("max_connections", "8").expect("update isolated connection limit");
+        assert_eq!(dispatch(5).unwrap()["max_connections"],8);
         update_setting("show_complete", "false").expect("update isolated setting");
         assert_eq!(dispatch(5).unwrap()["show_complete"], false);
         assert!(add_download("magnet:?xt=urn:btih:1234", true).unwrap_err().contains("HTTP"));
@@ -286,6 +314,7 @@ mod tests {
         };
         let destination=std::path::PathBuf::from(queued["path"].as_str().expect("download path"));
         assert!(destination.starts_with(data.join("downloads")), "test download escaped sandbox");
+        assert!(safe_test_path(0,false).is_err());
         let id=queued["id"].as_u64().expect("download id");
         assert!(file_details(id).expect("read isolated download details").is_object());
         set_speed_limit(id,512).expect("set isolated speed limit");
@@ -306,6 +335,12 @@ mod tests {
             thread::sleep(Duration::from_millis(100));
         }
         assert_eq!(std::fs::read(&destination).expect("read test download"),b"isolated WinUI test download");
+        assert!(std::path::PathBuf::from(safe_test_path(id,false).unwrap()["path"].as_str().unwrap()).starts_with(data.join("downloads")));
+        assert_eq!(std::path::PathBuf::from(safe_test_path(id,true).unwrap()["path"].as_str().unwrap()),data.join("downloads"));
+        let removed=download_action(3,id).expect("remove test download from list");
+        assert!(removed["done"].as_array().is_some_and(|done|done.contains(&serde_json::json!(id))));
+        assert!(destination.is_file(),"removing a list entry must preserve the downloaded file");
+        assert!(download_action(4,id).is_err(),"the sandbox must not expose file deletion");
         stopped_server.store(true,Ordering::Relaxed);
         server.join().expect("stop test server");
         let stopped = stop().expect("stop isolated embedded downloader");

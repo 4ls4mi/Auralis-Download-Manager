@@ -16,7 +16,7 @@ internal static class LocalWebviewBridge
 
     /// Isolated WebView profiles keep sample and test interfaces separate from
     /// installed settings and downloads; auxiliary views share their parent profile.
-    internal static async Task<CoreWebView2Environment> AttachPreviewAsync(WebView2 view, string assetDirectory, Action<NativeAppearance> applyAppearance, Func<string, JsonElement> windowCommand, Func<BridgeMessage, Task<JsonElement>> openWindow, Func<BridgeMessage, Task<JsonElement>> exportFile, bool sandbox=false, CoreWebView2Environment? sharedEnvironment=null)
+    internal static async Task<CoreWebView2Environment> AttachPreviewAsync(WebView2 view, string assetDirectory, Action<NativeAppearance> applyAppearance, Func<string, JsonElement> windowCommand, Func<BridgeMessage, Task<JsonElement>> openWindow, Func<BridgeMessage, Task<JsonElement>> exportFile, Func<BridgeMessage, Task<JsonElement>> openTestFile, bool sandbox=false, CoreWebView2Environment? sharedEnvironment=null)
     {
         if (!Directory.Exists(assetDirectory)) throw new DirectoryNotFoundException("Build the local interface preview assets first.");
         var adapterPath=Path.Combine(assetDirectory,sandbox?"winui-sandbox-compat.js":"winui-preview-compat.js");
@@ -43,11 +43,13 @@ internal static class LocalWebviewBridge
                     ? ApplyAppearance(message.Appearance,applyAppearance)
                     : message.Command is "export_theme_file" or "export_material_file"
                         ? await exportFile(message)
+                    : sandbox && (message.Command is "file_open" or "file_folder")
+                        ? await openTestFile(message)
                     : message.Command == "open_glass_window"
                         ? await openWindow(message)
                     : message.Command is "window_minimize" or "window_toggle_maximize" or "window_close" or "window_is_maximized" or "window_outer_position" or "window_outer_size" or "window_current_monitor"
                         ? windowCommand(message.Command)
-                    : sandbox && (message.Command is "dashboard_snapshot" or "dashboard_visuals" or "glass_settings" or "update_glass_setting" or "start_download" or "pause_download" or "file_details" or "file_speed_limit" or "queue_action")
+                    : sandbox && (message.Command is "dashboard_snapshot" or "dashboard_visuals" or "glass_settings" or "update_glass_setting" or "start_download" or "pause_download" or "remove_download" or "file_details" or "file_speed_limit" or "queue_action" or "add_download")
                         ? await BridgeDispatcher.DispatchAsync(message)
                         : throw new InvalidOperationException("This isolated host does not support that command.");
                 core.PostWebMessageAsJson(JsonSerializer.Serialize(new {id,ok=true,value}));

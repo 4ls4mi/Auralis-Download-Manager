@@ -16,6 +16,7 @@ internal static class BridgeDispatcher
         "file_speed_limit" when message.Value is not null => DownloaderBridge.SpeedLimitAsync(message.DownloadId, ulong.Parse(message.Value, System.Globalization.CultureInfo.InvariantCulture)),
         "file_details" => DownloaderBridge.FileDetailsAsync(message.DownloadId),
         "start_download" => DownloaderBridge.StartDownloadAsync(message.DownloadId),
+        "remove_download" => DownloaderBridge.RemoveDownloadAsync(message.DownloadId),
         "pause_download" => DownloaderBridge.PauseDownloadAsync(message.DownloadId),
         "add_download" when message.Url is not null => DownloaderBridge.AddDownloadAsync(message.Url, message.Later),
         _ => throw new InvalidOperationException("Unsupported interface command.")

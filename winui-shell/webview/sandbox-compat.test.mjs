@@ -11,7 +11,7 @@ test('sandbox restricts downloader requests and allows isolated display preferen
  await assert.rejects(context.__TAURI_INTERNALS__.invoke('update_glass_setting',{key:'advanced_integration',value:'true'}),/unavailable/);
  const action=context.__TAURI_INTERNALS__.invoke('download_action',{action:'start',ids:[1]});assert.equal(messages[2].command,'start_download');listener({data:{id:messages[2].id,ok:true,value:{done:[1]}}});assert.equal((await action).done[0],1);
  await assert.rejects(context.__TAURI_INTERNALS__.invoke('download_action',{action:'delete',ids:[1]}),/unavailable/);
- await assert.rejects(context.__TAURI_INTERNALS__.invoke('add_download',{url:'https://example.com'}),/unavailable/);
+ await assert.rejects(context.__TAURI_INTERNALS__.invoke('add_download',{url:'magnet:?xt=urn:btih:123',later:false}),/unavailable/);
  assert.throws(()=>new context.WebSocket('wss://example.com'),/disabled/);
 });
 
@@ -34,7 +34,7 @@ test('progress windows may read details but cannot request file operations',asyn
  const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);
  const pending=context.__TAURI_INTERNALS__.invoke('file_operation',{id:7,operation:'details',value:null});assert.equal(sent[0].command,'file_details');assert.equal(sent[0].downloadId,7);
  listener({data:{id:sent[0].id,ok:true,value:{own_limit_kb:null}}});assert.equal((await pending).own_limit_kb,null);
- await assert.rejects(context.__TAURI_INTERNALS__.invoke('file_operation',{id:7,operation:'open',value:null}),/unavailable/);
+ await assert.rejects(context.__TAURI_INTERNALS__.invoke('file_operation',{id:7,operation:'open-with',value:null}),/unavailable/);
 });
 
 test('multiple selected downloads preserve each start result',async()=>{
@@ -59,4 +59,41 @@ test('queue controls are limited to start and stop in the isolated engine',async
  const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);
  const pending=context.__TAURI_INTERNALS__.invoke('queue_action',{name:'Main download queue',action:'start_queue'});assert.equal(sent[0].action,'start_queue');listener({data:{id:sent[0].id,ok:true,value:{done:[],skipped:[]}}});assert.equal((await pending).done.length,0);
  await assert.rejects(context.__TAURI_INTERNALS__.invoke('queue_action',{name:'Main download queue',action:'delete_queue'}),/unavailable/);
+});
+
+test('add URL dialog forwards only HTTP test downloads and receives the existing UI response shape',async()=>{
+ let listener;const sent=[];
+ const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);
+ const pending=context.__TAURI_INTERNALS__.invoke('add_download',{url:' https://example.com/file ',later:false});
+ assert.equal(sent[0].command,'add_download');assert.equal(sent[0].url,'https://example.com/file');
+ listener({data:{id:sent[0].id,ok:true,value:{pending:true}}});assert.equal(JSON.parse(await pending).pending,true);
+ await assert.rejects(context.__TAURI_INTERNALS__.invoke('add_download',{url:'file:///etc/passwd',later:false}),/unavailable/);
+});
+
+test('remove is available without exposing delete-file actions',async()=>{
+ let listener;const sent=[];
+ const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);
+ const pending=context.__TAURI_INTERNALS__.invoke('download_action',{action:'remove',ids:[7]});assert.equal(sent[0].command,'remove_download');listener({data:{id:sent[0].id,ok:true,value:{done:[7],skipped:[]}}});assert.equal((await pending).done[0],7);
+ await assert.rejects(context.__TAURI_INTERNALS__.invoke('download_action',{action:'delete',ids:[7]}),/unavailable/);
+});
+
+test('list removal keeps the isolated no-disk-deletion preference',async()=>{
+ const context={chrome:{webview:{addEventListener(){},postMessage(){}}},setTimeout,clearTimeout};runInNewContext(source,context);
+ assert.equal((await context.__TAURI_INTERNALS__.invoke('glass_tool',{action:'original-setting',payload:{key:'delete_files_too',value:false}})).ok,true);
+ await assert.rejects(context.__TAURI_INTERNALS__.invoke('glass_tool',{action:'original-setting',payload:{key:'delete_files_too',value:true}}),/unavailable/);
+});
+
+test('isolated connection settings can be adjusted without enabling browser integration',async()=>{
+ let listener;const sent=[];
+ const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);
+ const pending=context.__TAURI_INTERNALS__.invoke('update_glass_setting',{key:'max_connections',value:'8'});assert.equal(sent[0].key,'max_connections');listener({data:{id:sent[0].id,ok:true,value:{saved:true}}});assert.equal((await pending).saved,true);
+ await assert.rejects(context.__TAURI_INTERNALS__.invoke('update_glass_setting',{key:'proxy_from_browser',value:'true'}),/unavailable/);
+});
+
+test('file actions send only an ID to the host, never a web supplied path',async()=>{
+ let listener;const sent=[];
+ const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);
+ for(const [operation,command] of [['open','file_open'],['folder','file_folder']]){
+  const pending=context.__TAURI_INTERNALS__.invoke('file_operation',{id:7,operation,value:'C:\\outside.exe'});const message=sent.at(-1);assert.equal(message.command,command);assert.equal(message.downloadId,7);assert.equal('value' in message,false);listener({data:{id:message.id,ok:true,value:{ok:true}}});await pending;
+ }
 });

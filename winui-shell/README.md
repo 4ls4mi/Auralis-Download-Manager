@@ -16,9 +16,10 @@ not modify the installed app. Build the interface assets first with
 `cd glass-ui; npm install; npm run build`.
 
 The **Isolated downloader** button starts the Rust engine in a fresh temporary
-folder and shows its empty download list and settings through a restricted bridge. A few display preferences can be changed in the
+folder and shows its empty download list and settings through a restricted bridge. Display and selected connection preferences can be changed in the
 temporary profile. HTTP and HTTPS test downloads use its temporary downloads
-folder; the test interface supports start, pause and per-file speed limits. Closing the window stops the test engine; this
+folder; the test interface supports adding URLs, start, pause, queue actions,
+removing list entries and per-file speed limits. Removing a list entry keeps the file. Closing the window stops the test engine; this
 mode does not use the installed app's data. Windows validation is still needed.
 
 Test files remain in the temporary profile; this preview does not import or alter

@@ -22,6 +22,9 @@ internal static class DownloaderBridge
     private static extern IntPtr auralis_bridge_file_details(ulong id);
 
     [DllImport("auralis_winui_bridge", CallingConvention = CallingConvention.Cdecl)]
+    private static extern IntPtr auralis_bridge_safe_test_path(ulong id, byte folder);
+
+    [DllImport("auralis_winui_bridge", CallingConvention = CallingConvention.Cdecl)]
     private static extern IntPtr auralis_bridge_speed_limit(ulong id, ulong kb);
 
     [DllImport("auralis_winui_bridge", CallingConvention = CallingConvention.Cdecl)]
@@ -40,8 +43,10 @@ internal static class DownloaderBridge
         return ReadResponse(auralis_bridge_queue_action(bytes, (nuint)bytes.Length, start ? (byte)1 : (byte)2));
     });
     internal static Task<JsonElement> FileDetailsAsync(ulong id) => Task.Run(() => ReadResponse(auralis_bridge_file_details(id)));
+    internal static Task<JsonElement> SafeTestPathAsync(ulong id, bool folder) => Task.Run(() => ReadResponse(auralis_bridge_safe_test_path(id, folder ? (byte)1 : (byte)0)));
     internal static Task<JsonElement> SpeedLimitAsync(ulong id, ulong kb) => Task.Run(() => ReadResponse(auralis_bridge_speed_limit(id, kb)));
     internal static Task<JsonElement> StartDownloadAsync(ulong id) => Task.Run(() => ReadResponse(auralis_bridge_download_action(1, id)));
+    internal static Task<JsonElement> RemoveDownloadAsync(ulong id) => Task.Run(() => ReadResponse(auralis_bridge_download_action(3, id)));
     internal static Task<JsonElement> PauseDownloadAsync(ulong id) => Task.Run(() => ReadResponse(auralis_bridge_download_action(2, id)));
     internal static Task<JsonElement> AddDownloadAsync(string url, bool later) => Task.Run(() =>
     {

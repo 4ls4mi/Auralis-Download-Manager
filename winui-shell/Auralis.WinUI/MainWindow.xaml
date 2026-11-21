@@ -14,13 +14,15 @@
             <TextBlock Text="WinUI shell development" FontSize="24" FontWeight="SemiBold" />
             <TextBlock Text="Development preview — test downloads use an isolated temporary folder." TextWrapping="Wrap" />
         </StackPanel>
-        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="12">
-            <ComboBox x:Name="MaterialSelector" Header="Surface material" DisplayMemberPath="Label" SelectionChanged="OnMaterialChanged" />
-            <ComboBox x:Name="ThemeSelector" Header="Preview theme" SelectionChanged="OnThemeChanged" />
-            <Button Content="Preview interface" Click="OnPreviewInterface" VerticalAlignment="Bottom" />
-            <Button Content="Isolated downloader" Click="OnSandboxInterface" VerticalAlignment="Bottom" />
-            <Button Content="Appearance settings" Click="OnPreviewSettings" VerticalAlignment="Bottom" />
-        </StackPanel>
+        <ScrollViewer Grid.Row="1" HorizontalScrollMode="Auto" HorizontalScrollBarVisibility="Auto" VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled">
+            <StackPanel Orientation="Horizontal" Spacing="12">
+                <ComboBox x:Name="MaterialSelector" Header="Surface material" DisplayMemberPath="Label" SelectionChanged="OnMaterialChanged" />
+                <ComboBox x:Name="ThemeSelector" Header="Preview theme" SelectionChanged="OnThemeChanged" />
+                <Button Content="Preview interface" Click="OnPreviewInterface" VerticalAlignment="Bottom" />
+                <Button Content="Isolated downloader" Click="OnSandboxInterface" VerticalAlignment="Bottom" />
+                <Button Content="Appearance settings" Click="OnPreviewSettings" VerticalAlignment="Bottom" />
+            </StackPanel>
+        </ScrollViewer>
         <StackPanel x:Name="SandboxControls" Grid.Row="2" Visibility="Collapsed" Spacing="4">
             <Grid ColumnSpacing="8">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>

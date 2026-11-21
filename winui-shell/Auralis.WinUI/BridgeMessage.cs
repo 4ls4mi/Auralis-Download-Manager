@@ -73,7 +73,7 @@ internal sealed record BridgeMessage(long Id, string Command, ulong DownloadId, 
                 throw new InvalidOperationException("Invalid speed limit request.");
             return new(id, command, itemId, null, false, Value: kb.ToString(System.Globalization.CultureInfo.InvariantCulture));
         }
-        if (command is "start_download" or "pause_download" or "file_details")
+        if (command is "start_download" or "pause_download" or "remove_download" or "file_details" or "file_open" or "file_folder")
         {
             if (!root.TryGetProperty("downloadId", out var downloadId) || !downloadId.TryGetUInt64(out ulong value) || value == 0)
                 throw new InvalidOperationException("Invalid download ID.");
@@ -97,7 +97,7 @@ internal sealed record BridgeMessage(long Id, string Command, ulong DownloadId, 
                 throw new InvalidOperationException("Invalid download link.");
             string url = urlValue.GetString()?.Trim() ?? "";
             if (url.Length == 0 || System.Text.Encoding.UTF8.GetByteCount(url) > 8192 ||
-                !(url.StartsWith("http://", StringComparison.Ordinal) || url.StartsWith("https://", StringComparison.Ordinal) || url.StartsWith("ftp://", StringComparison.Ordinal) || url.StartsWith("magnet:", StringComparison.Ordinal)))
+                !(url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || url.StartsWith("https://", StringComparison.OrdinalIgnoreCase) || url.StartsWith("ftp://", StringComparison.Ordinal) || url.StartsWith("magnet:", StringComparison.Ordinal)))
                 throw new InvalidOperationException("Unsupported download link.");
             bool later = false;
             if (root.TryGetProperty("later", out var laterValue))
