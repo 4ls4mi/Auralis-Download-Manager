@@ -2060,7 +2060,7 @@ button:focus-visible { outline: none; }
         select.value=subtitleChoice;select.addEventListener("change",()=>{subtitleChoice=select.value});label.append(select);section.append(label);
         const modes=document.createElement("div");modes.className="subtitle-modes";modes.setAttribute("role","group");modes.setAttribute("aria-label","Subtitle output");
         for(const [value,text] of [[false,"Separate file"],[true,"Selectable track"]]){const item=document.createElement("label");const radio=document.createElement("input");radio.type="radio";radio.name="subtitle-output";radio.checked=subtitleEmbed===value;radio.addEventListener("change",()=>{if(radio.checked)subtitleEmbed=value});item.append(radio,document.createTextNode(text));modes.append(item)}
-        const note=document.createElement("small");note.textContent="Selectable tracks require FFmpeg and MP4, MKV or MOV; otherwise subtitles save separately. Burn-in is not available yet.";modes.append(note);section.append(modes);rows.append(section);
+        const burn=document.createElement("label"),burnRadio=document.createElement("input");burnRadio.type="radio";burnRadio.name="subtitle-output";burnRadio.disabled=true;burn.append(burnRadio,document.createTextNode("Burn into picture (not available yet)"));modes.append(burn);const note=document.createElement("small");note.textContent="Selectable tracks require FFmpeg and MP4, MKV or MOV; otherwise subtitles save separately.";modes.append(note);section.append(modes);rows.append(section);
       }
       if(qualityTab!=="subtitles") {
         if(qualityTab==="video")rows.append(topRow(best, { choice: look.choices.indexOf(best) }));
