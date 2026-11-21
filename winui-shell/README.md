@@ -36,5 +36,11 @@ MSBuild winui-shell/Auralis.WinUI/Auralis.WinUI.csproj /restore /p:Configuration
 
 The desktop preview reduces the old WebView surface layers, including the
 Frosted Layers canvas, to give the Windows backdrop room to show through.
+The validation workflow uploads a temporary **auralis-winui-development-preview**
+artifact after its checks pass. Extract all files before launching
+`Auralis.WinUI.exe`; keep the adjacent DLLs and `interface` folder together.
+This development build may require the .NET 8 Desktop Runtime and WebView2
+Runtime. It is not an installer or replacement for the released app.
+
 Native backdrop visibility must be checked on Windows; a successful build alone
 does not establish that the material looks right or works on every system.

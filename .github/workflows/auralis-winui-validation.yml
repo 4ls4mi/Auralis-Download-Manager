@@ -71,3 +71,22 @@ jobs:
         run: |
           cargo test -p auralis-winui-bridge --lib --no-default-features
           if ($LASTEXITCODE) { throw 'Embedded downloader bridge test failed.' }
+      - name: Stage isolated development preview
+        shell: pwsh
+        run: |
+          $executables = @(Get-ChildItem winui-shell/Auralis.WinUI/bin -Recurse -Filter Auralis.WinUI.exe)
+          if ($executables.Count -ne 1) { throw "Expected one WinUI executable; found $($executables.Count)." }
+          $output = $executables[0].DirectoryName
+          foreach ($required in @('auralis_winui_bridge.dll', 'interface/index.html', 'interface/winui-preview-compat.js', 'interface/winui-sandbox-compat.js')) {
+            if (!(Test-Path (Join-Path $output $required))) { throw "Missing development preview file: $required" }
+          }
+          New-Item -ItemType Directory -Force -Path winui-preview-artifact | Out-Null
+          Copy-Item (Join-Path $output '*') winui-preview-artifact -Recurse -Force
+          Copy-Item winui-shell/README.md winui-preview-artifact/DEVELOPMENT-README.md
+      - name: Upload isolated WinUI development preview
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: auralis-winui-development-preview
+          path: winui-preview-artifact/
+          if-no-files-found: error
+          retention-days: 7
