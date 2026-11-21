@@ -168,7 +168,7 @@ jobs:
       - name: Test backup snapshot and torrent comparison
         shell: pwsh
         run: |
-          cargo test -p mdm-app --target x86_64-pc-windows-msvc --lib backup_snapshot::tests
+          cargo test -p mdm-app --target x86_64-pc-windows-msvc --lib backup_snapshot::
           if ($LASTEXITCODE) { throw 'Backup snapshot tests failed.' }
           cargo test -p mdm-torrent --target x86_64-pc-windows-msvc --lib compare_saved_download
           if ($LASTEXITCODE) { throw 'Torrent comparison test failed.' }
