@@ -7,7 +7,7 @@ test('in-player panel tabs preserve subtitle selection and stay anchored',{skip:
  const browser=await chromium.launch({headless:true,executablePath:browserPath,args:['--no-sandbox']});
  try{const page=await browser.newPage({viewport:{width:1000,height:700}});
   await page.route('https://www.youtube.com/**',r=>r.fulfill({contentType:'text/html',body:'<video controls style="width:640px;height:360px"></video>'}));
-  await page.addInitScript(()=>{const attach=Element.prototype.attachShadow;Element.prototype.attachShadow=function(init){return attach.call(this,{...init,mode:'open'})};window.sent=[];window.chrome={i18n:{getMessage:()=>'',getUILanguage:()=> 'en'},runtime:{id:'test',sendMessage:async m=>{window.sent.push(m);if(m.type==='panel')return {on:true};if(m.type==='video-lookup')return {lookup:{state:'ready',token:'t',title:'A very long video title '.repeat(30),subtitles:[{code:'en',name:'English'}],choices:[{label:'1080p',size:104857600},{label:'128 kbps',audio:true,size:10485760}]}};if(m.type==='video-pick')return {lookup:{state:'sent'}};return {}}},storage:{local:{get:async defaults=>defaults,set:async()=>{}},onChanged:{addListener:()=>{}}}}});
+  await page.addInitScript(()=>{const attach=Element.prototype.attachShadow;Element.prototype.attachShadow=function(init){return attach.call(this,{...init,mode:'open'})};window.sent=[];window.chrome={i18n:{getMessage:()=>'',getUILanguage:()=> 'en'},runtime:{id:'test',sendMessage:async m=>{window.sent.push(m);if(m.type==='panel')return {on:true};if(m.type==='video-lookup')return {lookup:{state:'ready',token:'t',title:'A very long video title '.repeat(30),subtitles:[{code:'en',name:'English'}],choices:[{label:'1080p',ext:'mp4',height:1080,fps:30,codec:'AV1',size:104857600},{label:'128 kbps',audio:true,size:10485760}]}};if(m.type==='video-pick')return {lookup:{state:'sent'}};return {}}},storage:{local:{get:async defaults=>defaults,set:async()=>{}},onChanged:{addListener:()=>{}}}}});
   await page.goto('https://www.youtube.com/watch?v=abcdef12345');
   await page.addScriptTag({content:readFileSync(new URL('../../auralis-extension/video.js',import.meta.url),'utf8')});
   await page.mouse.move(100,100);
@@ -24,11 +24,13 @@ test('in-player panel tabs preserve subtitle selection and stay anchored',{skip:
   await host.locator('[role="tab"]',{hasText:'Video'}).focus();await page.keyboard.press('ArrowRight');
   assert.equal(await host.locator('[role="tab"][aria-selected="true"]').innerText(),'Audio');
   await page.keyboard.press('ArrowRight');assert.equal(await host.locator('[role="tab"][aria-selected="true"]').innerText(),'Subtitles');
-  await host.locator('.subtitle-list button',{hasText:'English'}).click();
+  await host.getByLabel('Subtitle language').selectOption('manual:en');
+  await host.getByLabel('Selectable track').check();
   await host.locator('[role="tab"]',{hasText:'Video'}).click();
   await host.locator('.rows button').filter({hasText:'1080p'}).last().click();
   await page.waitForFunction(()=>window.sent.some(m=>m.type==='video-pick'));
   const picked=await page.evaluate(()=>window.sent.find(m=>m.type==='video-pick'));
-  assert.deepEqual(picked.subs.langs,['en']);
+  assert.deepEqual(picked.subs.langs,['en']);assert.equal(picked.subs.embed,true);
+  assert.equal(await host.locator('.quality-details').count()>0,true);assert.equal(await host.locator('.quality-badge').first().innerText(),'Full HD');
  }finally{await browser.close()}
 });

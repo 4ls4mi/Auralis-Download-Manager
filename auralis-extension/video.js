@@ -1053,6 +1053,12 @@ button:focus-visible { outline: none; }
 .menu .rows::-webkit-scrollbar-thumb,.menu .subtitle-list::-webkit-scrollbar-thumb{background:#a98ee2;border-radius:8px}
 .menu .rows button,.menu .subtitle-list button{min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .menu .subtitle-list{max-height:none;overflow:visible}
+.menu .subtitle-controls{display:grid;gap:5px;padding:5px 3px;border-bottom:1px solid var(--bd);font-size:11px}
+.menu .subtitle-controls>label{display:flex;align-items:center;gap:6px;min-width:0}.menu .subtitle-controls select{flex:1;min-width:0;max-width:100%;background:#20334f;color:var(--tx);border:1px solid var(--bd);border-radius:5px;padding:4px}
+.menu .subtitle-modes{display:flex;gap:7px;align-items:center;flex-wrap:wrap}.menu .subtitle-modes label{display:flex;align-items:center;gap:3px}.menu .subtitle-modes small{flex-basis:100%;color:var(--tx2)}
+.menu button.quality-row{height:auto;min-height:42px;display:flex;flex-direction:column;align-items:stretch;gap:2px;padding:5px 8px;text-align:left;border-bottom:1px solid #ffffff18}
+.menu .quality-primary{display:flex;align-items:center;gap:4px;min-width:0;white-space:nowrap}.menu .quality-name{font-weight:650;overflow:hidden;text-overflow:ellipsis}.menu .quality-badge,.menu .quality-codec{flex:none;font-size:9px;padding:1px 3px;border:1px solid var(--accent);border-radius:3px;color:var(--accent)}
+.menu .quality-details{font-size:10px;font-weight:400;color:var(--tx2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .menu .cookie-controls{padding:4px;gap:4px;font-size:11px}
 .menu .cookie-controls select{max-width:135px}
 .menu [data-act="hide"],.menu [data-act="never"],.menu [data-act="settings"]{height:25px;font-size:11px}
@@ -1684,7 +1690,7 @@ button:focus-visible { outline: none; }
     if (!ext.runtime?.id) return teardown();
     if (video !== v) {
       looks.clear();
-      cookieHeader.value = ""; cookieHeader.hidden = true; cookieMode.value = "browser"; subtitleChoice = "none";
+      cookieHeader.value = ""; cookieHeader.hidden = true; cookieMode.value = "browser"; subtitleChoice = "none"; subtitleEmbed = false;
       video = v;
       held = null;
       closeMenu();
@@ -1935,7 +1941,7 @@ button:focus-visible { outline: none; }
     if (!l.token || l.picked || !(i >= 0 && i < Math.min(l.choices.length, 100))) return useWindow(playedJob(j, l));
     l.picked = true;
     const [subKind, subCode] = subtitleChoice.split(":");
-    const s = replyState(await send({ type: "video-pick", token: l.token, choice: i, subs: {langs: subCode ? [subCode] : [], automatic: subKind === "auto", embed: false} }));
+    const s = replyState(await send({ type: "video-pick", token: l.token, choice: i, subs: {langs: subCode ? [subCode] : [], automatic: subKind === "auto", embed: subtitleEmbed && l.choices[i]?.audio !== true && ["mp4","mkv","mov","m4v"].includes(String(l.choices[i]?.ext || "").toLowerCase())} }));
     if (!s) return endStatus(true);
     // Downloading, queued, or handed to the app ("sent"): green, with "Show". Anything else (the
     // look-up forgotten, another window's, an older app): the window.
@@ -2012,6 +2018,7 @@ button:focus-visible { outline: none; }
   // line per quality (video, then sound); MDM's whole window; hiding and settings. Filled as it
   // opens and again when the look-up ends.
   let subtitleChoice = "none";
+  let subtitleEmbed = false;
   let qualityTab = "video";
   function fillMenu() {
     const c = video ? describeNow(video) : null;
@@ -2041,19 +2048,25 @@ button:focus-visible { outline: none; }
       const tabs=document.createElement("div");tabs.className="quality-tabs";tabs.setAttribute("role","tablist");tabs.setAttribute("aria-label","Quality categories");
       for(const [kind,title] of [["video",t("video_tab_video")],["audio",t("video_tab_audio")],["subtitles","Subtitles"]]){const button=document.createElement("button");button.type="button";button.textContent=title;button.setAttribute("role","tab");button.setAttribute("aria-selected",String(qualityTab===kind));button.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();qualityTab=kind;fillMenu()});tabs.append(button)}
       rows.append(tabs);
+      if(qualityTab!=="audio") {
+        const section=document.createElement("section");section.className="subtitle-controls";
+        const label=document.createElement("label");label.textContent="Subtitle language ";
+        const select=document.createElement("select");select.setAttribute("aria-label","Subtitle language");
+        const add=(value,text)=>{const option=document.createElement("option");option.value=value;option.textContent=text;select.append(option)};
+        add("none","No subtitles");
+        for(const [kind,tracks] of [["manual",look.subtitles||[]],["auto",look.automatic_subtitles||[]]]) {
+          for(const track of tracks)add(`${kind}:${track.code}`,`${track.name||track.code} (${track.code})${kind==="auto"?" · automatic":""}`);
+        }
+        select.value=subtitleChoice;select.addEventListener("change",()=>{subtitleChoice=select.value});label.append(select);section.append(label);
+        const modes=document.createElement("div");modes.className="subtitle-modes";modes.setAttribute("role","group");modes.setAttribute("aria-label","Subtitle output");
+        for(const [value,text] of [[false,"Separate file"],[true,"Selectable track"]]){const item=document.createElement("label");const radio=document.createElement("input");radio.type="radio";radio.name="subtitle-output";radio.checked=subtitleEmbed===value;radio.addEventListener("change",()=>{if(radio.checked)subtitleEmbed=value});item.append(radio,document.createTextNode(text));modes.append(item)}
+        const note=document.createElement("small");note.textContent="Selectable tracks require FFmpeg and MP4, MKV or MOV; otherwise subtitles save separately. Burn-in is not available yet.";modes.append(note);section.append(modes);rows.append(section);
+      }
       if(qualityTab!=="subtitles") {
         if(qualityTab==="video")rows.append(topRow(best, { choice: look.choices.indexOf(best) }));
         const choices=groups[qualityTab]||[];
         if(!choices.length){const empty=document.createElement("div");empty.className="note";empty.textContent="No qualities available";rows.append(empty)}
         let n=0;for(const i of choices)rows.append(row(look.choices[i],i,(n+=1),look.choices[i]===best));
-      } else {
-        const subtitleSection=document.createElement("section");subtitleSection.className="subtitle-section";
-        const list=document.createElement("div");list.className="subtitle-list";list.setAttribute("aria-label","Available subtitles");
-        const add=(value,text)=>{const button=document.createElement("button");button.type="button";button.textContent=text;button.setAttribute("aria-pressed",String(value===subtitleChoice));button.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();subtitleChoice=value;for(const b of list.querySelectorAll("button"))b.setAttribute("aria-pressed",String(b===button));});list.append(button)};
-        add("none","No subtitles");let count=0;
-        for(const [kind,tracks] of [["manual",look.subtitles||[]],["auto",look.automatic_subtitles||[]]]){if(tracks.length)add(`${kind}:all`,kind==="auto"?"All automatic captions":"All subtitles");for(const track of tracks){add(`${kind}:${track.code}`,`${track.name||track.code} (${track.code})${kind==="auto"?" · automatic":""} · ${choiceSize(track, lang)||"Size unavailable"}`);count++;}}
-        if(!count){const text=document.createElement("div");text.className="note";text.textContent="No subtitle languages available";subtitleSection.append(text)}
-        subtitleSection.append(list);rows.append(subtitleSection);
       }
       tell(noticeOf(look));
     } else if (look) {
@@ -2143,10 +2156,17 @@ button:focus-visible { outline: none; }
     b.type = "button";
     b.setAttribute("role", "menuitem");
     b.dataset.choice = String(choice);
-    const { q, f } = lineWords(c, t);
-    const fs = span("f", f);
-    if (best) fs.append(span("best", t("video_best")));
-    b.append(span("n", String(n)), span("q", q), fs, span("z", rowText(c, lang).size || "Size unavailable"));
+    b.className="quality-row";
+    const line=document.createElement("span");line.className="quality-primary";
+    const quality=qualityName(c,t), type=String(c.ext||"").toUpperCase();
+    line.append(span("quality-name",`${n}. ${type ? `${type} · ` : ""}${quality}${c.fps ? `${Math.round(c.fps)}fps` : ""}`));
+    const height=Number(c.height)||0;
+    const badge=height>=2160?"4K":height>=1440?"2K":height>=1080?"Full HD":height>=720?"HD":"";
+    if(badge)line.append(span("quality-badge",badge));
+    if(c.codec)line.append(span("quality-codec",String(c.codec)));
+    if(best)line.append(span("best",t("video_best")));
+    const details=[durationText(video&&video.duration),choiceSize(c,lang)||"Size unavailable",c.audio===true&&c.kbps?`${Math.round(c.kbps)} kbps`:"",c.range||""].filter(Boolean).join(" · ");
+    b.append(line,span("quality-details",details));
     return b;
   }
 
