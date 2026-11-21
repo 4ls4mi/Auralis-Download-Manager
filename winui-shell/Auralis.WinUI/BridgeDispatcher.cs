@@ -13,6 +13,8 @@ internal static class BridgeDispatcher
         "glass_settings" => DownloaderBridge.CallAsync(DownloaderBridge.Operation.Settings),
         "preferences" => DownloaderBridge.CallAsync(DownloaderBridge.Operation.Preferences),
         "network_adapters" => DownloaderBridge.CallAsync(DownloaderBridge.Operation.NetworkAdapters),
+        "queue_schedules" => DownloaderBridge.CallAsync(DownloaderBridge.Operation.QueueSchedules),
+        "save_schedule" when message.Value is not null => DownloaderBridge.SaveScheduleAsync(message.Value),
         "update_preference" when message.Key is not null && message.Value is not null => DownloaderBridge.UpdatePreferenceAsync(message.Key,message.Value,message.Clear),
         "update_glass_setting" when message.Key is not null && message.Value is not null => DownloaderBridge.UpdateSettingAsync(message.Key, message.Value),
         "queue_action" when message.Key is not null && message.Value is not null => DownloaderBridge.QueueActionAsync(message.Key, message.Value == "start_queue"),

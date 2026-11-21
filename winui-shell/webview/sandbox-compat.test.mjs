@@ -131,6 +131,16 @@ test('a test download can be added to or removed from an existing queue',async()
  await assert.rejects(context.__TAURI_INTERNALS__.invoke('file_operation',{id:7,operation:'queue-add',value:''}),/unavailable/);
 });
 
+test('scheduler uses the narrow isolated queue schedule commands',async()=>{
+ let listener;const sent=[];
+ const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);
+ const list=context.__TAURI_INTERNALS__.invoke('glass_tool',{action:'queues'});assert.equal(sent[0].command,'queue_schedules');
+ listener({data:{id:sent[0].id,ok:true,value:{queues:[]}}});await list;
+ const payload={name:'Main download queue',files_at_once:2,schedule:{wake:false}};
+ const save=context.__TAURI_INTERNALS__.invoke('glass_tool',{action:'schedule',payload});assert.equal(sent[1].command,'save_schedule');assert.equal(sent[1].payload,payload);
+ listener({data:{id:sent[1].id,ok:true,value:{ok:true}}});assert.equal((await save).ok,true);
+});
+
 test('add URL dialog forwards only HTTP test downloads and receives the existing UI response shape',async()=>{
  let listener;const sent=[];
  const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);

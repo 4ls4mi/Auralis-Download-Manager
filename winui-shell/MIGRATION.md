@@ -31,6 +31,9 @@ preview is not yet the application and must not be packaged as a release.
   addresses for stopped test downloads. These paths still require Windows and
   backend integration tests before production use. Torrent recovery and
   saved-data repair remain separate, unfinished work.
+- Test-queue membership and schedule editing are connected in the isolated
+  profile. Computer wake, shutdown, external program launch and completion
+  actions are deliberately rejected there and need production integration.
 - Preserve the existing instance lock, data directory, authenticated local IPC,
   downloader shutdown and in-progress download state. Starting a second shell
   must not take over or stop a running instance.

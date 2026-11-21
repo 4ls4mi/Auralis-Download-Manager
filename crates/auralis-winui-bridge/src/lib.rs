@@ -153,8 +153,39 @@ fn dispatch(operation: u32) -> Result<serde_json::Value, String> {
             Ok(settings)
         },
         9 if owned_backend() => request("glass-network-adapters"),
+        10 if owned_backend() => request("glass-queues"),
         _ => Err("Unsupported bridge operation".into()),
     }
+}
+fn preview_schedule_is_safe(schedule: &serde_json::Value) -> bool {
+    schedule.is_object() && schedule["open_when_done"].is_null() && schedule["turn_off"].is_null() &&
+        ["hang_up","exit_when_done","force_close","wake"].iter().all(|key|schedule[*key].as_bool()==Some(false))
+}
+fn save_schedule(payload: &serde_json::Value) -> Result<serde_json::Value, String> {
+    if ISOLATED_DATA.get().is_none() || !owned_backend() { return Err("The isolated downloader is not running.".into()); }
+    let name=payload["name"].as_str().filter(|s|!s.is_empty() && s.len()<=256).ok_or("Invalid queue name.")?;
+    if !payload["files_at_once"].as_u64().is_some_and(|n|(1..=128).contains(&n)) { return Err("Choose 1–128 simultaneous downloads.".into()); }
+    let schedule=&payload["schedule"];
+    if !preview_schedule_is_safe(schedule) {
+        return Err("Computer and completion actions are unavailable in the development preview.".into());
+    }
+    let queues=request("glass-queues")?;
+    if !queues["queues"].as_array().is_some_and(|items|items.iter().any(|item|item["name"].as_str()==Some(name))) { return Err("The selected queue is unavailable.".into()); }
+    let command=mdm_ipc::Command { action:Some("glass-schedule".into()), queue:Some(payload.to_string()), ..Default::default() };
+    let raw=mdm_ipc::request_checked(&command).map_err(|e|e.to_string())?;
+    let data:serde_json::Value=serde_json::from_str(&raw).map_err(|_|"Invalid schedule response.")?;
+    if data["ok"]!=true { return Err("The schedule could not be saved.".into()); }
+    Ok(data)
+}
+/// # Safety
+/// `input` must point to `len` readable JSON bytes during this call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn auralis_bridge_save_schedule(input: *const u8, len: usize) -> *mut c_char {
+    encode(std::panic::catch_unwind(|| {
+        if input.is_null() || len==0 || len>8192 { return Err("Invalid schedule request.".into()); }
+        let data:serde_json::Value=serde_json::from_slice(unsafe { std::slice::from_raw_parts(input,len) }).map_err(|_|"Invalid schedule request.")?;
+        save_schedule(&data)
+    }))
 }
 fn safe_preference_key(key: &str) -> bool {
     matches!(key, "limiter_on_startup" | "global_only_active" | "set_creation_date" | "mark_downloads" | "ignore_mtime" | "many_connections" | "duplicate_action" |
@@ -493,6 +524,16 @@ mod tests {
         assert!(update_preference("proxy_host", &serde_json::json!("x".repeat(513)),false).is_err());
         assert!(update_preference("proxy_host", &serde_json::json!("host"),true).is_err());
     }
+    #[test]
+    fn preview_schedule_rejects_computer_actions() {
+        let mut schedule=serde_json::json!({"open_when_done":null,"turn_off":null,"hang_up":false,"exit_when_done":false,"force_close":false,"wake":false});
+        assert!(preview_schedule_is_safe(&schedule));
+        for key in ["hang_up","exit_when_done","force_close","wake"] {
+            schedule[key]=serde_json::json!(true); assert!(!preview_schedule_is_safe(&schedule)); schedule[key]=serde_json::json!(false);
+        }
+        schedule["turn_off"]=serde_json::json!("ShutDown");assert!(!preview_schedule_is_safe(&schedule));
+        schedule["turn_off"]=serde_json::Value::Null;schedule["open_when_done"]=serde_json::json!("C:\\untrusted.exe");assert!(!preview_schedule_is_safe(&schedule));
+    }
     #[cfg(unix)]
     #[test]
     fn development_output_rejects_redirected_downloads_folder() {
@@ -527,6 +568,11 @@ mod tests {
         let list = dispatch(3).expect("read download list");
         assert!(list["downloads"].is_array());
         let main_queue=list["queues"][0]["name"].as_str().expect("main queue");
+        let schedules=dispatch(10).expect("read queue schedules");
+        let schedule=schedules["queues"].as_array().unwrap().iter().find(|queue|queue["name"]==main_queue).unwrap()["schedule"].clone();
+        let schedule_change=serde_json::json!({"name":main_queue,"files_at_once":2,"schedule":schedule});
+        assert_eq!(save_schedule(&schedule_change).expect("save isolated queue schedule")["ok"],true);
+        assert!(dispatch(10).unwrap()["queues"].as_array().unwrap().iter().any(|queue|queue["name"]==main_queue && queue["files_at_once"]==2));
         assert!(queue_action(main_queue,2).expect("stop isolated queue").is_object());
         assert!(queue_action(main_queue,3).is_err());
         let visual = dispatch(4).expect("read download visuals");

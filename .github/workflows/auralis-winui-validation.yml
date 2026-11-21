@@ -44,7 +44,7 @@ jobs:
           if (!(Test-Path $browser)) { $browser = Join-Path ${env:ProgramFiles(x86)} 'Microsoft/Edge/Application/msedge.exe' }
           if (!(Test-Path $browser)) { throw 'A Windows browser for interface checks was not found.' }
           $env:AURALIS_TEST_BROWSER = $browser
-          node --test glass-ui/tests/winui-preview-ui.test.mjs glass-ui/tests/winui-sandbox-add.test.mjs glass-ui/tests/winui-progress-tray.test.mjs glass-ui/tests/winui-update-notification.test.mjs glass-ui/tests/winui-preferences.test.mjs glass-ui/tests/winui-check-saved.test.mjs glass-ui/tests/winui-queue.test.mjs
+          node --test glass-ui/tests/winui-preview-ui.test.mjs glass-ui/tests/winui-sandbox-add.test.mjs glass-ui/tests/winui-progress-tray.test.mjs glass-ui/tests/winui-update-notification.test.mjs glass-ui/tests/winui-preferences.test.mjs glass-ui/tests/winui-check-saved.test.mjs glass-ui/tests/winui-queue.test.mjs glass-ui/tests/winui-scheduler.test.mjs
           if ($LASTEXITCODE) { throw 'WinUI hosted interface checks failed.' }
       - name: Test material mapping
         shell: pwsh

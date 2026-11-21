@@ -41,6 +41,8 @@
     if(command==='dashboard_snapshot'||command==='dashboard_visuals'||command==='glass_settings')return request(command);
     if(command==='list_network_adapters')return request('network_adapters');
     if(command==='glass_tool' && args.action==='original-settings')return request('preferences');
+    if(command==='glass_tool' && args.action==='queues')return request('queue_schedules');
+    if(command==='glass_tool' && args.action==='schedule' && args.payload && typeof args.payload==='object')return request('save_schedule',{payload:args.payload});
     if(command==='glass_tool' && args.action==='original-setting') {
       const {key,value,clear=false}=args.payload??{};
       if((['limiter_on_startup','global_only_active','set_creation_date','mark_downloads','ignore_mtime','many_connections','proxy_http','proxy_https','proxy_ftp','dns_fallback','ftp_passive'].includes(key) && typeof value==='boolean') ||

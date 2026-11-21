@@ -80,7 +80,15 @@ internal sealed record BridgeMessage(long Id, string Command, ulong DownloadId, 
         if (command == "window_start_drag") return new(id,command,0,null,false);
         if (command is "window_hide" or "window_minimize" or "window_toggle_maximize" or "window_close" or "window_is_maximized" or "window_outer_position" or "window_outer_size" or "window_current_monitor") return new(id, command, 0, null, false);
         if (command is "dashboard_snapshot" or "dashboard_visuals" or "glass_settings") return new(id, command, 0, null, false);
-        if (command is "preferences" or "network_adapters") return new(id,command,0,null,false);
+        if (command is "preferences" or "network_adapters" or "queue_schedules") return new(id,command,0,null,false);
+        if (command == "save_schedule")
+        {
+            if (!root.TryGetProperty("payload",out var payload) || payload.ValueKind!=JsonValueKind.Object)
+                throw new InvalidOperationException("Invalid schedule request.");
+            string jsonPayload=payload.GetRawText();
+            if (System.Text.Encoding.UTF8.GetByteCount(jsonPayload)>8192) throw new InvalidOperationException("Schedule request is too large.");
+            return new(id,command,0,null,false,Value:jsonPayload);
+        }
         if (command == "update_preference")
         {
             if (!root.TryGetProperty("key",out var key) || key.ValueKind!=JsonValueKind.String ||
