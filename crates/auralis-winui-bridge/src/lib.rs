@@ -390,6 +390,10 @@ mod tests {
         assert!(visual["downloads"].is_array());
         let settings = dispatch(5).expect("read downloader settings");
         assert!(settings["max_connections"].is_number());
+        let preferences=dispatch(8).expect("read isolated preferences");
+        assert!(preferences["fields"].as_array().unwrap().iter().all(|field|field["key"].as_str().is_some_and(safe_preference_key)));
+        assert!(update_preference("many_connections",&serde_json::json!(true)).expect("save isolated preference")["ok"]==true);
+        assert!(dispatch(8).unwrap()["fields"].as_array().unwrap().iter().any(|field|field["key"]=="many_connections" && field["value"]==true));
         assert!(update_setting("advanced_integration", "true").unwrap_err().contains("disabled"));
         update_setting("max_connections", "8").expect("update isolated connection limit");
         assert_eq!(dispatch(5).unwrap()["max_connections"],8);
@@ -469,6 +473,7 @@ mod tests {
         let restored=dispatch(5).expect("read restored settings");
         assert_eq!(restored["max_connections"],8);
         assert_eq!(restored["show_complete"],false);
+        assert!(dispatch(8).unwrap()["fields"].as_array().unwrap().iter().any(|field|field["key"]=="many_connections" && field["value"]==true));
         assert!(destination.is_file(),"a restart must preserve previously downloaded files");
         assert_eq!(stop().expect("stop restarted downloader")["running"],false);
         std::fs::remove_dir_all(data).expect("remove isolated test data");
