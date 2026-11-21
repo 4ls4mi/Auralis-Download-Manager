@@ -32,3 +32,11 @@ jobs:
           if (-not $msbuild) { throw 'Visual Studio MSBuild was not found.' }
           & $msbuild winui-shell/Auralis.WinUI/Auralis.WinUI.csproj /restore /m /p:Configuration=Debug /p:Platform=x64
           if ($LASTEXITCODE) { throw 'WinUI shell build failed.' }
+      - name: Test embedded downloader bridge
+        shell: pwsh
+        env:
+          CARGO_INCREMENTAL: '0'
+          CARGO_PROFILE_TEST_DEBUG: '0'
+        run: |
+          cargo test -p auralis-winui-bridge --lib --no-default-features
+          if ($LASTEXITCODE) { throw 'Embedded downloader bridge test failed.' }
