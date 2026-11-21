@@ -237,6 +237,39 @@ fn file_details(id: u64) -> Result<serde_json::Value, String> {
     if data.get("error").is_some() { return Err("Download details are unavailable.".into()); }
     Ok(data)
 }
+// Check only a stopped ordinary test download owned by the isolated profile.
+// The backend performs the read-only hash verification and returns its report.
+fn check_saved(id: u64, result: bool) -> Result<serde_json::Value, String> {
+    if id==0 || !owned_backend() { return Err("The test download is unavailable.".into()); }
+    let root=test_output_dir()?;
+    let canonical_root=root.canonicalize().map_err(|_|"The test folder is unavailable.")?;
+    let command=mdm_ipc::Command { query:Some("list".into()), ..Default::default() };
+    let raw=mdm_ipc::request_checked(&command).map_err(|e|e.to_string())?;
+    let list:mdm_ipc::api::ListAnswer=serde_json::from_str(&raw).map_err(|_|"Invalid download list.")?;
+    let item=list.downloads.iter().find(|item|item.id==id).ok_or("The test download no longer exists.")?;
+    let destination=std::path::PathBuf::from(&item.path);
+    if destination.parent().is_none_or(|parent|!same_path(parent,&root)) { return Err("The download is outside the test folder.".into()); }
+    if !result {
+        for suffix in [".mdm.json",".mdm.part"] {
+            let mut name=destination.as_os_str().to_owned(); name.push(suffix);
+            let file=std::path::PathBuf::from(name);
+            let metadata=std::fs::symlink_metadata(&file).map_err(|_|"Saved download data is unavailable.")?;
+            let actual=file.canonicalize().map_err(|_|"Saved download data is unavailable.")?;
+            if metadata.file_type().is_symlink() || !metadata.is_file() || actual.parent().is_none_or(|p|!same_path(p,&canonical_root)) {
+                return Err("Saved download data cannot be redirected.".into());
+            }
+        }
+    }
+    let command=mdm_ipc::Command { action:Some("glass-item".into()), category:Some(if result {"check-saved-result"} else {"check-saved"}.into()), ids:vec![id], ..Default::default() };
+    let raw=mdm_ipc::request_checked(&command).map_err(|e|e.to_string())?;
+    let data:serde_json::Value=serde_json::from_str(&raw).map_err(|_|"Invalid saved-data response")?;
+    if data.get("error").is_some() { return Err("The saved download cannot be checked now.".into()); }
+    Ok(data)
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn auralis_bridge_check_saved(id: u64, result: u8) -> *mut c_char {
+    encode(std::panic::catch_unwind(|| if result>1 { Err("Invalid saved-data request.".into()) } else { check_saved(id,result==1) }))
+}
 /// Returns details for one download; no file paths or operations are accepted from the caller.
 #[unsafe(no_mangle)]
 pub extern "C" fn auralis_bridge_file_details(id: u64) -> *mut c_char {
@@ -506,6 +539,8 @@ mod tests {
             thread::sleep(Duration::from_millis(100));
         }
         assert_eq!(std::fs::read(&destination).expect("read test download"),b"isolated WinUI test download");
+        assert!(check_saved(id,false).is_err(),"a completed download must not be treated as partial data");
+        assert!(check_saved(u64::MAX,false).is_err(),"unknown downloads cannot be checked");
         assert!(std::path::PathBuf::from(safe_test_path(id,false).unwrap()["path"].as_str().unwrap()).starts_with(data.join("downloads")));
         assert_eq!(std::path::PathBuf::from(safe_test_path(id,true).unwrap()["path"].as_str().unwrap()),data.join("downloads"));
         let removed=download_action(3,id).expect("remove test download from list");
@@ -529,6 +564,11 @@ mod tests {
 
     #[test]
     fn unsupported_operations_are_rejected_and_ffi_returns_json() {
+        assert!(check_saved(0,false).is_err());
+        let invalid=auralis_bridge_check_saved(1,2);
+        let response=unsafe { std::ffi::CStr::from_ptr(invalid) }.to_str().unwrap();
+        assert_eq!(serde_json::from_str::<serde_json::Value>(response).unwrap()["ok"],false);
+        unsafe { auralis_bridge_free(invalid) };
         assert!(update_setting("automation_api", "true").is_err());
         assert!(add_download("file:///local/private", false).is_err());
         assert!(add_download("http://", false).is_err());

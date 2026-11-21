@@ -120,7 +120,7 @@ internal sealed record BridgeMessage(long Id, string Command, ulong DownloadId, 
                 throw new InvalidOperationException("Invalid speed limit request.");
             return new(id, command, itemId, null, false, Value: kb.ToString(System.Globalization.CultureInfo.InvariantCulture));
         }
-        if (command is "start_download" or "pause_download" or "remove_download" or "file_details" or "file_open" or "file_folder" or "progress_hide" or "progress_restore")
+        if (command is "start_download" or "pause_download" or "remove_download" or "file_details" or "check_saved" or "check_saved_result" or "file_open" or "file_folder" or "progress_hide" or "progress_restore")
         {
             if (!root.TryGetProperty("downloadId", out var downloadId) || !downloadId.TryGetUInt64(out ulong value) || value == 0)
                 throw new InvalidOperationException("Invalid download ID.");

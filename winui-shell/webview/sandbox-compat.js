@@ -54,6 +54,7 @@
     if(command==='file_operation' && ['open','folder'].includes(args.operation) && Number.isSafeInteger(args.id) && args.id>0) return request(args.operation==='open'?'file_open':'file_folder',{downloadId:args.id});
     if(command==='file_operation' && args.operation==='speed-limit' && Number.isSafeInteger(args.id) && args.id>0) { const kb=args.value==='off'?0:Number(args.value); if(Number.isInteger(kb) && kb>=0 && kb<=10000000 && (kb>0 || args.value==='off')) return request('file_speed_limit',{downloadId:args.id,value:kb}); }
     if(command==='file_operation' && args.operation==='details' && Number.isSafeInteger(args.id) && args.id>0) return request('file_details',{downloadId:args.id});
+    if(command==='file_operation' && ['check-saved','check-saved-result'].includes(args.operation) && Number.isSafeInteger(args.id) && args.id>0) return request(args.operation==='check-saved'?'check_saved':'check_saved_result',{downloadId:args.id});
     if(command==='download_action' && ['start','pause','remove'].includes(args.action) && Array.isArray(args.ids) && args.ids.length>0 && args.ids.length<=100 && args.ids.every(id=>Number.isSafeInteger(id) && id>0)) {
       const results=await Promise.all([...new Set(args.ids)].map(downloadId=>request(args.action==='start'?'start_download':args.action==='pause'?'pause_download':'remove_download',{downloadId})));
       return {done:results.flatMap(result=>result.done??[]),skipped:results.flatMap(result=>result.skipped??[])};

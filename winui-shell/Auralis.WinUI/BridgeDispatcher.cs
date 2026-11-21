@@ -18,6 +18,8 @@ internal static class BridgeDispatcher
         "queue_action" when message.Key is not null && message.Value is not null => DownloaderBridge.QueueActionAsync(message.Key, message.Value == "start_queue"),
         "file_speed_limit" when message.Value is not null => DownloaderBridge.SpeedLimitAsync(message.DownloadId, ulong.Parse(message.Value, System.Globalization.CultureInfo.InvariantCulture)),
         "file_details" => DownloaderBridge.FileDetailsAsync(message.DownloadId),
+        "check_saved" => DownloaderBridge.CheckSavedAsync(message.DownloadId,false),
+        "check_saved_result" => DownloaderBridge.CheckSavedAsync(message.DownloadId,true),
         "start_download" => DownloaderBridge.StartDownloadAsync(message.DownloadId),
         "remove_download" => DownloaderBridge.RemoveDownloadAsync(message.DownloadId),
         "pause_download" => DownloaderBridge.PauseDownloadAsync(message.DownloadId),

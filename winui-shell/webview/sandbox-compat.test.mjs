@@ -63,6 +63,18 @@ test('progress windows may read details but cannot request file operations',asyn
  await assert.rejects(context.__TAURI_INTERNALS__.invoke('file_operation',{id:7,operation:'open-with',value:null}),/unavailable/);
 });
 
+test('saved-data checking uses only the download ID and does not expose repair or torrent actions',async()=>{
+ let listener;const sent=[];
+ const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);
+ for(const [operation,command,value] of [['check-saved','check_saved',{pending:true}],['check-saved-result','check_saved_result',{complete:true,report:{checked_bytes:10,unhashed_bytes:0,damaged_ranges:[]}}]]){
+  const pending=context.__TAURI_INTERNALS__.invoke('file_operation',{id:7,operation,value:'/outside'});const message=sent.at(-1);
+  assert.equal(message.command,command);assert.equal(message.downloadId,7);assert.equal('value' in message,false);
+  listener({data:{id:message.id,ok:true,value}});assert.deepEqual(await pending,value);
+ }
+ await assert.rejects(context.__TAURI_INTERNALS__.invoke('file_operation',{id:7,operation:'repair-saved'}),/unavailable/);
+ await assert.rejects(context.__TAURI_INTERNALS__.invoke('file_operation',{id:7,operation:'find-recovery-torrents'}),/unavailable/);
+});
+
 test('multiple selected downloads preserve each start result',async()=>{
  let listener;const sent=[];
  const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);
