@@ -6,6 +6,8 @@ on:
     branches: [feature/auralis-frosted-candidate]
     paths:
       - '.github/workflows/auralis-self-hosted-windows.yml'
+      - '.github/scripts/verify-auralis-release.py'
+      - '.github/scripts/test_verify_auralis_release.py'
       - 'glass-ui/**'
       - 'tools/lab/auralis-embedded-smoke.mjs'
       - 'auralis-extension/**'
@@ -287,6 +289,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
+          python3 -m unittest discover -s .github/scripts -p 'test_verify_auralis_release.py'
           version="$(python3 -c 'import tomllib; print(tomllib.load(open("glass-ui/src-tauri/Cargo.toml", "rb"))["package"]["version"])')"
           tag="v$version"
           if gh release view "$tag" --json isDraft --jq .isDraft 2>/dev/null | grep -qx false; then
@@ -304,24 +307,37 @@ jobs:
           for name in auralis-chromium.zip auralis-edge-store.zip auralis-firefox.zip; do test -f "extensions/$name"; done
           cp "installer/Auralis Download Manager_${version}_x64-setup.exe" "Auralis.Download.Manager_${version}_x64-setup.exe"
           gh release create "$tag" --draft --target "$GITHUB_SHA" --title "Auralis Download Manager $version — Windows x64" --notes-file "docs/glass-releases/$tag.md"
-          gh release upload "$tag" "Auralis.Download.Manager_${version}_x64-setup.exe" extensions/*.zip
-          release_id="$(gh api "repos/$GH_REPO/releases" --jq "[.[] | select(.tag_name==\"$tag\" and .draft==true)] | if length==1 then .[0].id else empty end")"
-          test -n "$release_id"
-          gh api "repos/$GH_REPO/releases/$release_id" > release.json
-          export AURALIS_VERSION="$version"
-          python3 - <<'PY'
-          import hashlib,json,os
-          from pathlib import Path
-          version=os.environ['AURALIS_VERSION']
-          files=[Path(f'Auralis.Download.Manager_{version}_x64-setup.exe'),*(Path('extensions')/name for name in ('auralis-chromium.zip','auralis-edge-store.zip','auralis-firefox.zip'))]
-          release=json.loads(Path('release.json').read_text())
-          assert release['draft'] and release['target_commitish']==os.environ['GITHUB_SHA']
-          assets={item['name']:item for item in release['assets']}
-          assert set(assets)=={path.name for path in files}
-          for path in files:
-              asset=assets[path.name]
-              assert asset['size']==path.stat().st_size
-              assert asset['digest']=='sha256:'+hashlib.sha256(path.read_bytes()).hexdigest()
-          PY
+          if ! gh release upload "$tag" "Auralis.Download.Manager_${version}_x64-setup.exe" extensions/*.zip; then
+            echo "::warning::Upload command reported an error; verifying whether every artifact arrived intact."
+          fi
+          # GitHub can take a short time to return a newly created draft and
+          # its uploaded asset digests. Do not skip verification or assume the
+          # first page contains the draft.
+          release_id=""
+          for attempt in {1..15}; do
+            release_id="$(gh api --paginate "repos/$GH_REPO/releases?per_page=100" --jq ".[] | select(.tag_name==\"$tag\" and .draft==true) | .id" 2>/dev/null || true)"
+            if [[ "$release_id" =~ ^[0-9]+$ ]]; then break; fi
+            echo "Waiting for a unique draft release for $tag (attempt $attempt/15)."
+            sleep 4
+          done
+          if [[ ! "$release_id" =~ ^[0-9]+$ ]]; then
+            echo "::error::Could not find a unique draft release for $tag; it was not published."
+            exit 1
+          fi
+          verified=false
+          for attempt in {1..15}; do
+            if gh api "repos/$GH_REPO/releases/$release_id" > release.json &&
+              python3 .github/scripts/verify-auralis-release.py release.json "$version" "$GITHUB_SHA" \
+                "Auralis.Download.Manager_${version}_x64-setup.exe" extensions/*.zip; then
+              verified=true
+              break
+            fi
+            echo "Waiting for release assets and their digests (attempt $attempt/15)."
+            sleep 4
+          done
+          if [[ "$verified" != true ]]; then
+            echo "::error::The draft release did not pass artifact verification; it was not published."
+            exit 1
+          fi
           gh release edit "$tag" --draft=false --prerelease=false --latest
           test "$(gh api "repos/$GH_REPO/git/ref/tags/$tag" --jq .object.sha)" = "$GITHUB_SHA"
