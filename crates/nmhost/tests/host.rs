@@ -307,6 +307,7 @@ fn zen_and_helium_alone_are_registered() {
     // Both copies of the extension connect: the Chrome Web Store's and the app folder's.
     let origins = manifest(&helium_hosts)["allowed_origins"].clone();
     for id in [
+        "bobmhloppnfipdjjncalidjenegfgebg",
         "ejoleppdfgjdndddcjoehopknmlglojp",
         "oogbclbbninliongijffeeggalppliok",
     ] {
@@ -315,7 +316,7 @@ fn zen_and_helium_alone_are_registered() {
     }
     // #685: Helium offers the store's extension at its next start, from its own folder, through
     // its own services (its name for the store; Google's answers it "no update").
-    let offer = helium.join("External Extensions/ejoleppdfgjdndddcjoehopknmlglojp.json");
+    let offer = helium.join("External Extensions/bobmhloppnfipdjjncalidjenegfgebg.json");
     let offered: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&offer).unwrap()).unwrap();
     assert_eq!(

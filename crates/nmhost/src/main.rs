@@ -1167,7 +1167,8 @@ fn serve() -> io::Result<()> {
             // The rules as saved now: a change in Options applies to the next download.
             Ok(m) => {
                 // This browser has the extension: the app stops offering it (extension.rs).
-                mdm_ipc::extension::mark_seen(browser(&m), m.v.as_deref().unwrap_or_default());
+                let caller = std::env::args().find_map(|arg| arg.strip_prefix("chrome-extension://").map(|id| id.trim_end_matches('/').to_owned()));
+                mdm_ipc::extension::mark_seen(browser(&m), m.v.as_deref().unwrap_or_default(), caller.as_deref());
                 answer(m, &mdm_ipc::capture::CaptureRules::load())
             }
             Err(e) => Reply::failed("refused", e.to_string()),
@@ -1661,6 +1662,7 @@ mod tests {
     fn store_and_unpacked_extensions_both_allowed() {
         let manifest = chromium_manifest(&this_program().unwrap());
         for id in [
+            "bobmhloppnfipdjjncalidjenegfgebg",
             "ejoleppdfgjdndddcjoehopknmlglojp",
             "oogbclbbninliongijffeeggalppliok",
         ] {

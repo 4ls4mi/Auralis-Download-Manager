@@ -71,7 +71,7 @@ try{
  const main=await until(()=>browser.contexts().flatMap(c=>c.pages()).find(p=>!p.url().includes('?')),'Main native WebView did not appear');
  await main.waitForSelector('.cg-toolbar');await until(async()=>{const d=await ipc({query:'glass-backend'});return d.headless&&d.glass},'Original headless backend did not start',60000);
  passed('One Glass shell connects to the original headless MDM backend');
- const edgeStore=await invoke(main,'extension_store_link',{browser:'edge'});assert.equal(edgeStore,'microsoft-edge:https://chromewebstore.google.com/detail/mister-download-manager/ejoleppdfgjdndddcjoehopknmlglojp');await assert.rejects(()=>invoke(main,'extension_store_link',{browser:'invalid'}));passed('Edge repair targets the official extension listing and rejects unknown browsers');
+ const edgeStore=await invoke(main,'extension_store_link',{browser:'edge'});assert.equal(edgeStore,'microsoft-edge:https://chromewebstore.google.com/detail/auralis-download-manager/bobmhloppnfipdjjncalidjenegfgebg');await assert.rejects(()=>invoke(main,'extension_store_link',{browser:'invalid'}));passed('Edge repair targets the official extension listing and rejects unknown browsers');
  assert.equal(await main.locator('.cg-material-renderer').count(),0,'Removed material overlay must not cover the interface');passed('The redundant material overlay is absent');
  await main.locator('.cg-toolbar').getByRole('button',{name:'Settings',exact:true}).click();const settings=await pageFor('settings=');
  await settings.getByRole('button',{name:'General',exact:true}).click();
