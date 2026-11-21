@@ -16,7 +16,7 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -81,14 +81,20 @@ jobs:
         run: |
           cargo test -p auralis-winui-bridge --lib --no-default-features
           if ($LASTEXITCODE) { throw 'Embedded downloader bridge test failed.' }
-      - name: Check installed downloader bridge
+      - name: Install native build dependencies
+        shell: pwsh
+        run: |
+          choco install nasm --version 2.16.3 --no-progress -y
+          if ($LASTEXITCODE) { throw 'NASM installation failed.' }
+          'C:\Program Files\NASM' >> $env:GITHUB_PATH
+      - name: Build installed downloader bridge
         shell: pwsh
         env:
           CARGO_INCREMENTAL: '0'
           CARGO_PROFILE_DEV_DEBUG: '0'
         run: |
-          cargo check -p auralis-winui-bridge --lib --no-default-features --features installed-profile
-          if ($LASTEXITCODE) { throw 'Installed downloader bridge check failed.' }
+          cargo build -p auralis-winui-bridge --lib --features installed-profile
+          if ($LASTEXITCODE) { throw 'Installed downloader bridge build failed.' }
       - name: Compile installed WinUI host
         shell: pwsh
         run: |
@@ -97,3 +103,31 @@ jobs:
           if (-not $msbuild) { throw 'Visual Studio MSBuild was not found.' }
           & $msbuild winui-shell/Auralis.WinUI/Auralis.WinUI.csproj /t:Rebuild /m /p:Configuration=Debug /p:Platform=x64 /p:AuralisInstalledHost=true
           if ($LASTEXITCODE) { throw 'Installed WinUI host build failed.' }
+      - name: Package WinUI app for manual testing
+        shell: pwsh
+        run: |
+          $executables = @(Get-ChildItem winui-shell/Auralis.WinUI/bin -Recurse -Filter Auralis.WinUI.exe)
+          if ($executables.Count -ne 1) { throw "Expected one WinUI executable; found $($executables.Count)." }
+          $output = $executables[0].DirectoryName
+          foreach ($required in @('auralis_winui_bridge.dll', 'interface/index.html', 'interface/winui-sandbox-compat.js', 'interface/winui-package.json')) {
+            if (!(Test-Path (Join-Path $output $required))) { throw "Missing app file: $required" }
+          }
+          $builtBridge = (Get-FileHash target/debug/auralis_winui_bridge.dll -Algorithm SHA256).Hash
+          $packagedBridge = (Get-FileHash (Join-Path $output 'auralis_winui_bridge.dll') -Algorithm SHA256).Hash
+          if ($builtBridge -ne $packagedBridge) { throw 'The app does not contain the installed-profile downloader bridge.' }
+          New-Item -ItemType Directory -Force -Path auralis-winui-app | Out-Null
+          Copy-Item (Join-Path $output '*') auralis-winui-app -Recurse -Force
+          @'
+          Auralis WinUI 3 - development build
+
+          Extract all files to a separate folder and run Auralis.WinUI.exe.
+          This is the installed-profile shell, not a sample-data interface. It can read and change your existing Auralis downloads and settings. Close the installed Auralis app completely first, including its tray icon. Back up important downloads and preferences before testing.
+          This is an incomplete development build: some settings, integrations, and migration of visual preferences are not yet available. It is not an installer or a public release. Do not copy it over your installed application.
+          '@ | Set-Content -Encoding utf8 auralis-winui-app/README.txt
+      - name: Upload WinUI app build
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: auralis-winui-windows-x64
+          path: auralis-winui-app/
+          if-no-files-found: error
+          retention-days: 14
