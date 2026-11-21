@@ -43,7 +43,7 @@ internal static class LocalWebviewBridge
                     ? ApplyAppearance(message.Appearance,applyAppearance)
                     : message.Command is "window_minimize" or "window_toggle_maximize" or "window_close" or "window_is_maximized"
                         ? windowCommand(message.Command)
-                    : sandbox && (message.Command is "dashboard_snapshot" or "dashboard_visuals" or "glass_settings" or "update_glass_setting")
+                    : sandbox && (message.Command is "dashboard_snapshot" or "dashboard_visuals" or "glass_settings" or "update_glass_setting" or "start_download" or "pause_download")
                         ? await BridgeDispatcher.DispatchAsync(message)
                         : throw new InvalidOperationException("This isolated host does not support that command.");
                 core.PostWebMessageAsJson(JsonSerializer.Serialize(new {id,ok=true,value}));

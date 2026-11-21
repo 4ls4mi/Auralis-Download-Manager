@@ -17,8 +17,12 @@ not modify the installed app. Build the interface assets first with
 
 The **Isolated downloader** button starts the Rust engine in a fresh temporary
 folder and shows its empty download list and settings through a restricted bridge. A few display preferences can be changed in the
-temporary profile. Download actions are disabled. Closing the window stops the test engine; this
+temporary profile. HTTP and HTTPS test downloads use its temporary downloads
+folder; the test interface supports starting and pausing one item at a time. Closing the window stops the test engine; this
 mode does not use the installed app's data. Windows validation is still needed.
+
+Test files remain in the temporary profile; this preview does not import or alter
+the installed app’s download list.
 
 The existing Auralis app, Rust downloader, browser integration and release
 installer are unchanged by this prototype. A narrow Rust bridge for the embedded downloader, its list and visual state,

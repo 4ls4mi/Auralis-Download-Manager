@@ -86,7 +86,6 @@ fn dispatch(operation: u32) -> Result<serde_json::Value, String> {
 fn download_action(action: u32, id: u64) -> Result<serde_json::Value, String> {
     let action = match action { 1 => "start", 2 => "pause", _ => return Err("Unsupported download action".into()) };
     if id == 0 { return Err("Invalid download ID".into()); }
-    if ISOLATED_DATA.get().is_some() { return Err("Download actions are disabled in the development sandbox.".into()); }
     if !owned_backend() { return Err("The embedded downloader is not running in this process.".into()); }
     let command = mdm_ipc::Command { action: Some(action.into()), ids: vec![id], ..Default::default() };
     let raw = mdm_ipc::request_checked(&command).map_err(|e| e.to_string())?;
@@ -136,9 +135,12 @@ fn add_download(url: &str, later: bool) -> Result<serde_json::Value, String> {
         _ => false,
     };
     if !supported { return Err("Enter a supported HTTP, HTTPS, FTP or magnet link.".into()); }
-    if ISOLATED_DATA.get().is_some() { return Err("Adding downloads is disabled in the development sandbox.".into()); }
+    let data = ISOLATED_DATA.get().ok_or("Initialize isolated test data first.")?;
+    if !matches!(parsed.scheme(), "http" | "https") { return Err("The development sandbox accepts only HTTP and HTTPS links.".into()); }
+    let output = data.join("downloads");
+    std::fs::create_dir_all(&output).map_err(|e| format!("Cannot create the test downloads folder: {e}"))?;
     if !owned_backend() { return Err("The embedded downloader is not running in this process.".into()); }
-    mdm_ipc::send(&mdm_ipc::Command { url: Some(url.to_owned()), later, silent: false, ..Default::default() }).map_err(|e| e.to_string())?;
+    mdm_ipc::send(&mdm_ipc::Command { url: Some(url.to_owned()), dir: Some(output.to_string_lossy().into_owned()), later, silent: true, ..Default::default() }).map_err(|e| e.to_string())?;
     Ok(serde_json::json!({"pending":true}))
 }
 /// # Safety
@@ -195,8 +197,18 @@ mod tests {
         assert!(update_setting("advanced_integration", "true").unwrap_err().contains("disabled"));
         update_setting("show_complete", "false").expect("update isolated setting");
         assert_eq!(dispatch(5).unwrap()["show_complete"], false);
-        assert!(download_action(1, 1).unwrap_err().contains("disabled"));
-        assert!(add_download("https://example.com/file", false).unwrap_err().contains("disabled"));
+        assert!(add_download("magnet:?xt=urn:btih:1234", true).unwrap_err().contains("HTTP"));
+        add_download("https://example.com/winui-test.bin", true).expect("queue isolated test download");
+        let deadline=Instant::now()+Duration::from_secs(10);
+        let queued=loop {
+            let list=dispatch(3).expect("read queued download");
+            if let Some(item)=list["downloads"].as_array().and_then(|items| items.first()) { break item.clone(); }
+            assert!(Instant::now()<deadline, "queued download was not added");
+            thread::sleep(Duration::from_millis(100));
+        };
+        let destination=std::path::PathBuf::from(queued["path"].as_str().expect("download path"));
+        assert!(destination.starts_with(data.join("downloads")), "test download escaped sandbox");
+        assert!(download_action(2, u64::MAX).unwrap()["skipped"].is_array());
         let stopped = stop().expect("stop isolated embedded downloader");
         assert_eq!(stopped["running"], false);
         assert!(dispatch(3).is_err());

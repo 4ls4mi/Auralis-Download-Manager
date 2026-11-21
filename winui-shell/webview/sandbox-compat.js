@@ -1,4 +1,4 @@
-/* Isolated downloader: no installed user data or download actions. */
+/* Isolated downloader: no installed user data. */
 (() => {
   // Keep the WebView layers translucent enough to reveal the native backdrop,
   // while leaving individual panels readable. This is preview-only CSS.
@@ -20,6 +20,7 @@
   const invoke=async(command,args={})=>{
     if(command==='boot_engine')return 'Isolated test downloader — read only';
     if(command==='dashboard_snapshot'||command==='dashboard_visuals'||command==='glass_settings')return request(command);
+    if(command==='download_action' && ['start','pause'].includes(args.action) && Array.isArray(args.ids) && args.ids.length===1 && Number.isSafeInteger(args.ids[0]) && args.ids[0]>0) return request(args.action==='start'?'start_download':'pause_download',{downloadId:args.ids[0]});
     if(command==='update_glass_setting' && ['show_complete','show_progress','confirm_delete','double_click_open'].includes(args.key) && typeof args.value==='string') return request(command,{key:args.key,value:args.value});
     if(command==='glass_update_check')return {state:'unavailable'};
     if(command==='backup_prompt_enabled')return false;

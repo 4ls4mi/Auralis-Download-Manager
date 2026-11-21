@@ -9,7 +9,8 @@ test('sandbox restricts downloader requests and allows isolated display preferen
  const pending=context.__TAURI_INTERNALS__.invoke('dashboard_snapshot');assert.equal(messages[0].command,'dashboard_snapshot');listener({data:{id:messages[0].id,ok:true,value:{downloads:[]}}});assert.equal((await pending).downloads.length,0);
  const setting=context.__TAURI_INTERNALS__.invoke('update_glass_setting',{key:'show_complete',value:'false'});assert.equal(messages[1].key,'show_complete');listener({data:{id:messages[1].id,ok:true,value:{saved:true}}});assert.equal((await setting).saved,true);
  await assert.rejects(context.__TAURI_INTERNALS__.invoke('update_glass_setting',{key:'advanced_integration',value:'true'}),/unavailable/);
- await assert.rejects(context.__TAURI_INTERNALS__.invoke('download_action',{action:'start',ids:[1]}),/unavailable/);
+ const action=context.__TAURI_INTERNALS__.invoke('download_action',{action:'start',ids:[1]});assert.equal(messages[2].command,'start_download');listener({data:{id:messages[2].id,ok:true,value:{done:[1]}}});assert.equal((await action).done[0],1);
+ await assert.rejects(context.__TAURI_INTERNALS__.invoke('download_action',{action:'delete',ids:[1]}),/unavailable/);
  await assert.rejects(context.__TAURI_INTERNALS__.invoke('add_download',{url:'https://example.com'}),/unavailable/);
  assert.throws(()=>new context.WebSocket('wss://example.com'),/disabled/);
 });

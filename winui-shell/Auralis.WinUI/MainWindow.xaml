@@ -7,11 +7,12 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
         <StackPanel Spacing="6">
             <TextBlock Text="WinUI shell development" FontSize="24" FontWeight="SemiBold" />
-            <TextBlock Text="Development preview — sample or isolated test data only; download actions are disabled." TextWrapping="Wrap" />
+            <TextBlock Text="Development preview — test downloads use an isolated temporary folder." TextWrapping="Wrap" />
         </StackPanel>
         <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="12">
             <ComboBox x:Name="MaterialSelector" Header="Surface material" DisplayMemberPath="Label" SelectionChanged="OnMaterialChanged" />
@@ -20,7 +21,15 @@
             <Button Content="Isolated downloader" Click="OnSandboxInterface" VerticalAlignment="Bottom" />
             <Button Content="Appearance settings" Click="OnPreviewSettings" VerticalAlignment="Bottom" />
         </StackPanel>
-        <Grid Grid.Row="2">
+        <StackPanel x:Name="SandboxControls" Grid.Row="2" Visibility="Collapsed" Spacing="4">
+            <Grid ColumnSpacing="8">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <TextBox x:Name="SandboxUrl" PlaceholderText="HTTP or HTTPS test download URL" />
+                <Button x:Name="SandboxAdd" Grid.Column="1" Content="Start test download" Click="OnAddSandbox" />
+            </Grid>
+            <TextBlock x:Name="SandboxMessage" TextWrapping="Wrap" />
+        </StackPanel>
+        <Grid Grid.Row="3">
             <Border x:Name="PreviewIntro" Padding="20" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
                 <StackPanel Spacing="12">
                     <TextBlock Text="Backdrop preview" FontSize="18" FontWeight="SemiBold" />

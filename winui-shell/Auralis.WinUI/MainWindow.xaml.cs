@@ -64,6 +64,7 @@ public sealed partial class MainWindow : Window
             if (_closing || request != _viewRequest) return;
             PreviewIntro.Visibility=Visibility.Collapsed;
             InterfaceView.Visibility=Visibility.Collapsed;
+            SandboxControls.Visibility=Visibility.Visible;
             SandboxView.Visibility=Visibility.Visible;
             SandboxView.CoreWebView2.Navigate("https://auralis.local/index.html");
         }
@@ -76,6 +77,20 @@ public sealed partial class MainWindow : Window
             BackdropStatus.Text=$"Isolated downloader unavailable: {error.Message}";
         }
         finally { _openingSandbox=false; }
+    }
+
+    private async void OnAddSandbox(object sender, RoutedEventArgs args)
+    {
+        if (!_sandboxReady || _closing) return;
+        SandboxAdd.IsEnabled=false;
+        try
+        {
+            await DownloaderBridge.AddDownloadAsync(SandboxUrl.Text, false);
+            SandboxMessage.Text="Test download sent to the isolated downloads folder.";
+            SandboxUrl.Text="";
+        }
+        catch (Exception error) { SandboxMessage.Text=$"Could not add test download: {error.Message}"; }
+        finally { SandboxAdd.IsEnabled=true; }
     }
 
     private async void OnPreviewInterface(object sender, RoutedEventArgs args) => await OpenPreviewAsync(false);
@@ -96,6 +111,7 @@ public sealed partial class MainWindow : Window
             if (_closing || request != _viewRequest) return;
             PreviewIntro.Visibility=Visibility.Collapsed;
             SandboxView.Visibility=Visibility.Collapsed;
+            SandboxControls.Visibility=Visibility.Collapsed;
             InterfaceView.Visibility=Visibility.Visible;
             InterfaceView.CoreWebView2.Navigate(settings ? "https://auralis.local/index.html?settings=1&tab=Appearance" : "https://auralis.local/index.html");
         }
