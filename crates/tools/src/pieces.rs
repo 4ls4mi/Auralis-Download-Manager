@@ -4,8 +4,8 @@
 //! DASH's from yt-dlp's `fragments`), downloaded several at once (as many as Options →
 //! Connection gives a file) over the engine's connections (proxy, network adapter, DNS), under
 //! the speed limits, each kept on disk once whole so that a stop goes on from the pieces there,
-//! AES-128 pieces decrypted with the playlist's key, and joined in order into the file yt-dlp
-//! looks for: what hlsnative would have written. yt-dlp then fixes it up and merges it with ffmpeg
+//! AES-128 pieces decrypted with the playlist's key, and assembled in order as pieces arrive into
+//! the file yt-dlp looks for. yt-dlp then fixes it up and merges it with ffmpeg
 //! as after its own download.
 //!
 //! A piece refused (401, 403, 404, 410: its signed address expired) has the list asked of yt-dlp
@@ -432,12 +432,16 @@ struct Run {
     retry_delay: Duration,
     relist: Relist,
     relisted: tokio::sync::Mutex<(u32, Option<Instant>)>,
+    /// Wake the ordered stream writer when a complete piece has been saved.
+    join_wake: Option<std::sync::mpsc::Sender<JoinEvent>>,
 }
+
+enum JoinEvent { PieceReady, Finish(bool) }
 
 /// Download `pieces` (a piece already whole is kept), `connections` at once, with `headers`,
 /// under `limiter` (the download's own limit) and the engine's `opts` (its client, the limit for
-/// all downloads, retries); then join them in order into the `target` file, or leave each in its
-/// own (a gallery's: a file already there isn't counted as downloaded now).
+/// all downloads, retries). Assemble each available ordered prefix into the `target` while
+/// downloading, or leave each file in its own place (a gallery's: an existing file is skipped).
 #[allow(clippy::too_many_arguments)]
 pub async fn download(
     pieces: Vec<Piece>,
@@ -520,6 +524,16 @@ pub async fn download(
             speed: 0,
         })
         .collect();
+    // Retain every completed piece until the finished output is durable. After
+    // interruption, the next run can rebuild from those same saved pieces.
+    let (join_wake, join_task) = if let Some(path) = path.as_ref() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let join_dir = dir.clone();
+        let join_path = path.clone();
+        let task = tokio::task::spawn_blocking(move || join_progressively(&join_dir, n, &join_path, rx));
+        let _ = tx.send(JoinEvent::PieceReady); // process pieces saved by an earlier run
+        (Some(tx), Some(task))
+    } else { (None, None) };
     let run = Arc::new(Run {
         client,
         headers,
@@ -539,6 +553,7 @@ pub async fn download(
         retry_delay: opts.retry_delay,
         relist,
         relisted: Default::default(),
+        join_wake,
     });
     let mut set = tokio::task::JoinSet::new();
     for c in 0..connections {
@@ -557,6 +572,9 @@ pub async fn download(
             Err(_) => failure = Some(PieceError::Again("a connection stopped".into())),
         }
     }
+    let success = failure.is_none() && !run.cancel.is_cancelled();
+    if let Some(wake) = &run.join_wake { let _ = wake.send(JoinEvent::Finish(success)); }
+    let joined = match join_task { Some(task) => Some(task.await), None => None };
     match failure {
         Some(PieceError::Stopped) => return Ended::Stopped,
         Some(PieceError::Dead(e) | PieceError::Again(e) | PieceError::Busy(e, _)) => {
@@ -565,35 +583,55 @@ pub async fn download(
         None if run.cancel.is_cancelled() => return Ended::Stopped,
         None => {}
     }
-    let Some(path) = path else {
+    if path.is_none() {
         return Ended::Done(shared.downloaded());
-    };
-    let joined = tokio::task::spawn_blocking(move || join(&dir, n, &path)).await;
+    }
     match joined {
-        Ok(Ok(size)) => Ended::Done(size),
-        Ok(Err(e)) => Ended::Failed(format!("Cannot join the pieces: {e}")),
-        Err(_) => Ended::Failed("Cannot join the pieces".into()),
+        Some(Ok(Ok(Some(size)))) => Ended::Done(size),
+        Some(Ok(Ok(None))) => Ended::Stopped,
+        Some(Ok(Err(e))) => Ended::Failed(format!("Cannot join the pieces: {e}")),
+        _ => Ended::Failed("Cannot join the pieces".into()),
     }
 }
 
-/// The pieces in `dir` (`n` of them) one after another into `path` (through its part file), then
-/// the folder removed. The file's size.
-fn join(dir: &Path, n: usize, path: &Path) -> std::io::Result<u64> {
+/// Assemble each available contiguous prefix while downloads continue. Keep the
+/// source pieces until successful sync and rename, so a stop or crash is resumable.
+fn join_progressively(dir: &Path, n: usize, path: &Path, rx: std::sync::mpsc::Receiver<JoinEvent>) -> std::io::Result<Option<u64>> {
     use std::io::Write;
     let part = mdm_engine::naming::part_path(path);
-    let mut out = std::io::BufWriter::new(std::fs::File::create(&part)?);
+    let mut out = std::io::BufWriter::with_capacity(256 * 1024, std::fs::File::create(&part)?);
     let mut size = 0;
-    for i in 0..n {
-        let mut f = std::fs::File::open(piece_file(dir, i))?;
-        size += std::io::copy(&mut f, &mut out)?;
+    let mut next = 0;
+    let mut finished = false;
+    loop {
+        while next < n {
+            let file = piece_file(dir, next);
+            if !file.try_exists()? { break; }
+            let mut input = std::fs::File::open(file)?;
+            size += std::io::copy(&mut input, &mut out)?;
+            next += 1;
+        }
+        out.flush()?;
+        if finished {
+            if next != n { return Err(std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "missing video piece")); }
+            break;
+        }
+        match rx.recv() {
+            Ok(JoinEvent::PieceReady) => {},
+            Ok(JoinEvent::Finish(true)) => finished = true,
+            Ok(JoinEvent::Finish(false)) | Err(_) => {
+                drop(out);
+                let _ = std::fs::remove_file(part);
+                return Ok(None);
+            }
+        }
     }
-    out.flush()?;
     out.into_inner()
         .map_err(std::io::IntoInnerError::into_error)?
         .sync_all()?;
     std::fs::rename(&part, path)?;
     let _ = std::fs::remove_dir_all(dir);
-    Ok(size)
+    Ok(Some(size))
 }
 
 /// One connection: the next piece not taken, until none is left.
@@ -926,12 +964,105 @@ async fn fetch_piece(run: &Run, c: usize, i: usize, piece: &Piece) -> Result<(),
     }
     run.shared.whole_bytes.fetch_add(size, Ordering::Relaxed);
     run.shared.whole.fetch_add(1, Ordering::Relaxed);
+    if let Some(wake) = &run.join_wake { let _ = wake.send(JoinEvent::PieceReady); }
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn progressively_joins_in_order_and_keeps_pieces_until_finish() {
+        use std::sync::mpsc;
+        let root = tempfile::tempdir().unwrap();
+        let dir = root.path().join("pieces");
+        std::fs::create_dir(&dir).unwrap();
+        let output = root.path().join("video.ts");
+        std::fs::write(piece_file(&dir, 1), b"second").unwrap();
+        let (tx, rx) = mpsc::channel();
+        let (worker_dir, worker_out) = (dir.clone(), output.clone());
+        let worker = std::thread::spawn(move || join_progressively(&worker_dir, 3, &worker_out, rx));
+        tx.send(JoinEvent::PieceReady).unwrap();
+        std::fs::write(piece_file(&dir, 0), b"first").unwrap();
+        tx.send(JoinEvent::PieceReady).unwrap();
+        let part = mdm_engine::naming::part_path(&output);
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            if std::fs::read(&part).is_ok_and(|v| v == b"firstsecond") { break; }
+            assert!(std::time::Instant::now() < deadline, "completed prefix wasn't assembled while downloading");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(piece_file(&dir, 0).exists() && piece_file(&dir, 1).exists());
+        assert!(!output.exists());
+        std::fs::write(piece_file(&dir, 2), b"third").unwrap();
+        tx.send(JoinEvent::PieceReady).unwrap();
+        tx.send(JoinEvent::Finish(true)).unwrap();
+        assert_eq!(worker.join().unwrap().unwrap(), Some(16));
+        assert_eq!(std::fs::read(output).unwrap(), b"firstsecondthird");
+        assert!(!dir.exists());
+    }
+
+    #[test]
+    fn progressive_join_stop_retains_pieces_for_resume() {
+        use std::sync::mpsc;
+        let root = tempfile::tempdir().unwrap();
+        let dir = root.path().join("pieces");
+        std::fs::create_dir(&dir).unwrap();
+        let output = root.path().join("video.ts");
+        std::fs::write(piece_file(&dir, 0), b"first").unwrap();
+        let (tx, rx) = mpsc::channel();
+        tx.send(JoinEvent::PieceReady).unwrap();
+        tx.send(JoinEvent::Finish(false)).unwrap();
+        assert_eq!(join_progressively(&dir, 2, &output, rx).unwrap(), None);
+        assert!(piece_file(&dir, 0).exists());
+        assert!(!output.exists());
+        assert!(!mdm_engine::naming::part_path(&output).exists());
+        std::fs::write(piece_file(&dir, 1), b"second").unwrap();
+        let (tx, rx) = mpsc::channel();
+        tx.send(JoinEvent::Finish(true)).unwrap();
+        assert_eq!(join_progressively(&dir, 2, &output, rx).unwrap(), Some(11));
+        assert_eq!(std::fs::read(output).unwrap(), b"firstsecond");
+    }
+
+    #[test]
+    fn progressive_join_does_not_publish_when_a_piece_is_missing() {
+        let root = tempfile::tempdir().unwrap();
+        let dir = root.path().join("pieces");
+        std::fs::create_dir(&dir).unwrap();
+        let output = root.path().join("video.ts");
+        std::fs::write(piece_file(&dir, 1), b"second").unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        tx.send(JoinEvent::Finish(true)).unwrap();
+        assert_eq!(join_progressively(&dir, 2, &output, rx).unwrap_err().kind(), std::io::ErrorKind::UnexpectedEof);
+        assert!(!output.exists());
+        assert!(piece_file(&dir, 1).exists());
+    }
+
+    #[test]
+    fn progressive_download_joins_real_pieces_in_playlist_order() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let lab = rt.block_on(mdm_labserver::LabServer::start(Default::default())).unwrap();
+        let root = tempfile::tempdir().unwrap();
+        let output = root.path().join("stream.ts");
+        let pieces: Vec<Piece> = (0..3).map(|i| Piece {
+            url: Url::parse(&lab.url(&format!("/gen/128K/p{i}.ts?seed={}", 100 + i))).unwrap(),
+            range: None, key: None,
+        }).collect();
+        let opts = mdm_engine::Options { max_connections: 3, ..Default::default() };
+        let ended = rt.block_on(download(pieces, Target::Join(output.clone()), HeaderMap::new(), opts,
+            Arc::new(Limiter::new(None)), CancellationToken::new(), Arc::new(Shared::default()),
+            Arc::new(|| Err("no relist".into()))));
+        assert!(matches!(ended, Ended::Done(_)), "{ended:?}");
+        let actual = std::fs::read(output).unwrap();
+        let mut expected = Vec::new();
+        for seed in 100..103 {
+            let mut piece = vec![0; 128 * 1024];
+            mdm_labserver::content::fill(seed, 0, &mut piece);
+            expected.extend(piece);
+        }
+        assert_eq!(actual, expected);
+    }
 
     fn base() -> Url {
         Url::parse("https://cdn.example/v/720p/index.m3u8?sig=1").unwrap()
