@@ -119,6 +119,10 @@ if (!badResizeRejected) throw new Exception("Invalid resize request accepted.");
 var exportRequest=BridgeMessage.Parse("https://auralis.local/index.html", """{"id":6,"command":"export_theme_file","contents":"{\"format\":\"auralis-theme\"}"}""");
 var choosePath=BridgeMessage.Parse("https://auralis.local/index.html", """{"id":6,"command":"choose_download_path","current":"C:\\Downloads\\file.zip"}""");
 if (choosePath.Value!="C:\\Downloads\\file.zip") throw new Exception("Download destination was not parsed.");
+var startupRequest=BridgeMessage.Parse("https://auralis.local/index.html", """{"id":6,"command":"set_startup_settings","enabled":true,"mode":"minimized"}""");
+if (startupRequest.Key!="minimized" || startupRequest.Value!="true") throw new Exception("Startup settings were not parsed.");
+try { BridgeMessage.Parse("https://auralis.local/index.html", """{"id":6,"command":"set_startup_settings","enabled":true,"mode":"invalid"}"""); throw new Exception("Invalid startup mode was accepted."); }
+catch (InvalidOperationException) { }
 if (exportRequest.Value is null || !exportRequest.Value.Contains("auralis-theme")) throw new Exception("Theme export was not preserved.");
 var queueRequest=BridgeMessage.Parse("https://auralis.local/index.html", """{"id":7,"command":"queue_action","name":"Main download queue","action":"stop_queue"}""");
 var pendingInfo=BridgeMessage.Parse("https://auralis.local/index.html", """{"id":8,"command":"pending_file_info"}""");

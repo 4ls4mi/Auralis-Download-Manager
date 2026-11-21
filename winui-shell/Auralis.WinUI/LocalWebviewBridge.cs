@@ -63,6 +63,10 @@ internal static class LocalWebviewBridge
                 var message=BridgeMessage.Parse(args.Source,args.WebMessageAsJson);id=message.Id;command=message.Command;
                 var value=message.Appearance is not null
                     ? ApplyAppearance(message.Appearance,applyAppearance)
+                    : installed && message.Command=="startup_settings"
+                        ? StartupRegistration.InstalledSettings()
+                    : installed && message.Command=="set_startup_settings"
+                        ? StartupRegistration.SetInstalledSettings(message.Value=="true",message.Key!)
                     : (message.Command == "app_version" || sandbox && (message.Command is "update_check" or "notify_update"))
                         ? await updateCommand(message)
                     : message.Command == "clipboard_text"

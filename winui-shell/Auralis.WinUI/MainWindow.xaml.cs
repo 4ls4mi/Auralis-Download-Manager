@@ -149,7 +149,13 @@ public sealed partial class MainWindow : Window
 
     internal async Task ApplyStartupPreferencesAsync(bool launchedAtStartup)
     {
-        if (HostProfile.Installed) { await EnsureSandboxAsync(); return; }
+        if (HostProfile.Installed)
+        {
+            await EnsureSandboxAsync();
+            bool minimized=Environment.GetCommandLineArgs().Any(arg=>arg.Equals("--auralis-startup-minimized",StringComparison.OrdinalIgnoreCase));
+            if (minimized && !_notificationRequested && _sandboxReady && !_closing && _tray?.IsAvailable==true) AppWindow.Hide();
+            return;
+        }
         bool minimize=StartMinimized.IsChecked==true && _tray?.IsAvailable==true;
         if (!launchedAtStartup && !minimize) return;
         await EnsureSandboxAsync();

@@ -21,6 +21,14 @@ internal sealed record BridgeMessage(long Id, string Command, ulong DownloadId, 
             !root.TryGetProperty("command", out var commandValue) || commandValue.ValueKind != JsonValueKind.String)
             throw new InvalidOperationException("Invalid interface request.");
         string command = commandValue.GetString()!;
+        if (command == "startup_settings") return new(id,command,0,null,false);
+        if (command == "set_startup_settings")
+        {
+            if (!root.TryGetProperty("enabled",out var enabled) || enabled.ValueKind is not (JsonValueKind.True or JsonValueKind.False) ||
+                !root.TryGetProperty("mode",out var mode) || mode.ValueKind!=JsonValueKind.String || mode.GetString() is not ("window" or "minimized"))
+                throw new InvalidOperationException("Invalid startup settings.");
+            return new(id,command,0,null,false,Key:mode.GetString(),Value:enabled.GetBoolean()?"true":"false");
+        }
         if (command == "choose_download_path")
         {
             if (!root.TryGetProperty("current",out var currentValue) || currentValue.ValueKind!=JsonValueKind.String ||

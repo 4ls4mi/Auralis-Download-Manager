@@ -56,6 +56,18 @@ test('installed host chooses a download folder without exposing it to the test h
  const preview={chrome:{webview:{addEventListener(){},postMessage(){}}},setTimeout,clearTimeout};runInNewContext(source,preview);
  await assert.rejects(preview.__TAURI_INTERNALS__.invoke('choose_download_path',{current:'file.zip'}),/unavailable/);
 });
+test('Windows startup controls are available only to the installed host',async()=>{
+ let listener;const sent=[];
+ const context={__AURALIS_INSTALLED_HOST__:true,chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};
+ runInNewContext(source,context);
+ const read=context.__TAURI_INTERNALS__.invoke('startup_settings');
+ assert.equal(sent[0].command,'startup_settings');listener({data:{id:sent[0].id,ok:true,value:{enabled:false,mode:'minimized'}}});assert.equal((await read).enabled,false);
+ const change=context.__TAURI_INTERNALS__.invoke('set_startup_settings',{enabled:true,mode:'window'});
+ assert.equal(sent[1].mode,'window');assert.equal(sent[1].enabled,true);listener({data:{id:sent[1].id,ok:true,value:{enabled:true,mode:'window'}}});assert.equal((await change).mode,'window');
+ await assert.rejects(context.__TAURI_INTERNALS__.invoke('set_startup_settings',{enabled:true,mode:'invalid'}),/unavailable/);
+ const preview={chrome:{webview:{addEventListener(){},postMessage(){}}},setTimeout,clearTimeout};runInNewContext(source,preview);
+ await assert.rejects(preview.__TAURI_INTERNALS__.invoke('startup_settings'),/unavailable/);
+});
 test('sandbox restricts downloader requests and allows isolated display preferences',async()=>{
  let listener;const messages=[];
  const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>messages.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);

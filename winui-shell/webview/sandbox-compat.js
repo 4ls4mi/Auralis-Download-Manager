@@ -33,6 +33,8 @@
   const invoke=async(command,args={})=>{
     if(['export_theme_file','export_material_file'].includes(command) && typeof args.contents==='string' && args.contents.length<=32768) return request(command,{contents:args.contents});
     if(installed && command==='choose_download_path' && typeof args.current==='string' && args.current.length<=4096 && !args.current.includes('\0'))return request(command,{current:args.current});
+    if(installed && command==='startup_settings')return request(command);
+    if(installed && command==='set_startup_settings' && typeof args.enabled==='boolean' && ['window','minimized'].includes(args.mode))return request(command,{enabled:args.enabled,mode:args.mode});
     if(command==='clipboard_text')return request(command);
     if(command==='open_glass_window' && typeof args.label==='string' && typeof args.url==='string' && Number.isInteger(args.width) && Number.isInteger(args.height))return request(command,{label:args.label,url:args.url,width:args.width,height:args.height});
     if(command==='window_preferences' && typeof args.autoProgress==='boolean')return request('progress_preferences',{enabled:args.autoProgress});
