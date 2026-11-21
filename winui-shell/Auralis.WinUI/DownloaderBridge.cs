@@ -16,6 +16,15 @@ internal static class DownloaderBridge
     private static extern IntPtr auralis_bridge_download_action(uint action, ulong id);
 
     [DllImport("auralis_winui_bridge", CallingConvention = CallingConvention.Cdecl)]
+    private static extern IntPtr auralis_bridge_queue_action(byte[] name, nuint length, byte action);
+
+    [DllImport("auralis_winui_bridge", CallingConvention = CallingConvention.Cdecl)]
+    private static extern IntPtr auralis_bridge_file_details(ulong id);
+
+    [DllImport("auralis_winui_bridge", CallingConvention = CallingConvention.Cdecl)]
+    private static extern IntPtr auralis_bridge_speed_limit(ulong id, ulong kb);
+
+    [DllImport("auralis_winui_bridge", CallingConvention = CallingConvention.Cdecl)]
     private static extern IntPtr auralis_bridge_add_download(byte[] url, nuint length, byte later);
 
     [DllImport("auralis_winui_bridge", CallingConvention = CallingConvention.Cdecl)]
@@ -25,6 +34,13 @@ internal static class DownloaderBridge
     private static extern void auralis_bridge_free(IntPtr response);
 
     internal static Task<JsonElement> CallAsync(Operation operation) => Task.Run(() => ReadResponse(auralis_bridge_call(operation)));
+    internal static Task<JsonElement> QueueActionAsync(string name, bool start) => Task.Run(() =>
+    {
+        byte[] bytes = System.Text.Encoding.UTF8.GetBytes(name);
+        return ReadResponse(auralis_bridge_queue_action(bytes, (nuint)bytes.Length, start ? (byte)1 : (byte)2));
+    });
+    internal static Task<JsonElement> FileDetailsAsync(ulong id) => Task.Run(() => ReadResponse(auralis_bridge_file_details(id)));
+    internal static Task<JsonElement> SpeedLimitAsync(ulong id, ulong kb) => Task.Run(() => ReadResponse(auralis_bridge_speed_limit(id, kb)));
     internal static Task<JsonElement> StartDownloadAsync(ulong id) => Task.Run(() => ReadResponse(auralis_bridge_download_action(1, id)));
     internal static Task<JsonElement> PauseDownloadAsync(ulong id) => Task.Run(() => ReadResponse(auralis_bridge_download_action(2, id)));
     internal static Task<JsonElement> AddDownloadAsync(string url, bool later) => Task.Run(() =>

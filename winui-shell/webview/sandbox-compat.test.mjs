@@ -20,3 +20,43 @@ test('isolated downloader uses native window controls',async()=>{
  const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);
  const result=context.__TAURI_INTERNALS__.invoke('plugin:window|is_maximized');assert.equal(sent[0].command,'window_is_maximized');listener({data:{id:sent[0].id,ok:true,value:true}});assert.equal(await result,true);
 });
+
+test('isolated downloader asks the host to open a progress window',async()=>{
+ let listener;const sent=[];
+ const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);
+ const pending=context.__TAURI_INTERNALS__.invoke('open_glass_window',{label:'download-1',url:'/?detail=1',width:760,height:560});
+ assert.equal(sent[0].command,'open_glass_window');assert.equal(sent[0].label,'download-1');
+ listener({data:{id:sent[0].id,ok:true,value:{opened:true}}});assert.equal((await pending).opened,true);
+});
+
+test('progress windows may read details but cannot request file operations',async()=>{
+ let listener;const sent=[];
+ const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);
+ const pending=context.__TAURI_INTERNALS__.invoke('file_operation',{id:7,operation:'details',value:null});assert.equal(sent[0].command,'file_details');assert.equal(sent[0].downloadId,7);
+ listener({data:{id:sent[0].id,ok:true,value:{own_limit_kb:null}}});assert.equal((await pending).own_limit_kb,null);
+ await assert.rejects(context.__TAURI_INTERNALS__.invoke('file_operation',{id:7,operation:'open',value:null}),/unavailable/);
+});
+
+test('multiple selected downloads preserve each start result',async()=>{
+ let listener;const sent=[];
+ const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);
+ const pending=context.__TAURI_INTERNALS__.invoke('download_action',{action:'start',ids:[1,2,1]});assert.equal(sent.length,2);
+ listener({data:{id:sent[0].id,ok:true,value:{done:[1],skipped:[]}}});listener({data:{id:sent[1].id,ok:true,value:{done:[],skipped:[{id:2,reason:'already started'}]}}});
+ const result=await pending;assert.deepEqual(Array.from(result.done),[1]);assert.equal(result.skipped[0].id,2);
+ await assert.rejects(context.__TAURI_INTERNALS__.invoke('download_action',{action:'start',ids:Array(101).fill(1)}),/unavailable/);
+});
+
+test('speed limits are bounded before reaching the test downloader',async()=>{
+ let listener;const sent=[];
+ const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);
+ const pending=context.__TAURI_INTERNALS__.invoke('file_operation',{id:7,operation:'speed-limit',value:'512'});assert.equal(sent[0].value,512);listener({data:{id:sent[0].id,ok:true,value:{ok:true}}});assert.equal((await pending).ok,true);
+ await assert.rejects(context.__TAURI_INTERNALS__.invoke('file_operation',{id:7,operation:'speed-limit',value:'10000001'}),/unavailable/);
+ await assert.rejects(context.__TAURI_INTERNALS__.invoke('file_operation',{id:7,operation:'speed-limit',value:'0'}),/unavailable/);
+});
+
+test('queue controls are limited to start and stop in the isolated engine',async()=>{
+ let listener;const sent=[];
+ const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);
+ const pending=context.__TAURI_INTERNALS__.invoke('queue_action',{name:'Main download queue',action:'start_queue'});assert.equal(sent[0].action,'start_queue');listener({data:{id:sent[0].id,ok:true,value:{done:[],skipped:[]}}});assert.equal((await pending).done.length,0);
+ await assert.rejects(context.__TAURI_INTERNALS__.invoke('queue_action',{name:'Main download queue',action:'delete_queue'}),/unavailable/);
+});

@@ -34,10 +34,29 @@ foreach (var pair in new[] {
     try { BridgeMessage.Parse(pair.Item1, pair.Item2); throw new Exception("Unsafe bridge request was accepted."); }
     catch (InvalidOperationException error) when (error.Message != "Unsafe bridge request was accepted.") { }
 }
-foreach (var command in new[] { "window_minimize", "window_toggle_maximize", "window_close", "window_is_maximized" })
+foreach (var command in new[] { "window_minimize", "window_toggle_maximize", "window_close", "window_is_maximized", "window_outer_position", "window_outer_size", "window_current_monitor" })
 {
     var windowRequest = BridgeMessage.Parse("https://auralis.local/index.html", "{\"id\":1,\"command\":\"" + command + "\"}");
     if (windowRequest.Command != command) throw new Exception("Window control was not validated.");
+}
+var exportRequest=BridgeMessage.Parse("https://auralis.local/index.html", """{"id":6,"command":"export_theme_file","contents":"{\"format\":\"auralis-theme\"}"}""");
+if (exportRequest.Value is null || !exportRequest.Value.Contains("auralis-theme")) throw new Exception("Theme export was not preserved.");
+var queueRequest=BridgeMessage.Parse("https://auralis.local/index.html", """{"id":7,"command":"queue_action","name":"Main download queue","action":"stop_queue"}""");
+if (queueRequest.Key != "Main download queue" || queueRequest.Value != "stop_queue") throw new Exception("Queue request was not preserved.");
+var limitRequest = BridgeMessage.Parse("https://auralis.local/index.html", """{"id":5,"command":"file_speed_limit","downloadId":7,"value":512}""");
+if (limitRequest.DownloadId != 7 || limitRequest.Value != "512") throw new Exception("Speed limit request was not preserved.");
+try { BridgeMessage.Parse("https://auralis.local/index.html", """{"id":5,"command":"file_speed_limit","downloadId":7,"value":10000001}"""); throw new Exception("Unbounded speed limit was accepted."); }
+catch (InvalidOperationException) { }
+var auxiliary = BridgeMessage.Parse("https://auralis.local/index.html", """{"id":4,"command":"open_glass_window","label":"settings","url":"/?settings=1","width":968,"height":765}""");
+if (auxiliary.Label != "settings" || auxiliary.Url != "/?settings=1" || auxiliary.Width != 968) throw new Exception("Invalid auxiliary window request.");
+foreach (var bad in new[] {
+    """{"id":4,"command":"open_glass_window","label":"settings","url":"https://evil.example/","width":968,"height":765}""",
+    """{"id":4,"command":"open_glass_window","label":"../settings","url":"/?settings=1","width":968,"height":765}""",
+    """{"id":4,"command":"open_glass_window","label":"settings","url":"/?settings=1","width":99999,"height":765}""" })
+{
+    bool rejected=false;
+    try { BridgeMessage.Parse("https://auralis.local/index.html",bad); } catch (InvalidOperationException) { rejected=true; }
+    if (!rejected) throw new Exception("Unsafe auxiliary window request was accepted.");
 }
 Console.WriteLine("Web interface request validation checks passed.");
 

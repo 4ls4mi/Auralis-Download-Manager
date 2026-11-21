@@ -4,8 +4,8 @@ using Microsoft.Web.WebView2.Core;
 
 namespace Auralis.WinUI;
 
-/// Development bridge for packaged local UI assets. This is not wired into the
-/// preview yet: lifecycle, full command parity and data migration remain open.
+/// Development bridge for local UI assets. Production command parity,
+/// lifecycle and data migration remain open.
 internal static class LocalWebviewBridge
 {
     private static JsonElement ApplyAppearance(NativeAppearance appearance, Action<NativeAppearance> apply)
@@ -14,15 +14,15 @@ internal static class LocalWebviewBridge
         return JsonSerializer.SerializeToElement(new { applied = true });
     }
 
-    /// A separate WebView profile and read-only adapter keep the preview away
-    /// from the installed app, the user's data and the downloader bridge.
-    internal static async Task AttachPreviewAsync(WebView2 view, string assetDirectory, Action<NativeAppearance> applyAppearance, Func<string, JsonElement> windowCommand, bool sandbox=false)
+    /// Isolated WebView profiles keep sample and test interfaces separate from
+    /// installed settings and downloads; auxiliary views share their parent profile.
+    internal static async Task<CoreWebView2Environment> AttachPreviewAsync(WebView2 view, string assetDirectory, Action<NativeAppearance> applyAppearance, Func<string, JsonElement> windowCommand, Func<BridgeMessage, Task<JsonElement>> openWindow, Func<BridgeMessage, Task<JsonElement>> exportFile, bool sandbox=false, CoreWebView2Environment? sharedEnvironment=null)
     {
         if (!Directory.Exists(assetDirectory)) throw new DirectoryNotFoundException("Build the local interface preview assets first.");
         var adapterPath=Path.Combine(assetDirectory,sandbox?"winui-sandbox-compat.js":"winui-preview-compat.js");
         if (!File.Exists(adapterPath) || !File.Exists(Path.Combine(assetDirectory,"index.html"))) throw new FileNotFoundException("Interface preview assets are missing.");
         var profile=Path.Combine(Path.GetTempPath(),"auralis-winui-preview-"+Guid.NewGuid().ToString("N"));
-        var environment=await CoreWebView2Environment.CreateWithOptionsAsync(null, profile, null);
+        var environment=sharedEnvironment ?? await CoreWebView2Environment.CreateWithOptionsAsync(null, profile, null);
         await view.EnsureCoreWebView2Async(environment);
         view.DefaultBackgroundColor=Windows.UI.Color.FromArgb(0,0,0,0);
         var core=view.CoreWebView2 ?? throw new InvalidOperationException("WebView2 is unavailable.");
@@ -41,9 +41,13 @@ internal static class LocalWebviewBridge
                 var message=BridgeMessage.Parse(args.Source,args.WebMessageAsJson);id=message.Id;
                 var value=message.Appearance is not null
                     ? ApplyAppearance(message.Appearance,applyAppearance)
-                    : message.Command is "window_minimize" or "window_toggle_maximize" or "window_close" or "window_is_maximized"
+                    : message.Command is "export_theme_file" or "export_material_file"
+                        ? await exportFile(message)
+                    : message.Command == "open_glass_window"
+                        ? await openWindow(message)
+                    : message.Command is "window_minimize" or "window_toggle_maximize" or "window_close" or "window_is_maximized" or "window_outer_position" or "window_outer_size" or "window_current_monitor"
                         ? windowCommand(message.Command)
-                    : sandbox && (message.Command is "dashboard_snapshot" or "dashboard_visuals" or "glass_settings" or "update_glass_setting" or "start_download" or "pause_download")
+                    : sandbox && (message.Command is "dashboard_snapshot" or "dashboard_visuals" or "glass_settings" or "update_glass_setting" or "start_download" or "pause_download" or "file_details" or "file_speed_limit" or "queue_action")
                         ? await BridgeDispatcher.DispatchAsync(message)
                         : throw new InvalidOperationException("This isolated host does not support that command.");
                 core.PostWebMessageAsJson(JsonSerializer.Serialize(new {id,ok=true,value}));
@@ -51,6 +55,7 @@ internal static class LocalWebviewBridge
                 if(id is not null)core.PostWebMessageAsJson(JsonSerializer.Serialize(new {id,ok=false,error="The isolated request failed."}));
             }
         };
+        return environment;
     }
 
     private static bool IsLocal(string address) => Uri.TryCreate(address,UriKind.Absolute,out var uri) &&

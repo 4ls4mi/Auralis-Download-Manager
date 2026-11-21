@@ -92,6 +92,54 @@ fn download_action(action: u32, id: u64) -> Result<serde_json::Value, String> {
     let result: mdm_ipc::api::ActAnswer = serde_json::from_str(&raw).map_err(|_| "Invalid downloader action response")?;
     serde_json::to_value(result).map_err(|e| e.to_string())
 }
+fn queue_action(name: &str, action: u8) -> Result<serde_json::Value, String> {
+    if name.is_empty() || name.len()>256 { return Err("Invalid queue name.".into()); }
+    let action=match action { 1=>"start_queue", 2=>"stop_queue", _=>return Err("Unsupported queue action.".into()) };
+    if !owned_backend() { return Err("The embedded downloader is not running in this process.".into()); }
+    let command=mdm_ipc::Command { action:Some(action.into()), queue:Some(name.into()), ..Default::default() };
+    let raw=mdm_ipc::request_checked(&command).map_err(|e|e.to_string())?;
+    let result:mdm_ipc::api::ActAnswer=serde_json::from_str(&raw).map_err(|_|"Queue action failed.")?;
+    serde_json::to_value(result).map_err(|e|e.to_string())
+}
+/// # Safety
+/// `name` must point to `len` readable UTF-8 bytes for this call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn auralis_bridge_queue_action(name: *const u8, len: usize, action: u8) -> *mut c_char {
+    encode(std::panic::catch_unwind(|| {
+        if name.is_null() || len==0 || len>256 { return Err("Invalid queue name.".into()); }
+        let bytes=unsafe { std::slice::from_raw_parts(name,len) };
+        let name=std::str::from_utf8(bytes).map_err(|_|"Invalid queue name.")?;
+        queue_action(name,action)
+    }))
+}
+fn file_details(id: u64) -> Result<serde_json::Value, String> {
+    if id == 0 { return Err("Invalid download ID".into()); }
+    if !owned_backend() { return Err("The embedded downloader is not running in this process.".into()); }
+    let command=mdm_ipc::Command { action:Some("glass-item".into()), category:Some("details".into()), ids:vec![id], ..Default::default() };
+    let raw=mdm_ipc::request_checked(&command).map_err(|e|e.to_string())?;
+    let data:serde_json::Value=serde_json::from_str(&raw).map_err(|_|"Invalid download details response")?;
+    if data.get("error").is_some() { return Err("Download details are unavailable.".into()); }
+    Ok(data)
+}
+/// Returns details for one download; no file paths or operations are accepted from the caller.
+#[unsafe(no_mangle)]
+pub extern "C" fn auralis_bridge_file_details(id: u64) -> *mut c_char {
+    encode(std::panic::catch_unwind(|| file_details(id)))
+}
+fn set_speed_limit(id: u64, kb: u64) -> Result<serde_json::Value, String> {
+    if id == 0 || kb > 10_000_000 { return Err("Invalid download speed limit.".into()); }
+    if !owned_backend() { return Err("The embedded downloader is not running in this process.".into()); }
+    let value=if kb==0 { "off".to_owned() } else { kb.to_string() };
+    let command=mdm_ipc::Command { action:Some("glass-item".into()), category:Some("speed-limit".into()), ids:vec![id], queue:Some(value), ..Default::default() };
+    let raw=mdm_ipc::request_checked(&command).map_err(|e|e.to_string())?;
+    let data:serde_json::Value=serde_json::from_str(&raw).map_err(|_|"Invalid speed limit response")?;
+    if data.get("error").is_some() || data["ok"]!=true { return Err("The speed limit could not be applied.".into()); }
+    Ok(data)
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn auralis_bridge_speed_limit(id: u64, kb: u64) -> *mut c_char {
+    encode(std::panic::catch_unwind(|| set_speed_limit(id,kb)))
+}
 fn update_setting(key: &str, value: &str) -> Result<serde_json::Value, String> {
     const ALLOWED: &[&str] = &[
         "max_connections", "speed_limit_on", "speed_limit_kb", "global_limit_on", "global_limit_kb",
@@ -190,6 +238,9 @@ mod tests {
         assert_eq!(started["running"], true);
         let list = dispatch(3).expect("read download list");
         assert!(list["downloads"].is_array());
+        let main_queue=list["queues"][0]["name"].as_str().expect("main queue");
+        assert!(queue_action(main_queue,2).expect("stop isolated queue").is_object());
+        assert!(queue_action(main_queue,3).is_err());
         let visual = dispatch(4).expect("read download visuals");
         assert!(visual["downloads"].is_array());
         let settings = dispatch(5).expect("read downloader settings");
@@ -198,7 +249,34 @@ mod tests {
         update_setting("show_complete", "false").expect("update isolated setting");
         assert_eq!(dispatch(5).unwrap()["show_complete"], false);
         assert!(add_download("magnet:?xt=urn:btih:1234", true).unwrap_err().contains("HTTP"));
-        add_download("https://example.com/winui-test.bin", true).expect("queue isolated test download");
+        use std::io::{Read, Write};
+        use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+        let listener=std::net::TcpListener::bind("127.0.0.1:0").expect("local test server");
+        listener.set_nonblocking(true).expect("nonblocking test server");
+        let address=listener.local_addr().unwrap();
+        let stopped_server=Arc::new(AtomicBool::new(false));
+        let stop_signal=stopped_server.clone();
+        let server=thread::spawn(move || {
+            let deadline=Instant::now()+Duration::from_secs(60);
+            while !stop_signal.load(Ordering::Relaxed) && Instant::now()<deadline {
+                match listener.accept() {
+                    Ok((mut stream,_)) => {
+                        let _=stream.set_read_timeout(Some(Duration::from_secs(2)));
+                        let mut bytes=[0u8;4096];
+                        if let Ok(n)=stream.read(&mut bytes) {
+                            let head=bytes[..n].starts_with(b"HEAD ");
+                            let body=b"isolated WinUI test download";
+                            let header=format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",body.len());
+                            let _=stream.write_all(header.as_bytes());
+                            if !head { let _=stream.write_all(body); }
+                        }
+                    }
+                    Err(e) if e.kind()==std::io::ErrorKind::WouldBlock => thread::sleep(Duration::from_millis(20)),
+                    Err(_) => break,
+                }
+            }
+        });
+        add_download(&format!("http://{address}/winui-test.bin"), true).expect("queue isolated test download");
         let deadline=Instant::now()+Duration::from_secs(10);
         let queued=loop {
             let list=dispatch(3).expect("read queued download");
@@ -208,7 +286,28 @@ mod tests {
         };
         let destination=std::path::PathBuf::from(queued["path"].as_str().expect("download path"));
         assert!(destination.starts_with(data.join("downloads")), "test download escaped sandbox");
+        let id=queued["id"].as_u64().expect("download id");
+        assert!(file_details(id).expect("read isolated download details").is_object());
+        set_speed_limit(id,512).expect("set isolated speed limit");
+        assert_eq!(file_details(id).unwrap()["own_limit_kb"],512);
+        set_speed_limit(id,0).expect("clear isolated speed limit");
+        assert!(file_details(id).unwrap()["own_limit_kb"].is_null());
+        assert!(set_speed_limit(id,10_000_001).is_err());
+        assert!(file_details(0).is_err());
         assert!(download_action(2, u64::MAX).unwrap()["skipped"].is_array());
+        assert!(download_action(1, id).expect("start queued test download")["done"].as_array().is_some_and(|done|done.contains(&serde_json::json!(id))));
+        let finish_deadline=Instant::now()+Duration::from_secs(30);
+        loop {
+            let list=dispatch(3).expect("read test progress");
+            let item=list["downloads"].as_array().unwrap().iter().find(|item|item["id"]==id).expect("test download present");
+            if item["status"]=="Complete" { break; }
+            assert!(item["status"]!="Error", "test download failed: {item}");
+            assert!(Instant::now()<finish_deadline, "test download did not complete: {item}");
+            thread::sleep(Duration::from_millis(100));
+        }
+        assert_eq!(std::fs::read(&destination).expect("read test download"),b"isolated WinUI test download");
+        stopped_server.store(true,Ordering::Relaxed);
+        server.join().expect("stop test server");
         let stopped = stop().expect("stop isolated embedded downloader");
         assert_eq!(stopped["running"], false);
         assert!(dispatch(3).is_err());

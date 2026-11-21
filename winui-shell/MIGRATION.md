@@ -28,8 +28,9 @@ preview is not yet the application and must not be packaged as a release.
 
 ## Shell parity
 
-- Restore multiple progress windows and independent minimize, maximize, resize,
-  drag and tray behavior; keep all tray actions and close-to-tray semantics.
+- Preview settings and progress windows share an isolated WebView profile and
+  support native minimize, maximize and close. Complete and validate resize,
+  drag, production lifecycle, all tray actions and close-to-tray semantics.
 - Port notifications, update checks/install, startup, preferences/theme backup,
   dialogs, file selection, clipboard, browser native host, and helper setup.
 - Test fresh install and upgrade from the released shell with existing downloads

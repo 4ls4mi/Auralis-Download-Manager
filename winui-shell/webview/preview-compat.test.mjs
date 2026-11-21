@@ -32,3 +32,26 @@ test('preview forwards native window controls and their state',async()=>{
   const pending=context.__TAURI_INTERNALS__.invoke('plugin:window|'+action);const message=sent.at(-1);assert.equal(message.command,command);listener({data:{id:message.id,ok:true,value}});assert.equal(await pending,value);
  }
 });
+
+test('preview asks the host to open a settings window',async()=>{
+ let listener;const sent=[];
+ const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);
+ const pending=context.__TAURI_INTERNALS__.invoke('open_glass_window',{label:'settings',url:'/?settings=1&tab=Appearance',width:968,height:765});
+ assert.equal(sent[0].command,'open_glass_window');assert.equal(sent[0].url,'/?settings=1&tab=Appearance');
+ listener({data:{id:sent[0].id,ok:true,value:{opened:true}}});assert.equal((await pending).opened,true);
+});
+
+test('preview requests real window bounds and display work area',async()=>{
+ let listener;const sent=[];
+ const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);
+ for(const [action,command,value] of [['outer_position','window_outer_position',{x:500,y:0}],['outer_size','window_outer_size',{width:700,height:900}],['current_monitor','window_current_monitor',{position:{x:0,y:0},size:{width:1920,height:1080},workArea:{position:{x:0,y:0},size:{width:1920,height:1040}},scaleFactor:1}]]){
+  const pending=context.__TAURI_INTERNALS__.invoke('plugin:window|'+action);const message=sent.at(-1);assert.equal(message.command,command);listener({data:{id:message.id,ok:true,value}});assert.equal(await pending,value);
+ }
+});
+
+test('appearance exports require an explicit host file request',async()=>{
+ let listener;const sent=[];
+ const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);
+ const pending=context.__TAURI_INTERNALS__.invoke('export_theme_file',{contents:'{"format":"auralis-theme"}'});assert.equal(sent[0].command,'export_theme_file');listener({data:{id:sent[0].id,ok:true,value:null}});assert.equal(await pending,null);
+ await assert.rejects(context.__TAURI_INTERNALS__.invoke('export_theme_file',{contents:'x'.repeat(32769)}),/unavailable/);
+});

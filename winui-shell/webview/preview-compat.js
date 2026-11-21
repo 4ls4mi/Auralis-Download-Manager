@@ -17,8 +17,10 @@
   // The preview deliberately cannot contact the release push service.
   globalThis.WebSocket=class {constructor(){throw new Error('Network is disabled in visual preview.')}};
   const empty={downloads:[],queues:[],categories:[],speed:0};
-  const windowCommands={'plugin:window|minimize':'window_minimize','plugin:window|toggle_maximize':'window_toggle_maximize','plugin:window|close':'window_close','plugin:window|is_maximized':'window_is_maximized'};
-  const invoke=async(command)=>{
+  const windowCommands={'plugin:window|minimize':'window_minimize','plugin:window|toggle_maximize':'window_toggle_maximize','plugin:window|close':'window_close','plugin:window|is_maximized':'window_is_maximized','plugin:window|outer_position':'window_outer_position','plugin:window|outer_size':'window_outer_size','plugin:window|current_monitor':'window_current_monitor'};
+  const invoke=async(command,args={})=>{
+    if(['export_theme_file','export_material_file'].includes(command) && typeof args.contents==='string' && args.contents.length<=32768) return windowRequest(command,{contents:args.contents});
+    if(command==='open_glass_window' && typeof args.label==='string' && typeof args.url==='string' && Number.isInteger(args.width) && Number.isInteger(args.height))return windowRequest(command,{label:args.label,url:args.url,width:args.width,height:args.height});
     if(command==='boot_engine')return 'Visual preview — downloader disabled';
     if(command==='dashboard_snapshot')return empty;
     if(command==='dashboard_visuals')return {downloads:[]};
@@ -30,9 +32,6 @@
     if(command==='plugin:event|listen')return 1;
     if(command==='plugin:event|unlisten'||command==='window_preferences'||command==='set_material_window_shape'||command==='plugin:window|set_effects')return null;
     if(Object.hasOwn(windowCommands,command))return windowRequest(windowCommands[command]);
-    if(command==='plugin:window|outer_position')return {x:0,y:0};
-    if(command==='plugin:window|outer_size')return {width:960,height:690};
-    if(command==='plugin:window|current_monitor')return null;
     throw new Error('This action is unavailable in the isolated visual preview.');
   };
   globalThis.__AURALIS_WINUI__={setAppearance:appearance};

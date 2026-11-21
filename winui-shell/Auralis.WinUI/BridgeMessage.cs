@@ -5,7 +5,7 @@ namespace Auralis.WinUI;
 /// Parses the narrow set of commands that the future packaged web interface
 /// can ask the native host to perform. The host must also enforce that no
 /// untrusted navigation is allowed and must never expose the downloader token.
-internal sealed record BridgeMessage(long Id, string Command, ulong DownloadId, string? Url, bool Later, string? Key = null, string? Value = null, NativeAppearance? Appearance = null)
+internal sealed record BridgeMessage(long Id, string Command, ulong DownloadId, string? Url, bool Later, string? Key = null, string? Value = null, NativeAppearance? Appearance = null, string? Label = null, int Width = 0, int Height = 0)
 {
     internal const string TrustedOrigin = "https://auralis.local";
     internal static BridgeMessage Parse(string source, string json)
@@ -13,7 +13,7 @@ internal sealed record BridgeMessage(long Id, string Command, ulong DownloadId, 
         if (!Uri.TryCreate(source, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps ||
             uri.Host != "auralis.local" || !uri.IsDefaultPort || uri.UserInfo.Length != 0)
             throw new InvalidOperationException("Untrusted interface origin.");
-        if (json.Length > 16_384) throw new InvalidOperationException("Interface message is too large.");
+        if (json.Length > 65_536) throw new InvalidOperationException("Interface message is too large.");
         using var document = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = 8 });
         var root = document.RootElement;
         if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("id", out var idValue) ||
@@ -21,14 +21,59 @@ internal sealed record BridgeMessage(long Id, string Command, ulong DownloadId, 
             !root.TryGetProperty("command", out var commandValue) || commandValue.ValueKind != JsonValueKind.String)
             throw new InvalidOperationException("Invalid interface request.");
         string command = commandValue.GetString()!;
+        if (command is "export_theme_file" or "export_material_file")
+        {
+            if (!root.TryGetProperty("contents", out var contentsValue) || contentsValue.ValueKind != JsonValueKind.String)
+                throw new InvalidOperationException("Invalid export.");
+            string contents=contentsValue.GetString()!;
+            int limit=command=="export_theme_file" ? 32_768 : 16_384;
+            if (System.Text.Encoding.UTF8.GetByteCount(contents)>limit) throw new InvalidOperationException("Export is too large.");
+            using var exported=JsonDocument.Parse(contents,new JsonDocumentOptions { MaxDepth=32 });
+            if (exported.RootElement.ValueKind!=JsonValueKind.Object) throw new InvalidOperationException("Invalid export.");
+            return new(id,command,0,null,false,Value:contents);
+        }
+        if (command == "open_glass_window")
+        {
+            if (!root.TryGetProperty("label", out var labelValue) || labelValue.ValueKind != JsonValueKind.String ||
+                !root.TryGetProperty("url", out var urlValue) || urlValue.ValueKind != JsonValueKind.String ||
+                !root.TryGetProperty("width", out var widthValue) || !widthValue.TryGetInt32(out int width) ||
+                !root.TryGetProperty("height", out var heightValue) || !heightValue.TryGetInt32(out int height))
+                throw new InvalidOperationException("Invalid window request.");
+            string label = labelValue.GetString()!;
+            string url = urlValue.GetString()!;
+            if (label.Length is < 1 or > 80 || !label.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_') ||
+                url.Length > 2048 || !url.StartsWith("/?", StringComparison.Ordinal) || url.Contains('\\') ||
+                !Uri.TryCreate(TrustedOrigin + url, UriKind.Absolute, out var target) || target.Host != "auralis.local" ||
+                width is < 320 or > 2400 || height is < 120 or > 1600)
+                throw new InvalidOperationException("Unsupported window request.");
+            return new(id, command, 0, url, false, Label: label, Width: width, Height: height);
+        }
         if (command == "set_native_appearance")
         {
             if (!root.TryGetProperty("appearance", out var appearance)) throw new InvalidOperationException("Missing appearance.");
             return new(id, command, 0, null, false, Appearance: NativeAppearance.Parse(appearance));
         }
-        if (command is "window_minimize" or "window_toggle_maximize" or "window_close" or "window_is_maximized") return new(id, command, 0, null, false);
+        if (command is "window_minimize" or "window_toggle_maximize" or "window_close" or "window_is_maximized" or "window_outer_position" or "window_outer_size" or "window_current_monitor") return new(id, command, 0, null, false);
         if (command is "dashboard_snapshot" or "dashboard_visuals" or "glass_settings") return new(id, command, 0, null, false);
-        if (command is "start_download" or "pause_download")
+        if (command == "queue_action")
+        {
+            if (!root.TryGetProperty("name", out var nameValue) || nameValue.ValueKind != JsonValueKind.String ||
+                !root.TryGetProperty("action", out var actionValue) || actionValue.ValueKind != JsonValueKind.String)
+                throw new InvalidOperationException("Invalid queue request.");
+            string name=nameValue.GetString()!;
+            string action=actionValue.GetString()!;
+            if (name.Length==0 || System.Text.Encoding.UTF8.GetByteCount(name)>256 || action is not ("start_queue" or "stop_queue"))
+                throw new InvalidOperationException("Unsupported queue request.");
+            return new(id,command,0,null,false,Key:name,Value:action);
+        }
+        if (command == "file_speed_limit")
+        {
+            if (!root.TryGetProperty("downloadId", out var item) || !item.TryGetUInt64(out ulong itemId) || itemId == 0 ||
+                !root.TryGetProperty("value", out var amount) || !amount.TryGetUInt64(out ulong kb) || kb > 10_000_000)
+                throw new InvalidOperationException("Invalid speed limit request.");
+            return new(id, command, itemId, null, false, Value: kb.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+        if (command is "start_download" or "pause_download" or "file_details")
         {
             if (!root.TryGetProperty("downloadId", out var downloadId) || !downloadId.TryGetUInt64(out ulong value) || value == 0)
                 throw new InvalidOperationException("Invalid download ID.");
