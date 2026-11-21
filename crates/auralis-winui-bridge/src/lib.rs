@@ -8,6 +8,14 @@ static ENGINE: OnceLock<Mutex<Option<JoinHandle<Result<(), String>>>>> = OnceLoc
 // directory before starting. It cannot attach to an installed app's data.
 static ISOLATED_DATA: OnceLock<std::path::PathBuf> = OnceLock::new();
 static ISOLATED_DATA_CANONICAL: OnceLock<std::path::PathBuf> = OnceLock::new();
+#[cfg(feature = "installed-profile")]
+static INSTALLED_DATA: OnceLock<std::path::PathBuf> = OnceLock::new();
+fn installed_profile_selected() -> bool {
+    #[cfg(feature = "installed-profile")]
+    { INSTALLED_DATA.get().is_some() }
+    #[cfg(not(feature = "installed-profile"))]
+    { false }
+}
 fn same_path(left: &std::path::Path, right: &std::path::Path) -> bool {
     if cfg!(windows) { left.to_string_lossy().eq_ignore_ascii_case(&right.to_string_lossy()) } else { left==right }
 }
@@ -40,6 +48,7 @@ fn test_output_dir() -> Result<std::path::PathBuf, String> {
 fn initialize_sandbox() -> Result<serde_json::Value, String> {
     let worker = engine().lock().map_err(|_| "Downloader state unavailable")?;
     if worker.is_some() { return Err("Stop the downloader before initializing its test data.".into()); }
+    if installed_profile_selected() { return Err("The installed profile is already selected.".into()); }
     if let Some(path) = ISOLATED_DATA.get() { return Ok(serde_json::json!({"isolated":true,"directory":path})); }
     let stamp=std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_err(|e|e.to_string())?.as_nanos();
     let root=std::env::temp_dir();
@@ -67,6 +76,7 @@ fn development_profile_path(base: &std::path::Path) -> Result<std::path::PathBuf
 fn initialize_development_profile() -> Result<serde_json::Value, String> {
     let worker=engine().lock().map_err(|_|"Downloader state unavailable")?;
     if worker.is_some() { return Err("Stop the downloader before initializing its test data.".into()); }
+    if installed_profile_selected() { return Err("The installed profile is already selected.".into()); }
     if let Some(path)=ISOLATED_DATA.get() { return Ok(serde_json::json!({"isolated":true,"directory":path})); }
     let base=std::env::var_os("LOCALAPPDATA").ok_or("The local application data folder is unavailable.")?;
     let path=development_profile_path(std::path::Path::new(&base))?;
@@ -90,6 +100,20 @@ fn initialize_development_profile() -> Result<serde_json::Value, String> {
     remember_isolated_data(&path)?;
     Ok(serde_json::json!({"isolated":true,"directory":path}))
 }
+/// Select the exact data directory resolved by the installed Auralis backend.
+/// This is a host-only operation, never a WebView command. The existing
+/// downloader still acquires its own instance lock before it opens any data.
+#[cfg(feature = "installed-profile")]
+fn initialize_installed_profile() -> Result<serde_json::Value, String> {
+    let worker=engine().lock().map_err(|_|"Downloader state unavailable")?;
+    if worker.is_some() { return Err("Stop the downloader before selecting its data.".into()); }
+    if ISOLATED_DATA.get().is_some() { return Err("A development profile is already selected.".into()); }
+    if INSTALLED_DATA.get().is_some() { return Ok(serde_json::json!({"installed":true})); }
+    let path=mdm_ipc::data_dir().ok_or("The Auralis data directory is unavailable.")?;
+    if !path.is_absolute() { return Err("The Auralis data directory is invalid.".into()); }
+    INSTALLED_DATA.set(path).map_err(|_|"The Auralis profile was already selected.")?;
+    Ok(serde_json::json!({"installed":true}))
+}
 fn engine() -> &'static Mutex<Option<JoinHandle<Result<(), String>>>> { ENGINE.get_or_init(|| Mutex::new(None)) }
 fn request(query: &str) -> Result<serde_json::Value, String> {
     let command = mdm_ipc::Command { query: Some(query.into()), ..Default::default() };
@@ -102,7 +126,7 @@ fn owned_backend() -> bool {
 }
 
 fn start() -> Result<serde_json::Value, String> {
-    if ISOLATED_DATA.get().is_none() { return Err("Initialize isolated test data before starting the development downloader.".into()); }
+    if ISOLATED_DATA.get().is_none() && !installed_profile_selected() { return Err("Initialize a downloader profile before starting the downloader.".into()); }
     let mut worker = engine().lock().map_err(|_| "Downloader state unavailable")?;
     if worker.as_ref().is_some_and(|w| !w.is_finished()) {
         return if owned_backend() { Ok(serde_json::json!({"running":true})) } else { Err("Downloader is still starting".into()) };
@@ -154,6 +178,8 @@ fn dispatch(operation: u32) -> Result<serde_json::Value, String> {
         },
         9 if owned_backend() => request("glass-network-adapters"),
         10 if owned_backend() => request("glass-queues"),
+        #[cfg(feature = "installed-profile")]
+        11 => initialize_installed_profile(),
         _ => Err("Unsupported bridge operation".into()),
     }
 }
@@ -557,7 +583,7 @@ mod tests {
     }
     #[test]
     fn isolated_embedded_downloader_starts_reads_and_stops() {
-        assert!(start().unwrap_err().contains("isolated test data"));
+        assert!(start().unwrap_err().contains("Initialize a downloader profile"));
         let initialized=initialize_sandbox().expect("create isolated data directory");
         assert_eq!(initialized["isolated"],true);
         let data=std::path::PathBuf::from(initialized["directory"].as_str().expect("test directory"));
@@ -703,6 +729,8 @@ mod tests {
 
     #[test]
     fn unsupported_operations_are_rejected_and_ffi_returns_json() {
+        #[cfg(not(feature = "installed-profile"))]
+        assert_eq!(dispatch(11).unwrap_err(),"Unsupported bridge operation");
         assert!(check_saved(0,false).is_err());
         let invalid=auralis_bridge_check_saved(1,2);
         let response=unsafe { std::ffi::CStr::from_ptr(invalid) }.to_str().unwrap();

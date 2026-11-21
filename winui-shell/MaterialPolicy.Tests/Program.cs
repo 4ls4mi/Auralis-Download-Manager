@@ -166,6 +166,12 @@ await Task.WhenAll(lifetime.StopAsync(), lifetime.StopAsync());
 if (!lifecycleCalls.SequenceEqual(new[] { DownloaderBridge.Operation.InitializeDevelopmentProfile, DownloaderBridge.Operation.Start, DownloaderBridge.Operation.Stop }))
     throw new Exception("Downloader lifecycle must serialize and deduplicate start and stop.");
 lifecycleCalls.Clear();
+var installedLifetime = new DownloaderLifetime(operation => { lifecycleCalls.Add(operation); return Task.FromResult(default(System.Text.Json.JsonElement)); }, DownloaderLifetime.Profile.Installed);
+await installedLifetime.StartAsync();
+await installedLifetime.StopAsync();
+if (!lifecycleCalls.SequenceEqual(new[] { DownloaderBridge.Operation.InitializeInstalledProfile, DownloaderBridge.Operation.Start, DownloaderBridge.Operation.Stop }))
+    throw new Exception("The installed shell must select the installed profile explicitly.");
+lifecycleCalls.Clear();
 var failedStart = new DownloaderLifetime(operation => {
     lifecycleCalls.Add(operation);
     return operation == DownloaderBridge.Operation.Start

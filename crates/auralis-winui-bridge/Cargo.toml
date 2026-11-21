@@ -12,6 +12,9 @@ crate-type = ["cdylib", "rlib"]
 [features]
 default = ["browser-connection"]
 browser-connection = ["mdm-app/browser-connection"]
+# Production data access is opt-in while shell parity and migration are being
+# completed. The development artifact does not enable this feature.
+installed-profile = []
 
 [dependencies]
 mdm-app = { path = "../app", default-features = false }
