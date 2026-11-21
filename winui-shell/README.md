@@ -2,8 +2,8 @@
 
 This is the beginning of a WinUI 3 replacement for the current shell, not a
 working downloader and not a release. It requests native Windows desktop
-Acrylic, Mica and Mica Alt on the window so they can be evaluated over real
-Windows content. Mica and Acrylic are different system backdrops: Windows
+Acrylic, Mica and Mica Alt for the built-in material names, with light and dark
+preview overlays, so they can be evaluated over real Windows content. Mica and Acrylic are different system backdrops: Windows
 controls their supported versions and may reduce effects according to system
 settings. The preview has no connection to saved settings or download data.
 

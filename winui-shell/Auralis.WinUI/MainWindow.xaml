@@ -3,7 +3,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="Auralis — WinUI shell development">
-    <Grid Background="Transparent" Padding="24" RowSpacing="16">
+    <Grid x:Name="Root" Background="Transparent" Padding="24" RowSpacing="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -13,7 +13,10 @@
             <TextBlock Text="WinUI shell development" FontSize="24" FontWeight="SemiBold" />
             <TextBlock Text="Native backdrop test — downloader and existing interface are not connected yet." TextWrapping="Wrap" />
         </StackPanel>
-        <ComboBox x:Name="MaterialSelector" Grid.Row="1" Header="Native backdrop" SelectionChanged="OnMaterialChanged" />
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="12">
+            <ComboBox x:Name="MaterialSelector" Header="Surface material" DisplayMemberPath="Label" SelectionChanged="OnMaterialChanged" />
+            <ComboBox x:Name="ThemeSelector" Header="Preview theme" SelectionChanged="OnThemeChanged" />
+        </StackPanel>
         <Border Grid.Row="2" Padding="20" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
             <StackPanel Spacing="12">
                 <TextBlock Text="Backdrop preview" FontSize="18" FontWeight="SemiBold" />

@@ -10,27 +10,37 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        MaterialSelector.ItemsSource = new[] { "Acrylic", "Mica", "Mica Alt" };
-        MaterialSelector.SelectedIndex = 0;
+        MaterialSelector.ItemsSource = MaterialPolicy.BuiltIns;
+        ThemeSelector.ItemsSource = new[] { "Dark", "Light" };
+        ThemeSelector.SelectedIndex = 0;
+        MaterialSelector.SelectedIndex = 1;
     }
 
-    private void OnMaterialChanged(object sender, SelectionChangedEventArgs args)
+    private void OnThemeChanged(object sender, SelectionChangedEventArgs args) => ApplyMaterial();
+
+    private void OnMaterialChanged(object sender, SelectionChangedEventArgs args) => ApplyMaterial();
+
+    private void ApplyMaterial()
     {
-        if (MaterialSelector.SelectedItem is not string material) return;
+        if (MaterialSelector.SelectedItem is not MaterialDefinition material || ThemeSelector.SelectedItem is not string theme) return;
         try
         {
-            SystemBackdrop = material switch
+            SystemBackdrop = material.Backdrop switch
             {
-                "Mica" => new MicaBackdrop { Kind = MicaKind.Base },
-                "Mica Alt" => new MicaBackdrop { Kind = MicaKind.BaseAlt },
+                NativeBackdrop.Mica => new MicaBackdrop { Kind = MicaKind.Base },
+                NativeBackdrop.MicaAlt => new MicaBackdrop { Kind = MicaKind.BaseAlt },
                 _ => new DesktopAcrylicBackdrop()
             };
-            BackdropStatus.Text = $"Requested native Windows {material}.";
+            var light = theme == "Light";
+            Root.RequestedTheme = light ? ElementTheme.Light : ElementTheme.Dark;
+            byte value = light ? (byte)245 : (byte)14;
+            Root.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(material.OverlayOpacity, value, value, value));
+            BackdropStatus.Text = $"Requested native Windows {material.Backdrop} for {material.Label}.";
         }
         catch (System.Exception error)
         {
             SystemBackdrop = null;
-            BackdropStatus.Text = $"Could not apply {material}: {error.Message}";
+            BackdropStatus.Text = $"Could not apply {material.Label}: {error.Message}";
         }
     }
 }
