@@ -21,6 +21,13 @@ internal sealed record BridgeMessage(long Id, string Command, ulong DownloadId, 
             !root.TryGetProperty("command", out var commandValue) || commandValue.ValueKind != JsonValueKind.String)
             throw new InvalidOperationException("Invalid interface request.");
         string command = commandValue.GetString()!;
+        if (command == "choose_download_path")
+        {
+            if (!root.TryGetProperty("current",out var currentValue) || currentValue.ValueKind!=JsonValueKind.String ||
+                currentValue.GetString() is not string current || current.Length>4096 || current.Contains('\0'))
+                throw new InvalidOperationException("Invalid download destination.");
+            return new(id,command,0,null,false,Value:current);
+        }
         if (command is "export_theme_file" or "export_material_file")
         {
             if (!root.TryGetProperty("contents", out var contentsValue) || contentsValue.ValueKind != JsonValueKind.String)

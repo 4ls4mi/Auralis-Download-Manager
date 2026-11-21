@@ -67,6 +67,8 @@ internal static class LocalWebviewBridge
                         ? await updateCommand(message)
                     : message.Command == "clipboard_text"
                         ? await ReadClipboardAsync()
+                    : installed && message.Command == "choose_download_path"
+                        ? await exportFile(message)
                     : message.Command is "export_theme_file" or "export_material_file"
                         ? await exportFile(message)
                     : sandbox && (message.Command is "progress_hide" or "progress_restore" or "progress_ids" or "progress_preferences")
@@ -92,8 +94,8 @@ internal static class LocalWebviewBridge
                     "The saved download cannot be checked now." => exception.Message,
                     "The checksum could not be verified." => exception.Message,
                     "The test download is not complete." => exception.Message,
-                    "Stop this test download before updating its address." => exception.Message,
-                    "Could not update the test download address." => exception.Message,
+                    "Stop this download before updating its address." => exception.Message,
+                    "Could not update the download address." => exception.Message,
                     "Enter a valid HTTP or HTTPS address." => exception.Message,
                     "The selected queue is unavailable." => exception.Message,
                     "The download queue could not be changed." => exception.Message,
@@ -101,7 +103,7 @@ internal static class LocalWebviewBridge
                     "Choose 1–128 simultaneous downloads." => exception.Message,
                     "The schedule could not be saved." => exception.Message,
                     _ when command=="update_check" => "The update check is unavailable. Try again later.",
-                    _ => "The isolated request failed."
+                    _ => installed ? "The requested action could not be completed." : "The isolated request failed."
                 };
                 if(id is not null && requestEpoch==navigationEpoch) { try { core.PostWebMessageAsJson(JsonSerializer.Serialize(new {id,ok=false,error})); } catch (Exception) { } }
             }

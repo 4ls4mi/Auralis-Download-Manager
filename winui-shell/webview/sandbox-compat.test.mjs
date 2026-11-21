@@ -46,6 +46,16 @@ test('release fallback and file pickers have time to complete',async()=>{
   listener({data:{id:sent.at(-1).id,ok:true,value:{}}});await pending;
  }
 });
+test('installed host chooses a download folder without exposing it to the test host',async()=>{
+ let listener;const sent=[],timeouts=[];
+ const context={__AURALIS_INSTALLED_HOST__:true,chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout:(_fn,delay)=>{timeouts.push(delay);return timeouts.length},clearTimeout(){}};
+ runInNewContext(source,context);
+ const pending=context.__TAURI_INTERNALS__.invoke('choose_download_path',{current:'C:\\Downloads\\file.zip'});
+ assert.equal(sent[0].command,'choose_download_path');assert.equal(timeouts[0],300000);
+ listener({data:{id:sent[0].id,ok:true,value:'D:\\Files\\file.zip'}});assert.equal(await pending,'D:\\Files\\file.zip');
+ const preview={chrome:{webview:{addEventListener(){},postMessage(){}}},setTimeout,clearTimeout};runInNewContext(source,preview);
+ await assert.rejects(preview.__TAURI_INTERNALS__.invoke('choose_download_path',{current:'file.zip'}),/unavailable/);
+});
 test('sandbox restricts downloader requests and allows isolated display preferences',async()=>{
  let listener;const messages=[];
  const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>messages.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);

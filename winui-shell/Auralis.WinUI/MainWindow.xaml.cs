@@ -447,6 +447,20 @@ public sealed partial class MainWindow : Window
     private static async Task<JsonElement> ExportAppearanceAsync(Window owner, BridgeMessage message)
     {
         if (message.Value is null) throw new InvalidOperationException("No appearance data was provided.");
+        if (message.Command=="choose_download_path")
+        {
+            // FolderPicker does not create or truncate a destination. The name can
+            // still be edited in the download form before the transfer is added.
+            string name=Path.GetFileName(message.Value);
+            if (string.IsNullOrWhiteSpace(name) || name is "." or "..")
+                throw new InvalidOperationException("Choose a file name first.");
+            var folderPicker=new Windows.Storage.Pickers.FolderPicker();
+            WinRT.Interop.InitializeWithWindow.Initialize(folderPicker,WinRT.Interop.WindowNative.GetWindowHandle(owner));
+            folderPicker.SuggestedStartLocation=Windows.Storage.Pickers.PickerLocationId.Downloads;
+            folderPicker.FileTypeFilter.Add("*");
+            var folder=await folderPicker.PickSingleFolderAsync();
+            return JsonSerializer.SerializeToElement(folder is null ? null : Path.Combine(folder.Path,name));
+        }
         var picker=new Windows.Storage.Pickers.FileSavePicker();
         WinRT.Interop.InitializeWithWindow.Initialize(picker,WinRT.Interop.WindowNative.GetWindowHandle(owner));
         picker.SuggestedStartLocation=Windows.Storage.Pickers.PickerLocationId.DocumentsLibrary;

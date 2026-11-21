@@ -24,7 +24,7 @@
   let boundsTimer;
   webview.addEventListener('message',event=>{const m=event.data;if(m?.event==='window_bounds_changed'){if(typeof window!=='undefined' && boundsTimer===undefined)boundsTimer=setTimeout(()=>{boundsTimer=undefined;window.dispatchEvent(new Event('resize'))},50);return}const request=pending.get(m?.id);if(!request)return;pending.delete(m.id);clearTimeout(request.timer);m.ok?request.resolve(m.value):request.reject(new Error(m.error || 'Native request failed.'))});
   // Release checks may use two feeds; native file pickers wait for the user.
-  const timeoutFor=command=>command==='update_check'?40000:['export_theme_file','export_material_file'].includes(command)?300000:10000;
+  const timeoutFor=command=>command==='update_check'?40000:['export_theme_file','export_material_file','choose_download_path'].includes(command)?300000:10000;
   const request=(command,args={})=>new Promise((resolve,reject)=>{const id=nextId++;const timer=setTimeout(()=>{pending.delete(id);reject(new Error('Native request timed out.'))},timeoutFor(command));pending.set(id,{resolve,reject,timer});try{webview.postMessage({id,command,...args})}catch(error){pending.delete(id);clearTimeout(timer);reject(error)}});
   const appearance=value=>request('set_native_appearance',{appearance:value});
   // The preview deliberately cannot contact the release push service.
@@ -32,6 +32,7 @@
   const windowCommands={'plugin:window|hide':'window_hide','plugin:window|minimize':'window_minimize','plugin:window|toggle_maximize':'window_toggle_maximize','plugin:window|close':'window_close','plugin:window|is_maximized':'window_is_maximized','plugin:window|outer_position':'window_outer_position','plugin:window|outer_size':'window_outer_size','plugin:window|current_monitor':'window_current_monitor'};
   const invoke=async(command,args={})=>{
     if(['export_theme_file','export_material_file'].includes(command) && typeof args.contents==='string' && args.contents.length<=32768) return request(command,{contents:args.contents});
+    if(installed && command==='choose_download_path' && typeof args.current==='string' && args.current.length<=4096 && !args.current.includes('\0'))return request(command,{current:args.current});
     if(command==='clipboard_text')return request(command);
     if(command==='open_glass_window' && typeof args.label==='string' && typeof args.url==='string' && Number.isInteger(args.width) && Number.isInteger(args.height))return request(command,{label:args.label,url:args.url,width:args.width,height:args.height});
     if(command==='window_preferences' && typeof args.autoProgress==='boolean')return request('progress_preferences',{enabled:args.autoProgress});

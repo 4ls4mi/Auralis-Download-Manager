@@ -44,7 +44,7 @@ jobs:
           if (!(Test-Path $browser)) { $browser = Join-Path ${env:ProgramFiles(x86)} 'Microsoft/Edge/Application/msedge.exe' }
           if (!(Test-Path $browser)) { throw 'A Windows browser for interface checks was not found.' }
           $env:AURALIS_TEST_BROWSER = $browser
-          node --test glass-ui/tests/winui-preview-ui.test.mjs glass-ui/tests/winui-sandbox-add.test.mjs glass-ui/tests/winui-progress-tray.test.mjs glass-ui/tests/winui-update-notification.test.mjs glass-ui/tests/winui-preferences.test.mjs glass-ui/tests/winui-check-saved.test.mjs glass-ui/tests/winui-queue.test.mjs glass-ui/tests/winui-scheduler.test.mjs
+          node --test glass-ui/tests/winui-preview-ui.test.mjs glass-ui/tests/winui-sandbox-add.test.mjs glass-ui/tests/winui-progress-tray.test.mjs glass-ui/tests/winui-update-notification.test.mjs glass-ui/tests/winui-preferences.test.mjs glass-ui/tests/winui-check-saved.test.mjs glass-ui/tests/winui-queue.test.mjs glass-ui/tests/winui-scheduler.test.mjs glass-ui/tests/winui-installed-file-info.test.mjs
           if ($LASTEXITCODE) { throw 'WinUI hosted interface checks failed.' }
       - name: Test material mapping
         shell: pwsh
@@ -81,22 +81,19 @@ jobs:
         run: |
           cargo test -p auralis-winui-bridge --lib --no-default-features
           if ($LASTEXITCODE) { throw 'Embedded downloader bridge test failed.' }
-      - name: Stage isolated development preview
+      - name: Check installed downloader bridge
+        shell: pwsh
+        env:
+          CARGO_INCREMENTAL: '0'
+          CARGO_PROFILE_DEV_DEBUG: '0'
+        run: |
+          cargo check -p auralis-winui-bridge --lib --no-default-features --features installed-profile
+          if ($LASTEXITCODE) { throw 'Installed downloader bridge check failed.' }
+      - name: Compile installed WinUI host
         shell: pwsh
         run: |
-          $executables = @(Get-ChildItem winui-shell/Auralis.WinUI/bin -Recurse -Filter Auralis.WinUI.exe)
-          if ($executables.Count -ne 1) { throw "Expected one WinUI executable; found $($executables.Count)." }
-          $output = $executables[0].DirectoryName
-          foreach ($required in @('auralis_winui_bridge.dll', 'interface/index.html', 'interface/winui-preview-compat.js', 'interface/winui-sandbox-compat.js', 'interface/winui-package.json')) {
-            if (!(Test-Path (Join-Path $output $required))) { throw "Missing development preview file: $required" }
-          }
-          New-Item -ItemType Directory -Force -Path winui-preview-artifact | Out-Null
-          Copy-Item (Join-Path $output '*') winui-preview-artifact -Recurse -Force
-          Copy-Item winui-shell/README.md winui-preview-artifact/DEVELOPMENT-README.md
-      - name: Upload isolated WinUI development preview
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: auralis-winui-development-preview
-          path: winui-preview-artifact/
-          if-no-files-found: error
-          retention-days: 7
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $msbuild = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -find 'MSBuild/**/Bin/MSBuild.exe' | Select-Object -First 1
+          if (-not $msbuild) { throw 'Visual Studio MSBuild was not found.' }
+          & $msbuild winui-shell/Auralis.WinUI/Auralis.WinUI.csproj /t:Rebuild /m /p:Configuration=Debug /p:Platform=x64 /p:AuralisInstalledHost=true
+          if ($LASTEXITCODE) { throw 'Installed WinUI host build failed.' }
