@@ -5,7 +5,7 @@ namespace Auralis.WinUI;
 /// Parses the narrow set of commands that the future packaged web interface
 /// can ask the native host to perform. The host must also enforce that no
 /// untrusted navigation is allowed and must never expose the downloader token.
-internal sealed record BridgeMessage(long Id, string Command, ulong DownloadId, string? Url, bool Later, string? Key = null, string? Value = null)
+internal sealed record BridgeMessage(long Id, string Command, ulong DownloadId, string? Url, bool Later, string? Key = null, string? Value = null, NativeAppearance? Appearance = null)
 {
     internal const string TrustedOrigin = "https://auralis.local";
     internal static BridgeMessage Parse(string source, string json)
@@ -21,6 +21,11 @@ internal sealed record BridgeMessage(long Id, string Command, ulong DownloadId, 
             !root.TryGetProperty("command", out var commandValue) || commandValue.ValueKind != JsonValueKind.String)
             throw new InvalidOperationException("Invalid interface request.");
         string command = commandValue.GetString()!;
+        if (command == "set_native_appearance")
+        {
+            if (!root.TryGetProperty("appearance", out var appearance)) throw new InvalidOperationException("Missing appearance.");
+            return new(id, command, 0, null, false, Appearance: NativeAppearance.Parse(appearance));
+        }
         if (command is "dashboard_snapshot" or "dashboard_visuals" or "glass_settings") return new(id, command, 0, null, false);
         if (command is "start_download" or "pause_download")
         {

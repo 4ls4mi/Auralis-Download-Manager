@@ -8,7 +8,13 @@ namespace Auralis.WinUI;
 /// preview yet: lifecycle, full command parity and data migration remain open.
 internal static class LocalWebviewBridge
 {
-    internal static async Task AttachAsync(WebView2 view, string assetDirectory)
+    private static JsonElement ApplyAppearance(NativeAppearance appearance, Action<NativeAppearance> apply)
+    {
+        apply(appearance);
+        return JsonSerializer.SerializeToElement(new { applied = true });
+    }
+
+    internal static async Task AttachAsync(WebView2 view, string assetDirectory, Action<NativeAppearance> applyAppearance)
     {
         if (!Directory.Exists(assetDirectory)) throw new DirectoryNotFoundException("Packaged interface assets are missing.");
         string adapterPath = Path.Combine(assetDirectory, "winui-compat.js");
@@ -35,7 +41,9 @@ internal static class LocalWebviewBridge
             {
                 var message = BridgeMessage.Parse(args.Source, args.WebMessageAsJson);
                 requestId = message.Id;
-                var value = await BridgeDispatcher.DispatchAsync(message);
+                var value = message.Appearance is not null
+                    ? ApplyAppearance(message.Appearance, applyAppearance)
+                    : await BridgeDispatcher.DispatchAsync(message);
                 core.PostWebMessageAsJson(JsonSerializer.Serialize(new { id = requestId, ok = true, value }));
             }
             catch (Exception)

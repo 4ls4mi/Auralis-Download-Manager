@@ -17,7 +17,8 @@
   });
   function invoke(command, args = {}) {
     let payload;
-    if (command === 'dashboard_snapshot' || command === 'dashboard_visuals' || command === 'glass_settings') payload = {command};
+    if (command === 'set_native_appearance' && args.appearance && typeof args.appearance === 'object') payload = {command, appearance: args.appearance};
+    else if (command === 'dashboard_snapshot' || command === 'dashboard_visuals' || command === 'glass_settings') payload = {command};
     else if (command === 'update_glass_setting' && typeof args.key === 'string' && typeof args.value === 'string')
       payload = {command, key: args.key, value: args.value};
     else if (command === 'download_action' && ['start', 'pause'].includes(args.action) &&
@@ -35,6 +36,7 @@
       catch (error) { clearTimeout(timer); pending.delete(id); reject(error); }
     });
   }
+  globalThis.__AURALIS_WINUI__ = {setAppearance: appearance => invoke('set_native_appearance', {appearance})};
   globalThis.__TAURI_INTERNALS__ = {
     invoke,
     metadata: {currentWindow:{label:'main'}, currentWebview:{label:'main'}},

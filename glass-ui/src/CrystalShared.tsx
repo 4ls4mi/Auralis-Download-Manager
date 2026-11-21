@@ -367,6 +367,13 @@ export function CrystalWindow({ children, target = "main" }: {
   }, [mode, appearance.material, surfaceStyle]);
   // White palettes need light surfaces and dark foregrounds in every material.
   const effectiveLight = theme.light === true || theme.id === "white-frost" || theme.id === "white-pearl";
+  // The WinUI host owns the system backdrop. The current Tauri shell does not
+  // expose this adapter and retains its existing behavior.
+  useEffect(()=>{
+    const host=(globalThis as typeof globalThis & {__AURALIS_WINUI__?:{setAppearance:(value:unknown)=>Promise<unknown>}}).__AURALIS_WINUI__;
+    if(!host||mode!=="desktop")return;
+    void host.setAppearance({material:appearance.material,finish:selectedMaterial.finish,translucency:selectedMaterial.translucency,tint:themeTintRgb,light:effectiveLight}).catch(()=>undefined);
+  },[appearance.material,selectedMaterial.finish,selectedMaterial.translucency,themeTintRgb,effectiveLight,mode]);
   const lightAccentRgb = theme.light ? theme.rgb.split(",").map(v=>Math.round(Number(v)*.36)).join(",") : theme.id === "white-pearl" ? "101,86,67" : "64,91,112";
   const lightAccent = `rgb(${lightAccentRgb})`;
   const style = {

@@ -55,3 +55,20 @@ await failedStart.StopAsync();
 if (!lifecycleCalls.SequenceEqual(new[] { DownloaderBridge.Operation.Start, DownloaderBridge.Operation.Stop }))
     throw new Exception("A failed start must still be followed by a stop attempt.");
 Console.WriteLine("Downloader lifecycle checks passed.");
+
+var appearanceRequest = BridgeMessage.Parse("https://auralis.local/index.html", """{"id":3,"command":"set_native_appearance","appearance":{"material":"window-glass","tint":[10,40,90],"light":false}}""");
+if (appearanceRequest.Appearance is not { Backdrop: NativeBackdrop.Acrylic, Red: 10, Green: 40, Blue: 90, Light: false })
+    throw new Exception("Native appearance must preserve the theme tint and chosen material.");
+var customRequest = BridgeMessage.Parse("https://auralis.local/index.html", """{"id":4,"command":"set_native_appearance","appearance":{"material":"custom-6162","finish":"matte","translucency":25,"tint":[245,250,255],"light":true}}""");
+if (customRequest.Appearance is not { Backdrop: NativeBackdrop.Mica, Light: true })
+    throw new Exception("Custom matte materials should use Mica and preserve light mode.");
+foreach (var appearance in new[] {
+    """{"material":"window-glass","tint":[-1,0,0],"light":false}""",
+    """{"material":"custom-bad!","finish":"clear","translucency":50,"tint":[0,0,0],"light":false}""",
+    """{"material":"custom-6162","finish":"script","translucency":50,"tint":[0,0,0],"light":false}""",
+    """{"material":"custom-6162","finish":"clear","translucency":101,"tint":[0,0,0],"light":false}""" })
+{
+    try { BridgeMessage.Parse("https://auralis.local/index.html", "{\"id\":5,\"command\":\"set_native_appearance\",\"appearance\":" + appearance + "}"); throw new Exception("Invalid appearance was accepted."); }
+    catch (InvalidOperationException) { }
+}
+Console.WriteLine("Native appearance validation checks passed.");
