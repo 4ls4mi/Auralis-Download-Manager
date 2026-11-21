@@ -1,3 +1,4 @@
+import {isTiledWindow} from "./windowTiling";
 import {LiquidProgress, LiquidChunk, isLiquidMaterial} from "./LiquidIndicators";
 import {ConnectionTubes} from "./ConnectionTubes";
 import {receivingTubeSlots} from "./tubeNetwork";
@@ -5,7 +6,7 @@ import {loadMaterials,materialId,extraMaterials} from "./customMaterials";
 import FrostedRibbon from "./FrostedRibbon";
 import FrostedLayers from "./FrostedLayers";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
-import { getCurrentWindow, Effect, EffectState } from "@tauri-apps/api/window";
+import { getCurrentWindow, currentMonitor, Effect, EffectState } from "@tauri-apps/api/window";
 type ResizeDirection = Parameters<ReturnType<typeof getCurrentWindow>["startResizeDragging"]>[0];
 import { useEffect, useState, useLayoutEffect, useRef, useId, useMemo, createContext, useContext } from "react";
 import type { CSSProperties, ReactNode } from "react";
@@ -285,12 +286,13 @@ export function CrystalWindow({ children, target = "main" }: {
 }) {
   const { appearance, theme } = useCrystal();
   const frame=useRef<HTMLDivElement>(null);
-  const [fit,setFit]=useState(1),[windowError,setWindowError]=useState(""),[maximized,setMaximized]=useState(false);
+  const [fit,setFit]=useState(1),[windowError,setWindowError]=useState(""),[maximized,setMaximized]=useState(false),[tiled,setTiled]=useState(false);
   useEffect(()=>{
-    let active=true, sequence=0;
-    const update=()=>{const request=++sequence;void getCurrentWindow().isMaximized().then(value=>{if(active&&request===sequence)setMaximized(value)}).catch(()=>undefined)};
+    let active=true, sequence=0;let unlisten:(()=>void)|undefined;
+    const update=()=>{const request=++sequence;const w=getCurrentWindow();void Promise.all([w.isMaximized(),w.outerPosition(),w.outerSize(),currentMonitor()]).then(([max,pos,size,monitor])=>{if(active&&request===sequence){setMaximized(max);setTiled(!max&&!!monitor&&isTiledWindow(pos,size,monitor.workArea))}}).catch(()=>{void w.isMaximized().then(value=>{if(active&&request===sequence)setMaximized(value)}).catch(()=>undefined)})};
     update();window.addEventListener('resize',update);
-    return()=>{active=false;window.removeEventListener('resize',update)};
+    void getCurrentWindow().onMoved(update).then(fn=>{if(active)unlisten=fn;else fn()}).catch(()=>undefined);
+    return()=>{active=false;window.removeEventListener('resize',update);unlisten?.()};
   },[]);
   useEffect(()=>{const report=(event:Event)=>setWindowError(String((event as CustomEvent).detail));window.addEventListener("glass-window-error",report);return()=>window.removeEventListener("glass-window-error",report)},[]);
   useLayoutEffect(()=>{
@@ -323,12 +325,12 @@ export function CrystalWindow({ children, target = "main" }: {
   },[appearance.uiScale,appearance.fontSize,appearance.fontFamily,target]);
   useEffect(()=>{
     let disposed=false, pending=false, running=false, timer=0, outline:number[][]|null=null;
-    const apply=async()=>{if(disposed)return;if(running){pending=true;return}running=true;try{await invoke("set_material_window_shape",{material:appearance.material,outline})}catch(e){if(!disposed)setWindowError(`Material outline unavailable: ${String(e)}`)}finally{running=false;if(pending&&!disposed){pending=false;void apply()}}};
+    const apply=async()=>{if(disposed)return;if(running){pending=true;return}running=true;try{await invoke("set_material_window_shape",{material:appearance.material,outline,flat:maximized||tiled})}catch(e){if(!disposed)setWindowError(`Material outline unavailable: ${String(e)}`)}finally{running=false;if(pending&&!disposed){pending=false;void apply()}}};
     const resize=()=>{if(!timer)timer=window.setTimeout(()=>{timer=0;void apply()},50)};
     const onOutline=(event:Event)=>{outline=(event as CustomEvent<number[][]>).detail;void apply()};
     window.addEventListener("resize",resize);window.addEventListener("glass-frost-outline",onOutline);void apply();
     return()=>{disposed=true;window.clearTimeout(timer);window.removeEventListener("resize",resize);window.removeEventListener("glass-frost-outline",onOutline)};
-  },[appearance.material]);
+  },[appearance.material,maximized,tiled]);
   const main = target === "main", mode = main ? appearance.mainMode : appearance.detailMode;
   const customMaterial=extraMaterials[appearance.material]??loadMaterials().find(m=>materialId(m)===appearance.material);
   const themeTintRgb=useMemo(()=>(theme.neutralTint??theme.rgb.split(",").map(Number)) as [number,number,number],[theme]);
@@ -373,14 +375,14 @@ export function CrystalWindow({ children, target = "main" }: {
     "--min-window-button": (30/Math.min(1,Math.max(.4,fit)))+"px",
     "--font-size": Math.max(Math.min(20,Math.max(12,appearance.fontSize)),12/Math.max(.4,fit))+"px"
   } as CSSProperties;
-  return <div className={`cg-window cg-mode-${mode} cg-material-${appearance.material} cg-surface-${appearance.surfaceStyle} cg-theme-${theme.id} ${customMaterial?`cg-custom-material cg-finish-${customMaterial.finish} cg-controls-${customMaterial.controls} cg-layout-${customMaterial.layout??'standard'} cg-text-${customMaterial.text??'crisp'}`:""} cg-progress-shape-${appearance.progressShape} cg-connection-shape-${appearance.connectionShape} ${maximized?"cg-maximized":""} ${effectiveLight?"cg-light":"cg-dark"} ${appearance.highContrast?"cg-high-contrast":""}`} style={style}>
+  return <div className={`cg-window cg-mode-${mode} cg-material-${appearance.material} cg-surface-${appearance.surfaceStyle} cg-theme-${theme.id} ${customMaterial?`cg-custom-material cg-finish-${customMaterial.finish} cg-controls-${customMaterial.controls} cg-layout-${customMaterial.layout??'standard'} cg-text-${customMaterial.text??'crisp'}`:""} cg-progress-shape-${appearance.progressShape} cg-connection-shape-${appearance.connectionShape} ${maximized?"cg-maximized":""} ${tiled?"cg-tiled":""} ${effectiveLight?"cg-light":"cg-dark"} ${appearance.highContrast?"cg-high-contrast":""}`} style={style}>
     {mode === "wallpaper" && <div className="cg-wallpaper">
       {video ? <video key={src} autoPlay loop muted playsInline src={src} /> :
         <div style={{ backgroundImage: `url("${src}")` }} />}
       <span style={{ background: `rgba(3,9,19,${appearance.dim / 100})` }} />
     </div>}
     {mode === "solid" && <div className="cg-solid" />}
-    <div className="cg-content" ref={frame}>{appearance.material === "frosted-water-351" && !maximized && <FrostedLayers maskBackdrop={mode!=="desktop"} tintHue={appearance.tintHue} tintRgb={themeTintRgb} tintStrength={appearance.tintStrength} opacity={appearance.opacity * ({material:1,clear:.45,soft:.58,frosted:.72,tinted:.82}[appearance.surfaceStyle]??1)}/>}<div className="cg-fit-content">{children}</div></div>
+    <div className="cg-content" ref={frame}>{appearance.material === "frosted-water-351" && !maximized && !tiled && <FrostedLayers maskBackdrop={mode!=="desktop"} tintHue={appearance.tintHue} tintRgb={themeTintRgb} tintStrength={appearance.tintStrength} opacity={appearance.opacity * ({material:1,clear:.45,soft:.58,frosted:.72,tinted:.82}[appearance.surfaceStyle]??1)}/>}<div className="cg-fit-content">{children}</div></div>
     {windowError&&<aside className="cg-window-notice cg-error" role="alert"><span>{windowError}</span><button title="Dismiss" onClick={()=>setWindowError("")}><X size={15}/></button></aside>}
     <ResizeGrips />
   </div>;

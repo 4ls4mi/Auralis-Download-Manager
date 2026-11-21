@@ -112,3 +112,16 @@
 .cg-window.cg-light.cg-material-frosted-water-351 .cg-fit-content :is(.cg-settings-nav button span,.cg-sidebar button span,.cg-color-choices button span,.cg-title span){color:#102738!important;text-shadow:none!important}
 .cg-window.cg-dark.cg-dark .cg-fit-content :is(.cg-toolbar>button,.cg-btn,.cg-settings-nav button,.cg-sidebar button) svg{color:var(--vivid)!important}
 .cg-window.cg-light.cg-light .cg-fit-content :is(.cg-toolbar>button,.cg-btn,.cg-settings-nav button,.cg-sidebar button) svg{color:var(--vivid)!important}
+
+/* Snap layouts fill their Windows-assigned rectangle, like maximized windows. */
+.cg-window.cg-tiled .cg-content{inset:0!important;border-radius:0!important}
+.cg-window.cg-material-frosted-water-351.cg-tiled .cg-content{background:linear-gradient(155deg,var(--glass-tint),transparent 50%),rgba(var(--glass),var(--panel-opacity))!important;backdrop-filter:blur(var(--crystal-blur)) saturate(115%)!important}
+.cg-window.cg-material-frosted-water-351.cg-tiled .cg-fit-content{position:absolute;inset:8px;width:calc(100% - 16px);height:calc(100% - 16px)}
+
+/* Every text cell needs contrast on light surfaces, including embedded spans. */
+.cg-window.cg-light .cg-fit-content :is(.cg-window-top .cg-muted,.cg-footer-version,.cg-cols,.cg-cols>span,.cg-row>span,.cg-row .cg-status,.cg-row .cg-status span,.cg-row-progress .cg-chunk-label,.cg-row-progress .cg-chunk-label span){color:#142c3e!important;text-shadow:none!important}
+.cg-window.cg-light.cg-material-frosted-water-351 .cg-fit-content :is(.cg-window-top .cg-muted,.cg-footer-version,.cg-cols,.cg-cols>span,.cg-row>span,.cg-row .cg-status,.cg-row .cg-status span,.cg-row-progress .cg-chunk-label,.cg-row-progress .cg-chunk-label span){color:#142c3e!important;text-shadow:none!important}
+.cg-window.cg-light .cg-fit-content .cg-row .cg-status.complete{color:#075f46!important}
+.cg-window.cg-light .cg-fit-content .cg-row .cg-status.error{color:#a12239!important}
+.cg-window.cg-light .cg-fit-content .cg-row .cg-status.downloading{color:#075b88!important}
+.cg-window.cg-light .cg-fit-content .cg-row .cg-status.stopped{color:#785000!important}

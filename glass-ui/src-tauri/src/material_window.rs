@@ -1,14 +1,14 @@
 //! Native Windows clipping for the material outline. The UI draws inside this
 //! region; Windows clips the WebView and native backdrop together.
 #[tauri::command]
-pub fn set_material_window_shape(window: tauri::WebviewWindow, material: String, outline: Option<Vec<[f64; 2]>>) -> Result<(), String> {
+pub fn set_material_window_shape(window: tauri::WebviewWindow, material: String, outline: Option<Vec<[f64; 2]>>, flat: Option<bool>) -> Result<(), String> {
     #[cfg(windows)]
     {
         use windows_sys::Win32::Foundation::POINT;
         use windows_sys::Win32::Graphics::Gdi::{CreatePolygonRgn, CreateRoundRectRgn, DeleteObject, SetWindowRgn, WINDING};
         let hwnd = window.hwnd().map_err(|e| e.to_string())?.0 as windows_sys::Win32::Foundation::HWND;
-        if window.is_maximized().map_err(|e| e.to_string())? {
-            // A maximized window must occupy the entire monitor work area.
+        if flat.unwrap_or(false) || window.is_maximized().map_err(|e| e.to_string())? {
+            // Snapped and maximized windows must fill their allocated rectangle.
             unsafe { SetWindowRgn(hwnd, std::ptr::null_mut(), 1); }
             return Ok(());
         }
@@ -53,5 +53,5 @@ pub fn set_material_window_shape(window: tauri::WebviewWindow, material: String,
         Ok(())
     }
     #[cfg(not(windows))]
-    { let _ = (window, material, outline); Err("Native material outlines are available on Windows".into()) }
+    { let _ = (window, material, outline, flat); Err("Native material outlines are available on Windows".into()) }
 }
