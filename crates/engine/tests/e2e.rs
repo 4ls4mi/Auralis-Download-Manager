@@ -1000,6 +1000,37 @@ async fn pause_and_resume_continues_where_it_stopped() {
     );
 }
 
+/// The backed-up committed ranges can be restored under a different path and
+/// completed from the server without downloading those ranges a second time.
+#[tokio::test]
+async fn restored_partial_backup_resumes_without_replacing_saved_bytes() {
+    use std::io::{Seek, SeekFrom};
+    let server = server("rate=1M").await;
+    let (_original_dir, state_path) = paused(&server, "/gen/8M/backup.bin?seed=73").await;
+    let original = mdm_engine::state::ResumeState::load(&state_path).unwrap();
+    assert!(original.downloaded() > 0 && original.downloaded() < original.size);
+    let restored_dir = tempfile::tempdir().unwrap();
+    let backup_path = restored_dir.path().join("backup.auralis");
+    let mut backup = std::fs::OpenOptions::new().read(true).write(true).create_new(true).open(&backup_path).unwrap();
+    mdm_engine::backup_partial::write_partial(&mut backup, &original).unwrap();
+    backup.seek(SeekFrom::Start(0)).unwrap();
+    let target = restored_dir.path().join("restored.bin");
+    let report = mdm_engine::backup_partial::restore_partial(&mut backup, &restored_dir.path().join("stage"), &target).unwrap();
+    assert_eq!(report.unhashed_bytes, 0);
+    assert!(report.damaged_ranges.is_empty());
+    let restored_path = mdm_engine::state::state_path(&target);
+    let restored = mdm_engine::state::ResumeState::load(&restored_path).unwrap();
+    assert_eq!(restored.downloaded(), original.downloaded());
+    server.set_faults(Faults::default());server.clear_log();
+    let completed=Download::resume(restored_path.clone(),Default::default(),fast_opts()).unwrap().wait().await.unwrap();
+    let mut expected=vec![0;8<<20];content::fill(73,0,&mut expected);
+    assert_eq!(std::fs::read(completed.path).unwrap(),expected);
+    tokio::time::timeout(SETTLE,server.settled()).await.unwrap();
+    for entry in server.log() {
+        assert!(on_disk(entry.range.as_deref(),&restored)<=fast_opts().verify_overlap,"restored saved data was requested again: {:?}",entry.range);
+    }
+}
+
 #[tokio::test]
 async fn resume_detects_changed_file() {
     let s = server("rate=1M").await;
@@ -2409,4 +2440,35 @@ async fn a_scripts_video_is_named_by_what_it_is() {
     content::fill_with_head(5, 0, &mut want, mp4);
     assert!(data == want, "the kept answer's first bytes are the file's");
     assert_eq!(out.path.file_name().unwrap(), "Lecture one.mp4");
+}
+
+#[tokio::test]
+async fn restored_bundle_resumes_partial_and_preserves_completed_file() {
+    use std::io::{Seek, SeekFrom};
+    use mdm_engine::backup_bundle::{self, BackupItem};
+    let server = server("rate=1M").await;
+    let (_original_dir, state_path) = paused(&server, "/gen/8M/bundle.bin?seed=74").await;
+    let original = mdm_engine::state::ResumeState::load(&state_path).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let complete = dir.path().join("completed.txt");
+    std::fs::write(&complete, b"previously completed").unwrap();
+    let mut archive = std::fs::OpenOptions::new().read(true).write(true).create_new(true).open(dir.path().join("bundle.auralis")).unwrap();
+    backup_bundle::write_bundle(&mut archive, serde_json::json!({"list":["done", "partial"]}), &[BackupItem::Completed(&complete), BackupItem::Partial(&original)]).unwrap();
+    archive.seek(SeekFrom::Start(0)).unwrap();
+    let restored = backup_bundle::restore_bundle(&mut archive, &dir.path().join("restored")).unwrap();
+    assert_eq!(std::fs::read(&restored.items[0].path).unwrap(), b"previously completed");
+    assert_eq!(restored.items[1].unhashed_bytes, 0);
+    let state_path = mdm_engine::state::state_path(&restored.items[1].path);
+    let state = mdm_engine::state::ResumeState::load(&state_path).unwrap();
+    assert_eq!(state.downloaded(), original.downloaded());
+    server.set_faults(Faults::default());
+    server.clear_log();
+    let completed = Download::resume(state_path, Default::default(), fast_opts()).unwrap().wait().await.unwrap();
+    let mut expected = vec![0; 8 << 20];
+    content::fill(74, 0, &mut expected);
+    assert_eq!(std::fs::read(completed.path).unwrap(), expected);
+    tokio::time::timeout(SETTLE, server.settled()).await.unwrap();
+    for entry in server.log() {
+        assert!(on_disk(entry.range.as_deref(), &state) <= fast_opts().verify_overlap);
+    }
 }

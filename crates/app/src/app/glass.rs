@@ -35,6 +35,15 @@ impl App {
         if let Some(answer)=self.glass_prompts(cmd){return Some(answer);}
         if let Some(answer)=self.glass_accounts(cmd){return Some(answer);}
         if let Some(answer)=self.glass_tools(cmd){return Some(answer);}
+        if cmd.query.as_deref()==Some("glass-full-backup-preflight") {
+            if !self.moving.is_empty() || !self.renaming.is_empty() || !self.deferred_torrent_queue.is_empty() {
+                return Some(json!({"error":"Wait for file moves and renames to finish before backing up."}).to_string());
+            }
+            return Some(match crate::backup_snapshot::prepare(&self.items, &self.queues, &self.settings) {
+                Ok(snapshot)=>json!({"ok":true,"downloads":self.items.len(),"files":snapshot.contents.len()}),
+                Err(error)=>json!({"error":error})
+            }.to_string());
+        }
         if cmd.query.as_deref()==Some("glass-backup-settings") {
             let mut value=match serde_json::to_value(&self.settings) { Ok(v)=>v, Err(e)=>return Some(json!({"error":e.to_string()}).to_string()) };
             if let Some(map)=value.as_object_mut() { for key in ["proxy_pass","site_logins","debrid_accounts"] { map.remove(key); } }

@@ -1752,7 +1752,7 @@ mod tests {
         let dest = dir.path().join("saved.bin");
         let part = mdm_engine::naming::part_path(&dest);
         std::fs::write(&part, b"abcdefghijkl").unwrap();
-        let url = "https://example.org/file".parse().unwrap();
+        let url: url::Url = "https://example.org/file".parse().unwrap();
         let mut saved = mdm_engine::state::ResumeState::new(
             url,
             url::Url::parse("https://example.org/file").unwrap(),

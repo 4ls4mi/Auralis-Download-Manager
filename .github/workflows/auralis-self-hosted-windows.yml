@@ -165,6 +165,14 @@ jobs:
           cargo test -p mdm-app --target x86_64-pc-windows-msvc --test embedded_service
           if ($LASTEXITCODE) { throw 'Embedded downloader smoke test failed.' }
 
+      - name: Test backup snapshot and torrent comparison
+        shell: pwsh
+        run: |
+          cargo test -p mdm-app --target x86_64-pc-windows-msvc --lib backup_snapshot::tests
+          if ($LASTEXITCODE) { throw 'Backup snapshot tests failed.' }
+          cargo test -p mdm-torrent --target x86_64-pc-windows-msvc --lib compare_saved_download
+          if ($LASTEXITCODE) { throw 'Torrent comparison test failed.' }
+
       - name: Install and test interface
         working-directory: glass-ui
         shell: pwsh

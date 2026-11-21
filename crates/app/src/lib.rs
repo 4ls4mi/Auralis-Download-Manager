@@ -1,5 +1,6 @@
 
 mod app;
+mod backup_snapshot;
 mod batch;
 mod categories;
 mod checksum;
