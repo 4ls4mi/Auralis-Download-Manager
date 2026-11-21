@@ -13,11 +13,17 @@ internal static class DownloaderBridge
     private static extern IntPtr auralis_bridge_call(Operation operation);
 
     [DllImport("auralis_winui_bridge", CallingConvention = CallingConvention.Cdecl)]
+    private static extern IntPtr auralis_bridge_download_action(uint action, ulong id);
+
+    [DllImport("auralis_winui_bridge", CallingConvention = CallingConvention.Cdecl)]
     private static extern void auralis_bridge_free(IntPtr response);
 
-    internal static Task<JsonElement> CallAsync(Operation operation) => Task.Run(() =>
+    internal static Task<JsonElement> CallAsync(Operation operation) => Task.Run(() => ReadResponse(auralis_bridge_call(operation)));
+    internal static Task<JsonElement> StartDownloadAsync(ulong id) => Task.Run(() => ReadResponse(auralis_bridge_download_action(1, id)));
+    internal static Task<JsonElement> PauseDownloadAsync(ulong id) => Task.Run(() => ReadResponse(auralis_bridge_download_action(2, id)));
+
+    private static JsonElement ReadResponse(IntPtr response)
     {
-        IntPtr response = auralis_bridge_call(operation);
         if (response == IntPtr.Zero) throw new InvalidOperationException("The downloader bridge returned no response.");
         try
         {
@@ -28,5 +34,5 @@ internal static class DownloaderBridge
             return root.GetProperty("value").Clone();
         }
         finally { auralis_bridge_free(response); }
-    });
+    }
 }

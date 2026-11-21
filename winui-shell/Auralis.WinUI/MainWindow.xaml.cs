@@ -25,6 +25,12 @@ public sealed partial class MainWindow : Window
         if (MaterialSelector.SelectedItem is not MaterialDefinition material || ThemeSelector.SelectedItem is not string theme) return;
         try
         {
+            bool supported = material.Backdrop switch
+            {
+                NativeBackdrop.Mica or NativeBackdrop.MicaAlt => MicaController.IsSupported(),
+                _ => DesktopAcrylicController.IsSupported()
+            };
+            if (!supported) throw new System.InvalidOperationException("This Windows system does not support the requested backdrop.");
             SystemBackdrop = material.Backdrop switch
             {
                 NativeBackdrop.Mica => new MicaBackdrop { Kind = MicaKind.Base },

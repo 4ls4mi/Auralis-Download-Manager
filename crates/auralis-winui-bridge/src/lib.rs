@@ -56,12 +56,28 @@ fn dispatch(operation: u32) -> Result<serde_json::Value, String> {
         _ => Err("Unsupported bridge operation".into()),
     }
 }
+fn download_action(action: u32, id: u64) -> Result<serde_json::Value, String> {
+    let action = match action { 1 => "start", 2 => "pause", _ => return Err("Unsupported download action".into()) };
+    if id == 0 { return Err("Invalid download ID".into()); }
+    if !owned_backend() { return Err("The embedded downloader is not running in this process.".into()); }
+    let command = mdm_ipc::Command { action: Some(action.into()), ids: vec![id], ..Default::default() };
+    let raw = mdm_ipc::request_checked(&command).map_err(|e| e.to_string())?;
+    let result: mdm_ipc::api::ActAnswer = serde_json::from_str(&raw).map_err(|_| "Invalid downloader action response")?;
+    serde_json::to_value(result).map_err(|e| e.to_string())
+}
+fn encode(result: Result<Result<serde_json::Value, String>, Box<dyn std::any::Any + Send>>) -> *mut c_char {
+    let value = match result { Ok(Ok(value)) => serde_json::json!({"ok":true,"value":value}), Ok(Err(error)) => serde_json::json!({"ok":false,"error":error}), Err(_) => serde_json::json!({"ok":false,"error":"Native bridge failed"}) };
+    CString::new(value.to_string()).expect("JSON escapes zero bytes").into_raw()
+}
+/// Starts or pauses a single download. Arbitrary and destructive commands are not exposed.
+#[unsafe(no_mangle)]
+pub extern "C" fn auralis_bridge_download_action(action: u32, id: u64) -> *mut c_char {
+    encode(std::panic::catch_unwind(|| download_action(action, id)))
+}
 /// Returns an owned UTF-8 JSON string; release it exactly once with `auralis_bridge_free`.
 #[unsafe(no_mangle)]
 pub extern "C" fn auralis_bridge_call(operation: u32) -> *mut c_char {
-    let result = std::panic::catch_unwind(|| dispatch(operation));
-    let value = match result { Ok(Ok(value)) => serde_json::json!({"ok":true,"value":value}), Ok(Err(error)) => serde_json::json!({"ok":false,"error":error}), Err(_) => serde_json::json!({"ok":false,"error":"Native bridge failed"}) };
-    CString::new(value.to_string()).expect("JSON escapes zero bytes").into_raw()
+    encode(std::panic::catch_unwind(|| dispatch(operation)))
 }
 /// # Safety
 /// `value` must be null or a pointer returned by `auralis_bridge_call` that has not been freed.
@@ -84,6 +100,8 @@ mod tests {
         assert!(list["downloads"].is_array());
         let visual = dispatch(4).expect("read download visuals");
         assert!(visual["downloads"].is_array());
+        let unknown = download_action(1, u64::MAX).expect("unknown ID returns a skipped result");
+        assert!(unknown["skipped"].is_array());
         let stopped = stop().expect("stop isolated embedded downloader");
         assert_eq!(stopped["running"], false);
         assert!(dispatch(3).is_err());
@@ -92,6 +110,8 @@ mod tests {
 
     #[test]
     fn unsupported_operations_are_rejected_and_ffi_returns_json() {
+        assert_eq!(download_action(999, 1).unwrap_err(), "Unsupported download action");
+        assert_eq!(download_action(1, 0).unwrap_err(), "Invalid download ID");
         let pointer = auralis_bridge_call(999);
         assert!(!pointer.is_null());
         let response = unsafe { std::ffi::CStr::from_ptr(pointer) }.to_str().unwrap();
