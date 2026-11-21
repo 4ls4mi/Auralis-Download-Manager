@@ -438,9 +438,11 @@ public sealed partial class MainWindow : Window
             bool routeChanged=existing.Route!=message.Url;
             existing.Route=message.Url;
             if (routeChanged && existing.Ready) existing.View.CoreWebView2.Navigate(WindowRoutePolicy.InterfaceUrl(existing.Route));
-            existing.Window.AppWindow.Show();
+            bool isToast=message.Label=="tool-update-toast";
+            if (isToast) existing.Window.AppWindow.Show(false);
+            else existing.Window.AppWindow.Show();
             if (existing.Window.AppWindow.Presenter is OverlappedPresenter presenter && presenter.State==OverlappedPresenterState.Minimized) presenter.Restore();
-            existing.Window.Activate();
+            if (!isToast) existing.Window.Activate();
             if (sandbox && message.Label.StartsWith("download-",StringComparison.Ordinal) && ulong.TryParse(message.Label[9..],out var restoredId)) ForgetHiddenProgress(restoredId);
             return JsonSerializer.SerializeToElement(new { opened=true });
         }
@@ -450,6 +452,12 @@ public sealed partial class MainWindow : Window
         root.Children.Add(view);
         child.Content=root;
         bool isProgressPicker=message.Label=="tool-progress-tray";
+        bool isUpdateToast=message.Label=="tool-update-toast";
+        if (isUpdateToast && child.AppWindow.Presenter is OverlappedPresenter toastPresenter)
+        {
+            toastPresenter.SetBorderAndTitleBar(false,false);
+            toastPresenter.IsResizable=false;
+        }
         var cursor=NativeTrayIcon.CursorPosition();
         var area=isProgressPicker
             ? DisplayArea.GetFromPoint(new Windows.Graphics.PointInt32(cursor.X,cursor.Y),DisplayAreaFallback.Nearest)
@@ -469,13 +477,21 @@ public sealed partial class MainWindow : Window
             int y=Math.Clamp(cursor.Y-height-12,work.Y,Math.Max(work.Y,work.Y+work.Height-height));
             child.AppWindow.Move(new Windows.Graphics.PointInt32(x,y));
         }
+        else if (isUpdateToast && area is not null)
+        {
+            var work=area.WorkArea;
+            int margin=(int)Math.Round(16*scale);
+            var placed=WindowPlacementPolicy.BottomRight(new(work.X,work.Y,work.Width,work.Height),width,height,margin);
+            child.AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(placed.X,placed.Y,placed.Width,placed.Height));
+        }
         var state=new AuxiliaryWindowState { Window=child, View=view, Route=message.Url };
         _auxiliaryWindows.Add(key,state);
         child.Closed += (_,_) => {
             if (_auxiliaryWindows.TryGetValue(key,out var current) && ReferenceEquals(current,state)) _auxiliaryWindows.Remove(key);
             if (sandbox && message.Label.StartsWith("download-",StringComparison.Ordinal) && ulong.TryParse(message.Label[9..],out var id)) ForgetHiddenProgress(id);
         };
-        child.Activate();
+        if (isUpdateToast) child.AppWindow.Show(false);
+        else child.Activate();
         try
         {
             await LocalWebviewBridge.AttachPreviewAsync(view,child,Path.Combine(AppContext.BaseDirectory,"interface"),

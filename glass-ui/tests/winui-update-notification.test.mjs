@@ -9,7 +9,7 @@ test('WinUI always shows an in-app update and presents only the selected extra n
  const server=await createServer({configFile:false,root:fileURLToPath(new URL('..',import.meta.url)),server:{host:'127.0.0.1',port:0},logLevel:'silent'});await server.listen();
  const browser=await chromium.launch({headless:true,executablePath:executable,args:['--no-sandbox']});
  try{
-  for(const presentation of ['quiet','notify','dialog']){
+  for(const presentation of ['quiet','notify','toast','dialog']){
    const context=await browser.newContext();const page=await context.newPage();
    await page.addInitScript(presentation=>{let listener;window.requests=[];window.chrome={webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:message=>{
     window.requests.push(message);let value={applied:true};
@@ -34,7 +34,7 @@ test('WinUI always shows an in-app update and presents only the selected extra n
    const requests=await page.evaluate(()=>window.requests);
    assert.equal(requests.filter(message=>message.command==='notify_update').length,presentation==='notify'?1:0);
    assert.equal(requests.filter(message=>message.command==='open_glass_window' && message.label==='tool-update-notice').length,presentation==='dialog'?1:0);
-   assert.equal(requests.some(message=>message.command==='open_glass_window' && message.label==='tool-update-toast'),false);
+   assert.equal(requests.some(message=>message.command==='open_glass_window' && message.label==='tool-update-toast'),presentation==='toast');
    await context.close();
   }
  }finally{await browser.close();await server.close()}

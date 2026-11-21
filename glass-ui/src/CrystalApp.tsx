@@ -151,7 +151,8 @@ export default function CrystalApp(){
         if(presentation==="dialog") openWindow("tool-update-notice","/?tool=update-notice",680,520);
         else if(presentation==="notify"||presentation==="toast") {
           const host=(globalThis as typeof globalThis & {__AURALIS_WINUI__?:{notifyUpdate?:(version:string)=>Promise<unknown>}}).__AURALIS_WINUI__;
-          if(host?.notifyUpdate)void host.notifyUpdate(update.version!).catch(()=>undefined);
+          if(host?.notifyUpdate && presentation==="notify")void host.notifyUpdate(update.version!).catch(()=>undefined);
+          else if(host?.notifyUpdate)openWindow("tool-update-toast","/?tool=update-toast",400,150);
           else {
             openWindow("tool-update-toast","/?tool=update-toast",400,150);
             if(presentation==="notify")void (async()=>{try{if(await isPermissionGranted())sendNotification({title:"Auralis update available",body:`Version ${update.version} is ready to review in Auralis.`})}catch{/* The in-app and corner notices remain available. */}})();
