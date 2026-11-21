@@ -517,8 +517,7 @@ fn add_download(url: &str, later: bool) -> Result<serde_json::Value, String> {
     Ok(serde_json::json!({"pending":true}))
 }
 #[cfg(feature = "installed-profile")]
-fn file_info_action(id: u64, action: u8, payload: Option<&serde_json::Value>) -> Result<serde_json::Value, String> {
-    if id==0 || !installed_profile_selected() || !owned_backend() { return Err("The download request is unavailable.".into()); }
+fn validate_file_info_action(action: u8, payload: Option<&serde_json::Value>) -> Result<&'static str, String> {
     let name=match action { 1=>"commit", 2=>"cancel", 3=>"category", _=>return Err("Invalid download request action.".into()) };
     match action {
         2 if payload.is_some() => return Err("Invalid download request.".into()),
@@ -534,6 +533,12 @@ fn file_info_action(id: u64, action: u8, payload: Option<&serde_json::Value>) ->
         },
         _=>(),
     }
+    Ok(name)
+}
+#[cfg(feature = "installed-profile")]
+fn file_info_action(id: u64, action: u8, payload: Option<&serde_json::Value>) -> Result<serde_json::Value, String> {
+    let name=validate_file_info_action(action,payload)?;
+    if id==0 || !installed_profile_selected() || !owned_backend() { return Err("The download request is unavailable.".into()); }
     let command=mdm_ipc::Command { action:Some("glass-file-info".into()), category:Some(name.into()), ids:vec![id], queue:payload.map(serde_json::Value::to_string), ..Default::default() };
     let raw=mdm_ipc::request_checked(&command).map_err(|e|e.to_string())?;
     let data:serde_json::Value=serde_json::from_str(&raw).map_err(|_|"Invalid download request response.")?;
@@ -586,6 +591,18 @@ pub unsafe extern "C" fn auralis_bridge_free(value: *mut c_char) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "installed-profile")]
+    #[test]
+    fn installed_file_info_accepts_only_explicit_valid_actions() {
+        assert_eq!(validate_file_info_action(2,None).unwrap(),"cancel");
+        assert!(validate_file_info_action(0,None).is_err());
+        assert!(validate_file_info_action(2,Some(&serde_json::json!({}))).is_err());
+        assert!(validate_file_info_action(3,Some(&serde_json::json!({"category":"programs"}))).is_ok());
+        assert!(validate_file_info_action(3,Some(&serde_json::json!({"category":""}))).is_err());
+        assert!(validate_file_info_action(1,Some(&serde_json::json!({"save_as":"relative"}))).is_err());
+        let target=std::env::temp_dir().join("auralis-test.bin");
+        assert!(validate_file_info_action(1,Some(&serde_json::json!({"save_as":target}))).is_ok());
+    }
     #[test]
     fn preferences_reject_secrets_and_invalid_values_before_backend_access() {
         assert!(!safe_preference_key("site_logins"));
