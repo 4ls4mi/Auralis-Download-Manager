@@ -175,7 +175,15 @@ fn update_preference(key: &str, value: &serde_json::Value, clear: bool) -> Resul
     let command=mdm_ipc::Command { action:Some("glass-original-setting".into()), queue:Some(payload), ..Default::default() };
     let raw=mdm_ipc::request_checked(&command).map_err(|e|e.to_string())?;
     let result:serde_json::Value=serde_json::from_str(&raw).map_err(|_|"Invalid preferences response")?;
-    if result["ok"] != true { return Err("The downloader rejected the preference.".into()); }
+    if result["ok"] != true {
+        // Forward only known validation messages. Never echo arbitrary backend
+        // errors, which could contain a path or a value entered by the user.
+        return Err(match result["error"].as_str() {
+            Some("Proxy port must be 1–65535") => "Proxy port must be 1–65535",
+            Some("Choose a valid option") => "Choose a valid option",
+            _ => "The downloader rejected the preference.",
+        }.into());
+    }
     Ok(result)
 }
 /// # Safety
@@ -418,6 +426,7 @@ mod tests {
         assert!(update_preference("many_connections",&serde_json::json!(true),false).expect("save isolated preference")["ok"]==true);
         assert!(dispatch(8).unwrap()["fields"].as_array().unwrap().iter().any(|field|field["key"]=="many_connections" && field["value"]==true));
         assert!(update_preference("proxy_host",&serde_json::json!("proxy.example.test"),false).expect("save proxy host")["ok"]==true);
+        assert_eq!(update_preference("proxy_port",&serde_json::json!("70000"),false).unwrap_err(),"Proxy port must be 1–65535");
         assert!(dispatch(8).unwrap()["fields"].as_array().unwrap().iter().any(|field|field["key"]=="proxy_host" && field["value"]=="proxy.example.test"));
         assert!(update_preference("proxy_host",&serde_json::json!(""),false).expect("clear proxy host")["ok"]==true);
         assert!(update_preference("proxy_pass",&serde_json::json!("example-secret"),false).expect("save isolated proxy password")["ok"]==true);

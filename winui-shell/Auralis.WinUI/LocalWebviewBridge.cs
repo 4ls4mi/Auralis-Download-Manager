@@ -79,8 +79,14 @@ internal static class LocalWebviewBridge
                         ? await BridgeDispatcher.DispatchAsync(message)
                         : throw new InvalidOperationException("This isolated host does not support that command.");
                 if (requestEpoch==navigationEpoch) core.PostWebMessageAsJson(JsonSerializer.Serialize(new {id,ok=true,value}));
-            } catch(Exception) {
-                string error=command=="update_check" ? "The update check is unavailable. Try again later." : "The isolated request failed.";
+            } catch(Exception exception) {
+                string error=exception.Message switch {
+                    "Proxy port must be 1–65535" => exception.Message,
+                    "Choose a valid option" => exception.Message,
+                    "The selected network adapter is unavailable." => exception.Message,
+                    _ when command=="update_check" => "The update check is unavailable. Try again later.",
+                    _ => "The isolated request failed."
+                };
                 if(id is not null && requestEpoch==navigationEpoch) { try { core.PostWebMessageAsJson(JsonSerializer.Serialize(new {id,ok=false,error})); } catch (Exception) { } }
             }
         };
