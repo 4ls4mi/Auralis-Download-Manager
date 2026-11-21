@@ -990,6 +990,7 @@ impl Run {
             size: None,
             downloaded: 0,
             resumable: Some(true),
+            checksum: None,
             segments: Vec::new(),
             connections: Vec::new(),
             error: None,

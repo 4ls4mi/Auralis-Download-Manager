@@ -820,6 +820,8 @@ pub struct Snapshot {
     pub size: Option<u64>,
     pub downloaded: u64,
     pub resumable: Option<bool>,
+    /// Expected whole-file checksum supplied by the server or the user, if any.
+    pub checksum: Option<crate::verify::Hash>,
     pub segments: Vec<SegmentView>,
     pub connections: Vec<ConnView>,
     /// Why the download failed (state `Failed`), in English (the command line, logs).
@@ -1228,6 +1230,7 @@ impl Download {
                 size: None,
                 downloaded: 0,
                 resumable: None,
+                checksum: None,
                 segments: Vec::new(),
                 connections: Vec::new(),
                 error: None,
@@ -2055,6 +2058,7 @@ async fn run_fresh(
             .then(|| crate::verify::Hash::from_headers(h))
             .flatten()
     });
+    shared.view.lock().unwrap().checksum = checksum.clone();
     let validators = Validators::from_response(
         header_str(h, header::ETAG),
         header_str(h, header::LAST_MODIFIED),
@@ -2527,6 +2531,7 @@ async fn run_resume(
     let file = Arc::new(file);
     let (dest, size) = (saved.dest.clone(), saved.size);
     let checksum = opts.checksum.clone().or_else(|| saved.checksum.clone());
+    shared.view.lock().unwrap().checksum = checksum.clone();
     let web_page_ok = expects_web_page(&dest, saved.content_type.as_deref());
     // The server's type for it then stands for the browser's (#701).
     let never_page = never_a_page(

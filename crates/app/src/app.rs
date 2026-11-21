@@ -10199,6 +10199,10 @@ impl App {
         item.downloaded = 0;
         item.status = Status::Stopped;
         item.error = None;
+        if item.checksum_from_server {
+            item.checksum = None;
+            item.checksum_from_server = false;
+        }
         item.note(crate::i18n::t("Downloading again from the start"));
         self.dirty = true;
         self.start(id, true);
@@ -10755,6 +10759,7 @@ impl App {
                     &[("algorithm", h.algo.name())],
                 ));
                 item.checksum = Some(h);
+                item.checksum_from_server = false;
                 self.dirty = true;
             }
         }

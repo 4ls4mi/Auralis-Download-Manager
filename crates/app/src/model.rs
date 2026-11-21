@@ -459,6 +459,9 @@ pub struct Item {
     /// The hash the finished file must have (Verify checksum…; beyond IDM, D-015).
     #[serde(default)]
     pub checksum: Option<mdm_engine::verify::Hash>,
+    /// Server-provided checksums belong to this particular download version.
+    #[serde(default)]
+    pub checksum_from_server: bool,
     /// When the download was added ("Added" column), as `Last Try Date` is written. Downloads
     /// added before the column existed have none.
     #[serde(default)]
@@ -734,6 +737,7 @@ fn tool_snapshot(p: mdm_tools::video::Progress, url: &Url) -> mdm_engine::Snapsh
         size,
         downloaded: p.downloaded,
         resumable: Some(true),
+        checksum: None,
         segments,
         connections: own.into_iter().chain(engine.connections).collect(),
         error,
@@ -973,6 +977,7 @@ impl Item {
             error: None,
             resumable: None,
             checksum: None,
+            checksum_from_server: false,
             added: Some(now_stamp()),
             own_limit: None,
             chunk_count: None,
@@ -1046,6 +1051,11 @@ impl Item {
         self.downloaded = s.downloaded;
         self.size = size_after(s.state, s.size, s.downloaded, self.size);
         self.resumable = s.resumable.or(self.resumable);
+        // Preserve the server's checksum after the temporary resume state is removed.
+        if self.checksum.is_none() && s.checksum.is_some() {
+            self.checksum = s.checksum.clone();
+            self.checksum_from_server = true;
+        }
         if let Some(f) = &s.file {
             // Named now: a later start from scratch keeps this name, and its file is its own.
             let guessed = std::mem::take(&mut self.name_from_url);

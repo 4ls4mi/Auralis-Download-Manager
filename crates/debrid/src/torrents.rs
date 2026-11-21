@@ -584,6 +584,7 @@ impl RemoteTorrent {
             size: sh.total,
             downloaded,
             resumable: Some(true),
+            checksum: None,
             segments: sh
                 .total
                 .map(|t| {

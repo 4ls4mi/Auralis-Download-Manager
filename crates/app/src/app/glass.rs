@@ -259,6 +259,9 @@ impl App {
             "checksum" => {
                 let Some(hash) = mdm_engine::verify::Hash::parse(value) else { return fail("Enter a valid MD5, SHA-1, SHA-256, SHA-512 or CRC32 checksum"); };
                 let item = self.item(id).unwrap();
+                if item.checksum.as_ref().map(|h| h.display()) != Some(hash.display()) {
+                    item.checksum_from_server = false;
+                }
                 item.checksum = Some(hash.clone());
                 let file=(item.status==Status::Complete).then(||item.dest.clone());
                 self.dirty = true;
