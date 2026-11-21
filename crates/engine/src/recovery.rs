@@ -482,3 +482,150 @@ mod verify_checkpoint_tests {
         assert!(verify_checkpoint(&mut file, 8, &segments, &[hole]).is_err());
     }
 }
+
+/// Build a proposed range map that re-fetches damaged ranges while keeping all
+/// other saved ranges. This only constructs a plan: it never writes state or data.
+/// The caller must confirm that a compatible range source exists before applying it.
+pub fn plan_range_repair(
+    size: u64,
+    segments: &[SavedSegment],
+    damaged: &[(u64, u64)],
+) -> io::Result<Vec<SavedSegment>> {
+    let invalid = || {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "invalid saved or damaged ranges",
+        )
+    };
+    if crate::planner::Planner::resume(size, 1, segments).is_err() {
+        return Err(invalid());
+    }
+    let mut saved_ranges: Vec<(u64, u64)> = Vec::new();
+    for s in segments {
+        if s.start == s.cursor {
+            continue;
+        }
+        if let Some(last) = saved_ranges.last_mut() {
+            if last.1 == s.start {
+                last.1 = s.cursor;
+                continue;
+            }
+        }
+        saved_ranges.push((s.start, s.cursor));
+    }
+    let mut previous_end = 0;
+    for &(start, end) in damaged {
+        if start < previous_end
+            || start >= end
+            || end > size
+            || !saved_ranges.iter().any(|&(a, b)| a <= start && end <= b)
+        {
+            return Err(invalid());
+        }
+        previous_end = end;
+    }
+    let mut boundaries = vec![0, size];
+    for s in segments {
+        boundaries.extend([s.start, s.cursor, s.end]);
+    }
+    for &(start, end) in damaged {
+        boundaries.extend([start, end]);
+    }
+    boundaries.sort_unstable();
+    boundaries.dedup();
+    let mut plan: Vec<SavedSegment> = Vec::new();
+    for pair in boundaries.windows(2) {
+        let (start, end) = (pair[0], pair[1]);
+        let present = saved_ranges.iter().any(|&(a, b)| a <= start && end <= b)
+            && !damaged.iter().any(|&(a, b)| a < end && start < b);
+        if let Some(last) = plan.last_mut() {
+            let last_present = last.cursor == last.end;
+            if last.end == start && last_present == present {
+                last.end = end;
+                if present {
+                    last.cursor = end;
+                }
+                continue;
+            }
+        }
+        plan.push(SavedSegment {
+            start,
+            cursor: if present { end } else { start },
+            end,
+        });
+    }
+    Ok(plan)
+}
+
+#[cfg(test)]
+mod repair_plan_tests {
+    use super::*;
+    #[test]
+    fn keeps_good_bytes_on_both_sides_of_damage_and_gaps() {
+        let original = vec![
+            SavedSegment {
+                start: 0,
+                cursor: 6,
+                end: 8,
+            },
+            SavedSegment {
+                start: 8,
+                cursor: 12,
+                end: 12,
+            },
+        ];
+        let plan = plan_range_repair(12, &original, &[(2, 4), (9, 11)]).unwrap();
+        assert_eq!(
+            plan,
+            vec![
+                SavedSegment {
+                    start: 0,
+                    cursor: 2,
+                    end: 2
+                },
+                SavedSegment {
+                    start: 2,
+                    cursor: 2,
+                    end: 4
+                },
+                SavedSegment {
+                    start: 4,
+                    cursor: 6,
+                    end: 6
+                },
+                SavedSegment {
+                    start: 6,
+                    cursor: 6,
+                    end: 8
+                },
+                SavedSegment {
+                    start: 8,
+                    cursor: 9,
+                    end: 9
+                },
+                SavedSegment {
+                    start: 9,
+                    cursor: 9,
+                    end: 11
+                },
+                SavedSegment {
+                    start: 11,
+                    cursor: 12,
+                    end: 12
+                },
+            ]
+        );
+        assert!(crate::planner::Planner::resume(12, 1, &plan).is_ok());
+        assert_eq!(original[0].cursor, 6);
+    }
+    #[test]
+    fn refuses_damage_in_an_unwritten_gap_or_overlaps() {
+        let segments = [SavedSegment {
+            start: 0,
+            cursor: 4,
+            end: 8,
+        }];
+        assert!(plan_range_repair(8, &segments, &[(3, 5)]).is_err());
+        assert!(plan_range_repair(8, &segments, &[(0, 3), (2, 4)]).is_err());
+    }
+}

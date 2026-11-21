@@ -131,6 +131,24 @@ impl ResumeState {
         crate::recovery::verify_checkpoint(&mut part, self.size, &self.segments, &self.block_hashes)
     }
 
+    /// Prepare (but do not persist) a repair plan for changed saved ranges.
+    /// The caller must first establish a compatible range-capable source and
+    /// preserve the original state before applying the returned plan.
+    pub fn proposed_repair(&self) -> io::Result<(Self, crate::recovery::CheckpointVerification)> {
+        let report = self.verify_saved_blocks()?;
+        let segments =
+            crate::recovery::plan_range_repair(self.size, &self.segments, &report.damaged_ranges)?;
+        let mut planned = self.clone();
+        planned.segments = segments;
+        planned.block_hashes.retain(|block| {
+            !report
+                .damaged_ranges
+                .iter()
+                .any(|&(start, end)| start < block.end && block.start < end)
+        });
+        Ok((planned, report))
+    }
+
     /// Write as is (its segments must already be on disk).
     pub fn write(&self, path: &Path) -> io::Result<()> {
         let json = serde_json::to_vec_pretty(self).map_err(io::Error::other)?;
@@ -354,6 +372,11 @@ mod tests {
         assert_eq!(report.checked_bytes, block + 2);
         assert_eq!(report.unhashed_bytes, 0);
         assert_eq!(report.damaged_ranges, vec![(0, block)]);
+        let (plan, report) = saved.proposed_repair().unwrap();
+        assert_eq!(report.damaged_ranges, vec![(0, block)]);
+        assert_eq!(plan.downloaded(), 2);
+        assert_eq!(plan.block_hashes.len(), 1);
+        assert_eq!(ResumeState::load(&state_path(&dest)).unwrap(), saved);
     }
 
     const LM: &str = "Wed, 21 Oct 2015 07:28:00 GMT";

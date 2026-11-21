@@ -3278,11 +3278,11 @@ impl App {
             slot.lock().ok().and_then(|result| result.as_ref().and_then(|r| r.as_ref().ok()).and_then(|report| report.get("damaged_ranges")).and_then(serde_json::Value::as_array).map(|ranges| !ranges.is_empty())).unwrap_or(false)
         });
         if damaged {
-            self.notice = Some("Saved data changed. Resume is blocked to protect the file; redownload it or wait for a repair option.".into());
+            self.notice = Some(("Saved-data check", "Saved data changed. Resume is blocked to protect the file; redownload it or wait for a repair option.".to_owned()));
             return;
         }
         if self.recovery_check_running(id) {
-            self.notice = Some("Wait for the saved-data check to finish before resuming.".into());
+            self.notice = Some(("Saved-data check", "Wait for the saved-data check to finish before resuming.".to_owned()));
             return;
         }
         let show = show && self.settings.show_progress;
@@ -10210,7 +10210,7 @@ impl App {
     /// the new download completes.
     fn redownload(&mut self, id: u64) {
         if self.recovery_check_running(id) {
-            self.notice = Some("Wait for the saved-data check to finish before redownloading.".into());
+            self.notice = Some(("Saved-data check", "Wait for the saved-data check to finish before redownloading.".to_owned()));
             return;
         }
         if !self.can_redownload(id) {
