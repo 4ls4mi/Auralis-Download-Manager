@@ -55,12 +55,12 @@ test('isolated downloader asks the host to open a progress window',async()=>{
  listener({data:{id:sent[0].id,ok:true,value:{opened:true}}});assert.equal((await pending).opened,true);
 });
 
-test('progress windows may read details but cannot request file operations',async()=>{
+test('progress windows may read details but cannot request arbitrary file operations',async()=>{
  let listener;const sent=[];
  const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);
  const pending=context.__TAURI_INTERNALS__.invoke('file_operation',{id:7,operation:'details',value:null});assert.equal(sent[0].command,'file_details');assert.equal(sent[0].downloadId,7);
  listener({data:{id:sent[0].id,ok:true,value:{own_limit_kb:null}}});assert.equal((await pending).own_limit_kb,null);
- await assert.rejects(context.__TAURI_INTERNALS__.invoke('file_operation',{id:7,operation:'open-with',value:null}),/unavailable/);
+ await assert.rejects(context.__TAURI_INTERNALS__.invoke('file_operation',{id:7,operation:'move',value:null}),/unavailable/);
 });
 
 test('saved-data checking uses only the download ID and does not expose repair or torrent actions',async()=>{
@@ -182,7 +182,7 @@ test('network adapter selection is sent to the isolated downloader',async()=>{
 test('file actions send only an ID to the host, never a web supplied path',async()=>{
  let listener;const sent=[];
  const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);
- for(const [operation,command] of [['open','file_open'],['folder','file_folder']]){
+ for(const [operation,command] of [['open','file_open'],['open-with','file_open_with'],['folder','file_folder']]){
   const pending=context.__TAURI_INTERNALS__.invoke('file_operation',{id:7,operation,value:'C:\\outside.exe'});const message=sent.at(-1);assert.equal(message.command,command);assert.equal(message.downloadId,7);assert.equal('value' in message,false);listener({data:{id:message.id,ok:true,value:{ok:true}}});await pending;
  }
 });

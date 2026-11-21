@@ -262,7 +262,7 @@ public sealed partial class MainWindow : Window
             if (_closing || request != _viewRequest) return;
             if (!_sandboxReady)
             {
-                _sandboxEnvironment=await LocalWebviewBridge.AttachPreviewAsync(SandboxView,this,Path.Combine(AppContext.BaseDirectory,"interface"),ApplyNativeAppearance,ApplyWindowCommand, message => OpenAuxiliaryAsync(message, true), message => ExportAppearanceAsync(this,message),OpenTestFileAsync,ProgressTrayCommandAsync,UpdateCommandAsync,sandbox:true);
+                _sandboxEnvironment=await LocalWebviewBridge.AttachPreviewAsync(SandboxView,this,Path.Combine(AppContext.BaseDirectory,"interface"),ApplyNativeAppearance,ApplyWindowCommand, message => OpenAuxiliaryAsync(message, true), message => ExportAppearanceAsync(this,message),message => OpenTestFileAsync(this,message),ProgressTrayCommandAsync,UpdateCommandAsync,sandbox:true);
                 _sandboxReady=true;
                 await RefreshDownloadTransitionsAsync();
                 if (!_closing) _downloadMonitor.Start();
@@ -312,7 +312,7 @@ public sealed partial class MainWindow : Window
         {
             if (!_previewReady)
             {
-                _previewEnvironment=await LocalWebviewBridge.AttachPreviewAsync(InterfaceView,this,Path.Combine(AppContext.BaseDirectory,"interface"),ApplyNativeAppearance,ApplyWindowCommand, message => OpenAuxiliaryAsync(message, false), message => ExportAppearanceAsync(this,message),OpenTestFileAsync,ProgressTrayCommandAsync,UpdateCommandAsync);
+                _previewEnvironment=await LocalWebviewBridge.AttachPreviewAsync(InterfaceView,this,Path.Combine(AppContext.BaseDirectory,"interface"),ApplyNativeAppearance,ApplyWindowCommand, message => OpenAuxiliaryAsync(message, false), message => ExportAppearanceAsync(this,message),message => OpenTestFileAsync(this,message),ProgressTrayCommandAsync,UpdateCommandAsync);
                 _previewReady=true;
             }
             if (_closing || request != _viewRequest) return;
@@ -377,7 +377,7 @@ public sealed partial class MainWindow : Window
         catch (Exception error) { TrayStatus.Text=$"Could not open the update notice: {error.Message}"; }
     }
 
-    private static async Task<JsonElement> OpenTestFileAsync(BridgeMessage message)
+    private static async Task<JsonElement> OpenTestFileAsync(Window owner, BridgeMessage message)
     {
         bool folder=message.Command=="file_folder";
         var result=await DownloaderBridge.SafeTestPathAsync(message.DownloadId,folder);
@@ -391,10 +391,17 @@ public sealed partial class MainWindow : Window
         else
         {
             var target=await Windows.Storage.StorageFile.GetFileFromPathAsync(path);
-            launched=await Windows.System.Launcher.LaunchFileAsync(target);
+            if (message.Command=="file_open_with")
+            {
+                var options=new Windows.System.LauncherOptions { DisplayApplicationPicker=true };
+                WinRT.Interop.InitializeWithWindow.Initialize(options,WinRT.Interop.WindowNative.GetWindowHandle(owner));
+                launched=await Windows.System.Launcher.LaunchFileAsync(target,options);
+            }
+            else launched=await Windows.System.Launcher.LaunchFileAsync(target);
         }
-        if (!launched) throw new InvalidOperationException("Windows could not open the test download.");
-        return JsonSerializer.SerializeToElement(new { ok=true });
+        if (!launched && message.Command!="file_open_with") throw new InvalidOperationException("Windows could not open the test download.");
+        // The Windows app picker also returns false when the user cancels.
+        return JsonSerializer.SerializeToElement(new { ok=launched });
     }
 
     private static async Task<JsonElement> ExportAppearanceAsync(Window owner, BridgeMessage message)
@@ -496,7 +503,7 @@ public sealed partial class MainWindow : Window
         {
             await LocalWebviewBridge.AttachPreviewAsync(view,child,Path.Combine(AppContext.BaseDirectory,"interface"),
                 appearance => { ApplyAppearance(child,root,appearance); }, message => ApplyWindowCommand(child,message),
-                next => OpenAuxiliaryAsync(next,sandbox), message => ExportAppearanceAsync(child,message),OpenTestFileAsync,ProgressTrayCommandAsync,UpdateCommandAsync,sandbox,environment);
+                next => OpenAuxiliaryAsync(next,sandbox), message => ExportAppearanceAsync(child,message),message => OpenTestFileAsync(child,message),ProgressTrayCommandAsync,UpdateCommandAsync,sandbox,environment);
             if (_closing || !_auxiliaryWindows.TryGetValue(key,out var current) || !ReferenceEquals(current,state)) throw new InvalidOperationException("The preview window was closed.");
             state.Ready=true;
             view.CoreWebView2.Navigate(WindowRoutePolicy.InterfaceUrl(state.Route));

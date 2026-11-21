@@ -53,7 +53,7 @@
     }
     if(command==='add_download' && typeof args.url==='string' && /^https?:\/\//i.test(args.url.trim()) && typeof args.later==='boolean') return JSON.stringify(await request(command,{url:args.url.trim(),later:args.later}));
     if(command==='queue_action' && typeof args.name==='string' && args.name.length>0 && args.name.length<=256 && ['start_queue','stop_queue'].includes(args.action)) return request(command,{name:args.name,action:args.action});
-    if(command==='file_operation' && ['open','folder'].includes(args.operation) && Number.isSafeInteger(args.id) && args.id>0) return request(args.operation==='open'?'file_open':'file_folder',{downloadId:args.id});
+    if(command==='file_operation' && ['open','open-with','folder'].includes(args.operation) && Number.isSafeInteger(args.id) && args.id>0) return request(args.operation==='open'?'file_open':args.operation==='open-with'?'file_open_with':'file_folder',{downloadId:args.id});
     if(command==='file_operation' && args.operation==='speed-limit' && Number.isSafeInteger(args.id) && args.id>0) { const kb=args.value==='off'?0:Number(args.value); if(Number.isInteger(kb) && kb>=0 && kb<=10000000 && (kb>0 || args.value==='off')) return request('file_speed_limit',{downloadId:args.id,value:kb}); }
     if(command==='file_operation' && args.operation==='details' && Number.isSafeInteger(args.id) && args.id>0) return request('file_details',{downloadId:args.id});
     if(command==='file_operation' && ['check-saved','check-saved-result'].includes(args.operation) && Number.isSafeInteger(args.id) && args.id>0) return request(args.operation==='check-saved'?'check_saved':'check_saved_result',{downloadId:args.id});

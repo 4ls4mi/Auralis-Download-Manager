@@ -85,3 +85,28 @@ test('WinUI refresh address tool forwards a replacement link for the selected do
   assert.equal(request.downloadId,7);assert.equal(request.value,'https://example.test/new');
  }finally{await browser.close();await server.close()}
 });
+
+test('WinUI properties asks the host to choose an app by download ID',{skip:!executable||!existsSync(executable)},async()=>{
+ const server=await createServer({configFile:false,root:fileURLToPath(new URL('..',import.meta.url)),server:{host:'127.0.0.1',port:0},logLevel:'silent'});await server.listen();
+ const browser=await chromium.launch({headless:true,executablePath:executable,args:['--no-sandbox']});
+ try{
+  const page=await browser.newPage();
+  await page.addInitScript(()=>{let listener;window.requests=[];window.chrome={webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:message=>{
+   window.requests.push(message);let value={applied:true};
+   if(message.command==='dashboard_snapshot')value={downloads:[{id:7,file:'test.zip',status:'Complete',downloaded:100,size:100,speed:0}],queues:[],categories:[],speed:0};
+   else if(message.command==='dashboard_visuals')value={downloads:[{id:7,active_connections:0}]};
+   else if(message.command==='file_open_with')value={ok:true};
+   else if(message.command==='window_is_maximized')value=false;
+   else if(message.command==='window_current_monitor')value=null;
+   else if(message.command==='window_outer_position')value={x:0,y:0};
+   else if(message.command==='window_outer_size')value={width:760,height:600};
+   queueMicrotask(()=>listener({data:{id:message.id,ok:true,value}}));
+  }}}});
+  await page.addInitScript({content:readFileSync(new URL('../../winui-shell/webview/sandbox-compat.js',import.meta.url),'utf8')});
+  await page.goto(server.resolvedUrls.local[0]+'?properties=7');
+  await page.getByRole('button',{name:'Open with…'}).click();
+  await page.waitForFunction(()=>window.requests.some(m=>m.command==='file_open_with'));
+  const request=await page.evaluate(()=>window.requests.find(m=>m.command==='file_open_with'));
+  assert.equal(request.downloadId,7);assert.equal('path' in request,false);
+ }finally{await browser.close();await server.close()}
+});

@@ -69,7 +69,7 @@ internal static class LocalWebviewBridge
                         ? await exportFile(message)
                     : sandbox && (message.Command is "progress_hide" or "progress_restore" or "progress_ids" or "progress_preferences")
                         ? await progressTray(message)
-                    : sandbox && (message.Command is "file_open" or "file_folder")
+                    : sandbox && (message.Command is "file_open" or "file_open_with" or "file_folder")
                         ? await openTestFile(message)
                     : message.Command == "open_glass_window"
                         ? await openWindow(message)
