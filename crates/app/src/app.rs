@@ -7592,7 +7592,18 @@ impl App {
         }
         let name = mdm_engine::naming::sanitize(&mdm_engine::naming::file_name(None, &url));
         let category = category.unwrap_or_else(|| Category::of(&name));
-        let dir = self.settings.category_dir(category, &self.downloads);
+        // A local headless caller may select a destination (the WinUI test
+        // host relies on this for isolation). A paired device must never be
+        // allowed to choose a path on this computer.
+        let dir = if !cmd.remote {
+            match cmd.dir.as_deref() {
+                Some(dir) if std::path::Path::new(dir).is_absolute() => PathBuf::from(dir),
+                Some(_) => return fail("invalid-directory", "the download folder must be absolute"),
+                None => self.settings.category_dir(category, &self.downloads),
+            }
+        } else {
+            self.settings.category_dir(category, &self.downloads)
+        };
         // Numbered on as it starts if the name is taken then (#743): no disk here.
         let dest = mdm_engine::naming::guess(&dir, &name);
         cmd.remote = false;
