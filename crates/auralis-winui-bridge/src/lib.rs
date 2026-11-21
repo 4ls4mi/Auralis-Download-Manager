@@ -149,6 +149,7 @@ fn dispatch(operation: u32) -> Result<serde_json::Value, String> {
             fields.retain(|field| field["key"].as_str().is_some_and(safe_preference_key));
             Ok(settings)
         },
+        9 if owned_backend() => request("glass-network-adapters"),
         _ => Err("Unsupported bridge operation".into()),
     }
 }
@@ -268,11 +269,17 @@ fn update_setting(key: &str, value: &str) -> Result<serde_json::Value, String> {
     ];
     if !ALLOWED.contains(&key) || value.len() > 256 { return Err("Unsupported settings change.".into()); }
     // Keep development settings changes limited to the isolated downloader.
-    // In particular, never enable integration, networking or startup behavior.
-    if ISOLATED_DATA.get().is_some() && !["show_complete", "show_progress", "confirm_delete", "double_click_open", "max_connections", "speed_limit_on", "speed_limit_kb", "global_limit_on", "global_limit_kb", "start_immediately", "only_add_to_queue"].contains(&key) {
+    // Integration and startup behavior remain disabled in the sandbox.
+    if ISOLATED_DATA.get().is_some() && !["show_complete", "show_progress", "confirm_delete", "double_click_open", "max_connections", "speed_limit_on", "speed_limit_kb", "global_limit_on", "global_limit_kb", "start_immediately", "only_add_to_queue", "net_adapter"].contains(&key) {
         return Err("This setting is disabled in the development sandbox.".into());
     }
     if !owned_backend() { return Err("The embedded downloader is not running in this process.".into()); }
+    if key=="net_adapter" && !value.is_empty() {
+        let adapters=request("glass-network-adapters")?;
+        if !adapters["adapters"].as_array().is_some_and(|list|list.iter().any(|item|item["name"].as_str()==Some(value))) {
+            return Err("The selected network adapter is unavailable.".into());
+        }
+    }
     let command = mdm_ipc::Command { action: Some("glass-setting".into()), category: Some(key.into()), queue: Some(value.into()), ..Default::default() };
     let raw = mdm_ipc::request_checked(&command).map_err(|e| e.to_string())?;
     let result: serde_json::Value = serde_json::from_str(&raw).map_err(|_| "Invalid settings response")?;
@@ -390,6 +397,9 @@ mod tests {
         assert!(visual["downloads"].is_array());
         let settings = dispatch(5).expect("read downloader settings");
         assert!(settings["max_connections"].is_number());
+        assert!(dispatch(9).expect("list network adapters")["adapters"].is_array());
+        assert!(update_setting("net_adapter","__auralis_missing_adapter__").is_err());
+        assert_eq!(update_setting("net_adapter","").expect("select automatic network adapter")["saved"],true);
         let preferences=dispatch(8).expect("read isolated preferences");
         assert!(preferences["fields"].as_array().unwrap().iter().all(|field|field["key"].as_str().is_some_and(safe_preference_key)));
         assert!(update_preference("many_connections",&serde_json::json!(true)).expect("save isolated preference")["ok"]==true);

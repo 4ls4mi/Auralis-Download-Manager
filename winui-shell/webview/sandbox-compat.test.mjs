@@ -109,6 +109,15 @@ test('isolated connection settings can be adjusted without enabling browser inte
  await assert.rejects(context.__TAURI_INTERNALS__.invoke('update_glass_setting',{key:'proxy_from_browser',value:'true'}),/unavailable/);
 });
 
+test('network adapter selection is sent to the isolated downloader',async()=>{
+ let listener;const sent=[];
+ const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);
+ const list=context.__TAURI_INTERNALS__.invoke('list_network_adapters');assert.equal(sent[0].command,'network_adapters');
+ listener({data:{id:sent[0].id,ok:true,value:{adapters:[{name:'Test VPN',address:'127.0.0.1'}]}}});assert.equal((await list).adapters[0].name,'Test VPN');
+ const save=context.__TAURI_INTERNALS__.invoke('update_glass_setting',{key:'net_adapter',value:'Test VPN'});assert.equal(sent[1].key,'net_adapter');
+ listener({data:{id:sent[1].id,ok:true,value:{saved:true}}});assert.equal((await save).saved,true);
+});
+
 test('file actions send only an ID to the host, never a web supplied path',async()=>{
  let listener;const sent=[];
  const context={chrome:{webview:{addEventListener:(_name,fn)=>{listener=fn},postMessage:m=>sent.push(m)}},setTimeout,clearTimeout};runInNewContext(source,context);

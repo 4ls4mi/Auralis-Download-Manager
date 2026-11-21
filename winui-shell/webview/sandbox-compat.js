@@ -39,6 +39,7 @@
     if(command==='plugin:window|available_monitors'){const monitor=await request('window_current_monitor');return monitor?[monitor]:[];}
     if(command==='boot_engine')return 'Isolated test downloader';
     if(command==='dashboard_snapshot'||command==='dashboard_visuals'||command==='glass_settings')return request(command);
+    if(command==='list_network_adapters')return request('network_adapters');
     if(command==='glass_tool' && args.action==='original-settings')return request('preferences');
     if(command==='glass_tool' && args.action==='original-setting') {
       const {key,value}=args.payload??{};
@@ -54,7 +55,7 @@
       const results=await Promise.all([...new Set(args.ids)].map(downloadId=>request(args.action==='start'?'start_download':args.action==='pause'?'pause_download':'remove_download',{downloadId})));
       return {done:results.flatMap(result=>result.done??[]),skipped:results.flatMap(result=>result.skipped??[])};
     }
-    if(command==='update_glass_setting' && ['show_complete','show_progress','confirm_delete','double_click_open','max_connections','speed_limit_on','speed_limit_kb','global_limit_on','global_limit_kb','start_immediately','only_add_to_queue'].includes(args.key) && typeof args.value==='string') return request(command,{key:args.key,value:args.value});
+    if(command==='update_glass_setting' && ['show_complete','show_progress','confirm_delete','double_click_open','max_connections','speed_limit_on','speed_limit_kb','global_limit_on','global_limit_kb','start_immediately','only_add_to_queue','net_adapter'].includes(args.key) && typeof args.value==='string') return request(command,{key:args.key,value:args.value});
     // Disk deletion stays disabled in the isolated test host. The default is already false.
     if(command==='glass_tool' && args.action==='original-setting' && args.payload?.key==='delete_files_too' && args.payload.value===false) return {ok:true};
     if(command==='glass_update_check')return request('update_check');
