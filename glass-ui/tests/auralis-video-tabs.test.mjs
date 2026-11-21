@@ -24,6 +24,7 @@ test('in-player panel tabs preserve subtitle selection and stay anchored',{skip:
   await host.locator('[role="tab"]',{hasText:'Video'}).focus();await page.keyboard.press('ArrowRight');
   assert.equal(await host.locator('[role="tab"][aria-selected="true"]').innerText(),'Audio');
   await page.keyboard.press('ArrowRight');assert.equal(await host.locator('[role="tab"][aria-selected="true"]').innerText(),'Subtitles');
+  assert.equal(await host.getByLabel('Subtitle language').locator('option[value="manual:all"]').count(),1);
   await host.getByLabel('Subtitle language').selectOption('manual:en');
   await host.getByLabel('Selectable track').check();
   await host.locator('[role="tab"]',{hasText:'Video'}).click();

@@ -2055,6 +2055,7 @@ button:focus-visible { outline: none; }
         const add=(value,text)=>{const option=document.createElement("option");option.value=value;option.textContent=text;select.append(option)};
         add("none","No subtitles");
         for(const [kind,tracks] of [["manual",look.subtitles||[]],["auto",look.automatic_subtitles||[]]]) {
+          if(tracks.length)add(`${kind}:all`,kind==="auto"?"All automatic captions":"All subtitles");
           for(const track of tracks)add(`${kind}:${track.code}`,`${track.name||track.code} (${track.code})${kind==="auto"?" · automatic":""}`);
         }
         select.value=subtitleChoice;select.addEventListener("change",()=>{subtitleChoice=select.value});label.append(select);section.append(label);
