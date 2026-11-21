@@ -80,7 +80,23 @@ internal sealed record BridgeMessage(long Id, string Command, ulong DownloadId, 
         if (command == "window_start_drag") return new(id,command,0,null,false);
         if (command is "window_hide" or "window_minimize" or "window_toggle_maximize" or "window_close" or "window_is_maximized" or "window_outer_position" or "window_outer_size" or "window_current_monitor") return new(id, command, 0, null, false);
         if (command is "dashboard_snapshot" or "dashboard_visuals" or "glass_settings") return new(id, command, 0, null, false);
-        if (command is "preferences" or "network_adapters" or "queue_schedules") return new(id,command,0,null,false);
+        if (command is "preferences" or "network_adapters" or "queue_schedules" or "pending_file_info") return new(id,command,0,null,false);
+        if (command == "file_info_action")
+        {
+            if (!root.TryGetProperty("downloadId",out var targetValue) || !targetValue.TryGetUInt64(out ulong target) || target==0 ||
+                !root.TryGetProperty("action",out var actionValue) || actionValue.ValueKind!=JsonValueKind.String ||
+                actionValue.GetString() is not string action || action is not ("commit" or "cancel" or "category"))
+                throw new InvalidOperationException("Invalid download request action.");
+            string? payload=null;
+            if (root.TryGetProperty("payload",out var data) && data.ValueKind!=JsonValueKind.Null)
+            {
+                if (data.ValueKind!=JsonValueKind.Object) throw new InvalidOperationException("Invalid download request.");
+                payload=data.GetRawText();
+                if (System.Text.Encoding.UTF8.GetByteCount(payload)>65536) throw new InvalidOperationException("Download request is too large.");
+            }
+            if ((action=="cancel") != (payload is null)) throw new InvalidOperationException("Invalid download request.");
+            return new(id,command,target,null,false,Key:action,Value:payload);
+        }
         if (command == "save_schedule")
         {
             if (!root.TryGetProperty("payload",out var payload) || payload.ValueKind!=JsonValueKind.Object)

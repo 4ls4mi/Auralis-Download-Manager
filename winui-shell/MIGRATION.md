@@ -37,6 +37,11 @@ preview is not yet the application and must not be packaged as a release.
 - Preserve the existing instance lock, data directory, authenticated local IPC,
   downloader shutdown and in-progress download state. Starting a second shell
   must not take over or stop a running instance.
+- An opt-in `installed-profile` bridge feature now selects the existing app's
+  resolved data directory and exposes the normal add and file-info operations
+  to the native host. It is not enabled in the development build and is not
+  yet connected to the WinUI interface or installer; completing that connection
+  and testing an upgrade are required before it can replace the current shell.
 - Port and test download actions, add URL, queues, properties, torrent recovery,
   browser integration and media tools before making the shell the default.
 

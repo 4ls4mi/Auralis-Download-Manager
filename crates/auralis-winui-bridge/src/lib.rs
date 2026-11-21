@@ -180,6 +180,8 @@ fn dispatch(operation: u32) -> Result<serde_json::Value, String> {
         10 if owned_backend() => request("glass-queues"),
         #[cfg(feature = "installed-profile")]
         11 => initialize_installed_profile(),
+        #[cfg(feature = "installed-profile")]
+        12 if installed_profile_selected() && owned_backend() => request("glass-file-info"),
         _ => Err("Unsupported bridge operation".into()),
     }
 }
@@ -499,11 +501,55 @@ fn add_download(url: &str, later: bool) -> Result<serde_json::Value, String> {
         _ => false,
     };
     if !supported { return Err("Enter a supported HTTP, HTTPS, FTP or magnet link.".into()); }
+    #[cfg(feature = "installed-profile")]
+    if installed_profile_selected() {
+        if parsed.scheme()=="magnet" { return Err("Torrent integration is not yet enabled in the WinUI host.".into()); }
+        if !owned_backend() { return Err("The embedded downloader is not running in this process.".into()); }
+        // Use the app's ordinary add flow so its existing file-info dialog,
+        // categories, selected destination and resume rules remain authoritative.
+        mdm_ipc::send(&mdm_ipc::Command { url:Some(url.to_owned()), later, silent:false, ..Default::default() }).map_err(|e|e.to_string())?;
+        return Ok(serde_json::json!({"pending":true}));
+    }
     if !matches!(parsed.scheme(), "http" | "https") { return Err("The development sandbox accepts only HTTP and HTTPS links.".into()); }
     let output = test_output_dir()?;
     if !owned_backend() { return Err("The embedded downloader is not running in this process.".into()); }
     mdm_ipc::send(&mdm_ipc::Command { url: Some(url.to_owned()), dir: Some(output.to_string_lossy().into_owned()), later, silent: true, ..Default::default() }).map_err(|e| e.to_string())?;
     Ok(serde_json::json!({"pending":true}))
+}
+#[cfg(feature = "installed-profile")]
+fn file_info_action(id: u64, action: u8, payload: Option<&serde_json::Value>) -> Result<serde_json::Value, String> {
+    if id==0 || !installed_profile_selected() || !owned_backend() { return Err("The download request is unavailable.".into()); }
+    let name=match action { 1=>"commit", 2=>"cancel", 3=>"category", _=>return Err("Invalid download request action.".into()) };
+    match action {
+        2 if payload.is_some() => return Err("Invalid download request.".into()),
+        1 => {
+            let data=payload.filter(|p|p.is_object()).ok_or("Invalid download request.")?;
+            let path=data["save_as"].as_str().filter(|s|!s.trim().is_empty() && s.len()<=32760).ok_or("Choose a destination filename.")?;
+            let destination=std::path::Path::new(path);
+            if !destination.is_absolute() || destination.file_name().is_none() { return Err("Choose an absolute destination filename.".into()); }
+        },
+        3 => {
+            let data=payload.filter(|p|p.is_object()).ok_or("Invalid download request.")?;
+            if !data["category"].as_str().is_some_and(|s|!s.is_empty() && s.len()<=128) { return Err("Choose a valid category.".into()); }
+        },
+        _=>(),
+    }
+    let command=mdm_ipc::Command { action:Some("glass-file-info".into()), category:Some(name.into()), ids:vec![id], queue:payload.map(serde_json::Value::to_string), ..Default::default() };
+    let raw=mdm_ipc::request_checked(&command).map_err(|e|e.to_string())?;
+    let data:serde_json::Value=serde_json::from_str(&raw).map_err(|_|"Invalid download request response.")?;
+    if data.get("error").is_some() { return Err("The download request could not be completed.".into()); }
+    Ok(data)
+}
+/// # Safety
+/// When `len` is nonzero, `input` must point to `len` readable JSON bytes.
+#[cfg(feature = "installed-profile")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn auralis_bridge_file_info_action(id:u64, action:u8, input:*const u8, len:usize) -> *mut c_char {
+    encode(std::panic::catch_unwind(|| {
+        if len>65536 || (len>0 && input.is_null()) { return Err("Invalid download request.".into()); }
+        let payload=if len==0 { None } else { Some(serde_json::from_slice(unsafe { std::slice::from_raw_parts(input,len) }).map_err(|_|"Invalid download request.")?) };
+        file_info_action(id,action,payload.as_ref())
+    }))
 }
 /// # Safety
 /// `url` must point to `len` readable bytes for the duration of this call.
