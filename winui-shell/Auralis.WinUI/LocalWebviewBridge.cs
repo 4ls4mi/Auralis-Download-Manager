@@ -22,7 +22,7 @@ internal static class LocalWebviewBridge
         var adapterPath=Path.Combine(assetDirectory,sandbox?"winui-sandbox-compat.js":"winui-preview-compat.js");
         if (!File.Exists(adapterPath) || !File.Exists(Path.Combine(assetDirectory,"index.html"))) throw new FileNotFoundException("Interface preview assets are missing.");
         var profile=Path.Combine(Path.GetTempPath(),"auralis-winui-preview-"+Guid.NewGuid().ToString("N"));
-        var environment=await CoreWebView2Environment.CreateAsync(userDataFolder:profile);
+        var environment=await CoreWebView2Environment.CreateWithOptionsAsync(null, profile, null);
         await view.EnsureCoreWebView2Async(environment);
         view.DefaultBackgroundColor=Windows.UI.Color.FromArgb(0,0,0,0);
         var core=view.CoreWebView2 ?? throw new InvalidOperationException("WebView2 is unavailable.");
