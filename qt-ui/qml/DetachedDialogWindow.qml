@@ -89,13 +89,22 @@ ApplicationWindow {
     }
 
     header: Item {
-        implicitHeight: heading.implicitHeight + 20
+        implicitHeight: Math.max(dialogBrand.implicitHeight, heading.implicitHeight) + 20
         GlassSurface { anchors.fill: parent; material: root.material; role: "title" }
+        BrandMark {
+            id: dialogBrand
+            anchors.left: parent.left
+            anchors.leftMargin: root.innerPadding
+            anchors.verticalCenter: parent.verticalCenter
+        }
         Label {
             id: heading
-            anchors.fill: parent
-            anchors.leftMargin: root.innerPadding
+            anchors.left: dialogBrand.right
+            anchors.leftMargin: 8
+            anchors.right: parent.right
             anchors.rightMargin: root.innerPadding
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
             text: root.title
             color: root.colors.ink
             font.bold: true

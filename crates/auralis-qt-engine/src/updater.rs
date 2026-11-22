@@ -26,6 +26,36 @@ struct Candidate {
     staged: Option<PathBuf>,
 }
 static CANDIDATE: OnceLock<Mutex<Option<Candidate>>> = OnceLock::new();
+static TRANSFER: Mutex<Option<TransferProgress>> = Mutex::new(None);
+
+#[derive(Serialize)]
+struct TransferProgress {
+    state: &'static str,
+    version: String,
+    downloaded: u64,
+    total: u64,
+}
+
+fn report_transfer(candidate: &Candidate, state: &'static str, downloaded: u64) {
+    if let Ok(mut progress) = TRANSFER.lock() {
+        if let Some(progress) = progress
+            .as_mut()
+            .filter(|value| value.version == candidate.version)
+        {
+            progress.state = state;
+            progress.downloaded = downloaded;
+            progress.total = candidate.size;
+        } else {
+            *progress = Some(TransferProgress {
+                state,
+                version: candidate.version.clone(),
+                downloaded,
+                total: candidate.size,
+            });
+        }
+    }
+}
+
 fn candidate() -> &'static Mutex<Option<Candidate>> {
     CANDIDATE.get_or_init(|| Mutex::new(None))
 }
@@ -39,11 +69,13 @@ pub struct UpdateStatus {
     state: &'static str,
     version: Option<String>,
     notes: Option<String>,
+    size: Option<u64>,
 }
-fn client() -> Result<reqwest::blocking::Client, String> {
+fn client(timeout: Duration) -> Result<reqwest::blocking::Client, String> {
     reqwest::blocking::Client::builder()
         .user_agent("AuralisDownloadManager/update-check")
-        .timeout(Duration::from_secs(180))
+        .connect_timeout(Duration::from_secs(8))
+        .timeout(timeout)
         .build()
         .map_err(|e| e.to_string())
 }
@@ -138,8 +170,9 @@ fn release_feed(
         Err(error)=>fetch(fallback).map_err(|_|format!("Update check unavailable (GitHub: {error}); try again later or download the latest release from GitHub.")),
     }
 }
-fn check() -> Result<UpdateStatus, String> {
-    let value = release_feed(&client()?, FEED, FALLBACK_FEED)?;
+fn check(current: &str) -> Result<UpdateStatus, String> {
+    semver::Version::parse(current).map_err(|_| "The installed version is invalid")?;
+    let value = release_feed(&client(Duration::from_secs(12))?, FEED, FALLBACK_FEED)?;
     let releases = value
         .as_array()
         .ok_or("The GitHub release feed is invalid")?;
@@ -148,7 +181,7 @@ fn check() -> Result<UpdateStatus, String> {
         if release["draft"] == true || release["prerelease"] == true {
             continue;
         }
-        if let Some(candidate) = candidate_from_release(release, env!("CARGO_PKG_VERSION"))? {
+        if let Some(candidate) = candidate_from_release(release, current)? {
             let replace = match next.as_ref() {
                 None => true,
                 Some(old) => {
@@ -166,11 +199,13 @@ fn check() -> Result<UpdateStatus, String> {
             state: "available",
             version: Some(c.version.clone()),
             notes: Some(c.notes.clone()),
+            size: Some(c.size),
         },
         None => UpdateStatus {
             state: "latest",
             version: None,
             notes: None,
+            size: None,
         },
     };
     let mut state = lock()?;
@@ -200,8 +235,46 @@ fn hash_file(path: &std::path::Path) -> Result<(String, u64), String> {
     }
     Ok((hex::encode(hash.finalize()), n))
 }
-fn download() -> Result<(), String> {
-    let c = lock()?.clone().ok_or("Check for an update first")?;
+fn selected_candidate(version: &str) -> Result<Candidate, String> {
+    let current = lock()?;
+    let candidate = current.as_ref().ok_or("Check for an update first")?;
+    if candidate.version != version {
+        return Err("The selected release changed; check again".into());
+    }
+    Ok(candidate.clone())
+}
+
+fn copy_installer(
+    mut source: impl Read,
+    mut destination: impl Write,
+    expected_size: u64,
+    mut bytes_written: impl FnMut(u64),
+) -> Result<(), String> {
+    let mut buffer = [0u8; 65536];
+    let mut count = 0u64;
+    loop {
+        let amount = source
+            .read(&mut buffer)
+            .map_err(|error| error.to_string())?;
+        if amount == 0 {
+            break;
+        }
+        count += amount as u64;
+        if count > expected_size || count > MAX_BYTES {
+            return Err("Installer size does not match the release".into());
+        }
+        destination
+            .write_all(&buffer[..amount])
+            .map_err(|error| error.to_string())?;
+        bytes_written(count);
+    }
+    if count != expected_size {
+        return Err("Installer size does not match the release".into());
+    }
+    Ok(())
+}
+
+fn stage_installer(c: &Candidate) -> Result<PathBuf, String> {
     let folder = mdm_ipc::data_dir()
         .ok_or("The application profile is unavailable")?
         .join("updates");
@@ -213,7 +286,7 @@ fn download() -> Result<(), String> {
     let tmp = folder.join(format!("glass-{nonce}.part"));
     let final_path = folder.join(format!("glass-{nonce}.exe"));
     let result = (|| -> Result<(), String> {
-        let mut source = client()?
+        let source = client(Duration::from_secs(180))?
             .get(&c.url)
             .send()
             .map_err(|e| e.to_string())?
@@ -224,19 +297,10 @@ fn download() -> Result<(), String> {
             .create_new(true)
             .open(&tmp)
             .map_err(|e| e.to_string())?;
-        let mut buf = [0u8; 65536];
-        let mut count = 0u64;
-        loop {
-            let n = source.read(&mut buf).map_err(|e| e.to_string())?;
-            if n == 0 {
-                break;
-            }
-            count += n as u64;
-            if count > c.size || count > MAX_BYTES {
-                return Err("Installer size does not match the release".into());
-            }
-            file.write_all(&buf[..n]).map_err(|e| e.to_string())?;
-        }
+        copy_installer(source, &mut file, c.size, |bytes| {
+            report_transfer(c, "downloading", bytes)
+        })?;
+        report_transfer(c, "verifying", c.size);
         file.sync_all().map_err(|e| e.to_string())?;
         drop(file);
         let (hash, size) = hash_file(&tmp)?;
@@ -250,20 +314,38 @@ fn download() -> Result<(), String> {
         let _ = fs::remove_file(&tmp);
         return Err(e);
     }
-    let mut state = lock()?;
-    let same = state
-        .as_ref()
-        .is_some_and(|next| next.url == c.url && next.sha256 == c.sha256);
-    if !same {
-        let _ = fs::remove_file(&final_path);
-        return Err("The selected release changed; check again".into());
-    }
-    state.as_mut().unwrap().staged = Some(final_path);
-    Ok(())
+    Ok(final_path)
 }
-fn install() -> Result<(), String> {
+
+fn download(version: &str) -> Result<u64, String> {
+    let c = selected_candidate(version)?;
+    report_transfer(&c, "connecting", 0);
+    let result = (|| {
+        let staged = stage_installer(&c)?;
+        let mut state = lock()?;
+        let Some(next) = state
+            .as_mut()
+            .filter(|next| next.url == c.url && next.sha256 == c.sha256)
+        else {
+            let _ = fs::remove_file(staged);
+            return Err("The selected release changed; check again".into());
+        };
+        if let Some(previous) = next.staged.replace(staged) {
+            let _ = fs::remove_file(previous);
+        }
+        Ok(c.size)
+    })();
+    report_transfer(
+        &c,
+        if result.is_ok() { "ready" } else { "failed" },
+        if result.is_ok() { c.size } else { 0 },
+    );
+    result
+}
+
+fn install(version: &str) -> Result<(), String> {
     use std::os::windows::process::CommandExt;
-    let c = lock()?.clone().ok_or("Check for an update first")?;
+    let c = selected_candidate(version)?;
     let installer = c.staged.ok_or("Download the update first")?;
     let (hash, size) = hash_file(&installer)?;
     if hash != c.sha256 || size != c.size {
@@ -295,11 +377,34 @@ fn install() -> Result<(), String> {
         .map_err(|e| format!("Could not start the installer: {e}"))?;
     Ok(())
 }
-pub(super) fn dispatch(action: &str) -> Result<serde_json::Value, String> {
+pub(super) fn dispatch(
+    action: &str,
+    request: &serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    let version = || {
+        request
+            .get("expectedVersion")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| String::from("Select an update version first"))
+    };
     match action {
-        "update-check" => serde_json::to_value(check()?).map_err(|error| error.to_string()),
-        "update-download" => download().map(|()| serde_json::json!({ "ok": true })),
-        "update-install" => install().map(|()| serde_json::json!({ "ok": true })),
+        "update-check" => {
+            let current = request
+                .get("currentVersion")
+                .and_then(serde_json::Value::as_str)
+                .ok_or("The installed version is unavailable")?;
+            serde_json::to_value(check(current)?).map_err(|error| error.to_string())
+        }
+        "update-progress" => TRANSFER
+            .lock()
+            .map_err(|_| String::from("Update progress is unavailable"))
+            .and_then(|progress| {
+                serde_json::to_value(progress.as_ref()).map_err(|error| error.to_string())
+            }),
+        "update-download" => {
+            download(version()?).map(|size| serde_json::json!({ "ok": true, "size": size }))
+        }
+        "update-install" => install(version()?).map(|()| serde_json::json!({ "ok": true })),
         _ => Err("Unsupported release update operation".into()),
     }
 }
@@ -340,6 +445,30 @@ mod tests {
         );
         assert!(candidate_from_release(&bad, "0.3.1").is_err());
     }
+
+    #[test]
+    fn reports_only_bytes_written_and_requires_the_release_size() {
+        let data = vec![42_u8; 96 * 1024];
+        let mut file = Vec::new();
+        let mut seen = Vec::new();
+        copy_installer(data.as_slice(), &mut file, data.len() as u64, |bytes| {
+            seen.push(bytes)
+        })
+        .unwrap();
+        assert_eq!(file, data);
+        assert_eq!(seen, [64 * 1024, 96 * 1024]);
+
+        for incorrect_size in [data.len() - 1, data.len() + 1] {
+            let size_error = copy_installer(
+                data.as_slice(),
+                std::io::sink(),
+                incorrect_size as u64,
+                |_| {},
+            );
+            assert!(size_error.is_err());
+        }
+    }
+
     #[test]
     fn uses_fallback_when_primary_is_rate_limited() {
         use std::{

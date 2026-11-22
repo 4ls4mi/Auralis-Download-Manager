@@ -3,19 +3,17 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import QtQuick.Window
 
 ColumnLayout {
     id: root
 
-    required property Window hostWindow
     property string section: "Advanced"
-    readonly property alias updatesAnchor: updateHeader
     property string updatePresentation: "toast"
     property bool automaticChecks: true
     signal updatePresentationRequested(string value)
     signal automaticChecksRequested(bool value)
-    signal releaseChecked(var value)
+    signal updateCheckRequested()
+    signal updateDetailsRequested()
     readonly property var presentationOptions: [
         {label: qsTr("Show in Auralis only"), value: "quiet"},
         {label: qsTr("Auralis corner popup"), value: "toast"},
@@ -27,10 +25,8 @@ ColumnLayout {
     property bool helperRequest: false
     property bool browserRequest: false
     property var release: null
-    property string updateStage: ""
     property string extensionMessage: ""
     property string helperProblem: ""
-    property string updateProblem: ""
     readonly property bool browserSection: section === "Browser Integration"
     readonly property bool hasWindowsIntegration: Qt.platform.os === "windows"
     readonly property bool installingHelper: Boolean(helpers && helpers.job && helpers.job.state === "installing")
@@ -79,46 +75,6 @@ ColumnLayout {
                 || (action === "registerBrowserHost"
                     ? qsTr("Browser connection registered. Restart the browser to reconnect.")
                     : qsTr("Choose the displayed Auralis folder when loading the unpacked extension."))
-        })
-    }
-
-    function checkForUpdate() {
-        if (updateStage)
-            return
-        updateStage = "check"
-        updateProblem = ""
-        release = null
-        engine.request({shellAction: "update-check"}, function(result, error) {
-            updateStage = ""
-            if (error || !result || !["available", "latest"].includes(result.state)) {
-                updateProblem = error || (result && result.message) || qsTr("Could not check for Auralis updates.")
-                return
-            }
-            release = result
-            releaseChecked(result)
-        })
-    }
-
-    function downloadUpdate() {
-        if (updateStage || !release || release.state !== "available")
-            return
-        updateStage = "download"
-        updateProblem = ""
-        engine.request({shellAction: "update-download"}, function(result, error) {
-            if (error || !result || !result.ok) {
-                updateStage = ""
-                updateProblem = error || qsTr("Could not download and verify the update.")
-                return
-            }
-            updateStage = "install"
-            engine.request({shellAction: "update-install"}, function(installed, installError) {
-                if (installError || !installed || !installed.ok) {
-                    updateStage = ""
-                    updateProblem = installError || qsTr("Could not launch the verified installer.")
-                } else {
-                    updateStage = "closing"
-                }
-            })
         })
     }
 
@@ -252,7 +208,6 @@ ColumnLayout {
         }
 
         Label {
-            id: updateHeader
             Layout.fillWidth: true
             Layout.topMargin: 12
             text: qsTr("Auralis updates")
@@ -296,90 +251,26 @@ ColumnLayout {
             color: root.colors.muted
             text: {
                 if (!root.hasWindowsIntegration) return qsTr("The installer updater is available on Windows.")
-                if (root.updateStage === "check") return qsTr("Checking for updates…")
-                if (root.updateStage === "download") return qsTr("Downloading and verifying the installer…")
-                if (root.updateStage === "install") return qsTr("Opening the verified installer…")
-                if (root.updateStage === "closing") return qsTr("Closing Auralis for installation…")
-                if (!root.release) return ""
-                if (root.release.state === "available") return qsTr("Auralis %1 is available.").arg(root.release.version)
-                return qsTr("Auralis is up to date.")
+                return root.release ? qsTr("Auralis %1 is available.").arg(root.release.version) : ""
             }
             visible: text.length > 0
         }
 
-        ProgressBar {
-            Layout.fillWidth: true
-            visible: root.updateStage === "download"
-            indeterminate: true
-            Accessible.name: qsTr("Downloading Auralis update")
-        }
-
         Flow {
-            id: updateButtons
             Layout.fillWidth: true
             spacing: 8
             visible: root.hasWindowsIntegration
 
             GlassButton {
                 text: qsTr("Check for updates")
-                enabled: !root.updateStage
-                onClicked: root.checkForUpdate()
+                onClicked: root.updateCheckRequested()
             }
 
             GlassButton {
-                text: qsTr("Show release notes")
-                visible: Boolean(root.release && root.release.notes)
-                onClicked: releaseNotes.open()
-            }
-
-            GlassButton {
-                text: qsTr("Download and install")
+                text: qsTr("Review update")
                 visible: Boolean(root.release && root.release.state === "available")
-                enabled: !root.updateStage
-                onClicked: root.downloadUpdate()
+                onClicked: root.updateDetailsRequested()
             }
-        }
-
-        DetachedDialogWindow {
-            id: releaseNotes
-            hostWindow: root.hostWindow
-            title: root.release && root.release.version
-                ? qsTr("Auralis %1 release notes").arg(root.release.version) : qsTr("Auralis release notes")
-            width: 590
-            minimumHeight: 265
-            onDismissRequested: hide()
-
-            bodyContent: TextArea {
-                Layout.fillWidth: true
-                text: root.release && root.release.notes ? root.release.notes : ""
-                color: root.colors.text
-                readOnly: true
-                selectByMouse: true
-                wrapMode: TextEdit.Wrap
-                textFormat: TextEdit.PlainText
-                background: Item {}
-            }
-
-            footer: Item {
-                implicitHeight: closeNotes.implicitHeight + 16
-                GlassSurface { anchors.fill: parent; role: "footer" }
-                GlassButton {
-                    id: closeNotes
-                    anchors.right: parent.right
-                    anchors.rightMargin: 12
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: qsTr("Close")
-                    onClicked: releaseNotes.hide()
-                }
-            }
-        }
-
-        Label {
-            Layout.fillWidth: true
-            visible: root.updateProblem.length > 0
-            text: root.updateProblem
-            color: root.colors.destructive
-            wrapMode: Text.WordWrap
         }
     }
 }

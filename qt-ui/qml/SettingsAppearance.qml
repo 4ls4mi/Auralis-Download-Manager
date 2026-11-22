@@ -146,8 +146,21 @@ GridLayout {
         Repeater {
             model: root.sections
             delegate: TabButton {
+                id: topTab
                 required property string modelData
+                required property int index
+                readonly property color accent: MaterialTheme.navigationColor(index, root.colors.light)
+                readonly property bool emphasized: checked || hovered || visualFocus
+                readonly property color face: MaterialTheme.controlHighlight(accent, down, hovered || visualFocus)
                 text: modelData
+                palette.buttonText: emphasized ? MaterialTheme.contrastInk(face) : root.colors.ink
+                background: Rectangle {
+                    anchors.margins: 2
+                    radius: 6
+                    color: topTab.emphasized ? topTab.face : MaterialTheme.rgba(topTab.accent, .15)
+                    border.color: MaterialTheme.rgba(topTab.accent, .56)
+                    border.width: 1
+                }
             }
         }
     }
@@ -179,6 +192,7 @@ GridLayout {
                 rightPadding: 7
                 text: modelData
                 checked: root.activeTab === index
+                accent: MaterialTheme.navigationColor(index, root.colors.light)
                 Accessible.role: Accessible.PageTab
                 Accessible.selected: checked
                 onClicked: root.activeTab = index
@@ -188,30 +202,11 @@ GridLayout {
                     font.family: tab.font.family
                     font.pixelSize: tab.font.pixelSize
                     font.weight: tab.checked ? Font.DemiBold : Font.Normal
-                    color: tab.checked ? root.colors.navigationInk || root.colors.ink : root.colors.ink
+                    color: tab.buttonInk
                     verticalAlignment: Text.AlignVCenter
                     wrapMode: Text.Wrap
                     maximumLineCount: 2
                     elide: Text.ElideRight
-                }
-
-                background: Rectangle {
-                    radius: 5
-                    color: tab.checked ? root.colors.navigationFill || Qt.alpha(root.colors.accent, .16)
-                        : tab.hovered || tab.down ? Qt.alpha(root.colors.ink, .075) : "transparent"
-                    border.width: tab.visualFocus ? 1 : 0
-                    border.color: root.colors.menuRail || root.colors.accent
-
-                    Rectangle {
-                        visible: tab.checked
-                        anchors.left: parent.left
-                        anchors.top: parent.top
-                        anchors.bottom: parent.bottom
-                        anchors.margins: 2
-                        width: 3
-                        radius: width / 2
-                        color: root.colors.menuRail || root.colors.accent
-                    }
                 }
 
                 Keys.onPressed: event => {
@@ -253,8 +248,9 @@ GridLayout {
                         Layout.fillWidth: true
                         Layout.minimumWidth: 120
                         material: modelData.id
-                        text: modelData.name
-                        Accessible.description: materialPalette.opaque ? qsTr("Opaque material") : ""
+                        text: checked ? qsTr("✓  %1").arg(modelData.name) : modelData.name
+                        Accessible.name: modelData.name
+                        Accessible.selected: checked
                         checkable: true
                         checked: MaterialTheme.current === modelData.id
                         highlighted: checked
@@ -271,23 +267,22 @@ GridLayout {
             RowLayout {
                 Layout.fillWidth: true
                 Slider {
+                    objectName: "translucencySlider"
                     Layout.fillWidth: true
                     from: 0
                     to: 100
                     stepSize: 1
-                    enabled: !root.colors.opaque
                     value: (1 - MaterialTheme.opacityFor(MaterialTheme.current)) * 100
                     onMoved: MaterialTheme.translucency = value / 100
                     Accessible.name: qsTr("Translucency")
                 }
                 Label {
-                    text: root.colors.opaque ? qsTr("Opaque") :
-                        qsTr("%1%").arg(Math.round((1 - MaterialTheme.opacityFor(MaterialTheme.current)) * 100))
+                    text: qsTr("%1%").arg(Math.round((1 - MaterialTheme.opacityFor(MaterialTheme.current)) * 100))
                     color: root.colors.text
                 }
                 GlassButton {
                     text: qsTr("Use material default")
-                    enabled: !root.colors.opaque && MaterialTheme.translucency >= 0
+                    enabled: MaterialTheme.translucency >= 0
                     onClicked: MaterialTheme.translucency = -1
                 }
             }

@@ -9,6 +9,7 @@ Item {
     required property Window hostWindow
     property int borderSize: 7
     property int cornerSize: 13
+    property bool windowMouseEvents: false
 
     // ApplicationWindow's content item is inset by the header and footer.
     parent: hostWindow.contentItem.parent ?? hostWindow.contentItem
@@ -16,6 +17,11 @@ Item {
     z: 20
     objectName: "windowResizeHandles"
     visible: hostWindow.visibility === Window.Windowed
+
+    Component.onCompleted: {
+        if (windowMouseEvents && Qt.platform.os === "windows")
+            engine.installInteractiveResize(hostWindow, borderSize, cornerSize)
+    }
 
     component ResizeArea: MouseArea {
         id: resizeArea

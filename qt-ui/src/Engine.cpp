@@ -1,4 +1,5 @@
 #include "Engine.h"
+#include "FrameResize.h"
 #include "LocalFiles.h"
 
 #include <QCoreApplication>
@@ -83,6 +84,7 @@ Engine::Engine(QJSEngine *scriptEngine, bool startHidden, bool smoke, QObject *p
 {
     m_commands.setMaxThreadCount(1);
     m_localJobs.setMaxThreadCount(1);
+    m_updateJobs.setMaxThreadCount(1);
     m_serviceThread.setMaxThreadCount(1);
     m_library.setLoadHints(QLibrary::PreventUnloadHint);
     m_run = reinterpret_cast<Run>(m_library.resolve("auralis_engine_run"));
@@ -101,6 +103,7 @@ Engine::~Engine()
     // Worker lambdas borrow the engine and profile. Wait while they still exist.
     m_commands.waitForDone();
     m_localJobs.waitForDone();
+    m_updateJobs.waitForDone();
     m_serviceThread.waitForDone();
 }
 
@@ -134,8 +137,25 @@ QVariantMap Engine::exchange(const QVariantMap &command) const
 QVariantMap Engine::dispatch(const QVariantMap &command) const
 {
     const QString local = command.value(QStringLiteral("local")).toString();
-    if (local.isEmpty())
+    if (local.isEmpty()) {
+        const QString shellAction = command.value(QStringLiteral("shellAction")).toString();
+        if (m_smoke && shellAction.startsWith(QStringLiteral("update-")))
+            return failure(tr("External update requests are disabled during the installation smoke test."));
+        if (shellAction == QStringLiteral("update-check")) {
+            auto request = command;
+            request.insert(QStringLiteral("currentVersion"), version());
+            return exchange(request);
+        }
+        if (shellAction == QStringLiteral("update-install")) {
+            const auto backup = exchange({{QStringLiteral("query"), QStringLiteral("glass-full-backup-status")}});
+            const auto status = backup.value(QStringLiteral("result")).toMap();
+            if (!status.contains(QStringLiteral("pending")))
+                return failure(tr("Could not confirm that Auralis is ready to close for the update."));
+            if (status.value(QStringLiteral("pending")).toBool())
+                return failure(tr("Wait for the download backup or restore to finish before installing the update."));
+        }
         return exchange(command);
+    }
     if (local == QStringLiteral("startupSettings"))
         return result(startupSettings());
     if (local == QStringLiteral("setStartupSettings"))
@@ -188,13 +208,19 @@ void Engine::request(const QVariantMap &command, const QJSValue &callback)
         } else if (!error.isEmpty()) {
             emit operationFailed(error);
         }
-        if (error.isEmpty() && shellAction == QStringLiteral("update-install"))
+        if (error.isEmpty() && shellAction == QStringLiteral("update-install")
+            && value.toMap().value(QStringLiteral("ok")).toBool())
             requestQuit();
     };
     if (local == QStringLiteral("openExtensionFolder")) {
         const auto path = QCoreApplication::applicationDirPath() + QStringLiteral("/auralis-extension");
         deliver(openFolder(path) ? result(QVariantMap{{QStringLiteral("ok"), true}})
                                  : failure(tr("Could not open the bundled extension folder.")));
+        return;
+    }
+    // This ABI call reads the updater's in-memory counters without waiting on its transfer worker.
+    if (shellAction == QStringLiteral("update-progress")) {
+        deliver(exchange(command));
         return;
     }
 
@@ -205,8 +231,8 @@ void Engine::request(const QVariantMap &command, const QJSValue &callback)
         if (changesDownloads)
             refresh();
     });
-    QThreadPool *pool = local.isEmpty() && !shellAction.startsWith(QStringLiteral("update-"))
-        ? &m_commands : &m_localJobs;
+    QThreadPool *pool = shellAction.startsWith(QStringLiteral("update-")) ? &m_updateJobs
+        : local.isEmpty() ? &m_commands : &m_localJobs;
     watcher->setFuture(QtConcurrent::run(pool, [this, command] { return dispatch(command); }));
 }
 
@@ -388,4 +414,9 @@ bool Engine::applyBackdrop(QWindow *window, bool enabled, bool dark) const
     Q_UNUSED(dark);
     return false;
 #endif
+}
+
+void Engine::installInteractiveResize(QWindow *window, int borderSize, int cornerSize) const
+{
+    FrameResize::install(window, borderSize, cornerSize);
 }

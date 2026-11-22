@@ -1,0 +1,273 @@
+pragma ComponentBehavior: Bound
+
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import "TransferData.js" as TransferData
+
+DetachedDialogWindow {
+    id: update
+
+    required property var backend
+    property var release: null
+    property var transfer: null
+    property string stage: ""
+    property string problem: ""
+    property bool waitingForAutomaticCheck: false
+    readonly property bool checking: stage === "checking" || stage === "rechecking"
+    readonly property bool requestInProgress: checking || busy
+    readonly property double totalBytes: Number(transfer?.total || release?.size || 0)
+    readonly property double downloadedBytes: Math.min(totalBytes, Math.max(0, Number(transfer?.downloaded || 0)))
+    readonly property real completion: totalBytes > 0 ? downloadedBytes / totalBytes : 0
+
+    signal checked(var result)
+
+    objectName: "updateWindow"
+    title: qsTr("Auralis Update")
+    width: 550
+    minimumHeight: 245
+    busy: ["rechecking", "downloading", "installing", "closing"].includes(stage)
+    onDismissRequested: hide()
+    onVisibleChanged: if (!visible) closeWhenCurrent.stop()
+
+    function beginCheck(awaitAutomaticCheck) {
+        if (requestInProgress) { open(); return }
+        closeWhenCurrent.stop()
+        stage = "checking"
+        problem = ""
+        waitingForAutomaticCheck = awaitAutomaticCheck
+        open()
+        if (!awaitAutomaticCheck)
+            backend.request({shellAction: "update-check"}, function(result, error) { update.finishCheck(result, error) })
+    }
+
+    function finishCheck(result, error) {
+        waitingForAutomaticCheck = false
+        if (error || !result || !["latest", "available"].includes(result.state)) {
+            stage = "error"
+            problem = error || qsTr("Could not check for Auralis updates.")
+            return
+        }
+        checked(result)
+        release = result.state === "available" ? result : null
+        stage = release ? "available" : "latest"
+        if (stage === "latest" && visible) closeWhenCurrent.restart()
+    }
+
+    function showRelease(result) {
+        if (requestInProgress) { open(); return }
+        if (!result || result.state !== "available") {
+            beginCheck(false)
+            return
+        }
+        closeWhenCurrent.stop()
+        release = result
+        transfer = null
+        problem = ""
+        stage = "available"
+        open()
+    }
+
+    function downloadAndInstall() {
+        if (requestInProgress || !release) return
+        const version = String(release.version)
+        stage = "rechecking"
+        problem = ""
+        transfer = null
+        backend.request({shellAction: "update-check"}, function(result, error) {
+            if (error || !result || !["latest", "available"].includes(result.state)) {
+                stage = "available"
+                problem = error || qsTr("Could not confirm the selected release.")
+                return
+            }
+            if (result.state === "latest") { finishCheck(result, null); return }
+            checked(result)
+            release = result
+            if (String(result.version) !== version) {
+                stage = "available"
+                problem = qsTr("A newer release is available. Review it before installing.")
+                return
+            }
+            stage = "downloading"
+            backend.request({shellAction: "update-download", expectedVersion: version}, function(receipt, downloadError) {
+                if (downloadError || !receipt || !receipt.ok) {
+                    stage = "available"
+                    problem = downloadError || qsTr("Could not download and verify the installer.")
+                    return
+                }
+                transfer = {version: version, total: Number(receipt.size || release.size), downloaded: Number(receipt.size || release.size)}
+                installVerified(version)
+            })
+        })
+    }
+
+    function installVerified(version) {
+        stage = "installing"
+        problem = ""
+        backend.request({shellAction: "update-install", expectedVersion: version}, function(result, error) {
+            if (error || !result || !result.ok) {
+                stage = "available"
+                problem = error || qsTr("Could not start the verified installer.")
+                return
+            }
+            stage = "closing"
+        })
+    }
+
+    function pollTransfer() {
+        if (stage !== "downloading") return
+        backend.request({shellAction: "update-progress"}, function(status, error) {
+            if (!error && stage === "downloading" && status && release && status.version === release.version
+                    && ["connecting", "downloading", "verifying"].includes(status.state))
+                transfer = status
+        })
+    }
+
+    Timer {
+        id: closeWhenCurrent
+        interval: 2200
+        onTriggered: if (update.stage === "latest") update.hide()
+    }
+
+    Timer {
+        interval: 160
+        repeat: true
+        running: update.stage === "downloading"
+        triggeredOnStart: true
+        onTriggered: update.pollTransfer()
+    }
+
+    bodyContent: [
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 12
+            BrandMark {
+                Layout.preferredWidth: 44
+                Layout.preferredHeight: 44
+            }
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 4
+                Label {
+                    Layout.fillWidth: true
+                    text: {
+                        if (update.checking) return qsTr("Checking for updates…")
+                        if (update.stage === "latest") return qsTr("Auralis is up to date")
+                        if (update.stage === "downloading") return update.transfer?.state === "verifying" ?
+                            qsTr("Verifying the installer…") : qsTr("Downloading Auralis…")
+                        if (update.stage === "installing") return qsTr("Starting the installer…")
+                        if (update.stage === "closing") return qsTr("Closing Auralis for the update…")
+                        if (update.stage === "error") return qsTr("Update check unavailable")
+                        return qsTr("Auralis %1 is available").arg(update.release?.version || "")
+                    }
+                    textFormat: Text.PlainText
+                    font.pixelSize: 19
+                    font.weight: Font.DemiBold
+                    color: update.colors.ink
+                    wrapMode: Text.WordWrap
+                }
+                Label {
+                    Layout.fillWidth: true
+                    text: qsTr("Installed version %1").arg(update.backend.version || "")
+                    textFormat: Text.PlainText
+                    color: update.colors.muted
+                    wrapMode: Text.WordWrap
+                }
+                Label {
+                    Layout.fillWidth: true
+                    visible: update.busy && Boolean(update.release?.version)
+                    text: qsTr("Updating to %1").arg(update.release?.version || "")
+                    textFormat: Text.PlainText
+                    color: update.colors.muted
+                    wrapMode: Text.WordWrap
+                }
+            }
+        },
+        ProgressBar {
+            Layout.fillWidth: true
+            visible: update.checking
+            indeterminate: true
+            Accessible.name: qsTr("Checking for Auralis updates")
+        },
+        GlassProgress {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 24
+            visible: update.stage === "downloading"
+            value: update.completion
+            animated: visible
+            showLabel: false
+        },
+        Label {
+            Layout.fillWidth: true
+            visible: update.stage === "downloading" && update.totalBytes > 0
+            text: qsTr("%1% · %2 of %3").arg(Math.floor(update.completion * 100))
+                .arg(TransferData.bytes(update.downloadedBytes)).arg(TransferData.bytes(update.totalBytes))
+            color: update.colors.muted
+            Accessible.name: qsTr("Update download progress")
+        },
+        Label {
+            Layout.fillWidth: true
+            visible: Boolean(update.problem)
+            text: update.problem
+            textFormat: Text.PlainText
+            color: update.colors.destructive
+            wrapMode: Text.WordWrap
+        },
+        ColumnLayout {
+            Layout.fillWidth: true
+            visible: Boolean(update.release?.notes) && update.stage === "available"
+            spacing: 6
+            Label {
+                text: qsTr("Release notes")
+                color: update.colors.ink
+                font.weight: Font.DemiBold
+            }
+            TextArea {
+                Layout.fillWidth: true
+                text: visible ? update.release?.notes || "" : ""
+                textFormat: TextEdit.PlainText
+                readOnly: true
+                selectByMouse: true
+                wrapMode: TextEdit.Wrap
+                color: update.colors.ink
+                padding: 8
+                background: GlassSurface { role: "field" }
+            }
+        }
+    ]
+
+    footer: Item {
+        implicitHeight: actions.implicitHeight + 16
+        GlassSurface { anchors.fill: parent; role: "footer" }
+        RowLayout {
+            id: actions
+            anchors.fill: parent
+            anchors.leftMargin: 14
+            anchors.rightMargin: 14
+            spacing: 8
+            Item { Layout.fillWidth: true }
+            GlassButton {
+                text: qsTr("Close")
+                accent: update.colors.destructive
+                enabled: !update.busy
+                onClicked: update.hide()
+            }
+            GlassButton {
+                objectName: "manualUpdateRetry"
+                text: qsTr("Check again")
+                accent: update.colors.caution
+                visible: update.stage === "error"
+                onClicked: update.beginCheck(false)
+            }
+            GlassButton {
+                objectName: "downloadAuralisUpdate"
+                text: qsTr("Download and install")
+                accent: update.colors.positive
+                visible: update.stage === "available" || update.stage === "rechecking"
+                enabled: update.stage === "available"
+                highlighted: true
+                onClicked: update.downloadAndInstall()
+            }
+        }
+    }
+}

@@ -11,14 +11,15 @@ Basic.Button {
     property bool filled: false
     property color accent: danger ? materialPalette.destructive : materialPalette.accent
     readonly property var materialPalette: MaterialTheme.profile(material)
-    readonly property real prominence: down ? .96 : hovered ? .76 : checked || highlighted ? .54 : .12
+    readonly property real prominence: .31
     readonly property color activeAccent: MaterialTheme.safeAccent(MaterialTheme.forcedAccent || accent, materialPalette.light)
     readonly property color displayAccent: hovered || down
         ? MaterialTheme.mix(activeAccent, materialPalette.light ? "#2d124c" : "#ffffff", .24, 1)
         : activeAccent
-    readonly property color fillColor: down ? MaterialTheme.mix(activeAccent, "#000000", .15, 1)
-        : hovered || visualFocus ? MaterialTheme.mix(activeAccent, "#ffffff", .17, 1) : activeAccent
-    readonly property color fillInk: MaterialTheme.relativeLuminance(fillColor) < .179 ? "#ffffff" : "#080a12"
+    readonly property bool accentFill: filled || enabled && (down || hovered || visualFocus || checked || highlighted)
+    readonly property color fillColor: MaterialTheme.controlHighlight(activeAccent, down, hovered || visualFocus)
+    readonly property color fillInk: MaterialTheme.contrastInk(fillColor)
+    readonly property color buttonInk: accentFill ? fillInk : materialPalette.text
 
     hoverEnabled: true
     font.pixelSize: 13
@@ -28,14 +29,14 @@ Basic.Button {
     rightPadding: 13
     implicitWidth: Math.max(35, implicitContentWidth + leftPadding + rightPadding)
     implicitHeight: Math.max(32, implicitContentHeight + topPadding + bottomPadding)
-    palette.buttonText: filled ? fillInk : materialPalette.text
-    palette.highlightedText: filled ? fillInk : materialPalette.text
-    icon.color: filled ? fillInk : displayAccent
+    palette.buttonText: buttonInk
+    palette.highlightedText: buttonInk
+    icon.color: accentFill ? fillInk : displayAccent
 
     background: Item {
         GlassSurface {
             anchors.fill: parent
-            visible: !control.filled
+            visible: !control.accentFill
             material: control.material
             role: "button"
             radius: Math.min(10, control.materialPalette.radius)
@@ -45,19 +46,20 @@ Basic.Button {
         }
         Rectangle {
             anchors.fill: parent
-            visible: control.filled
+            visible: control.accentFill
             radius: Math.min(10, control.materialPalette.radius)
             color: control.fillColor
             opacity: control.enabled ? 1 : .47
         }
         Rectangle {
             anchors.fill: parent
-            anchors.margins: 2
+            anchors.margins: control.visualFocus ? 2 : 0
             color: "transparent"
-            radius: 5
-            border.width: 2
-            border.color: control.filled ? control.fillInk : control.materialPalette.text
-            visible: control.visualFocus
+            radius: Math.max(3, Math.min(10, control.materialPalette.radius) - anchors.margins)
+            border.width: control.visualFocus ? 2 : 1
+            border.color: control.visualFocus ? control.buttonInk
+                : MaterialTheme.rgba(control.activeAccent, control.enabled ? .57 : .25)
+            visible: control.visualFocus || !control.accentFill
         }
     }
 }

@@ -15,7 +15,8 @@ Window {
     property string presentation: "toast"
     property var availableUpdate: null
 
-    readonly property bool canCheck: automaticChecks && Qt.platform.os === "windows" && Boolean(backend && backend.ready)
+    readonly property bool updateSupported: Qt.platform.os === "windows"
+    readonly property bool canCheck: automaticChecks && updateSupported && Boolean(backend)
     readonly property var colors: MaterialTheme.palette
     readonly property bool working: stage !== ""
     readonly property int bottomGap: 148
@@ -23,9 +24,6 @@ Window {
     property var release: null
     property string offeredVersion: ""
     property string stage: ""
-    property string problem: ""
-
-    signal detailsRequested(var update)
 
     title: qsTr("Auralis update available")
     flags: Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.WindowDoesNotAcceptFocus
@@ -63,10 +61,10 @@ Window {
         }
         release = update;
         offeredVersion = version;
-        problem = "";
         if (presentation === "dialog") {
             visible = false;
-            detailsRequested(release);
+            updateWindow.hostWindow = anchorWindow;
+            updateWindow.showRelease(release);
         } else {
             visible = presentation === "toast" || presentation === "notify";
             if (presentation === "notify")
@@ -78,11 +76,15 @@ Window {
     onPresentationChanged: if (presentation === "quiet" && !working) visible = false
 
     function checkForUpdate(reminder) {
-        if (!canCheck || working)
+        if (!canCheck || working || updateWindow.requestInProgress)
             return;
         stage = "check";
         backend.request({ shellAction: "update-check" }, function(result, error) {
             popup.stage = "";
+            if (updateWindow.waitingForAutomaticCheck) {
+                updateWindow.finishCheck(result, error);
+                return;
+            }
             if (error || !result || !popup.canCheck)
                 return;
             if (result.state === "latest") {
@@ -120,47 +122,49 @@ Window {
         if (working || !release)
             return;
         visible = false;
-        detailsRequested(release);
+        if (!updateWindow.requestInProgress) updateWindow.hostWindow = anchorWindow;
+        updateWindow.showRelease(release);
+    }
+
+    function manualCheck(owner) {
+        if (!updateSupported) return;
+        visible = false;
+        if (!updateWindow.requestInProgress) updateWindow.hostWindow = owner || anchorWindow;
+        updateWindow.beginCheck(stage === "check");
+    }
+
+    function showUpdate(owner) {
+        if (!availableUpdate) { manualCheck(owner); return; }
+        visible = false;
+        if (!updateWindow.requestInProgress) updateWindow.hostWindow = owner || anchorWindow;
+        updateWindow.showRelease(availableUpdate);
     }
 
     function installUpdate() {
-        if (working || !release)
-            return;
-        const version = String(release.version);
-        problem = "";
-        stage = "verify";
-        backend.request({ shellAction: "update-check" }, function(result, error) {
-            if (error || !result || result.state !== "available" || String(result.version) !== version) {
-                popup.stage = "";
-                if (result && result.state === "available" && result.version) {
-                    popup.release = result;
-                    popup.offeredVersion = String(result.version);
-                }
-                popup.problem = error || qsTr("The available release changed. Review it before installing.");
-                return;
+        review();
+        updateWindow.downloadAndInstall();
+    }
+
+    UpdateWindow {
+        id: updateWindow
+        hostWindow: popup.anchorWindow
+        backend: popup.backend
+        onChecked: result => {
+            popup.availableUpdate = result.state === "available" ? result : null;
+            if (result.state === "available") {
+                popup.release = result;
+                popup.offeredVersion = String(result.version);
             }
-            popup.stage = "download";
-            popup.backend.request({ shellAction: "update-download" }, function(downloaded, downloadError) {
-                if (downloadError || !downloaded || !downloaded.ok) {
-                    popup.stage = "";
-                    popup.problem = downloadError || qsTr("Could not download and verify the installer.");
-                    return;
-                }
-                popup.stage = "install";
-                popup.backend.request({ shellAction: "update-install" }, function(installed, installError) {
-                    if (installError || !installed || !installed.ok) {
-                        popup.stage = "";
-                        popup.problem = installError || qsTr("Could not launch the verified installer.");
-                    } else {
-                        popup.stage = "closing";
-                    }
-                });
-            });
-        });
+            if (result.state === "latest") {
+                popup.release = null;
+                preferences.reminderVersion = "";
+                preferences.remindAfter = 0;
+            }
+        }
     }
 
     Timer {
-        interval: 3500
+        interval: 700
         running: popup.canCheck
         onTriggered: popup.checkForUpdate(false)
     }
@@ -189,6 +193,10 @@ Window {
         spacing: 8
         RowLayout {
             Layout.fillWidth: true
+            BrandMark {
+                Layout.preferredWidth: 22
+                Layout.preferredHeight: 22
+            }
             Label {
                 Layout.fillWidth: true
                 text: popup.title
@@ -200,6 +208,7 @@ Window {
             GlassButton {
                 objectName: "updateNoticeDismiss"
                 text: "×"
+                accent: popup.colors.destructive
                 Accessible.name: qsTr("Dismiss this version")
                 ToolTip.text: qsTr("Dismiss this version")
                 ToolTip.visible: hovered
@@ -213,14 +222,9 @@ Window {
         }
         Label {
             Layout.fillWidth: true
-            color: popup.problem ? popup.colors.destructive : popup.colors.muted
+            color: popup.colors.muted
             wrapMode: Text.Wrap
-            text: popup.problem || ({
-                verify: qsTr("Checking the selected release…"),
-                download: qsTr("Downloading and verifying the installer…"),
-                install: qsTr("Starting the verified installer…"),
-                closing: qsTr("Closing Auralis for the update…")
-            }[popup.stage]) || qsTr("Version %1 is ready to review.").arg(popup.release ? popup.release.version : "")
+            text: qsTr("Version %1 is ready to review.").arg(popup.release ? popup.release.version : "")
         }
         RowLayout {
             Layout.fillWidth: true
@@ -234,6 +238,7 @@ Window {
             GlassButton {
                 objectName: "updateNoticeLater"
                 text: qsTr("Later")
+                accent: popup.colors.caution
                 ToolTip.text: qsTr("Remind me in an hour")
                 ToolTip.visible: hovered
                 enabled: !popup.working
@@ -243,7 +248,7 @@ Window {
             GlassButton {
                 objectName: "updateNoticeInstall"
                 text: qsTr("Download and install")
-                accent: popup.colors.accent
+                accent: popup.colors.positive
                 highlighted: true
                 enabled: !popup.working
                 onClicked: popup.installUpdate()

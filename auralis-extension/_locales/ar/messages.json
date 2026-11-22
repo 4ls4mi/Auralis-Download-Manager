@@ -1,4 +1,28 @@
 {
+  "appearance_label": {
+    "message": "المظهر"
+  },
+  "appearance_options": {
+    "message": "مظهر الإضافة"
+  },
+  "appearance_follow": {
+    "message": "اتّباع مظهر Auralis"
+  },
+  "appearance_system": {
+    "message": "اتّباع مظهر المتصفح"
+  },
+  "appearance_current": {
+    "message": "خامة تطبيق سطح المكتب: $1"
+  },
+  "appearance_cached": {
+    "message": "آخر خامة محفوظة لتطبيق سطح المكتب: $1"
+  },
+  "appearance_unavailable": {
+    "message": "افتح Auralis لتحميل خاماته. يُستخدم مظهر المتصفح إلى أن تتوفر."
+  },
+  "appearance_options_help": {
+    "message": "اختر مظهر هذه الإضافة. يحدّث خيار اتّباع Auralis المظهر عند تغييره في تطبيق سطح المكتب. ينطبق الاختيار المستقل على الإضافة فقط."
+  },
   "name": {
     "message": "Auralis Download Manager"
   },

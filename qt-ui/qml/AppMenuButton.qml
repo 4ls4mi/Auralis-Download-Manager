@@ -10,8 +10,12 @@ Basic.Button {
     property bool menuOpen: false
     property string railIcon: ""
     property color idleInk: colors.ink
+    property color accent: colors.highlight
     readonly property var colors: MaterialTheme.menuColors
     readonly property bool emphasized: enabled && (hovered || visualFocus || down || menuOpen)
+    readonly property color face: MaterialTheme.controlHighlight(MaterialTheme.forcedAccent || accent, down,
+        hovered || visualFocus)
+    readonly property color activeInk: MaterialTheme.contrastInk(face)
 
     hoverEnabled: true
     leftPadding: 11
@@ -20,8 +24,8 @@ Basic.Button {
     bottomPadding: 5
     font.pixelSize: 14
     font.weight: Font.Medium
-    palette.buttonText: railIcon.length ? "transparent" : emphasized ? colors.highlightInk : idleInk
-    palette.highlightedText: colors.highlightInk
+    palette.buttonText: railIcon.length ? "transparent" : emphasized ? activeInk : idleInk
+    palette.highlightedText: activeInk
     Accessible.name: text.replace("&", "")
     ToolTip.visible: railIcon.length > 0 && hovered && !menuOpen
     ToolTip.text: Accessible.name
@@ -33,7 +37,7 @@ Basic.Button {
         height: 19
         visible: button.railIcon.length > 0
         symbol: button.railIcon
-        ink: button.emphasized ? button.colors.highlightInk : button.idleInk
+        ink: button.emphasized ? button.activeInk : button.idleInk
     }
 
     background: Item {
@@ -43,8 +47,9 @@ Basic.Button {
             anchors.fill: parent
             anchors.margins: 1
             radius: 5
-            color: button.down ? button.colors.pressed : button.colors.highlight
-            visible: button.emphasized
+            color: button.emphasized ? button.face : MaterialTheme.rgba(button.accent, .13)
+            border.width: button.visualFocus ? 1 : 0
+            border.color: button.activeInk
         }
 
         Rectangle {
@@ -53,7 +58,7 @@ Basic.Button {
             width: button.emphasized ? Math.max(0, parent.width - 16) : 0
             height: 2
             radius: 1
-            color: button.colors.rail
+            color: button.activeInk
 
             Behavior on width {
                 NumberAnimation {

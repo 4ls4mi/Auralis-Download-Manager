@@ -442,7 +442,14 @@ ApplicationWindow {
             hiddenProgressIds = hiddenProgressIds.filter(hidden => hidden !== key)
     }
 
-    function showDownload(id) {
+    function canRecoverDownload(item) {
+        if (!item || item.status === "Downloading" || item.status === "Complete")
+            return false
+        const visual = visualById[item.id]
+        return Boolean(visual) && !visual.is_torrent && !visual.is_video && !visual.is_gallery && !visual.is_remote
+    }
+
+    function showDownload(id, recovery) {
         const key = String(id)
         const wasHidden = hiddenProgressIds.includes(key)
         let details = detailWindows[key]
@@ -459,6 +466,8 @@ ApplicationWindow {
             details.showNormal()
         else
             details.show()
+        if (recovery)
+            details.openRecovery()
         details.raise()
         details.requestActivate()
     }
@@ -513,14 +522,18 @@ ApplicationWindow {
     }
 
     ListModel { id: rows }
+    BrowserAppearance { backend: engine }
     function showUpdates() {
-        settingsWindow.showUpdate(settingsWindow.availableUpdate)
+        updateNotice.showUpdate()
     }
 
     SettingsWindow {
         id: settingsWindow
         objectName: "settingsWindow"
         transientParent: null
+        availableUpdate: updateNotice.availableUpdate
+        onUpdateCheckRequested: updateNotice.manualCheck(settingsWindow)
+        onUpdateDetailsRequested: updateNotice.showUpdate(settingsWindow)
         onConfigChanged: if (config) enginePrompts.settings = config
     }
     UpdateNotice {
@@ -529,8 +542,6 @@ ApplicationWindow {
         anchorWindow: root
         automaticChecks: settingsWindow.automaticUpdateChecks
         presentation: settingsWindow.updatePresentation
-        onAvailableUpdateChanged: settingsWindow.availableUpdate = updateNotice.availableUpdate
-        onDetailsRequested: update => settingsWindow.showUpdate(update)
     }
     AddDownloadDialog { id: addDialog; hostWindow: root }
     Component {
@@ -802,6 +813,14 @@ ApplicationWindow {
         parent: root.contentItem
         AppMenuItem { symbol: "details"; action: detailsAction }
         AppMenuItem {
+            objectName: "downloadRecoveryMenuItem"
+            symbol: "refresh"
+            text: qsTr("Download recovery…")
+            visible: root.canRecoverDownload(root.currentItem)
+            enabled: root.online && !root.busy
+            onTriggered: if (root.currentItem) root.showDownload(root.currentItem.id, true)
+        }
+        AppMenuItem {
             symbol: "file"
             text: qsTr("Open")
             enabled: root.currentItem !== null && root.currentItem.status === "Complete"
@@ -867,18 +886,23 @@ ApplicationWindow {
         property string symbol: ""
         property string count: ""
         property color accent: root.colors.accent
-        readonly property color studioInk: checked ? root.colors.navigationInk || root.colors.accent : root.sidebarInk
+        readonly property color navigationAccent: MaterialTheme.safeAccent(
+            MaterialTheme.forcedAccent || accent, root.fogSlate || root.colors.light)
+        readonly property bool emphasized: checked || down || hovered || visualFocus
+        readonly property color face: MaterialTheme.controlHighlight(navigationAccent, down, hovered || visualFocus)
+        readonly property color foreground: emphasized ? MaterialTheme.contrastInk(face) : root.sidebarInk
 
         hoverEnabled: true
-        leftPadding: root.studioChrome ? 10 : 7
+        leftPadding: 9
         rightPadding: 7
         topPadding: 3
         bottomPadding: 3
+        Accessible.selected: checked
         contentItem: RowLayout {
             spacing: 7
             DashboardIcon {
                 symbol: libraryButton.symbol
-                ink: root.studioChrome ? libraryButton.studioInk : libraryButton.accent
+                ink: libraryButton.emphasized ? libraryButton.foreground : libraryButton.navigationAccent
                 Layout.preferredWidth: 17
                 Layout.preferredHeight: 17
             }
@@ -886,61 +910,26 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 elide: Text.ElideRight
                 text: libraryButton.text
-                color: root.studioChrome ? libraryButton.studioInk : root.colors.ink
+                color: libraryButton.foreground
                 font.pixelSize: 12
-                font.weight: root.studioChrome && libraryButton.checked ? Font.DemiBold : Font.Normal
+                font.weight: libraryButton.checked ? Font.DemiBold : Font.Normal
             }
             Label {
                 visible: libraryButton.count.length > 0
                 text: libraryButton.count
-                color: root.studioChrome && libraryButton.checked ? libraryButton.studioInk : root.sidebarMuted
+                color: libraryButton.emphasized ? libraryButton.foreground : root.sidebarMuted
                 font.pixelSize: 11
             }
         }
-        background: Loader {
-            active: libraryButton.hovered || libraryButton.checked || libraryButton.visualFocus
-            sourceComponent: root.studioChrome ? studioNavigation : glassNavigation
-        }
+        background: Rectangle {
+            radius: root.materialDashboard ? 8 : 6
+            color: libraryButton.emphasized ? libraryButton.face : Qt.alpha(libraryButton.navigationAccent, .14)
+            border.width: libraryButton.visualFocus ? 2 : 1
+            border.color: libraryButton.visualFocus ? libraryButton.foreground
+                : Qt.alpha(libraryButton.navigationAccent, .43)
 
-        Component {
-            id: studioNavigation
-            Rectangle {
-                radius: root.materialDashboard ? 9 : 6
-                color: libraryButton.checked
-                    ? root.colors.navigationFill || Qt.alpha(root.colors.accent, .13)
-                    : libraryButton.down ? Qt.alpha(root.sidebarInk, .13)
-                    : libraryButton.hovered ? Qt.alpha(root.sidebarInk, .08) : "transparent"
-                border.width: libraryButton.visualFocus ? 1 : 0
-                border.color: root.colors.menuRail || root.colors.accent
-
-                Rectangle {
-                    visible: libraryButton.checked && !root.fogSlate && !root.coralSlate
-                    anchors.left: parent.left
-                    anchors.top: parent.top
-                    anchors.bottom: parent.bottom
-                    anchors.margins: 1
-                    width: 3
-                    radius: 1.5
-                    color: root.colors.menuRail || root.colors.accent
-                }
-            }
-        }
-
-        Component {
-            id: glassNavigation
-            GlassSurface {
-                role: "button"
-                accent: libraryButton.accent
-                emphasis: libraryButton.checked ? .32 : .13
-                Rectangle {
-                    anchors.fill: parent
-                    anchors.margins: 2
-                    radius: 5
-                    color: "transparent"
-                    border.width: 1
-                    border.color: root.colors.ink
-                    visible: libraryButton.visualFocus
-                }
+            Behavior on color {
+                ColorAnimation { duration: MaterialTheme.reducedMotion ? 0 : 120 }
             }
         }
     }
@@ -967,6 +956,7 @@ ApplicationWindow {
         Layout.preferredWidth: root.sideMenus && root.violetRail ? violetMenuDock.width : -1
         Layout.preferredHeight: root.sideMenus ? (root.violetRail ? 37 : 25) : -1
         railIcon: root.sideMenus && root.violetRail ? symbol : ""
+        accent: MaterialTheme.actionColor(symbol, root.fogSlate || root.colors.light)
         idleInk: root.sideMenus && root.violetRail ? "#ffffff"
             : root.sideMenus ? root.sidebarInk : MaterialTheme.menuColors.ink
     }
@@ -993,20 +983,28 @@ ApplicationWindow {
                 anchors.leftMargin: 10
                 anchors.rightMargin: 6
                 spacing: 8
-                DashboardIcon {
-                    symbol: root.studioChrome ? "studioMark" : "app"
-                    ink: root.studioChrome && root.colors.light ? root.colors.ink : root.colors.accent
-                    bold: root.studioChrome
-                    Layout.preferredWidth: 23
-                    Layout.preferredHeight: 23
+                BrandMark {
+                    Layout.preferredWidth: 29
+                    Layout.preferredHeight: 29
                 }
-                Label {
+                ColumnLayout {
                     Layout.fillWidth: true
-                    text: root.studioChrome ? qsTr("Auralis") : root.title
-                    color: root.colors.ink
-                    font.pixelSize: root.studioChrome ? 19 : 16
-                    font.weight: root.studioChrome ? Font.Bold : Font.DemiBold
-                    elide: Text.ElideRight
+                    spacing: 0
+                    Label {
+                        Layout.fillWidth: true
+                        text: qsTr("Auralis")
+                        color: root.colors.ink
+                        font.pixelSize: 17
+                        font.weight: Font.Bold
+                        elide: Text.ElideRight
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        text: qsTr("Download Manager")
+                        color: root.colors.muted
+                        font.pixelSize: 11
+                        elide: Text.ElideRight
+                    }
                 }
                 Rectangle {
                     Layout.preferredWidth: 7
@@ -1148,7 +1146,7 @@ ApplicationWindow {
                             y: root.sideMenus ? 0 : helpMenuButton.height
                             AppMenuItem { symbol: "keys"; text: qsTr("Keyboard shortcuts"); onTriggered: shortcutsDialog.open() }
                             AppMenuItem { symbol: "web"; text: qsTr("Browser integration"); onTriggered: settingsWindow.showCategory("Browser Integration") }
-                            AppMenuItem { symbol: "refresh"; text: qsTr("Check for updates"); onTriggered: root.showUpdates() }
+                            AppMenuItem { symbol: "refresh"; text: qsTr("Check for updates"); enabled: updateNotice.updateSupported; onTriggered: updateNotice.manualCheck() }
                             AppMenuItem { symbol: "details"; text: qsTr("Project guide"); onTriggered: Qt.openUrlExternally("https://github.com/4ls4mi/Auralis-Download-Manager#guides-and-recovery") }
                         }
                     }
@@ -1205,9 +1203,7 @@ ApplicationWindow {
                             readonly property bool showLabel: (primaryCommand && root.materialDashboard
                                 && actionControls.width >= 640)
                                 || ((fogResume || fogPause) && actionControls.width >= 730)
-                            readonly property color commandInk: filled ? fillInk
-                                : root.studioChrome && !root.materialDashboard && !hovered && !down && !visualFocus
-                                    ? root.colors.ink : displayAccent
+                            readonly property color commandInk: accentFill ? fillInk : displayAccent
                             Layout.preferredWidth: root.materialDashboard
                                 ? (showLabel ? Math.max(102, buttonLabel.implicitWidth + 40)
                                     : Math.min(43, Math.floor((actionControls.width - 48) / 11)))
@@ -1219,9 +1215,7 @@ ApplicationWindow {
                             rightPadding: leftPadding
                             accent: fogResume ? root.colors.positive
                                 : root.materialDashboard && primaryCommand ? root.colors.accent
-                                : root.studioChrome && !root.materialDashboard
-                                    ? (modelData.icon === "remove" ? root.colors.destructive : root.colors.accent)
-                                    : MaterialTheme.actionColor(modelData.accentKey || modelData.icon, root.colors.light)
+                                : MaterialTheme.actionColor(modelData.accentKey || modelData.icon, root.colors.light)
                             contentItem: RowLayout {
                                 spacing: 5
                                 DashboardIcon {
@@ -1271,7 +1265,7 @@ ApplicationWindow {
                 GlassButton {
                     text: qsTr("View details")
                     accent: root.colors.accent
-                    onClicked: if (root.recoveryNotice) root.showDownload(root.recoveryNotice.id)
+                    onClicked: if (root.recoveryNotice) root.showDownload(root.recoveryNotice.id, true)
                 }
                 GlassButton {
                     text: qsTr("Dismiss")
@@ -1339,7 +1333,7 @@ ApplicationWindow {
                                 symbol: modelData.icon
                                 count: String(root.counts[modelData.key])
                                 checked: root.filterType === "status" && root.filterKey === modelData.key
-                                accent: checked ? root.colors.caution : root.colors.accent
+                                accent: MaterialTheme.actionColor(modelData.icon, root.fogSlate || root.colors.light)
                                 onClicked: root.chooseFilter("status", modelData.key)
                             }
                         }
@@ -1356,12 +1350,13 @@ ApplicationWindow {
                             model: root.categories.filter(category => category.key !== "General")
                             delegate: LibraryButton {
                                 required property var modelData
+                                required property int index
                                 width: parent.width
                                 height: 29
                                 text: modelData.name
                                 symbol: "folder"
                                 checked: root.filterType === "category" && root.filterKey === modelData.key
-                                accent: root.colors.secondary
+                                accent: MaterialTheme.navigationColor(index + 2, root.fogSlate || root.colors.light)
                                 onClicked: root.chooseFilter("category", modelData.key)
                             }
                         }
@@ -1379,13 +1374,15 @@ ApplicationWindow {
                             model: root.queues
                             delegate: LibraryButton {
                                 required property var modelData
+                                required property int index
                                 width: parent.width
                                 height: 29
                                 text: modelData.name
                                 symbol: "queue"
                                 count: String(modelData.ids.length)
                                 checked: root.filterType === "queue" && root.filterKey === modelData.name
-                                accent: modelData.running ? root.colors.positive : root.colors.caution
+                                accent: modelData.running ? root.colors.positive
+                                    : MaterialTheme.navigationColor(index + 4, root.fogSlate || root.colors.light)
                                 onClicked: root.chooseFilter("queue", modelData.name)
                             }
                         }

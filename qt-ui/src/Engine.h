@@ -50,6 +50,7 @@ public:
     Q_INVOKABLE void setProgressTrayItems(const QVariantList &items) { emit progressTrayItemsChanged(items); }
     Q_INVOKABLE void notifyUpdate(const QString &version);
     Q_INVOKABLE bool applyBackdrop(QWindow *window, bool enabled, bool dark) const;
+    Q_INVOKABLE void installInteractiveResize(QWindow *window, int borderSize, int cornerSize) const;
 
 signals:
     void dashboardChanged();
@@ -82,6 +83,7 @@ private:
     Free m_free = nullptr;
     QThreadPool m_commands;
     QThreadPool m_localJobs;
+    QThreadPool m_updateJobs;
     QThreadPool m_serviceThread;
     QFutureWatcher<QVariantMap> m_service;
     QTimer m_timer;

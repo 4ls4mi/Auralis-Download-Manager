@@ -3,8 +3,10 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QRegularExpression>
 #include <QSaveFile>
 #include <QStandardPaths>
 #include <QTemporaryFile>
@@ -185,6 +187,82 @@ QVariantMap writeShareFile(const QString &path, const QVariant &value)
     return success(QVariantMap{{QStringLiteral("path"), path}});
 }
 
+QJsonObject browserTheme(const QJsonValue &value)
+{
+    const QJsonObject input = value.toObject();
+    const QString id = input.value(QStringLiteral("id")).toString();
+    const QString label = input.value(QStringLiteral("label")).toString().trimmed();
+    const auto light = input.value(QStringLiteral("light"));
+    const auto opaque = input.value(QStringLiteral("opaque"));
+    const auto radius = input.value(QStringLiteral("radius"));
+    static const QRegularExpression validId(QStringLiteral(R"(\A[A-Za-z0-9_-]{1,96}\z)"));
+    static const QRegularExpression validColor(QStringLiteral(R"(\A#[A-Fa-f0-9]{6}\z)"));
+    if (!validId.match(id).hasMatch() || label.isEmpty() || label.size() > 100 || !light.isBool()
+        || (!opaque.isUndefined() && !opaque.isBool())
+        || (!radius.isUndefined() && (radius.toInt(-1) < 0 || radius.toInt() > 24)))
+        return {};
+    for (const auto character : label) {
+        if (character.category() == QChar::Other_Control)
+            return {};
+    }
+
+    const auto suppliedColors = input.value(QStringLiteral("colors")).toObject();
+    QJsonObject colors;
+    for (const auto *role : {"background", "surface", "text", "muted", "accent", "border",
+                             "positive", "caution", "destructive"}) {
+        const QString key = QString::fromLatin1(role);
+        const QString color = suppliedColors.value(key).toString();
+        if (!validColor.match(color).hasMatch())
+            return {};
+        colors.insert(key, color.toLower());
+    }
+    QJsonObject theme{{QStringLiteral("id"), id}, {QStringLiteral("label"), label},
+        {QStringLiteral("light"), light}, {QStringLiteral("colors"), colors}};
+    if (!opaque.isUndefined())
+        theme.insert(QStringLiteral("opaque"), opaque);
+    if (!radius.isUndefined())
+        theme.insert(QStringLiteral("radius"), radius);
+    return theme;
+}
+
+QVariantMap publishBrowserAppearance(const QVariant &value, const QDir &profile)
+{
+    const QJsonObject input = QJsonDocument::fromVariant(value).object();
+    const QJsonObject current = browserTheme(input.value(QStringLiteral("current")));
+    const auto suppliedThemes = input.value(QStringLiteral("themes"));
+    const QJsonArray catalog = suppliedThemes.toArray();
+    if (input.value(QStringLiteral("version")).toInt() != 1 || current.isEmpty()
+        || !suppliedThemes.isArray() || catalog.size() > 64)
+        return failure(QStringLiteral("Invalid browser appearance."));
+
+    QJsonArray themes;
+    for (const auto &item : catalog) {
+        const QJsonObject theme = browserTheme(item);
+        if (theme.isEmpty())
+            return failure(QStringLiteral("Invalid browser theme."));
+        themes.append(theme);
+    }
+
+    if (!profile.isAbsolute() || !profile.mkpath(QStringLiteral(".")))
+        return failure(QStringLiteral("The download profile is unavailable."));
+    const auto bytes = QJsonDocument(QJsonObject{{QStringLiteral("version"), 1},
+        {QStringLiteral("current"), current}, {QStringLiteral("themes"), themes}})
+        .toJson(QJsonDocument::Compact);
+    if (bytes.size() > 64 * 1024)
+        return failure(QStringLiteral("The browser appearance is too large."));
+
+    const auto path = profile.filePath(QStringLiteral("extension-appearance.json"));
+    {
+        QFile previous(path);
+        if (previous.open(QIODevice::ReadOnly) && previous.read(bytes.size() + 1) == bytes)
+            return success(true);
+    }
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit())
+        return failure(file.errorString());
+    return success(true);
+}
+
 QVariantMap prepareFullBackup(const QVariantMap &command, const QDir &profile)
 {
     const auto appearance = command.value(QStringLiteral("appearance")).toMap();
@@ -233,6 +311,8 @@ QVariantMap requestLocalFile(const QVariantMap &command, const QString &dataDire
         return browserProfiles(command.value(QStringLiteral("browser")).toString());
     if (action == QStringLiteral("installNotificationCue"))
         return installNotificationCue(command.value(QStringLiteral("cue")).toString(), profile);
+    if (action == QStringLiteral("publishBrowserAppearance"))
+        return publishBrowserAppearance(command.value(QStringLiteral("appearance")), profile);
     if (action == QStringLiteral("prepareFullBackup"))
         return prepareFullBackup(command, profile);
     if (path.isEmpty())

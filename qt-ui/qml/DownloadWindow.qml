@@ -17,10 +17,15 @@ ApplicationWindow {
     readonly property var colors: MaterialTheme.profile(material)
     readonly property string transferLayout: colors.layout || ""
     readonly property bool sideTabs: ["fogSlate", "violetRail", "coralSlate"].includes(transferLayout)
-    readonly property color detailSidebarInk: colors.sidebarInk || colors.ink
     readonly property color detailDivider: colors.surfaceLine || colors.divider
     readonly property color summaryInk: sideTabs && colors.summaryInk ? colors.summaryInk : colors.text
-    readonly property var transferTabs: [qsTr("Download status"), qsTr("Speed limiter"), qsTr("Options on completion")]
+    readonly property int recoveryTab: 3
+    readonly property var transferTabs: {
+        const tabs = [qsTr("Download status"), qsTr("Speed limiter"), qsTr("Options on completion")]
+        if (recoveryAvailable)
+            tabs.push(qsTr("Recovery"))
+        return tabs
+    }
     readonly property string progressShape: selectedShape(WindowAppearance.progressShape)
     readonly property string connectionShape: selectedShape(WindowAppearance.connectionShape)
     readonly property var item: Transfer.find(engine.dashboard.downloads, downloadId)
@@ -35,6 +40,7 @@ ApplicationWindow {
     readonly property var progressColors: MaterialTheme.progressColors
     readonly property var connectionColors: MaterialTheme.connectionColors
     readonly property bool finished: !!(item && item.status === "Complete")
+    readonly property bool recoveryAvailable: !!item && ordinary && !runningTransfer && !finished
     readonly property string recoveryStage: telemetry && telemetry.recovery_stage || ""
     readonly property bool recoveryBusy: !!pendingResult || recoveryStage === "searching" || recoveryStage === "preparing"
     readonly property bool torrentRecoveryAllowed: !details.checksum
@@ -92,6 +98,11 @@ ApplicationWindow {
                     root.hideToTray()
             })
         }
+    }
+
+    function openRecovery() {
+        if (recoveryAvailable)
+            activeTab = recoveryTab
     }
 
     function selectedShape(choice) {
@@ -292,6 +303,15 @@ ApplicationWindow {
         observeRecovery()
     }
     onRecoveryStageChanged: observeRecovery()
+    onRecoveryAvailableChanged: {
+        if (!recoveryAvailable && activeTab === recoveryTab)
+            activeTab = 0
+    }
+    onActiveTabChanged: {
+        const flickable = view ? (view.contentItem as Flickable) : null
+        if (flickable)
+            flickable.contentY = flickable.originY
+    }
     onDownloadIdChanged: {
         activeTab = 0
         speedSamples = []
@@ -337,9 +357,18 @@ ApplicationWindow {
                 Item {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 43
+                    BrandMark {
+                        id: transferBrand
+                        anchors.left: parent.left
+                        anchors.leftMargin: 12
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
                     Label {
-                        anchors.fill: parent
-                        anchors.leftMargin: 14
+                        anchors.top: parent.top
+                        anchors.bottom: parent.bottom
+                        anchors.left: transferBrand.right
+                        anchors.leftMargin: 8
+                        anchors.right: parent.right
                         verticalAlignment: Text.AlignVCenter
                         text: root.title
                         textFormat: Text.PlainText
@@ -374,7 +403,7 @@ ApplicationWindow {
             Layout.fillWidth: true
             padding: 8
             background: GlassSurface { material: root.material; role: "toolbar"; backdropAvailable: root.backdropAvailable }
-            contentItem: RowLayout {
+            contentItem: Flow {
                 spacing: 7
                 Repeater {
                     model: root.transferTabs
@@ -388,12 +417,11 @@ ApplicationWindow {
                         onClicked: root.activeTab = index
                     }
                 }
-                Item { Layout.fillWidth: true }
             }
         }
     }
 
-    WindowResizeHandles { hostWindow: root }
+    WindowResizeHandles { hostWindow: root; windowMouseEvents: true }
 
     Timer {
         id: water
@@ -434,8 +462,8 @@ ApplicationWindow {
                     id: transferTab
                     required property int index
                     required property string modelData
-                    readonly property color tabInk: checked ? root.colors.navigationInk || root.colors.accent : root.detailSidebarInk
                     material: root.material
+                    accent: MaterialTheme.navigationColor(index, root.colors.light)
                     text: modelData
                     checkable: true
                     autoExclusive: true
@@ -445,19 +473,11 @@ ApplicationWindow {
                     Layout.minimumHeight: 36
                     leftPadding: 8
                     rightPadding: 8
-                    background: Rectangle {
-                        radius: Math.min(7, root.colors.radius)
-                        color: transferTab.checked ? root.colors.navigationFill || root.colors.buttonFace
-                            : transferTab.down ? Qt.alpha(root.detailSidebarInk, .18)
-                            : transferTab.hovered ? Qt.alpha(root.detailSidebarInk, .10) : "transparent"
-                        border.width: transferTab.visualFocus ? 1 : 0
-                        border.color: transferTab.tabInk
-                    }
                     contentItem: Label {
                         text: transferTab.text
                         textFormat: Text.PlainText
                         font: transferTab.font
-                        color: transferTab.tabInk
+                        color: transferTab.buttonInk
                         verticalAlignment: Text.AlignVCenter
                         wrapMode: Text.Wrap
                         maximumLineCount: 2
@@ -720,18 +740,34 @@ ApplicationWindow {
                 }
 
                 Pane {
-                    visible: root.activeTab === 0 && root.ordinary && !root.runningTransfer && !root.finished
+                    objectName: "downloadRecoveryPane"
+                    visible: root.activeTab === root.recoveryTab && root.recoveryAvailable
                     Layout.fillWidth: true
                     padding: 14
                     background: GlassSurface { material: root.material; role: "card"; backdropAvailable: root.backdropAvailable }
                     contentItem: ColumnLayout {
-                        spacing: 8
-                        Label { text: qsTr("Download recovery"); color: root.colors.text; font.bold: true }
+                        spacing: 10
+                        Label {
+                            Layout.fillWidth: true
+                            text: qsTr("Download recovery")
+                            color: root.colors.text
+                            font.bold: true
+                            font.pixelSize: 16
+                        }
+                        Label {
+                            visible: root.message !== ""
+                            Layout.fillWidth: true
+                            text: root.message
+                            textFormat: Text.PlainText
+                            color: root.error ? root.colors.destructive : root.colors.text
+                            wrapMode: Text.Wrap
+                        }
                         Flow {
                             Layout.fillWidth: true
                             spacing: 6
                             GlassButton {
-                                text: qsTr("Check saved data")
+                                objectName: "verifySavedDownload"
+                                text: qsTr("Verify saved data")
                                 enabled: !root.busy && !root.recoveryBusy
                                 material: root.material
                                 onClicked: root.beginCheck("check-saved", null, qsTr("Checking saved blocks…"))
@@ -741,12 +777,6 @@ ApplicationWindow {
                                 enabled: !root.busy && !root.recoveryBusy
                                 material: root.material
                                 onClicked: root.beginCheck("repair-saved", null, qsTr("Checking the direct source…"))
-                            }
-                            GlassButton {
-                                text: qsTr("Search Internet Archive")
-                                enabled: root.torrentRecoveryAllowed && !root.busy && !root.recoveryBusy
-                                material: root.material
-                                onClicked: searchConsent.open()
                             }
                             GlassButton {
                                 text: qsTr("Download again…")
@@ -764,13 +794,12 @@ ApplicationWindow {
                                     addressPrompt.open()
                                 }
                             }
-                            GlassButton {
-                                text: qsTr("Cancel torrent recovery")
-                                material: root.material
-                                visible: root.recoveryStage === "searching" || root.recoveryStage === "preparing"
-                                         || root.pendingResult === "find-recovery-torrents-result" || root.pendingResult === "start-recovery-torrent-result"
-                                onClicked: root.cancelRecovery()
-                            }
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            text: qsTr("Continue with BitTorrent")
+                            color: root.colors.text
+                            font.bold: true
                         }
                         Label {
                             visible: !root.torrentRecoveryAllowed
@@ -779,43 +808,79 @@ ApplicationWindow {
                             wrapMode: Text.WordWrap
                             text: qsTr("Torrent recovery is unavailable when a whole-file checksum is required.")
                         }
-                        RowLayout {
+                        TextField {
+                            id: link
                             Layout.fillWidth: true
-                            enabled: root.torrentRecoveryAllowed
-                            TextField {
-                                id: link
-                                Layout.fillWidth: true
-                                color: root.colors.text
-                                placeholderText: qsTr("Magnet or torrent URL")
-                                background: GlassSurface { material: root.material; role: "field" }
-                                Accessible.name: placeholderText
-                            }
+                            enabled: root.torrentRecoveryAllowed && !root.busy && !root.recoveryBusy
+                            color: root.colors.text
+                            placeholderText: qsTr("Magnet or torrent URL")
+                            background: GlassSurface { material: root.material; role: "field" }
+                            Accessible.name: placeholderText
+                            onAccepted: if (checkLink.enabled) linkConsent.open()
+                        }
+                        Flow {
+                            Layout.fillWidth: true
+                            spacing: 6
                             GlassButton {
+                                id: checkLink
+                                objectName: "checkRecoveryLink"
                                 material: root.material
                                 text: qsTr("Check link")
-                                enabled: !root.busy && !root.recoveryBusy && /^(magnet:\?|https?:\/\/)/i.test(link.text.trim())
+                                enabled: link.enabled && /^(magnet:\?|https?:\/\/)/i.test(link.text.trim())
                                 onClicked: linkConsent.open()
                             }
                             GlassButton {
                                 material: root.material
                                 text: qsTr("Torrent file…")
-                                enabled: !root.busy && !root.recoveryBusy
+                                enabled: link.enabled
                                 onClicked: recoveryFile.open()
+                            }
+                            GlassButton {
+                                text: qsTr("Search Internet Archive")
+                                enabled: link.enabled
+                                material: root.material
+                                onClicked: searchConsent.open()
+                            }
+                            GlassButton {
+                                text: qsTr("Cancel torrent recovery")
+                                material: root.material
+                                visible: root.recoveryStage === "searching" || root.recoveryStage === "preparing"
+                                         || root.pendingResult === "find-recovery-torrents-result" || root.pendingResult === "start-recovery-torrent-result"
+                                onClicked: root.cancelRecovery()
+                            }
+                        }
+                        CheckBox {
+                            id: risk
+                            visible: root.candidates.length > 0
+                            Layout.fillWidth: true
+                            text: qsTr("I understand that the rest of the torrent may differ.")
+                            contentItem: Label {
+                                text: risk.text
+                                color: root.colors.text
+                                verticalAlignment: Text.AlignVCenter
+                                wrapMode: Text.Wrap
+                                leftPadding: risk.indicator.width + risk.spacing
                             }
                         }
                         Repeater {
                             model: root.candidates
-                            delegate: RowLayout {
+                            delegate: ColumnLayout {
                                 id: candidate
                                 required property var modelData
                                 Layout.fillWidth: true
-                                ColumnLayout {
+                                spacing: 4
+                                Label {
+                                    text: candidate.modelData.title || candidate.modelData.path
+                                    textFormat: Text.PlainText
+                                    color: root.colors.text
                                     Layout.fillWidth: true
-                                    Label { text: candidate.modelData.title || candidate.modelData.path; color: root.colors.text; Layout.fillWidth: true; elide: Text.ElideRight }
-                                    Label {
-                                        text: qsTr("%1 matching pieces · %2 unchecked").arg(candidate.modelData.matching_pieces).arg(candidate.modelData.unavailable_pieces)
-                                        color: root.colors.muted
-                                    }
+                                    elide: Text.ElideRight
+                                }
+                                Label {
+                                    Layout.fillWidth: true
+                                    text: qsTr("%1 matching pieces · %2 unchecked").arg(candidate.modelData.matching_pieces).arg(candidate.modelData.unavailable_pieces)
+                                    color: root.colors.muted
+                                    wrapMode: Text.Wrap
                                 }
                                 GlassButton {
                                     material: root.material
@@ -827,11 +892,6 @@ ApplicationWindow {
                                         qsTr("Rechecking compatible pieces…"))
                                 }
                             }
-                        }
-                        CheckBox {
-                            id: risk
-                            visible: root.candidates.length > 0
-                            text: qsTr("I understand that the rest of the torrent may differ.")
                         }
                     }
                 }
@@ -887,7 +947,7 @@ ApplicationWindow {
                 }
 
                 Label {
-                    visible: root.message !== ""
+                    visible: root.message !== "" && root.activeTab !== root.recoveryTab
                     Layout.fillWidth: true
                     text: root.message
                     color: root.error ? root.colors.destructive : root.colors.text
@@ -945,6 +1005,14 @@ ApplicationWindow {
                 visible: root.finished && !!root.details.checksum
                 enabled: !root.busy && !root.pendingResult
                 onClicked: root.beginCheck("checksum", root.details.checksum, qsTr("Verifying checksum…"))
+            }
+            GlassButton {
+                objectName: "openDownloadRecovery"
+                material: root.material
+                text: qsTr("Recovery…")
+                visible: root.recoveryAvailable && root.activeTab !== root.recoveryTab
+                accent: root.colors.accent
+                onClicked: root.openRecovery()
             }
             GlassButton {
                 material: root.material

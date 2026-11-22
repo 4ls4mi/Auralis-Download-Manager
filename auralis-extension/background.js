@@ -89,6 +89,18 @@ async function native(message, ms = HOST_WAIT) {
   }
 }
 
+// Appearance is local to the browser's own Auralis installation. A failed read
+// must leave the connection badge and remote download target alone.
+let appearanceRequest;
+function desktopAppearance() {
+  if (!appearanceRequest) {
+    appearanceRequest = withTimeout(ext.runtime.sendNativeMessage(HOST, { appearance: true }), 2500)
+      .then((reply) => reply || { ok: false }, () => ({ ok: false }))
+      .finally(() => { appearanceRequest = undefined; });
+  }
+  return appearanceRequest;
+}
+
 // ---- another MDM (#157): a server's, through its remote control ------------------------------
 
 // {url, token} while downloads go to another MDM instead of this computer's, else null.
@@ -3093,6 +3105,10 @@ async function pageMessage(m, sender) {
 }
 
 async function popupMessage(m, sender) {
+  if (m.type === "desktop-appearance") {
+    return String(sender.url || "").startsWith(ext.runtime.getURL(""))
+      ? desktopAppearance() : { ok: false };
+  }
   if(m.type === "youtube-sign-in") return youtubeSignIn(sender);
   if (m.type === "state") {
     const r = await refreshRules();

@@ -22,7 +22,10 @@ Item {
         engine.applyBackdrop(hostWindow, desktopGlass, !MaterialTheme.palette.light)
     }
 
-    Component.onCompleted: Qt.callLater(refresh)
+    Component.onCompleted: {
+        if (target === "main") MaterialTheme.backdropAvailable = backdropAvailable
+        Qt.callLater(refresh)
+    }
     onSelectionChanged: Qt.callLater(refresh)
     onDesktopGlassChanged: Qt.callLater(refresh)
     onBackdropAvailableChanged: {
@@ -77,6 +80,7 @@ Item {
         solidColor: root.selection.mode === "solid" && root.selection.color ?
             root.selection.color : MaterialTheme.palette.background
         backdropAvailable: root.backdropAvailable
-        mediaOverlay: MaterialTheme.palette.opaque && (root.pictureReady || root.movieReady) ? .78 : -1
+        mediaOverlay: MaterialTheme.translucency < 0 && MaterialTheme.palette.opaque
+            && (root.pictureReady || root.movieReady) ? .78 : -1
     }
 }

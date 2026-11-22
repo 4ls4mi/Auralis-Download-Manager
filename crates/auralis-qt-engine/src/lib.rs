@@ -56,7 +56,7 @@ pub unsafe extern "C" fn auralis_engine_request(input: *const u8, length: usize)
         if let Some(action) = request.get("shellAction").and_then(Value::as_str) {
             #[cfg(windows)]
             if action.starts_with("update-") {
-                return updater::dispatch(action);
+                return updater::dispatch(action, &request);
             }
             if action == "register-interface" {
                 ensure_owner()?;

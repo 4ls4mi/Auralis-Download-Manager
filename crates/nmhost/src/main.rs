@@ -50,6 +50,8 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
+mod appearance;
+
 #[cfg(windows)]
 mod win32;
 
@@ -74,6 +76,8 @@ struct Message {
     /// installed, or the browser started) asks the same and tells the app it is there.
     rules: bool,
     hello: bool,
+    /// Only asking for the saved desktop appearance. Never starts the app.
+    appearance: bool,
     /// The extension's version.
     v: Option<String>,
     url: String,
@@ -259,6 +263,8 @@ struct Reply {
     /// The separate Auralis interface version, if this host is serving it.
     #[serde(skip_serializing_if = "Option::is_none")]
     auralis_version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    appearance: Option<appearance::Snapshot>,
     /// For `rules`: Options → File types.
     #[serde(skip_serializing_if = "Option::is_none")]
     types: Option<String>,
@@ -1164,6 +1170,14 @@ fn serve() -> io::Result<()> {
             }
         };
         let reply = match serde_json::from_slice::<Message>(&raw) {
+            Ok(message) if message.appearance => {
+                let appearance = mdm_ipc::data_dir().and_then(|profile| appearance::load(&profile));
+                Reply {
+                    ok: appearance.is_some(),
+                    appearance,
+                    ..Default::default()
+                }
+            }
             // The rules as saved now: a change in Options applies to the next download.
             Ok(m) => {
                 // This browser has the extension: the app stops offering it (extension.rs).

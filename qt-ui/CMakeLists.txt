@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(AuralisQt VERSION 0.3.60 LANGUAGES CXX)
+project(AuralisQt VERSION 0.3.61 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -13,6 +13,8 @@ qt_add_executable(auralis-download-manager WIN32
     src/main.cpp
     src/Engine.cpp
     src/Engine.h
+    src/FrameResize.cpp
+    src/FrameResize.h
     src/LocalFiles.cpp
     src/LocalFiles.h
     src/Smoke.cpp
@@ -42,6 +44,8 @@ qt_add_resources(auralis-download-manager "branding"
     BASE "assets"
     FILES
         assets/auralis.png
+        assets/auralis.ico
+        assets/auralis-progress.png
         assets/sounds/auralis-download-complete.wav
         assets/sounds/auralis-download-failed.wav
         assets/sounds/auralis-queue-started.wav

@@ -340,6 +340,15 @@ QtObject {
         return .2126 * linear(value.r) + .7152 * linear(value.g) + .0722 * linear(value.b);
     }
 
+    function contrastInk(color) {
+        return relativeLuminance(color) < .179 ? "#ffffff" : "#000000";
+    }
+
+    function controlHighlight(color, pressed, hovered) {
+        return pressed ? mix(color, "#000000", .18, 1)
+            : hovered ? mix(color, "#ffffff", .16, 1) : rgba(color, 1);
+    }
+
     function menuPalette(profile) {
         const pure = rgba(profile.accent, 1);
         const hue = pure.hsvSaturation > .12 ? pure.hsvHue : .62;
@@ -370,10 +379,19 @@ QtObject {
             stop: ["#ff8e75", "#b14435"], remove: ["#ff7498", "#c03259"],
             check: ["#f68bc8", "#a93478"], settings: ["#c09aff", "#6d35bc"],
             clock: ["#67e8e9", "#007d82"], queueStart: ["#8d9dff", "#4a4cc2"],
-            queueStop: ["#e9a4ff", "#893bb2"]
+            queueStop: ["#e9a4ff", "#893bb2"], downloads: ["#ff8d9c", "#aa3050"],
+            activity: ["#58e0bd", "#077967"], complete: ["#9ce57e", "#437623"],
+            tray: ["#88efb6", "#097c5c"], minimize: ["#69dbff", "#0877a5"],
+            maximize: ["#bd9fff", "#6941a6"], file: ["#ffbd73", "#976020"],
+            details: ["#a5afff", "#5149ab"], keys: ["#e2a2f7", "#8d3aa8"]
         };
         const colors = hues[symbol];
         return colors ? colors[light ? 1 : 0] : palette.accent;
+    }
+
+    function navigationColor(index, light) {
+        const keys = ["downloads", "activity", "settings", "pause", "start", "complete", "keys"];
+        return actionColor(keys[index % keys.length], light);
     }
 
     function mix(value, other, weight, alpha) {
@@ -438,7 +456,8 @@ QtObject {
 
     function opacityFor(id) {
         const style = profile(id);
-        return style.opaque ? 1 : Math.max(0, Math.min(1, 1 - (translucency >= 0 ? translucency : style.translucency)));
+        const amount = translucency >= 0 ? translucency : style.opaque ? 0 : style.translucency;
+        return Math.max(0, Math.min(1, 1 - amount));
     }
 
     function rgba(value, alpha) {

@@ -8,14 +8,18 @@ Basic.MenuItem {
     id: item
 
     property string symbol: ""
-    property color commandColor: MaterialTheme.menuColors.icon
+    property color commandColor: symbol.length
+        ? MaterialTheme.actionColor(symbol, MaterialTheme.palette.light) : MaterialTheme.menuColors.icon
     property bool destructive: false
     readonly property var colors: MaterialTheme.menuColors
     readonly property bool selected: enabled && (highlighted || hovered || activeFocus || down)
+    readonly property color face: MaterialTheme.controlHighlight(MaterialTheme.forcedAccent
+        || (destructive ? colors.danger : symbol.length ? commandColor : colors.highlight), down, hovered)
+    readonly property color activeInk: MaterialTheme.contrastInk(face)
     readonly property real glyphSpace: symbol.length ? 27 : 0
     readonly property string shortcutText: subMenu ? "" : menuShortcut.nativeText
     readonly property real shortcutSpace: shortcutText.length ? shortcutBadge.width + 9 : 0
-    readonly property color foreground: !enabled ? colors.muted : selected ? colors.highlightInk
+    readonly property color foreground: !enabled ? colors.muted : selected ? activeInk
         : destructive ? colors.danger : colors.ink
 
     hoverEnabled: true
@@ -27,7 +31,7 @@ Basic.MenuItem {
     font.weight: Font.Medium
     palette.windowText: foreground
     palette.text: foreground
-    icon.color: !enabled ? colors.muted : selected ? colors.highlightInk : item.commandColor
+    icon.color: !enabled ? colors.muted : selected ? activeInk : item.commandColor
 
     Shortcut {
         id: menuShortcut
@@ -45,7 +49,7 @@ Basic.MenuItem {
             anchors.bottomMargin: 1
             radius: item.colors.studio ? 9 : 6
             visible: item.selected
-            color: item.down ? item.colors.pressed : item.colors.highlight
+            color: item.face
         }
 
         Loader {
@@ -58,8 +62,8 @@ Basic.MenuItem {
                 value: .95
                 animated: true
                 opacity: item.colors.showShortcuts ? .16 : .31
-                startColor: item.colors.highlight
-                endColor: item.colors.rail
+                startColor: item.face
+                endColor: MaterialTheme.mix(item.face, item.activeInk, .10, 1)
                 trackColor: "transparent"
             }
         }
@@ -94,7 +98,7 @@ Basic.MenuItem {
             x: item.mirrored ? parent.width - width - 2 : 2
             width: item.selected ? 3 : 0
             radius: 1.5
-            color: item.colors.rail
+            color: item.activeInk
 
             Behavior on width {
                 NumberAnimation {
@@ -133,7 +137,7 @@ Basic.MenuItem {
             anchors.verticalCenter: parent.verticalCenter
             symbol: item.symbol
             bold: true
-            ink: !item.enabled ? item.colors.muted : item.selected ? item.colors.highlightInk
+            ink: !item.enabled ? item.colors.muted : item.selected ? item.activeInk
                 : item.destructive ? item.colors.danger : item.commandColor
         }
     }

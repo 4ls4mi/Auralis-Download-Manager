@@ -31,6 +31,10 @@ Item {
     readonly property bool cleanChrome: profile.opaque || profile.softChrome === true
     readonly property bool reflectionPlane: faceted && (!cleanChrome || shell || role === "toolbar")
     readonly property string outline: shell ? "square" : profile.softChrome ? "round" : profile.shape
+    readonly property color flatFace: (role === "summary" ? profile.summaryFill : profile.roleFaces?.[role])
+        || profile.background
+    readonly property real flatFaceOpacity: backdropAvailable && MaterialTheme.translucency >= 0
+        ? MaterialTheme.opacityFor(material) : 1
     readonly property real bevel: Math.max(1, Math.min(profile.bevel, height * .14, width * .10))
     readonly property real depth: Math.min(height / 3, 28 + profile.bevel)
     readonly property real reflectivity: profile.gloss * (role === "field" ? .54 : role === "button" ? .82 : 1)
@@ -60,8 +64,7 @@ Item {
         color: surface.shell ? surface.backing : surface.button
             ? MaterialTheme.mix(surface.profile.buttonFace || surface.profile.background, surface.accent,
                 Math.max(0, surface.emphasis - .12) * .37, 1)
-            : (surface.role === "summary" ? surface.profile.summaryFill : surface.profile.roleFaces?.[surface.role])
-                || surface.profile.background
+            : MaterialTheme.rgba(surface.flatFace, surface.flatFaceOpacity)
         border.width: surface.shell || surface.role === "field" ? 1 : 0
         border.color: surface.profile.surfaceLine || surface.profile.divider
 

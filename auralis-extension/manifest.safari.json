@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "default_locale": "en",
   "name": "__MSG_name__",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "__MSG_description__",
   "permissions": [
     "contextMenus",
@@ -20,6 +20,10 @@
       "background.js"
     ],
     "persistent": false
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
   },
   "action": {
     "default_popup": "popup.html",

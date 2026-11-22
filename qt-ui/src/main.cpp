@@ -73,7 +73,10 @@ int main(int argc, char **argv)
     app.setApplicationName(QStringLiteral("Auralis Download Manager"));
     app.setOrganizationName(QStringLiteral("Auralis"));
     app.setApplicationVersion(QStringLiteral(AURALIS_VERSION));
-    app.setWindowIcon(QIcon(QStringLiteral(":/auralis/auralis.png")));
+    QIcon appIcon(QStringLiteral(":/auralis/auralis.ico"));
+    if (appIcon.availableSizes().isEmpty())
+        appIcon = QIcon(QStringLiteral(":/auralis/auralis.png"));
+    app.setWindowIcon(appIcon);
     app.setQuitOnLastWindowClosed(false);
 
     const QStringList arguments = app.arguments();
@@ -178,7 +181,7 @@ int main(int argc, char **argv)
 
     QMenu trayMenu;
     QSystemTrayIcon tray(app.windowIcon());
-    QSystemTrayIcon progressTray(QIcon::fromTheme(QStringLiteral("folder-download"), app.windowIcon()));
+    QSystemTrayIcon progressTray(QIcon(QStringLiteral(":/auralis/auralis-progress.png")));
     QHash<qulonglong, QAction *> progressActions;
     if (engine.trayAvailable()) {
         tray.setToolTip(app.applicationName());

@@ -1,4 +1,28 @@
 {
+  "appearance_label": {
+    "message": "Appearance"
+  },
+  "appearance_options": {
+    "message": "Extension appearance"
+  },
+  "appearance_follow": {
+    "message": "Follow Auralis"
+  },
+  "appearance_system": {
+    "message": "Follow browser"
+  },
+  "appearance_current": {
+    "message": "Desktop material: $1"
+  },
+  "appearance_cached": {
+    "message": "Last saved desktop material: $1"
+  },
+  "appearance_unavailable": {
+    "message": "Open Auralis to load its materials. The browser appearance is used until then."
+  },
+  "appearance_options_help": {
+    "message": "Choose the appearance of this extension. Follow Auralis updates it when you change the desktop app. A separate selection applies only to the extension."
+  },
   "name": {
     "message": "Auralis Download Manager",
     "description": "the extension's name in the browser's list of extensions and on its toolbar button; keep the name Mister Download Manager as it is"

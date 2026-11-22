@@ -9,7 +9,6 @@ RowLayout {
 
     property string material: MaterialTheme.current
     readonly property var colors: MaterialTheme.profile(material)
-    readonly property bool studioChrome: colors.cleanStudio === true
     property bool trayEnabled: false
     property bool maximized: false
     property string closeLabel: qsTr("Close")
@@ -46,8 +45,7 @@ RowLayout {
                 width: 21
                 height: 21
                 symbol: button.symbol
-                ink: root.studioChrome && (button.symbol !== "close" || !(button.hovered || button.down))
-                    ? root.colors.ink : button.displayAccent
+                ink: button.accentFill ? button.fillInk : button.displayAccent
             }
         }
     }
@@ -57,28 +55,28 @@ RowLayout {
         visible: root.trayEnabled
         symbol: "tray"
         text: qsTr("Hide to system tray")
-        accent: root.colors.accent
+        accent: MaterialTheme.actionColor("tray", root.colors.light)
         onClicked: root.hideRequested()
     }
     CaptionButton {
         objectName: "minimizeCaption"
         symbol: "minimize"
         text: root.minimizeLabel
-        accent: root.studioChrome ? root.colors.accent : (root.colors.light ? "#0777ae" : "#4cddff")
+        accent: MaterialTheme.actionColor("minimize", root.colors.light)
         onClicked: root.minimizeRequested()
     }
     CaptionButton {
         objectName: "maximizeCaption"
         symbol: root.maximized ? "restore" : "maximize"
         text: root.maximized ? qsTr("Restore window") : qsTr("Maximize")
-        accent: root.studioChrome ? root.colors.accent : root.colors.secondary
+        accent: MaterialTheme.actionColor("maximize", root.colors.light)
         onClicked: root.maximizeRequested()
     }
     CaptionButton {
         objectName: "closeCaption"
         symbol: "close"
         text: root.closeLabel
-        accent: root.studioChrome ? root.colors.destructive : (root.colors.light ? "#c83856" : "#ff718a")
+        accent: root.colors.destructive
         onClicked: root.closeRequested()
     }
 }

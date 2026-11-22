@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 $source = Join-Path (Resolve-Path "$PSScriptRoot/../..").Path 'auralis-extension'
-foreach ($name in @('background.js','video.js','thumbnail.js')) {
+foreach ($name in @('background.js','popup.js','appearance.js','video.js','thumbnail.js')) {
     node --check (Join-Path $source $name)
     if ($LASTEXITCODE -ne 0) { throw "Invalid extension script: $name" }
 }

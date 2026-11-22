@@ -33,7 +33,8 @@ ApplicationWindow {
     property string problem: ""
     property string notice: ""
     property var availableUpdate: null
-    property bool showUpdateAfterLoad: false
+    signal updateCheckRequested()
+    signal updateDetailsRequested()
     readonly property string updatePresentation: updatePrefs.presentation
     readonly property bool automaticUpdateChecks: updatePrefs.automaticChecks
     readonly property string cookieBrowser: String(advancedFields.find(field => field.key === "video_cookies")?.value ?? "")
@@ -114,10 +115,6 @@ ApplicationWindow {
         property string presentation: "toast"
     }
 
-    onAvailableUpdateChanged: {
-        if (availableUpdate && !tools.updateStage) tools.release = availableUpdate
-    }
-
     function load() {
         if (reading || !engine.ready) return
         reading = true
@@ -128,10 +125,6 @@ ApplicationWindow {
                 if (data) advancedFields = data.fields || []
                 if (legacyError) problem = legacyError
                 reading = false
-                if (showUpdateAfterLoad) {
-                    showUpdateAfterLoad = false
-                    Qt.callLater(positionUpdateHeading)
-                }
             })
         })
     }
@@ -197,21 +190,6 @@ ApplicationWindow {
         requestActivate()
     }
 
-    function positionUpdateHeading() {
-        if (category !== "Advanced" || term)
-            return
-        const headingY = tools.updatesAnchor.mapToItem(scrollViewport.contentItem, 0, 0).y
-        scrollViewport.contentY = Math.max(0, Math.min(headingY - 8,
-            scrollViewport.contentHeight - scrollViewport.height))
-    }
-
-    function showUpdate(release) {
-        if (release) tools.release = release
-        showCategory("Advanced")
-        showUpdateAfterLoad = reading
-        Qt.callLater(positionUpdateHeading)
-    }
-
     function toggleMaximize() {
         if (visibility === Window.Maximized) showNormal()
         else showMaximized()
@@ -269,9 +247,15 @@ ApplicationWindow {
             Item {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 45
-                Label {
+                BrandMark {
+                    id: settingsBrand
                     anchors.left: parent.left
                     anchors.leftMargin: 15
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+                Label {
+                    anchors.left: settingsBrand.right
+                    anchors.leftMargin: 8
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
                     text: root.title
@@ -323,8 +307,10 @@ ApplicationWindow {
                         model: root.destinationSections
                         delegate: GlassButton {
                             required property var modelData
+                            required property int index
                             Layout.fillWidth: true
                             text: modelData.name
+                            accent: MaterialTheme.navigationColor(index, root.colors.light)
                             highlighted: root.category === modelData.id && !root.term
                             onClicked: root.showCategory(modelData.id)
                             Accessible.description: modelData.detail
@@ -435,7 +421,6 @@ ApplicationWindow {
 
                             SettingsTools {
                                 id: tools
-                                hostWindow: root
                                 Layout.fillWidth: true
                                 visible: !root.term && (root.category === "Advanced" || root.category === "Browser Integration")
                                 section: root.category
@@ -443,7 +428,9 @@ ApplicationWindow {
                                 automaticChecks: root.automaticUpdateChecks
                                 onUpdatePresentationRequested: value => updatePrefs.presentation = value
                                 onAutomaticChecksRequested: value => updatePrefs.automaticChecks = value
-                                onReleaseChecked: value => root.availableUpdate = value.state === "available" ? value : null
+                                release: root.availableUpdate
+                                onUpdateCheckRequested: root.updateCheckRequested()
+                                onUpdateDetailsRequested: root.updateDetailsRequested()
                             }
 
                             PaneCopy {
@@ -458,7 +445,7 @@ ApplicationWindow {
         }
     }
 
-    WindowResizeHandles { hostWindow: root }
+    WindowResizeHandles { hostWindow: root; windowMouseEvents: true }
 
     footer: ToolBar {
         background: GlassSurface { role: "footer"; radius: 0; backdropAvailable: settingsBackdrop.backdropAvailable }
@@ -471,7 +458,7 @@ ApplicationWindow {
                 elide: Text.ElideRight
                 color: root.colors.muted
             }
-            GlassButton { text: qsTr("Done"); highlighted: true; onClicked: root.close() }
+            GlassButton { text: qsTr("Done"); accent: root.colors.positive; highlighted: true; onClicked: root.close() }
         }
     }
 }

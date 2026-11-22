@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Auralis Download Manager</title>
+<link rel="stylesheet" href="popup.css">
+</head>
+<body class="options-page">
+  <header>
+    <img src="icons/icon-32.png" width="29" height="29" alt="">
+    <span>Auralis Download Manager</span>
+  </header>
+  <main class="panel-card">
+    <h1 data-appearance-text="appearance_options"></h1>
+    <p data-appearance-text="appearance_options_help"></p>
+    <div class="theme-control">
+      <label for="appearance-choice" data-appearance-text="appearance_label"></label>
+      <select id="appearance-choice" aria-describedby="appearance-note"></select>
+      <p id="appearance-note" class="note" role="status"></p>
+    </div>
+  </main>
+  <script src="appearance.js"></script>
+</body>
+</html>
