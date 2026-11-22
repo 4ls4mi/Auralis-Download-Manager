@@ -1,5 +1,5 @@
-/* Material tokens tint a shared translucent button face. Native frames, pane
-   surfaces, and navigation keep their own treatment. */
+/* Each material has its own key shape, lighting, and action palette. The
+   shared states below keep keyboard and pointer behavior consistent. */
 .cg-window {
   --action-radius: 7px;
   --action-gap: 6px;
@@ -8,6 +8,14 @@
   --action-shade: #000b21;
   --action-sheen: 14%;
   --action-edge: 25%;
+  --action-hover: 29%;
+  --action-reflection: linear-gradient(150deg, color-mix(in srgb, var(--action-light) var(--action-sheen), transparent), transparent 53%);
+  --action-add: #61cfab;
+  --action-play: #5cc9f2;
+  --action-stop: #ebbc73;
+  --action-remove: #e4879c;
+  --action-tools: #beadf0;
+  --action-time: #78d3db;
 }
 
 .cg-window.cg-light {
@@ -19,75 +27,161 @@
 }
 
 .cg-window.cg-material-brushed-glass {
-  --action-radius: 4px;
+  --action-radius: 3px;
   --action-gap: 4px;
+  --action-face: #10424d38;
   --action-light: #d5edf5;
   --action-sheen: 18%;
+  --action-reflection: repeating-linear-gradient(168deg, #d6f9f70c 0 1px, transparent 1px 4px), linear-gradient(180deg, #9fdfe34a, transparent 46%);
+  --action-add: #4addbb;
+  --action-play: #66d3dc;
+  --action-stop: #efc48c;
+  --action-remove: #ed9a95;
+  --action-tools: #a8bfdb;
+  --action-time: #83e0ca;
 }
 
 .cg-window.cg-material-frosted-water-351 {
-  --action-radius: 8px;
+  --action-radius: 11px 11px 6px 6px;
+  --action-face: #9ed5f93f;
   --action-light: #effcff;
-  --action-face: rgba(var(--glass), .14);
-  --action-sheen: 24%;
+  --action-sheen: 32%;
+  --action-hover: 30%;
+  --action-reflection: radial-gradient(ellipse 105% 65% at 38% 0, #effcff82, transparent 86%), linear-gradient(0deg, #90cfff2c, transparent 37%);
+  --action-add: #77ddd7;
+  --action-play: #73c6ff;
+  --action-stop: #fad399;
+  --action-remove: #f3a8bd;
+  --action-tools: #b4b6ff;
+  --action-time: #98eced;
 }
 
 .cg-window.cg-material-rose-pine {
-  --action-radius: 9px;
+  --action-radius: 999px;
   --action-gap: 7px;
+  --action-face: #56304a54;
   --action-light: #ffe5ed;
   --action-shade: #302037;
+  --action-hover: 33%;
+  --action-reflection: radial-gradient(ellipse 135% 100% at 72% 100%, #de7eab43, transparent 72%), linear-gradient(162deg, #ffe4ed39, transparent 48%);
+  --action-add: #efa9be;
+  --action-play: #c5b6f3;
+  --action-stop: #f7c789;
+  --action-remove: #fa82a3;
+  --action-tools: #edb3e2;
+  --action-time: #a7c8cd;
 }
 
 .cg-window.cg-material-oversimplified {
-  --action-radius: 6px;
+  --action-radius: 1px;
   --action-gap: 5px;
   --action-face: transparent;
   --action-sheen: 7%;
+  --action-edge: 19%;
+  --action-hover: 22%;
+  --action-reflection: linear-gradient(0deg, #6681ee35, transparent 18%);
+  --action-add: #75a8fa;
+  --action-play: #83ccf2;
+  --action-stop: #deb27b;
+  --action-remove: #ed91a5;
+  --action-tools: #b49bfa;
+  --action-time: #96bedf;
 }
 
 .cg-window.cg-material-builtin-obsidian-matte {
-  --action-radius: 5px;
+  --action-radius: 4px 4px 9px 9px;
   --action-gap: 4px;
-  --action-face: rgba(var(--glass), .36);
-  --action-sheen: 8%;
+  --action-face: #201b1959;
+  --action-light: #f5dfb8;
+  --action-sheen: 9%;
+  --action-hover: 24%;
+  --action-reflection: linear-gradient(180deg, #ddb9822e, transparent 31%, #0e0d0d61);
+  --action-add: #dfb565;
+  --action-play: #a5c6d5;
+  --action-stop: #f1c281;
+  --action-remove: #db8c73;
+  --action-tools: #cab6a1;
+  --action-time: #adc5ab;
 }
 
 .cg-window.cg-material-builtin-smoked-glass {
-  --action-radius: 8px;
-  --action-face: rgba(var(--glass), .27);
-  --action-light: #d3e0f8;
-  --action-sheen: 12%;
+  --action-radius: 16px 16px 5px 5px;
+  --action-gap: 7px;
+  --action-face: #46392e45;
+  --action-light: #f6dfc9;
+  --action-sheen: 18%;
+  --action-hover: 34%;
+  --action-reflection: linear-gradient(176deg, #f3d4a44a, #a98c7340 28%, transparent 60%, #1a161a34);
+  --action-add: #dcbe85;
+  --action-play: #a5bddb;
+  --action-stop: #f4b575;
+  --action-remove: #db9e9b;
+  --action-tools: #cfc0b4;
+  --action-time: #bbcaaf;
 }
 
 .cg-window.cg-material-builtin-black-glass {
-  --action-radius: 6px;
+  --action-radius: 50%;
+  --action-gap: 5px;
   --action-face: #05070c43;
   --action-light: #e0ecfa;
-  --action-sheen: 11%;
+  --action-sheen: 16%;
+  --action-hover: 27%;
+  --action-reflection: radial-gradient(ellipse 74% 64% at 48% 0, #d8edff4a, transparent 82%), linear-gradient(0deg, #7284ab24, transparent 45%);
+  --action-add: #c8dfe8;
+  --action-play: #8ec8eb;
+  --action-stop: #c9b496;
+  --action-remove: #d297ad;
+  --action-tools: #b1b7d9;
+  --action-time: #a5c5c7;
 }
 
 .cg-window.cg-material-builtin-pearl-frost {
-  --action-radius: 9px;
+  --action-radius: 12px 8px 12px 8px / 8px 15px 8px 15px;
   --action-gap: 7px;
+  --action-face: #e3d7ef49;
   --action-light: #fff6e9;
-  --action-sheen: 25%;
+  --action-sheen: 34%;
+  --action-hover: 31%;
+  --action-reflection: radial-gradient(ellipse 130% 62% at 34% 0, #fff2ce84, transparent 88%), linear-gradient(117deg, #d8a9e34f, transparent 55%, #b6e8f764);
+  --action-add: #e8c3f3;
+  --action-play: #a9d5ed;
+  --action-stop: #f1cb9f;
+  --action-remove: #e4a9be;
+  --action-tools: #cbb7f8;
+  --action-time: #bbe3cc;
 }
 
 .cg-window.cg-material-builtin-aurora-night {
-  --action-radius: 7px;
+  --action-radius: 5px 15px 5px 15px;
   --action-face: #13233f38;
   --action-light: #c0dcff;
   --action-shade: #020b23;
-  --action-sheen: 18%;
+  --action-sheen: 22%;
+  --action-hover: 38%;
+  --action-reflection: linear-gradient(141deg, #9b78f556, transparent 52%, #59ceff40), radial-gradient(ellipse 90% 72% at 100% 0, #8ceaff55, transparent 80%);
+  --action-add: #53e5c4;
+  --action-play: #66d6ff;
+  --action-stop: #f3b187;
+  --action-remove: #f187bc;
+  --action-tools: #c49bff;
+  --action-time: #86e1ec;
 }
 
 .cg-window.cg-material-builtin-aurora-ice {
-  --action-radius: 7px;
+  --action-radius: 34% 34% 25% 25% / 28% 28% 24% 24%;
   --action-face: #e9faff54;
   --action-light: #fbfeff;
   --action-shade: #3b79a3;
-  --action-sheen: 65%;
+  --action-sheen: 62%;
+  --action-hover: 35%;
+  --action-reflection: linear-gradient(136deg, #ffffffa1, #d2f3ff32 42%, transparent 43%, #8bd3f049 91%, #fff9);
+  --action-add: #138b83;
+  --action-play: #137abb;
+  --action-stop: #b67320;
+  --action-remove: #bc557f;
+  --action-tools: #805caf;
+  --action-time: #237e9d;
 }
 
 .cg-window[class*="cg-material-custom-"].cg-controls-angular { --action-radius: 4px }
@@ -122,15 +216,20 @@
     border: 1px solid color-mix(in srgb, var(--action-tint) var(--action-rim), transparent) !important;
     border-radius: var(--action-radius) !important;
     background:
-      linear-gradient(150deg, color-mix(in srgb, var(--action-light) var(--action-sheen), transparent), transparent 53%),
+      var(--action-reflection),
       linear-gradient(0deg, color-mix(in srgb, var(--action-tint) var(--action-wash), transparent), transparent 79%),
       var(--action-face) !important;
-    color: var(--ink) !important;
+    color: color-mix(in srgb, var(--action-tint) 19%, var(--ink)) !important;
     text-shadow: none !important;
     box-shadow:
       inset 0 1px 0 color-mix(in srgb, var(--action-light) var(--action-sheen), transparent),
       0 1px 2px color-mix(in srgb, var(--action-shade) 30%, transparent) !important;
     filter: none !important;
+  }
+
+  /* Keep label buttons readable inside the circular Black Blur toolbar profile. */
+  .cg-window.cg-material-builtin-black-glass .cg-fit-content .cg-btn {
+    --action-radius: 15px;
   }
 
   .cg-window.cg-light .cg-fit-content :is(.cg-toolbar > button[data-action], .cg-btn) {
@@ -144,27 +243,27 @@
   }
 
   .cg-window .cg-fit-content :is([data-action=add], [data-action=torrent], .cg-btn-primary) {
-    --action-tint: color-mix(in srgb, #61cfab 70%, var(--accent));
+    --action-tint: color-mix(in srgb, var(--action-add) 80%, var(--accent));
   }
 
   .cg-window .cg-fit-content :is([data-action=start], [data-action=queue-start]) {
-    --action-tint: color-mix(in srgb, #5cc9f2 70%, var(--accent));
+    --action-tint: color-mix(in srgb, var(--action-play) 80%, var(--accent));
   }
 
   .cg-window .cg-fit-content :is([data-action=stop], [data-action=stop-all], [data-action=queue-stop]) {
-    --action-tint: color-mix(in srgb, #ebbc73 70%, var(--accent));
+    --action-tint: color-mix(in srgb, var(--action-stop) 80%, var(--accent));
   }
 
   .cg-window .cg-fit-content :is([data-action=remove], [data-action=delete-completed], .cg-btn-danger) {
-    --action-tint: color-mix(in srgb, #e4879c 70%, var(--accent));
+    --action-tint: color-mix(in srgb, var(--action-remove) 80%, var(--accent));
   }
 
   .cg-window .cg-fit-content :is([data-action=settings], .cg-neon-violet) {
-    --action-tint: color-mix(in srgb, #beadf0 70%, var(--accent));
+    --action-tint: color-mix(in srgb, var(--action-tools) 80%, var(--accent));
   }
 
   .cg-window .cg-fit-content [data-action=scheduler] {
-    --action-tint: color-mix(in srgb, #78d3db 70%, var(--accent));
+    --action-tint: color-mix(in srgb, var(--action-time) 80%, var(--accent));
   }
 
   .cg-window .cg-fit-content :is(.cg-toolbar > .primary, .cg-btn-primary, .cg-btn[aria-pressed=true]) {
@@ -173,7 +272,7 @@
   }
 
   .cg-window .cg-fit-content :is(.cg-toolbar > button[data-action], .cg-btn):is(:hover,:focus-visible):not(:disabled) {
-    --action-wash: 29%;
+    --action-wash: var(--action-hover);
     --action-rim: 65%;
     box-shadow:
       inset 0 1px 0 color-mix(in srgb, var(--action-light) 37%, transparent),

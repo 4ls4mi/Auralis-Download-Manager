@@ -18,34 +18,32 @@ export function parseMaterial(input:unknown):MaterialFile {
 export function materialId(m:MaterialFile){return 'custom-'+Array.from(new TextEncoder().encode(m.name.toLowerCase())).map(n=>n.toString(16).padStart(2,'0')).join('')}
 export function loadMaterials():MaterialFile[]{try{const v=JSON.parse(localStorage.getItem(MATERIALS_KEY)||'[]');return Array.isArray(v)?v.slice(0,32).map(parseMaterial):[]}catch{return []}}
 export const materialPresets:Record<string,MaterialFile>={
- 'brushed-glass':{format:'auralis-material',version:1,name:'Brushed Glass',finish:'satin',controls:'angular',translucency:35,shading:55},
- 'frosted-water-351':{format:'auralis-material',version:1,name:'Frosted Layers',finish:'frosted',controls:'rounded',translucency:45,shading:70},
- 'rose-pine':{format:'auralis-material',version:1,name:'Rose Pine',finish:'matte',controls:'soft',translucency:15,shading:35},
+ 'brushed-glass':{format:'auralis-material',version:1,name:'Brushed Glass',finish:'satin',controls:'angular',translucency:74,shading:55},
+ 'frosted-water-351':{format:'auralis-material',version:1,name:'Frosted Layers',finish:'frosted',controls:'rounded',translucency:57,shading:70},
+ 'rose-pine':{format:'auralis-material',version:1,name:'Rose Pine',finish:'matte',controls:'soft',translucency:64,shading:35},
  'window-glass':{format:'auralis-material',version:1,name:'Window Glass',finish:'clear',controls:'angular',translucency:65,shading:40},
- 'oversimplified':{format:'auralis-material',version:1,name:'Oversimplified & Accentuated',finish:'matte',controls:'rounded',translucency:10,shading:20}
+ 'oversimplified':{format:'auralis-material',version:1,name:'Oversimplified & Accentuated',finish:'matte',controls:'rounded',translucency:83,shading:20}
 };
 export const extraMaterials:Record<string,MaterialFile>={
- 'builtin-aurora-night':{format:'auralis-material',version:1,name:'Aurora Glass — Dark',finish:'frosted',controls:'angular',translucency:65,shading:55},
- 'builtin-aurora-ice':{format:'auralis-material',version:1,name:'Aurora Glass — Light',finish:'frosted',controls:'angular',translucency:65,shading:30},
- 'builtin-obsidian-matte':{format:'auralis-material',version:1,name:'Matte Obsidian',finish:'matte',controls:'angular',translucency:8,shading:75},
- 'builtin-smoked-glass':{format:'auralis-material',version:1,name:'Smoked Glass',finish:'clear',controls:'soft',translucency:65,shading:65},
- 'builtin-black-glass':{format:'auralis-material',version:1,name:'Black Blur Glass',finish:'clear',controls:'soft',translucency:72,shading:20},
- 'builtin-pearl-frost':{format:'auralis-material',version:1,name:'Pearl Frost',finish:'frosted',controls:'rounded',translucency:35,shading:60}
+ 'builtin-aurora-night':{format:'auralis-material',version:1,name:'Aurora Glass — Dark',finish:'frosted',controls:'angular',translucency:72,shading:55},
+ 'builtin-aurora-ice':{format:'auralis-material',version:1,name:'Aurora Glass — Light',finish:'frosted',controls:'angular',translucency:78,shading:30},
+ 'builtin-obsidian-matte':{format:'auralis-material',version:1,name:'Matte Obsidian',finish:'matte',controls:'angular',translucency:52,shading:75},
+ 'builtin-smoked-glass':{format:'auralis-material',version:1,name:'Smoked Glass',finish:'clear',controls:'soft',translucency:67,shading:65},
+ 'builtin-black-glass':{format:'auralis-material',version:1,name:'Black Blur Glass',finish:'clear',controls:'soft',translucency:80,shading:20},
+ 'builtin-pearl-frost':{format:'auralis-material',version:1,name:'Pearl Frost',finish:'frosted',controls:'rounded',translucency:60,shading:60}
 };
 
 /** Backdrop behavior belongs to the chosen material, not a separate toggle. */
 export function materialBackdrop(id:string, material:MaterialFile): 'material'|'clear'|'soft'|'frosted'|'tinted' {
- if(id==='builtin-smoked-glass'||id==='builtin-black-glass')return 'tinted';
+ if(id==='builtin-smoked-glass'||id==='builtin-black-glass'||id==='builtin-obsidian-matte')return 'tinted';
+ if(id==='rose-pine')return 'frosted';
+ if(id==='oversimplified')return 'clear';
  switch(material.finish){
   case 'frosted': return 'frosted';
   case 'satin': case 'gloss': return 'soft';
   case 'clear': return 'clear';
   case 'matte': return 'material';
  }
-}
-
-export function isAuroraMaterial(id:string): boolean {
- return id === 'builtin-aurora-night' || id === 'builtin-aurora-ice';
 }
 
 export function resolveMaterial(id:string): MaterialFile {

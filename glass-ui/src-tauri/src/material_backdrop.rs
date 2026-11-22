@@ -7,6 +7,11 @@ pub async fn set_material_acrylic(
 ) -> Result<bool, String> {
     #[cfg(windows)]
     {
+        // The controller background must stay transparent independently of the HWND's DWM material.
+        window
+            .as_ref()
+            .set_background_color(Some(tauri::window::Color(0, 0, 0, 0)))
+            .map_err(|error| error.to_string())?;
         let (result, mut completed) = tauri::async_runtime::channel(1);
         let target = window.clone();
         window
@@ -33,7 +38,7 @@ fn apply_acrylic(window: &tauri::WebviewWindow, enabled: bool, dark: bool) -> Re
             DWMSBT_NONE, DWMSBT_TRANSIENTWINDOW, DWMWA_SYSTEMBACKDROP_TYPE,
             DWMWA_USE_IMMERSIVE_DARK_MODE, DwmExtendFrameIntoClientArea, DwmSetWindowAttribute,
         },
-        UI::Controls::MARGINS,
+        UI::{Controls::MARGINS, WindowsAndMessaging::GetForegroundWindow},
     };
 
     let hwnd = window.hwnd().map_err(|error| error.to_string())?.0 as _;
@@ -42,6 +47,10 @@ fn apply_acrylic(window: &tauri::WebviewWindow, enabled: bool, dark: bool) -> Re
         return Ok(false);
     }
 
+    // Desktop Acrylic turns into a solid fallback on deactivation. An inactive
+    // app window keeps its transparent glass tint by letting the desktop show
+    // through its WebView directly. Native focus events restore acrylic.
+    let enabled = enabled && unsafe { GetForegroundWindow() } == hwnd;
     let margin = if enabled { -1 } else { 0 };
     let margins = MARGINS {
         cxLeftWidth: margin,

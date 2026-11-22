@@ -1,7 +1,7 @@
 /* Aurora uses the desktop acrylic as its backing. The rim and individual
    panels tint that backdrop in different places to give each pane its depth. */
 .cg-window.cg-material-builtin-aurora-night {
-  --aurora-shell: 8 16 47;
+  --aurora-shell: var(--material-face-rgb);
   --aurora-shell-opacity: var(--glass-window-opacity, .42);
   --aurora-pane: 18 32 63;
   --aurora-pane-density: .38;
@@ -12,14 +12,22 @@
   --aurora-edge: #99c8ff9e;
   --aurora-light: #dceaffdc;
   --aurora-depth: #070c2bae;
-  --aurora-top: #85a7ff4d;
+  --aurora-top: #886bea70;
+  --aurora-panel-accent: 167 122 255;
+  --aurora-pane-radius: 8px 17px;
+  --aurora-raised-radius: 13px 6px;
+  --material-layout-gap: 10px;
+  --material-layout-inset: 13px;
+  --material-sidebar-width: 18vw;
+  --material-settings-width: 185px;
+  --material-section-padding: 12px;
   --aurora-bottom: #08112377;
   --aurora-ink: #eff7ff;
   --aurora-muted: #c8ddf6;
 }
 
 .cg-window.cg-material-builtin-aurora-ice {
-  --aurora-shell: 210 239 255;
+  --aurora-shell: var(--material-face-rgb);
   --aurora-shell-opacity: var(--glass-window-opacity, .35);
   --aurora-pane: 203 239 255;
   --aurora-pane-density: .38;
@@ -31,6 +39,14 @@
   --aurora-light: #fff;
   --aurora-depth: #24688b75;
   --aurora-top: #faffffb3;
+  --aurora-panel-accent: 51 165 216;
+  --aurora-pane-radius: 3px 11px 11px 3px;
+  --aurora-raised-radius: 6px;
+  --material-layout-gap: 5px;
+  --material-layout-inset: 7px;
+  --material-sidebar-width: 16vw;
+  --material-settings-width: 160px;
+  --material-section-padding: 8px;
   --aurora-bottom: #89cde73d;
   --aurora-ink: #10243d;
   --aurora-muted: #284867;
@@ -46,7 +62,9 @@
    stays translucent and the acrylic behind the panels can show through. */
 .cg-window.cg-surface-frosted:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-content {
   background:
-    linear-gradient(165deg, var(--aurora-top), transparent min(13%, 60px), transparent calc(100% - 34px), var(--aurora-bottom)),
+    radial-gradient(98% 96px at 83% 0, #a16bf766, transparent 83%),
+    radial-gradient(90% 46px at 89% 100%, #1acff24d, transparent 83%),
+    linear-gradient(163deg, var(--aurora-top), transparent min(13%, 60px), transparent calc(100% - 34px), var(--aurora-bottom)),
     rgb(var(--aurora-shell) / var(--aurora-shell-opacity)) !important;
   border-color: var(--aurora-edge) !important;
   box-shadow:
@@ -59,7 +77,9 @@
 
 .cg-window.cg-surface-frosted.cg-material-builtin-aurora-ice .cg-content {
   background:
-    linear-gradient(165deg, var(--aurora-top), transparent min(13%, 58px), transparent calc(100% - 29px), var(--aurora-bottom)),
+    linear-gradient(133deg, #fff8 0 12px, #92daff4a 13px, transparent 36px),
+    linear-gradient(315deg, #eafaff66 0 15px, #66c7f142 16px, transparent 46px),
+    linear-gradient(180deg, var(--aurora-top), transparent 31px, transparent calc(100% - 24px), var(--aurora-bottom)),
     rgb(var(--aurora-shell) / var(--aurora-shell-opacity)) !important;
 }
 
@@ -93,7 +113,7 @@
     rgb(var(--aurora-pane) / calc(var(--aurora-shell-opacity) * var(--aurora-pane-density))) !important;
   border: 1px solid var(--aurora-inner-rim) !important;
   border-top-color: var(--aurora-edge) !important;
-  border-radius: 12px !important;
+  border-radius: var(--aurora-pane-radius) !important;
   box-shadow:
     inset 0 1px 1px var(--aurora-light),
     inset 0 0 0 2px rgb(var(--aurora-panel-light) / .09),
@@ -131,6 +151,7 @@
     linear-gradient(0deg, rgb(var(--aurora-panel-light) / .12), transparent 15px),
     rgb(var(--aurora-pane) / calc(var(--aurora-shell-opacity) * var(--aurora-pane-density))) !important;
   border-color: var(--aurora-edge) !important;
+  border-radius: var(--aurora-raised-radius) !important;
   box-shadow:
     inset 0 1px 1px var(--aurora-light),
     inset 0 0 0 2px var(--aurora-inner-rim),
@@ -156,4 +177,22 @@
 .cg-window.cg-material-builtin-aurora-ice .cg-fit-content :is(.cg-sidebar,.cg-settings-nav) button.selected {
   color: #61360a !important;
   background: linear-gradient(155deg, #fffbecb9, #ffc96662 55%, #fff2be42) !important;
+}
+
+.cg-window.cg-material-builtin-aurora-night.cg-surface-frosted .cg-fit-content :is(.cg-sidebar,.cg-settings-nav).cg-glass {
+  background:
+    radial-gradient(90% 65px at 78% 0, #b578ff42, transparent 89%),
+    linear-gradient(90deg, #57d5ff24, transparent 9px),
+    rgb(var(--aurora-pane) / calc(var(--aurora-shell-opacity) * var(--aurora-pane-density))) !important;
+}
+
+.cg-window.cg-material-builtin-aurora-ice.cg-surface-frosted .cg-fit-content .cg-list-panel.cg-glass {
+  background:
+    linear-gradient(134deg, #f6ffffba 0 8px, #beeaff49 9px, transparent 30px),
+    linear-gradient(0deg, #74c8f24d, transparent 34px),
+    rgb(var(--aurora-pane) / calc(var(--aurora-shell-opacity) * var(--aurora-pane-density))) !important;
+}
+
+.cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-fit-content :is(.cg-list-title,.cg-settings-body > div:first-child) {
+  border-bottom: 1px solid rgb(var(--aurora-panel-accent) / .37);
 }

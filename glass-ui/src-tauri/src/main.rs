@@ -728,13 +728,8 @@ fn main() {
         }))
         .setup(|app| {
             if let Some(dir)=mdm_ipc::data_dir() {let _=mdm_ipc::private_dir(&dir);let _=fs::write(dir.join("auralis-interface-version"),env!("CARGO_PKG_VERSION"));}
-            if let Some(main)=app.get_webview_window("main") {
-                let (width,height)=lifecycle::fit_size(app.handle(),814.0,468.0);
-                let _=main.set_min_size(Some(tauri::LogicalSize::new(width.min(600.0),height.min(420.0))));
-                let _=main.set_size(tauri::LogicalSize::new(width,height));
-                let _=main.center();
-            }
             app.manage(HiddenDownloadWindows::default());
+            lifecycle::create_main(app.handle()).map_err(std::io::Error::other)?;
             let menu = build_tray_menu(app.handle()).map_err(std::io::Error::other)?;
             TrayIconBuilder::with_id("auralis-tray")
                 .icon(app.default_window_icon().cloned().ok_or("No packaged Auralis icon")?)

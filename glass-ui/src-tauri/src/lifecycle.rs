@@ -3,14 +3,33 @@
 use super::*;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use tauri::{Emitter, WebviewUrl, WebviewWindowBuilder};
+use tauri::{Emitter, WebviewUrl, WebviewWindow, WebviewWindowBuilder, utils::config::WindowConfig};
 static AUTO_PROGRESS: AtomicBool = AtomicBool::new(true);
 
 pub fn fit_size(app:&AppHandle,width:f64,height:f64)->(f64,f64) {
     app.get_webview_window("main").and_then(|w|w.current_monitor().ok().flatten())
+        .or_else(||app.primary_monitor().ok().flatten())
         .map(|m|(width.min((m.size().width as f64/m.scale_factor()-32.0).max(360.0)),
             height.min((m.size().height as f64/m.scale_factor()-76.0).max(300.0))))
         .unwrap_or((width,height))
+}
+
+// Use the same explicit transparent WebView creation for the main window and popups.
+fn build_glass_window(app: &AppHandle, config: &WindowConfig) -> ApiResult<WebviewWindow> {
+    WebviewWindowBuilder::from_config(app, config).map_err(|error| error.to_string())?
+        .transparent(true).background_color(tauri::window::Color(0, 0, 0, 0))
+        .shadow(false).build().map_err(|error| error.to_string())
+}
+
+pub fn create_main(app: &AppHandle) -> ApiResult<()> {
+    let mut config = app.config().app.windows.first().cloned().ok_or("Main window configuration is missing")?;
+    let (width,height) = fit_size(app, 814.0, 468.0);
+    config.width = width;
+    config.height = height;
+    config.min_width = Some(width.min(600.0));
+    config.min_height = Some(height.min(420.0));
+    build_glass_window(app, &config)?;
+    Ok(())
 }
 
 pub fn open(app: &AppHandle, label: &str, route: &str, width: f64, height: f64) -> ApiResult<()> {
@@ -36,6 +55,7 @@ pub fn open(app: &AppHandle, label: &str, route: &str, width: f64, height: f64) 
     // opaque/white backing around secondary glass windows on some systems.
     let mut config=app.config().app.windows.first().cloned().ok_or("Main window configuration is missing")?;
     config.label=label.to_owned();
+    config.visible=true;
     if label == "tool-update-toast" {
         // The WebView positions itself before showing, avoiding a centered flash.
         config.visible=false;
@@ -43,13 +63,12 @@ pub fn open(app: &AppHandle, label: &str, route: &str, width: f64, height: f64) 
         config.skip_taskbar=true;
     }
     config.url=WebviewUrl::App(format!("index.html?{route}").into());
-    let mut builder=WebviewWindowBuilder::from_config(app, &config).map_err(|e|e.to_string())?;
-    if let Some(args)=test_browser_args(){builder=builder.additional_browser_args(&args);}
-    let w = builder
-        .title("Auralis Download Manager").always_on_top(priority).inner_size(width, height)
-        .min_inner_size(width.min(440.0), height.min(320.0)).center().decorations(false)
-        .transparent(true).background_color(tauri::window::Color(0,0,0,0)).shadow(false).resizable(true).build()
-        .map_err(|e| e.to_string())?;
+    config.width = width;
+    config.height = height;
+    config.min_width = Some(width.min(440.0));
+    config.min_height = Some(height.min(320.0));
+    config.always_on_top = priority;
+    let w = build_glass_window(app, &config)?;
     if priority { let _ = w.show(); let _ = w.set_focus(); let raised=w.clone(); thread::spawn(move||{thread::sleep(Duration::from_millis(1200));let _=raised.set_always_on_top(false);}); }
     Ok(())
 }

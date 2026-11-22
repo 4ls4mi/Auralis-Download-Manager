@@ -8,7 +8,7 @@ import {createServer} from 'vite';
 const executablePath = process.env.AURALIS_TEST_BROWSER ||
   (process.platform === 'linux' ? '/usr/bin/chromium' : '');
 
-test('every material provides translucent actions, small corners, and legible states', {
+test('every material gives translucent actions distinct shapes, colors, and legible states', {
  skip: !executablePath || !existsSync(executablePath)
 }, async () => {
  const server = await createServer({
@@ -55,8 +55,8 @@ test('every material provides translucent actions, small corners, and legible st
      id,
      alpha: Number(style.backgroundColor.match(/^rgba\(.*?, ([\d.]+)\)$/)?.[1]),
      background: style.backgroundImage,
-     radius: Number.parseFloat(style.borderRadius),
-     shape: style.clipPath,
+     shape: style.borderRadius,
+     clip: style.clipPath,
      addColor: getComputedStyle(primary.querySelector('svg')).color,
      settingsColor: getComputedStyle(settings.querySelector('svg')).color,
      disabledOpacity: Number(disabled.opacity),
@@ -67,13 +67,14 @@ test('every material provides translucent actions, small corners, and legible st
   });
   for (const result of results) {
    assert.ok(result.alpha >= 0 && result.alpha <= 0.4, JSON.stringify(result));
-   assert.ok(result.radius >= 4 && result.radius <= 9, JSON.stringify(result));
-   assert.equal(result.shape, 'none');
+   assert.equal(result.clip, 'none', 'keep the full focus and hit area');
    assert.notEqual(result.addColor, result.settingsColor);
    assert.ok(result.disabledOpacity < 0.6, JSON.stringify(result));
   }
-  assert.ok(new Set(results.map(result => result.background)).size >= 7);
-  assert.ok(new Set(results.map(result => result.radius)).size >= 4);
+  assert.equal(new Set(results.map(result => result.background)).size, results.length);
+  assert.equal(new Set(results.map(result => result.shape)).size, results.length);
+  assert.equal(new Set(results.map(result => result.addColor)).size, results.length);
+  assert.equal(new Set(results.map(result => result.settingsColor)).size, results.length);
 
   const settings = page.locator('[data-action=settings]');
   const idle = await settings.evaluate(element => getComputedStyle(element).backgroundImage);

@@ -8,6 +8,7 @@ import {mkdir,mkdtemp,readFile,rm} from 'node:fs/promises';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
+import {fileURLToPath} from 'node:url';
 const {chromium}=createRequire(import.meta.url)('../../glass-ui/node_modules/playwright-core');
 assert.equal(process.platform,'win32');
 const exe=process.env.AURALIS_EMBEDDED_EXE;assert.ok(exe,'AURALIS_EMBEDDED_EXE is required');
@@ -119,27 +120,39 @@ try {
   assert.equal(frameStyle.radius,'0px');
   assert.match(frameStyle.face,/^rgba\(/,`${windowName} glass face must be translucent`);
   assert.equal(await view.locator('.cg-wallpaper').count(),0);
-  await until(async()=>{
+  return until(async()=>{
    const frame=await view.evaluate(async()=>({
     region:await window.__TAURI_INTERNALS__.invoke('inspect_material_window_region'),
     notice:document.querySelector('.cg-window-notice')?.textContent,
    }));
    assert.ok(frame.region.square,JSON.stringify(frame));
-   // Older Windows versions have no system backdrop attribute. The app uses
-   // the legacy effect there, while Windows 11 reports Desktop Acrylic as 3.
-   if(frame.region.systemBackdrop!==null)assert.equal(frame.region.systemBackdrop,3,JSON.stringify(frame));
-   return true;
+   // Active Desktop Acrylic is 3. Inactive windows use a transparent client
+   // over the desktop, which prevents Windows from painting its solid fallback.
+   if(frame.region.systemBackdrop!==null)assert.equal(frame.region.systemBackdrop,frame.region.foreground?3:1,JSON.stringify(frame));
+   return frame.region;
   },`${windowName} did not apply a square acrylic frame for ${material}`,10000);
  }
  for(const material of ['builtin-aurora-night','builtin-aurora-ice']){
   await page.evaluate(material=>{
-   localStorage.setItem('mh-glass-back-main','wallpaper');
-   localStorage.setItem('mh-glass-back-details','wallpaper');
+   localStorage.setItem('mh-glass-back-main','desktop');
+   localStorage.setItem('mh-glass-back-details','desktop');
    localStorage.setItem('mh-glass-material',material);
    window.dispatchEvent(new Event('storage'));
   },material);
-  await verifyAcrylic(page,material,'Main window');
-  await verifyAcrylic(settings,material,'Settings');
+  for(const [label,view] of [['main',page],['settings',settings]]) {
+   await view.evaluate(label=>window.__TAURI_INTERNALS__.invoke('plugin:window|set_focus',{label}),label);
+   const main=await verifyAcrylic(page,material,'Main window');
+   const details=await verifyAcrylic(settings,material,'Settings');
+   console.log(`${material}, focus requested for ${label}: main ${main.systemBackdrop}, Settings ${details.systemBackdrop}`);
+   if(label==='main'&&process.env.AURALIS_VERIFY_GLASS_PIXELS==='1'){
+    const script=fileURLToPath(new URL('./verify-auralis-glass-pixels.ps1',import.meta.url));
+    const pixels=spawnSync('powershell.exe',[
+     '-NoProfile','-NonInteractive','-STA','-File',script,'-WindowHandle',String(main.nativeHandle),
+    ],{encoding:'utf8',timeout:15000});
+    assert.equal(pixels.status,0,pixels.stdout||pixels.stderr||String(pixels.error));
+    console.log(`Main window passes the controlled backdrop color through ${material}.`);
+   }
+  }
  }
  await settings.getByRole('button',{name:'Close',exact:true}).click();
  const ps=spawnSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',`Get-CimInstance Win32_Process -Filter 'ParentProcessId=${app.pid}' | Select-Object -ExpandProperty Name`],{encoding:'utf8',timeout:15000});assert.equal(ps.status,0,'Could not inspect child processes');assert.doesNotMatch(ps.stdout,/^mdm-legacy\.exe\s*$/im,'A legacy downloader process was launched');

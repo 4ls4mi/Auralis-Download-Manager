@@ -3,7 +3,7 @@ import {nativeBackdrop} from "./nativeBackdrop";
 import {LiquidProgress, LiquidChunk, InletDroplet, isLiquidMaterial} from "./LiquidIndicators";
 import {ConnectionTubes} from "./ConnectionTubes";
 import {receivingTubeSlots} from "./tubeNetwork";
-import {loadMaterials,materialId,extraMaterials,materialBackdrop,isAuroraMaterial,resolveMaterial} from "./customMaterials";
+import {loadMaterials,materialId,extraMaterials,materialBackdrop,resolveMaterial} from "./customMaterials";
 import {loadThemes,paletteForTheme} from "./themeFiles";
 import FrostedRibbon from "./FrostedRibbon";
 import {BubbleProgress} from "./BubbleProgress";
@@ -71,9 +71,41 @@ export function themeHue(theme:Theme){
  return Math.round((hue*60+360)%360);
 }
 export type BackgroundMode = "desktop" | "wallpaper" | "solid";
+const validSolidColor = (color: string) => /^#[0-9a-f]{6}$/i.test(color);
+const materialColors: Record<string, {dark: number[]; light: number[]}> = {
+  "brushed-glass": {dark: [13,39,45], light: [207,230,229]},
+  "frosted-water-351": {dark: [16,49,75], light: [209,238,254]},
+  "rose-pine": {dark: [46,25,41], light: [248,226,225]},
+  "oversimplified": {dark: [17,19,43], light: [232,231,248]},
+  "builtin-obsidian-matte": {dark: [28,23,20], light: [238,225,208]},
+  "builtin-smoked-glass": {dark: [40,32,29], light: [231,216,195]},
+  "builtin-black-glass": {dark: [8,10,14], light: [8,10,14]},
+  "builtin-pearl-frost": {dark: [47,38,64], light: [248,241,239]},
+  "builtin-aurora-night": {dark: [8,16,47], light: [8,16,47]},
+  "builtin-aurora-ice": {dark: [210,239,255], light: [210,239,255]},
+};
+
+function usesLightSurface(material: string, theme: Theme): boolean {
+  if (material === "builtin-aurora-ice") return true;
+  if (material === "builtin-aurora-night" || material === "builtin-black-glass") return false;
+  return theme.light === true || theme.id === "white-frost" || theme.id === "white-pearl";
+}
+
+function materialSurfaceColor(material: string, theme: Theme, light: boolean): number[] {
+  const preset = materialColors[material];
+  if (preset) return light ? preset.light : preset.dark;
+  const tint = theme.neutralTint ?? theme.rgb.split(",").map(Number);
+  const shade = light ? 1 : theme.neutralTint ? .65 : .20;
+  return tint.map(channel => Math.round(channel * shade));
+}
+
+export function defaultSolidColor(material: string, theme: Theme): string {
+  const channels = materialSurfaceColor(material, theme, usesLightSurface(material, theme));
+  return "#" + channels.map(channel => channel.toString(16).padStart(2,"0")).join("");
+}
 export type Appearance = {
   theme: string; wallMain: string; wallDetail: string; mainMode: BackgroundMode;
-  detailMode: BackgroundMode; dim: number; opacity: number; blur: number; glassTranslucency: number | null;
+  detailMode: BackgroundMode; mainSolidColor: string; detailSolidColor: string; dim: number; opacity: number; blur: number; glassTranslucency: number | null;
   acrylic: boolean; autoPopups: boolean; uiScale: number; highContrast: boolean;
   lightMode: boolean; fontFamily: string; fontSize: number; material: string; surfaceStyle: string; indicator: string; progressMaterial: string; connectionMaterial: string; graphMaterial: string; trackFinish: string; trackColor: string; progressShape: string; graphIndicator: string; graphShape: string; connectionTrackFinish: string; connectionTrackColor: string; connectionIndicator: string; connectionShape: string; clipboardMode: string; tintHue: number; tintStrength: number
 };
@@ -101,11 +133,14 @@ const supportedPalette=(value:string)=>value==="neon"?"blue-purple":value;
 export function loadAppearance(): Appearance {
   const legacy=appearanceDefaults();
   const translucency = Number(stored("glass-translucency", "auto"));
+  const mainSolid = stored("solid-main", ""), detailSolid = stored("solid-details", "");
   return {
     glassTranslucency: Number.isInteger(translucency) && translucency >= 0 && translucency <= 100 ? translucency : null,
     theme: stored("theme", legacy?"silver":"ocean"), material: [...["brushed-glass","frosted-water-351","rose-pine","oversimplified"],...Object.keys(extraMaterials),...loadMaterials().map(materialId)].includes(stored("material", legacy?"frosted-water-351":"rose-pine")) ? stored("material", legacy?"frosted-water-351":"rose-pine") : (legacy?"frosted-water-351":"rose-pine"), tintHue: Number(stored("tint-hue", legacy?"209":"203")), tintStrength: Number(stored("tint-strength", legacy?"50":"0")), indicator: supportedPalette(stored("indicator", legacy?"blue-purple":"aurora")), progressMaterial: supportedFill(stored("progress-material", legacy?"gradient":"liquid-glass")), connectionMaterial: supportedFill(stored("connection-material", legacy?"gradient":"liquid-glass")), graphMaterial: supportedFill(stored("graph-material", "gradient")), trackFinish: stored("track-finish", "recessed"), trackColor: stored("track-color", "ice"), progressShape: supportedShape(stored("progress-shape", "rounded")), graphIndicator: supportedPalette(stored("graph-indicator", stored("indicator", legacy?"blue-purple":"aurora"))), graphShape: stored("graph-shape", "area"), connectionTrackFinish: stored("connection-track-finish", "recessed"), connectionTrackColor: stored("connection-track-color", "ice"), connectionIndicator: supportedPalette(stored("connection-indicator", stored("indicator", legacy?"blue-purple":"aurora"))), connectionShape: supportedShape(stored("connection-shape", stored("progress-shape", "rounded"))), clipboardMode: stored("clipboard-mode", "paste"),
     surfaceStyle: ["material","clear","soft","frosted","tinted"].includes(stored("surface-style","material")) ? stored("surface-style","material") : "material",
     wallMain: stored("wall-main", ""), wallDetail: stored("wall-detail", ""),
+    mainSolidColor: validSolidColor(mainSolid) ? mainSolid : "",
+    detailSolidColor: validSolidColor(detailSolid) ? detailSolid : "",
     mainMode: stored("back-main", "desktop") as BackgroundMode,
     detailMode: stored("back-details", "desktop") as BackgroundMode,
     dim: Number(stored("dim", "26")), opacity: Number(stored("opacity", "100")),
@@ -118,7 +153,7 @@ export function loadAppearance(): Appearance {
 }
 const keys: Record<keyof Appearance, string> = {
   theme: "theme", material: "material", tintHue: "tint-hue", tintStrength: "tint-strength", indicator: "indicator", progressMaterial: "progress-material", connectionMaterial: "connection-material", graphMaterial: "graph-material", trackFinish: "track-finish", trackColor: "track-color", progressShape: "progress-shape", graphIndicator: "graph-indicator", graphShape: "graph-shape", connectionTrackFinish: "connection-track-finish", connectionTrackColor: "connection-track-color", connectionIndicator: "connection-indicator", connectionShape: "connection-shape", clipboardMode: "clipboard-mode", wallMain: "wall-main", wallDetail: "wall-detail",
-  mainMode: "back-main", detailMode: "back-details", dim: "dim",
+  mainMode: "back-main", detailMode: "back-details", mainSolidColor: "solid-main", detailSolidColor: "solid-details", dim: "dim",
   opacity: "opacity", blur: "blur", glassTranslucency: "glass-translucency", acrylic: "acrylic", surfaceStyle: "surface-style",
   autoPopups: "auto-popups", uiScale: "ui-scale", highContrast: "high-contrast",
   lightMode: "light-mode", fontFamily: "font-family", fontSize: "font-size"
@@ -375,8 +410,8 @@ export function CrystalWindow({ children, target = "main" }: {
     return()=>{disposed=true;window.clearTimeout(resizeTimer);cancelAnimationFrame(raf);observer.disconnect();mutations.disconnect();el.removeEventListener('click',sectionClick);el.removeEventListener('change',reset);el.removeEventListener('toggle',reset,true);window.removeEventListener('resize',resize)};
   },[appearance.uiScale,appearance.fontSize,appearance.fontFamily,target]);
   const main = target === "main";
-  const savedMode = main ? appearance.mainMode : appearance.detailMode;
-  const mode = isAuroraMaterial(appearance.material) && savedMode === "wallpaper" ? "desktop" : savedMode;
+  const mode = main ? appearance.mainMode : appearance.detailMode;
+  const solidColor = (main ? appearance.mainSolidColor : appearance.detailSolidColor) || defaultSolidColor(appearance.material, theme);
   const customMaterial=extraMaterials[appearance.material]??loadMaterials().find(m=>materialId(m)===appearance.material);
   const selectedMaterial = customMaterial ?? resolveMaterial(appearance.material);
   const surfaceStyle=materialBackdrop(appearance.material,selectedMaterial);
@@ -385,7 +420,7 @@ export function CrystalWindow({ children, target = "main" }: {
   const blackGlass = appearance.material === "builtin-black-glass";
   const auroraDark = appearance.material === "builtin-aurora-night";
   const auroraLight = appearance.material === "builtin-aurora-ice";
-  const effectiveLight = auroraLight || (!auroraDark && !blackGlass && (theme.light === true || theme.id === "white-frost" || theme.id === "white-pearl"));
+  const effectiveLight = usesLightSurface(appearance.material, theme);
   const compositionQueue = useRef(Promise.resolve());
   useEffect(() => {
     const windowHandle = getCurrentWindow();
@@ -394,6 +429,7 @@ export function CrystalWindow({ children, target = "main" }: {
     let pending = false;
     let timer = 0;
     let initialized = false;
+    let stopFocusListener: (() => void) | undefined;
 
     const updateShape = () => {
       if (disposed || pending) return;
@@ -438,16 +474,19 @@ export function CrystalWindow({ children, target = "main" }: {
       timer = window.setTimeout(() => { timer = 0; updateShape(); }, 50);
     };
     window.addEventListener("resize", onResize);
-    window.addEventListener("focus", onResize);
+    void windowHandle.onFocusChanged(onResize).then(unlisten => {
+      if (disposed) unlisten();
+      else stopFocusListener = unlisten;
+    }).catch(() => undefined);
     updateShape();
     return () => {
       disposed = true;
       window.clearTimeout(timer);
       window.removeEventListener("resize", onResize);
-      window.removeEventListener("focus", onResize);
+      stopFocusListener?.();
     };
   }, [maximized, tiled, selectedBackdrop, effectiveLight]);
-  const translucency = mode === "solid" ? 0 : (appearance.glassTranslucency ?? selectedMaterial.translucency) / 100;
+  const translucency = (appearance.glassTranslucency ?? selectedMaterial.translucency) / 100;
   const surfaceOpacity = 1 - translucency;
   const themeTintRgb=useMemo(()=>(appearance.material==="builtin-aurora-night"?[21,37,76]:appearance.material==="builtin-aurora-ice"?[225,244,255]:(theme.neutralTint??theme.rgb.split(",").map(Number))) as [number,number,number],[theme,appearance.material]);
   const path = main ? appearance.wallMain : (appearance.wallDetail || appearance.wallMain);
@@ -455,6 +494,9 @@ export function CrystalWindow({ children, target = "main" }: {
   const video = /\.(mp4|webm|mov|m4v)$/i.test(path);
   const lightAccentRgb = theme.light ? theme.rgb.split(",").map(v=>Math.round(Number(v)*.36)).join(",") : theme.id === "white-pearl" ? "101,86,67" : "64,91,112";
   const lightAccent = `rgb(${lightAccentRgb})`;
+  const materialFace = materialSurfaceColor(appearance.material, theme, effectiveLight);
+  const themeTint = Math.max(0, Math.min(65, appearance.tintStrength));
+  const paneRgb = mixColor(materialFace, themeTintRgb, blackGlass ? 0 : themeTint * .0045);
   const style = {
     "--accent": auroraLight ? "#087eb8" : auroraDark ? "#46d8ff" : effectiveLight ? lightAccent : theme.accent,
     "--accent-secondary": auroraDark || auroraLight ? "#a752ff" : theme.secondary,
@@ -466,10 +508,14 @@ export function CrystalWindow({ children, target = "main" }: {
     "--theme-tool-rgb": effectiveLight ? lightAccentRgb : mixColor(secondaryRgb(theme),[255,255,255],.18),
     "--accent-rgb": auroraLight ? "8,126,184" : auroraDark ? "70,216,255" : effectiveLight ? lightAccentRgb : theme.rgb,
     "--glass": auroraDark ? "12,23,51" : auroraLight ? "225,244,255" : blackGlass ? "8,10,14" : effectiveLight ? themeTintRgb.join(",") : themeTintRgb.map(n=>Math.round(n*(theme.neutralTint ? .65 : .20))).join(","),
-    "--glass-tint": auroraDark ? "rgba(36,68,152,.20)" : auroraLight ? "rgba(157,219,255,.20)" : blackGlass ? "rgba(0,0,0,0)" : `rgba(${(theme.neutralTint??theme.rgb.split(",").map(Number)).join(",")},${Math.max(0,Math.min(65,appearance.tintStrength))/100})`,
+    "--glass-tint": auroraDark ? "rgba(36,68,152,.20)" : auroraLight ? "rgba(157,219,255,.20)" : blackGlass ? "rgba(0,0,0,0)" : `rgba(${(theme.neutralTint??theme.rgb.split(",").map(Number)).join(",")},${themeTint / 100})`,
     "--surface": auroraDark ? "rgba(41,65,120,.36)" : auroraLight ? "rgba(221,243,255,.66)" : blackGlass ? "rgba(12,14,18,.46)" : effectiveLight ? `rgba(${themeTintRgb.join(",")},.75)` : `rgba(${themeTintRgb.join(",")},.13)`,
     "--field": auroraDark ? "rgba(7,18,46,.78)" : auroraLight ? "rgba(239,251,255,.82)" : blackGlass ? "rgba(6,8,12,.78)" : effectiveLight ? `rgba(${themeTintRgb.join(",")},.92)` : `rgba(${themeTintRgb.map(n=>Math.round(n*.12)).join(",")},.82)`,
     "--popover": auroraDark ? "rgb(16,31,70)" : auroraLight ? "rgb(230,247,255)" : blackGlass ? "rgb(20,23,29)" : effectiveLight ? `rgb(${themeTintRgb.join(",")})` : `rgb(${themeTintRgb.map(n=>Math.round(n*(theme.neutralTint ? .65 : .18))).join(",")})`,
+    "--material-face-rgb": (mode === "solid"
+      ? [1, 3, 5].map(offset => parseInt(solidColor.slice(offset, offset + 2), 16))
+      : materialFace).join(" "),
+    "--material-pane-rgb": paneRgb.replaceAll(",", " "),
     "--glass-window-opacity": surfaceOpacity,
     "--glass-window-translucency": translucency,
     "--panel-opacity": surfaceOpacity,
@@ -491,7 +537,7 @@ export function CrystalWindow({ children, target = "main" }: {
         <div style={{ backgroundImage: `url("${src}")` }} />}
       <span style={{ background: `rgba(3,9,19,${appearance.dim / 100})` }} />
     </div>}
-    {mode === "solid" && <div className="cg-solid" />}
+    {mode === "solid" && <div className="cg-solid" style={{backgroundColor: solidColor}} />}
     <div className="cg-content" ref={frame}>
       {appearance.material === "frosted-water-351" &&
         <FrostedLayers tintHue={appearance.tintHue} tintRgb={themeTintRgb} tintStrength={appearance.tintStrength} opacity={surfaceOpacity * 100}/>}

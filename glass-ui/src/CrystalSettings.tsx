@@ -1,6 +1,6 @@
 import {savePreferences,restorePreferences} from "./preferencesBackup";
 
-import {loadMaterials,materialId,materialPresets,extraMaterials,parseMaterial,MATERIALS_KEY,isAuroraMaterial,resolveMaterial} from "./customMaterials";
+import {loadMaterials,materialId,materialPresets,extraMaterials,parseMaterial,MATERIALS_KEY,resolveMaterial} from "./customMaterials";
 import {loadThemes,parseTheme,paletteForTheme,themeId,THEMES_KEY,type ThemeFile,type ThemeSettings} from "./themeFiles";
 import { listen } from "@tauri-apps/api/event";
 import CrystalAccounts from "./CrystalAccounts";
@@ -11,8 +11,9 @@ import { useEffect, useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
 import { Activity, Check, CheckCircle2, Download, Folder, Gauge, Globe2, Image, Network, Palette, RotateCcw, Settings, SlidersHorizontal } from "lucide-react";
-import { CrystalWindow, WindowTop, GradientBar, SpeedGraph, ConnectionMap, themes, themeHue, indicatorPalettes, useCrystal, openWindow } from "./CrystalShared";
+import { CrystalWindow, WindowTop, GradientBar, SpeedGraph, ConnectionMap, themes, themeHue, indicatorPalettes, useCrystal, openWindow, defaultSolidColor } from "./CrystalShared";
 import type { Appearance, BackgroundMode, Queue } from "./CrystalShared";
+import "./background-settings.css";
 
 type EngineSettings = {
   max_connections:number;speed_limit_on:boolean;speed_limit_kb:number;global_limit_on:boolean;
@@ -105,34 +106,55 @@ export default function CrystalSettings(){
         min={min} max={max} disabled={!cfg||busy} key={String(cfg?.[key])}
         defaultValue={Number(cfg?.[key]??0)}
         onBlur={e=>{const v=Number(e.target.value);if(Number.isInteger(v)&&v>=min&&v<=max&&v!==cfg?.[key])void change(key,v);else if(v<min||v>max)setError(`${title} must be between ${min} and ${max}.`)}}/></label>;
-  const aurora = isAuroraMaterial(appearance.material);
   const translucency = appearance.glassTranslucency ?? resolveMaterial(appearance.material).translucency;
-  const mode=(target:"main"|"details")=>{
-    const saved=target==="main"?appearance.mainMode:appearance.detailMode;
-    const current=aurora && saved==="wallpaper" ? "desktop" : saved;
-    const options: BackgroundMode[] = aurora ? ["desktop","solid"] : ["desktop","wallpaper","solid"];
-    const key: keyof Appearance=target==="main"?"mainMode":"detailMode";
-    return <div className="cg-glass" style={{padding:13,margin:"12px 0"}}>
-      <strong>{target==="main"?"Main window background":"Download and other popup backgrounds"}</strong>
-      <div className="cg-wall-choice">{options.map(m=>
-        <button key={m} className={`cg-btn ${current===m?"cg-btn-primary":""}`} onClick={()=>set(key,m)}>
-          {m==="desktop"?"See-through desktop":m==="wallpaper"?"Custom wallpaper":"Solid color"}
-        </button>)}
+  const backgroundCard = (target: "main" | "details") => {
+    const main = target === "main";
+    const heading = main ? "Main window" : "Download and other popups";
+    const modeKey = main ? "mainMode" : "detailMode";
+    const mediaKey = main ? "wallMain" : "wallDetail";
+    const colorKey = main ? "mainSolidColor" : "detailSolidColor";
+    const mode = appearance[modeKey];
+    const media = appearance[mediaKey];
+    const savedColor = appearance[colorKey];
+    const color = savedColor || defaultSolidColor(appearance.material, theme);
+    const mediaName = media.split(/[\\/]/).pop();
+    const defaultMedia = !main && appearance.wallMain ? "Main window wallpaper" : "Default Alpine wallpaper";
+    const options: ReadonlyArray<[BackgroundMode, string]> = [
+      ["desktop", "Desktop"], ["solid", "Solid color"], ["wallpaper", "Image or video"],
+    ];
+    return <section className="cg-glass cg-background-card" aria-labelledby={`${target}-background-heading`}>
+      <h4 id={`${target}-background-heading`}>{heading}</h4>
+      <div className="cg-wall-choice" role="group" aria-label={`${heading} background mode`}>
+        {options.map(([value, label]) => <button key={value} type="button"
+          className={`cg-btn ${mode === value ? "cg-btn-primary" : ""}`}
+          aria-pressed={mode === value} onClick={() => set(modeKey, value)}>{label}</button>)}
       </div>
-      {!aurora&&<>
-      <button className="cg-btn" onClick={async()=>{
-        try{
-          const file=await invoke<string|null>("select_wallpaper",{target});
-          if(file){if(target==="main")set("wallMain",file);else set("wallDetail",file);set(key,"wallpaper")}
-        }catch(e){setError(String(e))}
-      }}><Image size={15}/> Choose image or video</button>
-      <button className="cg-btn" style={{marginLeft:8}} onClick={()=>{
-        if(target==="main")set("wallMain","");else set("wallDetail","");
-        set(key,"desktop");
-      }}>Remove wallpaper</button>
-      <p>{target==="main"?appearance.wallMain||"Default Alpine wallpaper":appearance.wallDetail||"Inherits main wallpaper if none selected"}</p>
-      </>}
-    </div>;
+      {mode === "desktop" && <small>Show the desktop through the selected material.</small>}
+      {mode === "solid" && <div className="cg-background-color-row">
+        <label className="cg-background-color">
+          <span>{heading} color</span>
+          <input type="color" value={color} onChange={event => set(colorKey, event.target.value)}/>
+          <span aria-hidden="true">{color.toUpperCase()}</span>
+        </label>
+        {savedColor ? <button className="cg-btn" type="button" onClick={() => set(colorKey, "")}>Use material color</button>
+          : <small>Using material color</small>}
+      </div>}
+      {mode === "wallpaper" && <div className="cg-background-media">
+        <div className="cg-wall-choice">
+          <button className="cg-btn" type="button" onClick={async () => {
+            setError("");
+            try {
+              const file = await invoke<string | null>("select_wallpaper", {target});
+              if (file) set(mediaKey, file);
+            } catch (error) {
+              setError(`Could not choose the background: ${String(error)}`);
+            }
+          }}><Image size={15}/> Choose image or video</button>
+          {media && <button className="cg-btn" type="button" onClick={() => set(mediaKey, "")}>Remove custom media</button>}
+        </div>
+        <small title={media || undefined}>{mediaName || defaultMedia}</small>
+      </div>}
+    </section>;
   };
   const slider=(name:keyof Appearance,title:string,min:number,max:number,suffix:string)=>
     <label className="cg-slider"><span>{title}<b>{appearance[name] as number}{suffix}</b></span>
@@ -203,7 +225,11 @@ export default function CrystalSettings(){
       </>;
       case "Accounts":return <CrystalAccounts/>;
       case "Appearance":return <>
-        <nav className="cg-appearance-tabs" aria-label="Appearance sections">{["Appearance","Indicators","Typography"].map(name=><button key={name} className={appearanceTab===name?"selected":""} onClick={()=>setAppearanceTab(name)}>{name}</button>)}</nav>
+        <nav className="cg-appearance-tabs" aria-label="Appearance sections">
+          {["Appearance", "Backgrounds", "Indicators", "Typography"].map(name =>
+            <button key={name} className={appearanceTab === name ? "selected" : ""} aria-pressed={appearanceTab === name}
+              onClick={() => setAppearanceTab(name)}>{name}</button>)}
+        </nav>
         {appearanceTab==="Appearance"&&<>
         <h3>Color themes</h3>
         <div className="cg-color-choices">{[...themes,...customThemes.map(f=>paletteForTheme(f.palette))].map(t=><button key={t.id} className={appearance.theme===t.id?"selected":""}
@@ -213,7 +239,7 @@ export default function CrystalSettings(){
         <div className="cg-settings-fallback">Your color theme controls the surfaces, buttons and highlights. Indicator colors remain separately adjustable.</div>
         </>}
         {appearanceTab==="Appearance"&&<><h3>Surface material</h3>
-        <div className="cg-wall-choice">{[["brushed-glass","Brushed Glass"],["frosted-water-351","Frosted Layers"],["rose-pine","Rose Pine"],["oversimplified","Oversimplified & Accentuated"],...Object.entries(extraMaterials).map(([id,m])=>[id,m.name]),...customMaterials.map(m=>[materialId(m),m.name])].map(([id,label])=><button key={id} className={`cg-btn cg-material-choice ${appearance.material===id?"cg-material-selected":""}`} aria-pressed={appearance.material===id} onClick={()=>set("material",id)}>{appearance.material===id&&<span aria-hidden="true">✓ </span>}{label}{appearance.material===id&&<span className="cg-selected-label">Selected</span>}</button>)}</div><p>Choose a surface style. Aurora Glass uses its own dark or light design; other materials follow your selected color theme. Indicators remain separate.</p>
+        <div className="cg-wall-choice">{[["brushed-glass","Brushed Glass"],["frosted-water-351","Frosted Layers"],["rose-pine","Rose Pine"],["oversimplified","Oversimplified & Accentuated"],...Object.entries(extraMaterials).map(([id,m])=>[id,m.name]),...customMaterials.map(m=>[materialId(m),m.name])].map(([id,label])=><button key={id} className={`cg-btn cg-material-choice ${appearance.material===id?"cg-material-selected":""}`} aria-pressed={appearance.material===id} onClick={()=>set("material",id)}>{appearance.material===id&&<span aria-hidden="true">✓ </span>}{label}{appearance.material===id&&<span className="cg-selected-label">Selected</span>}</button>)}</div><p>Each material has its own tint, panel layout, lighting, and controls. Adjust theme tint strength to blend in your color theme.</p>
         <div className="cg-wall-choice"><button className="cg-btn" onClick={async()=>{setError('');try{const material=customMaterials.find(m=>materialId(m)===appearance.material)??materialPresets[appearance.material]??extraMaterials[appearance.material];const file=await invoke<string|null>('export_material_file',{contents:JSON.stringify(material,null,2)+'\n'});if(file)setNotice('Material template exported. Edit the JSON file, then import it here.')}catch(e){setError(String(e))}}}>Export editable material…</button><label className="cg-btn cg-material-import">Import material…<input type="file" accept=".json,application/json" onChange={async e=>{const file=e.currentTarget.files?.[0];e.currentTarget.value='';if(!file)return;setError('');try{if(file.size>16384)throw Error('Material file exceeds 16 KB.');const material=parseMaterial(JSON.parse(await file.text()));const updated=[...customMaterials.filter(m=>materialId(m)!==materialId(material)),material];if(updated.length>32)throw Error('A maximum of 32 custom materials is supported.');localStorage.setItem(MATERIALS_KEY,JSON.stringify(updated));setCustomMaterials(updated);set('material',materialId(material));setNotice(`Imported ${material.name}.`)}catch(err){setError(`Could not import material: ${String(err)}`)}}}/></label>{appearance.material.startsWith('custom-')&&<button className="cg-btn" onClick={()=>{const updated=customMaterials.filter(m=>materialId(m)!==appearance.material);localStorage.setItem(MATERIALS_KEY,JSON.stringify(updated));setCustomMaterials(updated);set('material','frosted-water-351')}}>Remove custom material</button>}</div>
         <small>Material files define a finish, control shape, translucency and shading. They do not contain code. The Frosted Layers template approximates its animated glass using these editable settings.</small>{slider("tintStrength","Theme tint strength",0,65,"%")}</>}
         {appearanceTab==="Indicators"&&<><h3>Indicator styles</h3><p>Choose each indicator independently. Previews update as you choose.</p><nav className="cg-indicator-tabs" aria-label="Indicator preview">{["Progress","Connections","Graph"].map(name=><button key={name} type="button" aria-pressed={indicatorTab===name} className={indicatorTab===name?"selected":""} onClick={()=>setIndicatorTab(name)}>{name}</button>)}</nav><div className="cg-indicator-cards">{([ ["Progress", "progressShape", "indicator"], ["Connections", "connectionShape", "connectionIndicator"] ] as const).map(([label,shapeKey,colorKey])=><section className="cg-indicator-card" key={label} hidden={indicatorTab!==label}><strong>{label}</strong>{label==="Progress"&&<label className="cg-field">Fill<select value={appearance.progressMaterial} onChange={e=>set("progressMaterial",e.target.value)}><option value="gradient">Default</option><option value="liquid-glass">Sculpted Liquid Glass</option></select></label>}{label==="Connections"&&<label className="cg-field">Fill<select value={appearance.connectionMaterial} onChange={e=>set("connectionMaterial",e.target.value)}><option value="gradient">Default</option><option value="liquid-glass">Sculpted Liquid Glass</option></select></label>}<label className="cg-field">Shape<select value={appearance[shapeKey]} onChange={e=>set(shapeKey,e.target.value)}>{[["rounded","Rounded"],["faceted","Faceted"],["bubble","Bubble"],["square","Square"]].map(([id,name])=><option key={id} value={id}>{name}</option>)}</select></label><label className="cg-field">Gradient<select value={appearance[colorKey]} onChange={e=>set(colorKey,e.target.value)}>{Object.entries(indicatorPalettes).filter(([id])=>id!=="neon").map(([id,p])=><option key={id} value={id}>{p.label}</option>)}</select></label><div className="cg-card-preview">{label==="Progress"?<GradientBar percent={64} showLabel/>:<ConnectionMap compact downloading connections={Array.from({length:8},(_,id)=>({id,downloaded:40+id*5,speed:2,state:"Receiving"}))} segments={Array.from({length:8},(_,id)=>({start:0,cursor:40+id*5,end:100,worker:id}))}/>}</div></section>)}<section className="cg-indicator-card" hidden={indicatorTab!=="Progress"}><strong>Progress backdrop</strong><label className="cg-field">Finish<select value={appearance.trackFinish} onChange={e=>set("trackFinish",e.target.value)}><option value="default">Default</option><option value="clear">Clear glass</option><option value="frosted">Frosted</option><option value="recessed">Recessed</option></select></label><label className="cg-field">Backdrop tint<select value={appearance.trackColor} onChange={e=>set("trackColor",e.target.value)}><option value="ice">Ice</option><option value="violet">Violet</option><option value="teal">Teal</option><option value="amber">Amber</option><optgroup label="Gradient and solid palettes">{Object.entries(indicatorPalettes).filter(([id])=>id!=="neon").map(([id,p])=><option key={id} value={`palette:${id}`}>{p.label}</option>)}</optgroup></select></label><div className="cg-card-preview"><GradientBar percent={64} showLabel/></div></section><section className="cg-indicator-card" hidden={indicatorTab!=="Connections"}><strong>Connections backdrop</strong><label className="cg-field">Finish<select value={appearance.connectionTrackFinish} onChange={e=>set("connectionTrackFinish",e.target.value)}><option value="default">Default</option><option value="clear">Clear glass</option><option value="frosted">Frosted</option><option value="recessed">Recessed</option></select></label><label className="cg-field">Backdrop tint<select value={appearance.connectionTrackColor} onChange={e=>set("connectionTrackColor",e.target.value)}><option value="ice">Ice</option><option value="violet">Violet</option><option value="teal">Teal</option><option value="amber">Amber</option><optgroup label="Gradient and solid palettes">{Object.entries(indicatorPalettes).filter(([id])=>id!=="neon").map(([id,p])=><option key={id} value={`palette:${id}`}>{p.label}</option>)}</optgroup></select></label><div className="cg-card-preview"><ConnectionMap compact downloading connections={Array.from({length:8},(_,id)=>({id,downloaded:40+id*5,speed:2,state:"Receiving"}))} segments={Array.from({length:8},(_,id)=>({start:0,cursor:40+id*5,end:100,worker:id}))}/></div></section><section className="cg-indicator-card" hidden={indicatorTab!=="Graph"}><strong>Graph</strong><label className="cg-field">Material<select value={appearance.graphMaterial} onChange={e=>set("graphMaterial",e.target.value)}><option value="gradient">Default</option><option value="liquid-glass">Sculpted Liquid Glass</option></select></label><label className="cg-field">Shape<select value={appearance.graphShape} onChange={e=>set("graphShape",e.target.value)}><option value="area">Filled area</option><option value="line">Line</option><option value="bars">Bars</option></select></label><label className="cg-field">Gradient<select value={appearance.graphIndicator} onChange={e=>set("graphIndicator",e.target.value)}>{Object.entries(indicatorPalettes).filter(([id])=>id!=="neon").map(([id,p])=><option key={id} value={id}>{p.label}</option>)}</select></label><div className="cg-card-preview"><SpeedGraph values={[2,4,3,7,6,10,8,11,9,12]}/></div></section></div></>}
@@ -226,12 +252,17 @@ export default function CrystalSettings(){
           <small>Applies to the main window and popups with translucent backgrounds.</small>
           {appearance.glassTranslucency!==null&&<button className="cg-btn" onClick={()=>set("glassTranslucency",null)}>Use material default</button>}
         </div>
-        <h3>Independent translucent backgrounds</h3>
-        {mode("main")}{mode("details")}
-        </>}
-        {appearanceTab==="Appearance"&&<>
-        {!aurora&&<>{slider("blur","Wallpaper blur",0,20," px")}{slider("dim","Wallpaper darkness",0,80,"%")}</>}
         {slider("uiScale","Interface size",80,150,"%")}
+        </>}
+        {appearanceTab === "Backgrounds" && <>
+          <h3>Window backgrounds</h3>
+          <div className="cg-background-grid">{backgroundCard("main")}{backgroundCard("details")}</div>
+          {(appearance.mainMode === "wallpaper" || appearance.detailMode === "wallpaper") &&
+            <section className="cg-glass cg-background-card" aria-label="Wallpaper effects">
+              <h4>Wallpaper effects</h4>
+              {slider("blur", "Wallpaper blur", 0, 20, " px")}
+              {slider("dim", "Wallpaper darkness", 0, 80, "%")}
+            </section>}
         </>}
         {appearanceTab==="Typography"&&<>
         <h3>Typography and contrast</h3>
@@ -251,7 +282,7 @@ export default function CrystalSettings(){
         <label className="cg-toggle"><span><strong>Show actual download popup automatically</strong><small>Open the separate floating progress window when a download starts</small></span>
           <input type="checkbox" checked={appearance.autoPopups} onChange={e=>set("autoPopups",e.target.checked)}/></label>
         <button className="cg-btn" style={{marginTop:15}} onClick={()=>{
-          set("mainMode","desktop");set("detailMode","desktop");set("glassTranslucency",null);
+          set("mainMode","desktop");set("detailMode","desktop");set("mainSolidColor", "");set("detailSolidColor", "");set("glassTranslucency",null);
           set("acrylic",false);set("surfaceStyle","material");set("dim",26);set("opacity",100);set("blur",6);
           set("uiScale",97);set("lightMode",false);set("fontFamily","Trebuchet MS");
           set("fontSize",14);set("highContrast",true);set("theme","ocean");set("material","rose-pine");set("tintHue",203);set("tintStrength",0);set("indicator","aurora");set("connectionIndicator","aurora");set("graphIndicator","aurora");set("progressMaterial","liquid-aero");set("connectionMaterial","liquid-aero");set("graphMaterial","gradient");set("progressShape","rounded");set("connectionShape","rounded");set("trackFinish","recessed");set("connectionTrackFinish","recessed");set("trackColor","ice");set("connectionTrackColor","ice");

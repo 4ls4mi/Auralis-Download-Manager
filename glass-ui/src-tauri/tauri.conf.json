@@ -13,6 +13,7 @@
     "windows": [
       {
         "label": "main",
+        "create": false,
         "title": "Auralis Download Manager",
         "width": 960,
         "height": 690,

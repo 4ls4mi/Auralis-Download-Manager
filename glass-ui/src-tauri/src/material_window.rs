@@ -121,7 +121,9 @@ pub fn inspect_material_window_region(
         Ok(serde_json::json!({
             "square": kind == SIMPLEREGION && bounds_kind == SIMPLEREGION
                 && corners.iter().all(|inside| *inside) && edges.iter().all(|inside| *inside),
+            "nativeHandle": hwnd as usize,
             "systemBackdrop": super::material_backdrop::system_backdrop(hwnd),
+            "foreground": unsafe { windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow() } == hwnd,
             "regionKind": kind,
             "boundsKind": bounds_kind,
             "bounds": [left, top, right, bottom],

@@ -17,7 +17,9 @@ test('material finish selects its backdrop without a separate setting',async()=>
  const {materialBackdrop}=await import('../src/customMaterials.ts');
  assert.equal(materialBackdrop('frosted-water-351',materialPresets['frosted-water-351']),'frosted');
  assert.equal(materialBackdrop('brushed-glass',materialPresets['brushed-glass']),'soft');
- assert.equal(materialBackdrop('rose-pine',materialPresets['rose-pine']),'material');
+ assert.equal(materialBackdrop('rose-pine',materialPresets['rose-pine']),'frosted');
+ assert.equal(materialBackdrop('oversimplified',materialPresets['oversimplified']),'clear');
+ assert.equal(materialBackdrop('builtin-obsidian-matte',extraMaterials['builtin-obsidian-matte']),'tinted');
  assert.equal(materialBackdrop('window-glass',materialPresets['window-glass']),'clear');
  assert.equal(materialBackdrop('builtin-smoked-glass',extraMaterials['builtin-smoked-glass']),'tinted');
 });

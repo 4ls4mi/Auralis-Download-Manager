@@ -42,8 +42,8 @@ test('Aurora shows translucent panes and action colors with desktop acrylic', {
    await context.addInitScript(material => {
     localStorage.setItem('auralis-browser-guide-seen', '1');
     localStorage.setItem('mh-glass-material', material);
-    localStorage.setItem('mh-glass-back-main', 'wallpaper');
-    localStorage.setItem('mh-glass-back-details', 'wallpaper');
+    localStorage.setItem('mh-glass-back-main', 'desktop');
+    localStorage.setItem('mh-glass-back-details', 'desktop');
     const label = new URLSearchParams(location.search).has('settings') ? 'settings' : 'main';
     window.__TAURI_EVENT_PLUGIN_INTERNALS__ = {unregisterListener: () => {}};
     window.__TAURI_INTERNALS__ = {
@@ -53,7 +53,7 @@ test('Aurora shows translucent panes and action colors with desktop acrylic', {
      invoke: async (command, args) => {
       if (command === 'dashboard_snapshot') return {downloads: [], queues: [], categories: [], speed: 0};
       if (command === 'dashboard_visuals') return {downloads: []};
-      if (command === 'plugin:window|set_effects') window.auroraEffects = args.value?.effects;
+      if (command === 'set_material_acrylic') { window.auroraAcrylic = args; return true; }
       return null;
      }
     };
@@ -63,7 +63,7 @@ test('Aurora shows translucent panes and action colors with desktop acrylic', {
    const add = page.locator('.cg-toolbar button[data-action=add]');
    const settings = page.locator('.cg-toolbar button[data-action=settings]');
    await add.waitFor();
-   await page.waitForFunction(() => window.auroraEffects?.includes('acrylic'));
+   await page.waitForFunction(() => window.auroraAcrylic?.enabled);
    assert.equal(await page.locator('.cg-wallpaper').count(), 0);
    assert.equal(await page.locator('.cg-aurora-optics').count(), 0);
    assert.equal(
@@ -86,7 +86,9 @@ test('Aurora shows translucent panes and action colors with desktop acrylic', {
      panelLayers: pane.backgroundImage
     };
    });
-   assert.ok(cssAlpha(optics.shellBase) > 0 && cssAlpha(optics.shellBase) < 1);
+   const expectedAlpha = material.endsWith('night') ? .28 : .22;
+   assert.ok(Math.abs(cssAlpha(optics.shellBase) - expectedAlpha) < .01);
+   assert.equal(await page.evaluate(() => window.auroraAcrylic.dark), material.endsWith('night'));
    assert.ok(cssAlpha(optics.paneBase) > 0 && cssAlpha(optics.paneBase) < cssAlpha(optics.titleBase));
    assert.ok(cssAlpha(optics.paneBase) < cssAlpha(optics.toolbarBase));
    assert.ok(cssAlpha(optics.titleBase) < cssAlpha(optics.shellBase));
@@ -107,7 +109,7 @@ test('Aurora shows translucent panes and action colors with desktop acrylic', {
    };
    const addSurface = await add.evaluate(buttonSurface);
    const settingsSurface = await settings.evaluate(buttonSurface);
-   assert.equal(addSurface.radius, '7px');
+   assert.equal(addSurface.radius, material.endsWith('night') ? '5px 15px' : '34% 34% 25% 25% / 28% 28% 24% 24%');
    assert.equal(addSurface.clip, 'none');
    assert.equal(addSurface.rim, 'none');
    assert.match(addSurface.face, /^rgba\(/);
@@ -117,7 +119,7 @@ test('Aurora shows translucent panes and action colors with desktop acrylic', {
 
    const settingsPage = await context.newPage();
    await settingsPage.goto(server.resolvedUrls.local[0] + '?settings=1&tab=Appearance');
-   await settingsPage.waitForFunction(() => window.auroraEffects?.includes('acrylic'));
+   await settingsPage.waitForFunction(() => window.auroraAcrylic?.enabled);
    assert.equal(await settingsPage.locator('.cg-wallpaper').count(), 0);
    assert.equal(await settingsPage.locator('.cg-aurora-optics').count(), 0);
    const settingsShell = settingsPage.locator('.cg-content');

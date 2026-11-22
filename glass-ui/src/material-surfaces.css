@@ -1,8 +1,10 @@
-/* A single face opacity controls the glass. Lighting is concentrated at the
-   edges so it stays visible when the backing is set to see through. */
+/* Body tint and pane density follow the same translucency control. Material
+   profiles specify the local reflections, panel seams, and layout geometry. */
 .cg-window {
   --material-face-opacity: var(--glass-window-opacity, var(--panel-opacity, .65));
   --material-pane-density: .32;
+  --material-recess-density: .24;
+  --material-raised-density: .43;
   --material-edge-light: 198 230 255;
   --material-edge-shadow: 6 16 36;
   --material-chroma: 101 169 224;
@@ -12,6 +14,17 @@
   --material-face-reflection: calc(var(--material-reflection) * (.6 + .8 * var(--material-shading, .5)));
   --material-face-shadow: calc(var(--material-shadow-strength) * (.65 + .7 * var(--material-shading, .5)));
   --material-face-pattern: linear-gradient(transparent, transparent);
+  --material-pane-pattern: linear-gradient(transparent, transparent);
+  --material-pane-radius: 9px;
+  --material-light-angle: 180deg;
+  --material-light-width: 30px;
+  --material-bevel: 1px;
+  --material-cast: 7px;
+  --material-layout-gap: 8px;
+  --material-layout-inset: 9px;
+  --material-sidebar-width: 17vw;
+  --material-settings-width: 166px;
+  --material-section-padding: 9px;
 }
 
 .cg-window.cg-light {
@@ -19,23 +32,6 @@
   --material-edge-shadow: 60 96 122;
   --material-chroma: 117 168 201;
   --material-shadow-strength: .34;
-}
-
-.cg-window.cg-material-brushed-glass {
-  --material-reflection: .16;
-  --material-face-pattern: repeating-linear-gradient(112deg, #e5f7ff06 0 1px, transparent 1px 5px);
-}
-
-.cg-window.cg-material-rose-pine {
-  --material-chroma: 212 153 191;
-  --material-reflection: .11;
-  --material-pane-density: .44;
-}
-
-.cg-window.cg-material-oversimplified {
-  --material-edge-strength: .37;
-  --material-reflection: .08;
-  --material-shadow-strength: .31;
 }
 
 .cg-window.cg-finish-gloss {
@@ -47,78 +43,358 @@
   --material-face-pattern: repeating-linear-gradient(115deg, #ffffff0c 0 1px, transparent 1px 5px);
 }
 
-.cg-window.cg-material-builtin-obsidian-matte,
 .cg-window.cg-finish-matte {
   --material-reflection: .08;
   --material-shadow-strength: .59;
 }
 
-.cg-window.cg-material-builtin-smoked-glass {
-  --material-chroma: 166 196 231;
-  --material-reflection: .13;
-  --material-pane-density: .29;
+.cg-window.cg-controls-angular { --material-pane-radius: 3px; }
+.cg-window.cg-controls-soft { --material-pane-radius: 14px; }
+.cg-window.cg-controls-rounded { --material-pane-radius: 9px; }
+
+/* Brushed steel: close-packed plates, cool edge light, and fine grain. */
+.cg-window.cg-material-brushed-glass {
+  --material-edge-light: 192 245 239;
+  --material-chroma: 110 224 207;
+  --material-reflection: .22;
+  --material-edge-strength: .68;
+  --material-face-pattern: repeating-linear-gradient(0deg, #b2fff40b 0 1px, transparent 1px 4px);
+  --material-pane-pattern: repeating-linear-gradient(0deg, #d1fff80e 0 1px, transparent 1px 5px);
+  --material-pane-radius: 3px;
+  --material-raised-radius: 5px;
+  --material-layout-gap: 5px;
+  --material-layout-inset: 7px;
+  --material-sidebar-width: 15vw;
+  --material-settings-width: 158px;
+  --material-bevel: 2px;
+  --material-cast: 3px;
 }
 
-.cg-window.cg-material-builtin-black-glass {
-  --material-chroma: 139 166 210;
-  --material-reflection: .09;
-  --material-pane-density: .53;
-}
-
-.cg-window.cg-material-builtin-pearl-frost {
-  --material-edge-light: 231 248 255;
-  --material-chroma: 168 184 226;
-  --material-edge-strength: .9;
-  --material-reflection: .21;
-  --material-pane-density: .26;
-}
-
+/* Ice cut: bright broad seams, offset panes, and glints on the beveled edge. */
 .cg-window.cg-material-frosted-water-351 {
-  --material-edge-light: 225 247 255;
-  --material-chroma: 154 205 230;
-  --material-reflection: .19;
+  --material-edge-light: 211 245 255;
+  --material-edge-shadow: 20 61 99;
+  --material-chroma: 127 211 255;
+  --material-edge-strength: .87;
+  --material-reflection: .29;
+  --material-light-width: 48px;
+  --material-light-angle: 166deg;
+  --material-pane-radius: 8px 21px 8px 21px;
+  --material-raised-radius: 6px 17px;
+  --material-layout-gap: 11px;
+  --material-layout-inset: 12px;
+  --material-sidebar-width: 16vw;
+  --material-settings-width: 178px;
+  --material-face-pattern: radial-gradient(110% 70px at 20% 0, #d6f8ff4a, transparent 83%);
+  --material-pane-pattern: linear-gradient(137deg, #d9f9ff42, transparent 15%, transparent 89%, #7db8ec27);
+  --material-bevel: 3px;
+  --material-cast: 13px;
 }
 
-/* The animated Frosted Layers render over this same tint and beveled edge. */
+/* Rose Pine: warm plum, a soft fascia, and copper-colored light. */
+.cg-window.cg-material-rose-pine {
+  --material-edge-light: 255 213 219;
+  --material-edge-shadow: 54 16 39;
+  --material-chroma: 239 157 177;
+  --material-reflection: .20;
+  --material-pane-density: .36;
+  --material-raised-density: .48;
+  --material-light-angle: 148deg;
+  --material-face-pattern: radial-gradient(95% 92px at 78% 0, #f8ac9d38, transparent 90%);
+  --material-pane-pattern: radial-gradient(74% 52px at 0 0, #e49eb72e, transparent 86%);
+  --material-pane-radius: 17px;
+  --material-raised-radius: 20px;
+  --material-layout-gap: 10px;
+  --material-layout-inset: 12px;
+  --material-sidebar-width: 18vw;
+  --material-settings-width: 191px;
+  --material-section-padding: 12px;
+  --material-cast: 12px;
+}
+
+/* Oversimplified: an open workspace with one indigo rule per section. */
+.cg-window.cg-material-oversimplified {
+  --material-edge-light: 191 191 255;
+  --material-chroma: 156 153 252;
+  --material-edge-strength: .23;
+  --material-reflection: .045;
+  --material-pane-density: .11;
+  --material-raised-density: .19;
+  --material-recess-density: .075;
+  --material-shadow-strength: .22;
+  --material-cast: 0px;
+  --material-pane-radius: 0px;
+  --material-layout-gap: 4px;
+  --material-layout-inset: 6px;
+  --material-sidebar-width: 15vw;
+  --material-settings-width: 145px;
+  --material-section-padding: 8px;
+}
+
+/* Obsidian: an amber seam surrounded by deep matte planes. */
+.cg-window.cg-material-builtin-obsidian-matte {
+  --material-edge-light: 255 224 174;
+  --material-edge-shadow: 40 28 21;
+  --material-chroma: 243 180 91;
+  --material-edge-strength: .34;
+  --material-pane-density: .46;
+  --material-raised-density: .62;
+  --material-recess-density: .35;
+  --material-pane-radius: 2px;
+  --material-raised-radius: 0px;
+  --material-layout-gap: 6px;
+  --material-layout-inset: 8px;
+  --material-sidebar-width: 19vw;
+  --material-settings-width: 188px;
+  --material-cast: 5px;
+}
+
+/* Smoked glass: warm glass with a shaded lower edge and broad side catches. */
+.cg-window.cg-material-builtin-smoked-glass {
+  --material-edge-light: 255 232 189;
+  --material-edge-shadow: 41 23 12;
+  --material-chroma: 244 180 118;
+  --material-reflection: .19;
+  --material-pane-density: .31;
+  --material-raised-density: .51;
+  --material-edge-strength: .73;
+  --material-light-angle: 110deg;
+  --material-light-width: 56px;
+  --material-face-pattern: linear-gradient(90deg, #f2bd8246, transparent 54px, transparent calc(100% - 35px), #1d100c25);
+  --material-pane-pattern: linear-gradient(0deg, #2d160a43, transparent 19px);
+  --material-pane-radius: 15px 4px 15px 4px;
+  --material-raised-radius: 4px 15px;
+  --material-layout-gap: 9px;
+  --material-layout-inset: 12px;
+  --material-sidebar-width: 21vw;
+  --material-settings-width: 197px;
+  --material-section-padding: 11px;
+  --material-cast: 16px;
+}
+
+/* Black Blur: glass-black planes with quiet silver hairlines. */
+.cg-window.cg-material-builtin-black-glass {
+  --material-edge-light: 200 204 215;
+  --material-edge-shadow: 0 0 0;
+  --material-chroma: 164 173 192;
+  --material-reflection: .07;
+  --material-edge-strength: .29;
+  --material-pane-density: .53;
+  --material-recess-density: .31;
+  --material-pane-radius: 6px;
+  --material-raised-radius: 9px;
+  --material-layout-gap: 5px;
+  --material-layout-inset: 6px;
+  --material-sidebar-width: 16vw;
+  --material-settings-width: 153px;
+  --material-cast: 9px;
+}
+
+/* Pearl: soft opalescent edges, lilac shadows, and spacious creamy panels. */
+.cg-window.cg-material-builtin-pearl-frost {
+  --material-edge-light: 255 240 255;
+  --material-edge-shadow: 64 40 79;
+  --material-chroma: 222 185 244;
+  --material-edge-strength: .72;
+  --material-reflection: .28;
+  --material-pane-density: .26;
+  --material-raised-density: .36;
+  --material-light-angle: 156deg;
+  --material-light-width: 38px;
+  --material-face-pattern: radial-gradient(58% 60px at 79% 0, #ffe6d94b, transparent 90%), radial-gradient(42% 40px at 8% 100%, #d7b0ff38, transparent 94%);
+  --material-pane-pattern: linear-gradient(115deg, #f2bcff2a, transparent 20%, transparent 82%, #ffe9c332);
+  --material-pane-radius: 20px 20px 10px 10px;
+  --material-raised-radius: 24px;
+  --material-layout-gap: 13px;
+  --material-layout-inset: 14px;
+  --material-sidebar-width: 20vw;
+  --material-settings-width: 190px;
+  --material-section-padding: 13px;
+  --material-bevel: 2px;
+  --material-cast: 13px;
+}
+
+.cg-window.cg-layout-compact { --material-layout-gap: 4px; }
+.cg-window.cg-layout-spacious { --material-layout-gap: 12px; }
+
 .cg-window:is(.cg-dark,.cg-light):is(.cg-target-main,.cg-target-details):not(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-content {
   background:
     var(--material-face-pattern),
-    linear-gradient(109deg, rgb(var(--material-edge-light) / calc(var(--material-face-reflection) * .58)), transparent 17%, transparent 91%, rgb(var(--material-chroma) / .07)),
-    linear-gradient(180deg, rgb(var(--material-edge-light) / var(--material-face-reflection)), transparent 30px, transparent calc(100% - 26px), rgb(var(--material-edge-shadow) / .12)),
+    linear-gradient(var(--material-light-angle), rgb(var(--material-edge-light) / var(--material-face-reflection)), transparent var(--material-light-width), transparent calc(100% - 26px), rgb(var(--material-edge-shadow) / .12)),
     linear-gradient(141deg, color-mix(in srgb, var(--glass-tint) calc(55% * var(--material-face-opacity)), transparent), transparent 42%),
-    rgba(var(--glass), var(--material-face-opacity)) !important;
+    rgb(var(--material-face-rgb) / var(--material-face-opacity)) !important;
   border-color: rgb(var(--material-edge-light) / calc(var(--material-edge-strength) * .48)) !important;
   box-shadow:
-    inset 0 1px 1px rgb(var(--material-edge-light) / var(--material-edge-strength)),
-    inset 0 0 0 2px rgb(var(--material-edge-light) / .10),
+    inset 0 var(--material-bevel) var(--material-bevel) rgb(var(--material-edge-light) / var(--material-edge-strength)),
+    inset 0 0 0 calc(var(--material-bevel) + 1px) rgb(var(--material-edge-light) / .10),
     inset 0 -2px 4px rgb(var(--material-chroma) / .28),
-    inset 0 -16px 24px -25px rgb(var(--material-edge-shadow) / var(--material-face-shadow)),
-    0 5px 17px rgb(var(--material-edge-shadow) / .30) !important;
+    inset 0 -16px 24px -25px rgb(var(--material-edge-shadow) / var(--material-face-shadow)) !important;
 }
 
 .cg-window:is(.cg-dark,.cg-light):is(.cg-target-main,.cg-target-details):not(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-fit-content :is(.cg-glass,.cg-window-top,.cg-menubar,.cg-page-tabs) {
   background:
+    var(--material-pane-pattern),
     linear-gradient(90deg, rgb(var(--material-edge-light) / calc(var(--material-face-reflection) * .66)), transparent 8px, transparent calc(100% - 8px), rgb(var(--material-chroma) / .09)),
-    linear-gradient(180deg, rgb(var(--material-edge-light) / var(--material-face-reflection)), transparent 31px, transparent calc(100% - 18px), rgb(var(--material-edge-shadow) / .10)),
-    rgba(var(--glass), calc(var(--material-face-opacity) * var(--material-pane-density))) !important;
+    linear-gradient(var(--material-light-angle), rgb(var(--material-edge-light) / var(--material-face-reflection)), transparent var(--material-light-width), transparent calc(100% - 18px), rgb(var(--material-edge-shadow) / .10)),
+    rgb(var(--material-pane-rgb) / calc(var(--material-face-opacity) * var(--material-pane-density))) !important;
   border-color: rgb(var(--material-edge-light) / calc(var(--material-edge-strength) * .39)) !important;
   box-shadow:
-    inset 0 1px 1px rgb(var(--material-edge-light) / calc(var(--material-edge-strength) * .85)),
-    inset 0 0 0 2px rgb(var(--material-edge-light) / .068),
+    inset 0 var(--material-bevel) var(--material-bevel) rgb(var(--material-edge-light) / calc(var(--material-edge-strength) * .85)),
+    inset 0 0 0 calc(var(--material-bevel) + 1px) rgb(var(--material-edge-light) / .068),
     inset 0 -1px 2px rgb(var(--material-chroma) / .19),
-    0 2px 7px rgb(var(--material-edge-shadow) / .20) !important;
+    0 2px var(--material-cast) rgb(var(--material-edge-shadow) / .25) !important;
 }
 
-.cg-window:is(.cg-target-main,.cg-target-details):not(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-fit-content :is(.cg-toolbar,.cg-footer) {
-  --material-pane-density: .43;
+.cg-window:is(.cg-target-main,.cg-target-details) .cg-fit-content :is(.cg-toolbar,.cg-footer) {
+  --material-pane-density: var(--material-raised-density);
 }
 
-.cg-window:is(.cg-target-main,.cg-target-details):not(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-fit-content :is(.cg-list-panel,.cg-settings-body) {
-  --material-pane-density: .24;
+.cg-window:is(.cg-target-main,.cg-target-details) .cg-fit-content :is(.cg-list-panel,.cg-settings-body) {
+  --material-pane-density: var(--material-recess-density);
 }
 
-/* On desktop Windows supplies the pixel blur behind the entire shell.
-   An outer WebView filter can replace that transparent surface. */
+.cg-window:is(.cg-dark,.cg-light) .cg-fit-content :is(.cg-glass,.cg-menubar,.cg-page-tabs) {
+  border-radius: var(--material-pane-radius) !important;
+}
+
+.cg-window:is(.cg-dark,.cg-light) .cg-fit-content :is(.cg-toolbar,.cg-footer) {
+  border-radius: var(--material-raised-radius, var(--material-pane-radius)) !important;
+}
+
+.cg-window .cg-main-body { gap: var(--material-layout-gap); }
+.cg-window .cg-workspace { gap: var(--material-layout-gap); }
+.cg-window .cg-settings { gap: var(--material-layout-gap); }
+.cg-window .cg-list-title { padding: var(--material-section-padding); }
+
+@media (min-width: 761px) and (min-height: 430px) {
+  .cg-window .cg-main-body { padding: 0 var(--material-layout-inset) var(--material-layout-inset); }
+  .cg-window .cg-settings { padding: var(--material-layout-inset); }
+  .cg-window .cg-workspace:has(> .cg-sidebar) {
+    grid-template-columns: clamp(112px, var(--material-sidebar-width), 220px) minmax(0, 1fr);
+  }
+  .cg-window .cg-workspace:not(:has(> .cg-sidebar)) { grid-template-columns: minmax(0, 1fr); }
+  .cg-window .cg-settings {
+    grid-template-columns: clamp(143px, var(--material-settings-width), 205px) minmax(0, 1fr);
+  }
+}
+
+/* Horizontal navigation keeps the complete list width in the minimal style. */
+@media (min-width: 761px) and (min-height: 430px) {
+  .cg-window.cg-material-oversimplified .cg-workspace:has(> .cg-sidebar),
+  .cg-window.cg-material-oversimplified .cg-settings {
+    grid-template-columns: minmax(0,1fr);
+    grid-template-rows: auto minmax(0,1fr);
+  }
+
+  .cg-window.cg-material-oversimplified :is(.cg-sidebar,.cg-settings-nav) {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 5px;
+    min-height: 0;
+    max-height: 56px;
+    padding: 4px 6px;
+    white-space: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .cg-window.cg-material-oversimplified :is(.cg-sidebar,.cg-settings-nav) button {
+    flex: 0 0 auto;
+    width: auto;
+    white-space: nowrap;
+  }
+
+  .cg-window.cg-material-oversimplified :is(.cg-side-heading,.cg-side-separator) { display: none; }
+}
+
+.cg-window.cg-material-oversimplified:is(.cg-dark,.cg-light):is(.cg-target-main,.cg-target-details) .cg-fit-content :is(.cg-sidebar,.cg-settings-nav,.cg-list-panel) {
+  box-shadow: inset 0 -1px rgb(var(--material-chroma) / .45) !important;
+  border-color: transparent !important;
+}
+
+@media (max-height: 429px), (max-width: 760px) {
+  .cg-window :is(.cg-main-body,.cg-workspace,.cg-settings) {
+    gap: min(var(--material-layout-gap), 6px);
+  }
+}
+
+@media (min-width: 761px) and (min-height: 430px) {
+  .cg-window.cg-material-rose-pine .cg-list-title {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    align-items: start;
+    row-gap: 8px;
+  }
+
+  .cg-window.cg-material-rose-pine .cg-list-title > div { grid-column: 1 / -1; }
+  .cg-window.cg-material-rose-pine .cg-list-title .cg-search { width: min(100%, 310px); }
+}
+
+.cg-window:is(.cg-material-brushed-glass,.cg-material-frosted-water-351,.cg-material-rose-pine,.cg-material-oversimplified,.cg-material-builtin-obsidian-matte,.cg-material-builtin-smoked-glass,.cg-material-builtin-black-glass,.cg-material-builtin-pearl-frost):is(.cg-dark,.cg-light) .cg-fit-content :is(.cg-sidebar,.cg-settings-nav) button.selected {
+  background: linear-gradient(100deg, rgb(var(--material-chroma) / .34), rgb(var(--material-chroma) / .12)) !important;
+  color: var(--ink) !important;
+  border-color: rgb(var(--material-chroma) / .52) !important;
+  box-shadow: inset 3px 0 rgb(var(--material-chroma) / .87), inset 0 1px rgb(var(--material-edge-light) / .23) !important;
+}
+
+.cg-window:is(.cg-material-brushed-glass,.cg-material-frosted-water-351,.cg-material-rose-pine,.cg-material-oversimplified,.cg-material-builtin-obsidian-matte,.cg-material-builtin-smoked-glass,.cg-material-builtin-black-glass,.cg-material-builtin-pearl-frost) .cg-fit-content :is(.cg-list-title,.cg-settings-body > div:first-child,.cg-window-top) {
+  border-bottom: 1px solid rgb(var(--material-chroma) / .25);
+}
+
+.cg-window:is(.cg-material-brushed-glass,.cg-material-frosted-water-351,.cg-material-rose-pine,.cg-material-oversimplified,.cg-material-builtin-obsidian-matte,.cg-material-builtin-smoked-glass,.cg-material-builtin-black-glass,.cg-material-builtin-pearl-frost):is(.cg-dark,.cg-light) .cg-fit-content .cg-cols {
+  background: color-mix(in srgb, rgb(var(--material-face-rgb)) 77%, var(--popover)) !important;
+  border-bottom-color: rgb(var(--material-chroma) / .36);
+}
+
+@media (min-width: 810px) and (min-height: 430px) {
+  .cg-window.cg-material-builtin-obsidian-matte .cg-main-body {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    grid-template-rows: max-content minmax(0, 1fr) max-content;
+  }
+
+  .cg-window.cg-material-builtin-obsidian-matte .cg-main-body:has(> .cg-update-notice) {
+    grid-template-rows: max-content max-content minmax(0, 1fr) max-content;
+  }
+
+  .cg-window.cg-material-builtin-obsidian-matte .cg-main-body > :is(.cg-update-notice,.cg-workspace,.cg-footer) {
+    grid-column: 1 / -1;
+  }
+
+  .cg-window.cg-material-builtin-obsidian-matte .cg-main-body > .cg-menubar {
+    height: auto;
+    align-items: center;
+    padding-inline: 5px;
+  }
+
+  .cg-window.cg-material-builtin-pearl-frost .cg-main-body > .cg-menubar {
+    align-self: center;
+    padding-inline: 21px;
+  }
+
+  .cg-window.cg-material-builtin-pearl-frost .cg-main-body > .cg-toolbar {
+    justify-content: center;
+  }
+}
+
+@media (min-width: 761px) and (min-height: 430px) {
+  .cg-window.cg-material-builtin-smoked-glass .cg-workspace,
+  .cg-window.cg-material-builtin-smoked-glass .cg-settings {
+    column-gap: 0;
+  }
+
+  .cg-window.cg-material-builtin-smoked-glass .cg-fit-content :is(.cg-sidebar,.cg-settings-nav) {
+    --material-pane-radius: 15px 0 0 4px;
+    border-inline-end-width: 0;
+  }
+
+  .cg-window.cg-material-builtin-smoked-glass .cg-fit-content :is(.cg-sidebar + .cg-list-panel,.cg-settings-body) {
+    --material-pane-radius: 0 4px 15px 0;
+  }
+}
+
+/* Native acrylic supplies the blur behind the WebView. */
 .cg-window.cg-native-backdrop.cg-mode-desktop .cg-content {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;

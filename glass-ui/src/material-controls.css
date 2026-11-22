@@ -73,8 +73,6 @@
 .cg-window.cg-light .cg-fit-content :is(.cg-btn,.cg-toolbar>button) svg,.cg-window.cg-light .cg-fit-content :is(.cg-sidebar,.cg-settings-nav,.cg-winbuttons) button svg{color:var(--accent)!important;filter:none!important}
 .cg-window.cg-light .cg-fit-content :is(input:not([type=range]):not([type=checkbox]),select,textarea){background:var(--field)!important;color:var(--ink)!important;border-color:var(--edge-strong)!important;text-shadow:none!important}
 .cg-window.cg-light .cg-fit-content select option{background:rgb(var(--glass))!important;color:var(--ink)!important}
-.cg-window.cg-light .cg-solid{background:rgb(var(--glass))!important}
-.cg-window.cg-dark .cg-solid{background:linear-gradient(145deg,rgba(var(--accent-rgb),.22),transparent 70%),rgb(var(--glass))!important}
 
 /* Keep action buttons compact as the window grows. */
 .cg-window .cg-toolbar>button{flex:0 0 clamp(42px,4.5vw,58px)!important;min-width:42px!important;max-width:58px!important}

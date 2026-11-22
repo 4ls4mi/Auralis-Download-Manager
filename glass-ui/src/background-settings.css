@@ -1,0 +1,59 @@
+.cg-background-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
+  gap: 12px;
+  margin-block: 12px;
+}
+
+.cg-background-card {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px;
+}
+
+.cg-background-card h4 {
+  margin: 0;
+  font-size: 1em;
+}
+
+.cg-background-card .cg-wall-choice {
+  margin: 0;
+}
+
+.cg-background-card [aria-pressed="true"] {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.cg-background-card [aria-pressed="true"]:focus-visible {
+  outline-color: var(--ice-focus, currentColor);
+}
+
+.cg-background-color-row,
+.cg-background-color {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.cg-background-color input[type="color"] {
+  inline-size: 2.75rem;
+  block-size: 2rem;
+  padding: 2px !important;
+  cursor: pointer;
+}
+
+.cg-background-media {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.cg-background-media small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
