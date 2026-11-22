@@ -46,7 +46,7 @@ Item {
     signal opened()
     signal optionsRequested()
 
-    implicitHeight: recoveryLabel.length ? 78 : 64
+    implicitHeight: recoveryLabel.length ? 78 : colors.layout === "violetRail" ? 59 : 64
     Accessible.role: Accessible.ListItem
     Accessible.name: [fileName, sizeLabel, statusLabel, speedLabel, connectionLabel].filter(Boolean).join(", ")
     Accessible.selected: chosen
@@ -54,10 +54,11 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        radius: row.studioChrome ? 5 : 8
+        radius: row.colors.panelRadius || (row.studioChrome ? 5 : 8)
         color: row.chosen
             ? (row.studioChrome && row.colors.navigationFill
-                ? row.colors.navigationFill : Qt.alpha(row.colors.accent, row.colors.light ? .22 : .20))
+                ? row.colors.rowSelectionFill || row.colors.navigationFill
+                : Qt.alpha(row.colors.accent, row.colors.light ? .22 : .20))
             : pointer.containsMouse ? Qt.alpha(row.studioChrome ? row.colors.ink : row.colors.accent,
                                                row.studioChrome ? .055 : .11) : "transparent"
         border.width: row.cursorFocused || (row.chosen && !row.studioChrome) ? 1 : 0
@@ -128,7 +129,7 @@ Item {
                 Layout.fillWidth: true
                 text: row.fileName
                 elide: Text.ElideMiddle
-                color: row.colors.ink
+                color: row.chosen ? row.colors.rowSelectionInk || row.colors.ink : row.colors.ink
                 font.weight: Font.DemiBold
             }
             Label {
@@ -200,7 +201,8 @@ Item {
                     Layout.preferredWidth: 30
                     text: Math.floor(row.progress * 100) + "%"
                     horizontalAlignment: Text.AlignRight
-                    color: row.studioChrome ? row.colors.navigationInk || row.colors.accent : row.colors.ink
+                    color: row.studioChrome && !row.colors.rowSelectionInk
+                        ? row.colors.navigationInk || row.colors.accent : row.colors.ink
                     font.pixelSize: row.studioChrome ? 12 : 11
                     font.weight: row.studioChrome ? Font.Bold : Font.Normal
                 }

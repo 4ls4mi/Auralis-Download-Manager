@@ -1,12 +1,15 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Controls
 import QtQuick.Controls.Basic as Basic
 
 Basic.Button {
     id: button
 
     property bool menuOpen: false
+    property string railIcon: ""
+    property color idleInk: colors.ink
     readonly property var colors: MaterialTheme.menuColors
     readonly property bool emphasized: enabled && (hovered || visualFocus || down || menuOpen)
 
@@ -17,8 +20,21 @@ Basic.Button {
     bottomPadding: 5
     font.pixelSize: 14
     font.weight: Font.Medium
-    palette.buttonText: emphasized ? colors.highlightInk : colors.ink
+    palette.buttonText: railIcon.length ? "transparent" : emphasized ? colors.highlightInk : idleInk
     palette.highlightedText: colors.highlightInk
+    Accessible.name: text.replace("&", "")
+    ToolTip.visible: railIcon.length > 0 && hovered && !menuOpen
+    ToolTip.text: Accessible.name
+    ToolTip.delay: 400
+
+    DashboardIcon {
+        anchors.centerIn: parent
+        width: 19
+        height: 19
+        visible: button.railIcon.length > 0
+        symbol: button.railIcon
+        ink: button.emphasized ? button.colors.highlightInk : button.idleInk
+    }
 
     background: Item {
         implicitHeight: 29

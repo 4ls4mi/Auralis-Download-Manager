@@ -15,7 +15,7 @@ Item {
     property real emphasis: 0
     property color solidColor: profile.background
     property real mediaOverlay: -1
-    property real radius: profile.radius
+    property real radius: studioPanel ? profile.panelRadius : profile.radius
     property bool showReflection: role === "toolbar" && profile.shape === "aero"
 
     readonly property var profile: MaterialTheme.profile(material)
@@ -26,6 +26,8 @@ Item {
     readonly property bool stacked: ["smoke", "frost"].includes(profile.shape)
     readonly property bool faceted: ["prism", "ice", "chamfer"].includes(profile.shape)
     readonly property bool flatStudio: profile.cleanStudio === true
+    readonly property bool studioPanel: profile.panelRadius !== undefined
+        && ["card", "summary", "connections"].includes(role)
     readonly property bool cleanChrome: profile.opaque || profile.softChrome === true
     readonly property bool reflectionPlane: faceted && (!cleanChrome || shell || role === "toolbar")
     readonly property string outline: shell ? "square" : profile.softChrome ? "round" : profile.shape
@@ -54,11 +56,12 @@ Item {
     Rectangle {
         anchors.fill: parent
         visible: surface.flatStudio
-        radius: surface.button || surface.role === "field" ? surface.radius : 0
+        radius: surface.button || surface.role === "field" || surface.studioPanel ? surface.radius : 0
         color: surface.shell ? surface.backing : surface.button
             ? MaterialTheme.mix(surface.profile.buttonFace || surface.profile.background, surface.accent,
                 Math.max(0, surface.emphasis - .12) * .37, 1)
-            : surface.profile.roleFaces?.[surface.role] || surface.profile.background
+            : (surface.role === "summary" ? surface.profile.summaryFill : surface.profile.roleFaces?.[surface.role])
+                || surface.profile.background
         border.width: surface.shell || surface.role === "field" ? 1 : 0
         border.color: surface.profile.surfaceLine || surface.profile.divider
 

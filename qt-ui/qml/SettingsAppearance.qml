@@ -5,11 +5,14 @@ import QtQuick.Controls
 import QtQuick.Dialogs
 import QtQuick.Layouts
 
-ColumnLayout {
+GridLayout {
     id: root
 
     required property var backdrop
     readonly property var colors: MaterialTheme.palette
+    readonly property bool sideTabs: ["fogSlate", "violetRail", "coralSlate"].includes(colors.layout)
+    readonly property var sections: [qsTr("Materials and color"), qsTr("Window backgrounds"), qsTr("Indicators")]
+    property int activeTab: 0
     property string fileAction
     property string status
     property bool failed: false
@@ -21,7 +24,7 @@ ColumnLayout {
         to: 1
         duration: 1350
         loops: Animation.Infinite
-        running: root.visible && tabs.currentIndex === 2 && !MaterialTheme.reducedMotion
+        running: root.visible && root.activeTab === 2 && !MaterialTheme.reducedMotion
     }
     readonly property var shapeChoices: [
         {label: qsTr("Material default"), value: "material"}, {label: qsTr("Rounded"), value: "round"},
@@ -32,7 +35,9 @@ ColumnLayout {
         {label: qsTr("Sculpted Liquid Glass"), value: "sculpted"}, {label: qsTr("Default"), value: "default"}
     ]
 
-    spacing: 13
+    columns: 2
+    columnSpacing: sideTabs ? 10 : 0
+    rowSpacing: 13
 
     function report(message, error) {
         status = message
@@ -68,6 +73,15 @@ ColumnLayout {
         Layout.fillWidth: true
         padding: 14
         background: GlassSurface { role: "content"; backdropAvailable: root.backdrop.backdropAvailable }
+    }
+
+    component TabPage: Tile {
+        property int pageRow: 0
+
+        Layout.column: root.sideTabs ? 1 : 0
+        Layout.columnSpan: root.sideTabs ? 1 : 2
+        Layout.row: pageRow + (root.sideTabs ? 0 : 1)
+        Layout.minimumWidth: 0
     }
 
     component Heading: Label {
@@ -118,15 +132,108 @@ ColumnLayout {
     }
 
     TabBar {
-        id: tabs
+        id: topTabs
+
+        visible: !root.sideTabs
         Layout.fillWidth: true
-        TabButton { text: qsTr("Materials and color") }
-        TabButton { text: qsTr("Window backgrounds") }
-        TabButton { text: qsTr("Indicators") }
+        Layout.column: 0
+        Layout.columnSpan: 2
+        Layout.row: 0
+        currentIndex: root.activeTab
+        onCurrentIndexChanged: if (currentIndex >= 0 && root.activeTab !== currentIndex)
+            root.activeTab = currentIndex
+
+        Repeater {
+            model: root.sections
+            delegate: TabButton {
+                required property string modelData
+                text: modelData
+            }
+        }
     }
 
-    Tile {
-        visible: tabs.currentIndex === 0
+    ColumnLayout {
+        visible: root.sideTabs
+        Layout.column: 0
+        Layout.row: 0
+        Layout.rowSpan: root.activeTab === 1 ? 2 : 1
+        Layout.preferredWidth: Math.max(100, Math.min(144, Math.round(root.width * .25)))
+        Layout.fillWidth: false
+        Layout.alignment: Qt.AlignTop | Qt.AlignLeft
+        spacing: 5
+        Accessible.role: Accessible.PageTabList
+        Accessible.name: qsTr("Appearance sections")
+
+        Repeater {
+            id: sideTabButtons
+            model: root.sections
+            delegate: GlassButton {
+                id: tab
+                required property int index
+                required property string modelData
+
+                Layout.fillWidth: true
+                Layout.minimumWidth: 0
+                Layout.minimumHeight: 39
+                leftPadding: 8
+                rightPadding: 7
+                text: modelData
+                checked: root.activeTab === index
+                Accessible.role: Accessible.PageTab
+                Accessible.selected: checked
+                onClicked: root.activeTab = index
+
+                contentItem: Label {
+                    text: tab.text
+                    font.family: tab.font.family
+                    font.pixelSize: tab.font.pixelSize
+                    font.weight: tab.checked ? Font.DemiBold : Font.Normal
+                    color: tab.checked ? root.colors.navigationInk || root.colors.ink : root.colors.ink
+                    verticalAlignment: Text.AlignVCenter
+                    wrapMode: Text.Wrap
+                    maximumLineCount: 2
+                    elide: Text.ElideRight
+                }
+
+                background: Rectangle {
+                    radius: 5
+                    color: tab.checked ? root.colors.navigationFill || Qt.alpha(root.colors.accent, .16)
+                        : tab.hovered || tab.down ? Qt.alpha(root.colors.ink, .075) : "transparent"
+                    border.width: tab.visualFocus ? 1 : 0
+                    border.color: root.colors.menuRail || root.colors.accent
+
+                    Rectangle {
+                        visible: tab.checked
+                        anchors.left: parent.left
+                        anchors.top: parent.top
+                        anchors.bottom: parent.bottom
+                        anchors.margins: 2
+                        width: 3
+                        radius: width / 2
+                        color: root.colors.menuRail || root.colors.accent
+                    }
+                }
+
+                Keys.onPressed: event => {
+                    const count = root.sections.length
+                    let target = index
+                    switch (event.key) {
+                    case Qt.Key_Up: target = (index + count - 1) % count; break
+                    case Qt.Key_Down: target = (index + 1) % count; break
+                    case Qt.Key_Home: target = 0; break
+                    case Qt.Key_End: target = count - 1; break
+                    default: return
+                    }
+                    root.activeTab = target
+                    sideTabButtons.itemAt(target).forceActiveFocus(Qt.TabFocusReason)
+                    event.accepted = true
+                }
+            }
+        }
+    }
+
+    TabPage {
+        visible: root.activeTab === 0
 
         ColumnLayout {
             width: parent.width
@@ -212,8 +319,9 @@ ColumnLayout {
 
             Heading { text: qsTr("Accent override") }
 
-            RowLayout {
+            Flow {
                 Layout.fillWidth: true
+                spacing: 6
                 GlassButton {
                     text: qsTr("Choose accent color…")
                     accent: MaterialTheme.forcedAccent || root.colors.accent
@@ -228,7 +336,6 @@ ColumnLayout {
                     enabled: Boolean(MaterialTheme.forcedAccent)
                     onClicked: MaterialTheme.forcedAccent = ""
                 }
-                Item { Layout.fillWidth: true }
             }
 
             Label {
@@ -255,10 +362,12 @@ ColumnLayout {
             {key: "main", title: qsTr("Download manager")},
             {key: "details", title: qsTr("Settings and download windows")}
         ]
-        delegate: Tile {
+        delegate: TabPage {
             id: backgroundCard
+            required property int index
             required property var modelData
-            visible: tabs.currentIndex === 1
+            pageRow: index
+            visible: root.activeTab === 1
             readonly property var selected: WindowAppearance.background(modelData.key)
 
             ColumnLayout {
@@ -300,15 +409,16 @@ ColumnLayout {
         }
     }
 
-    Tile {
-        visible: tabs.currentIndex === 2
+    TabPage {
+        visible: root.activeTab === 2
 
         ColumnLayout {
             width: parent.width
             spacing: 10
             Heading { text: qsTr("Progress") }
-            RowLayout {
+            GridLayout {
                 Layout.fillWidth: true
+                columns: !root.sideTabs || width >= 320 ? 2 : 1
                 IndicatorChoice {
                     label: qsTr("Progress shape")
                     model: root.shapeChoices
@@ -341,8 +451,9 @@ ColumnLayout {
                 animated: visible
             }
             Heading { text: qsTr("Connections") }
-            RowLayout {
+            GridLayout {
                 Layout.fillWidth: true
+                columns: !root.sideTabs || width >= 320 ? 2 : 1
                 IndicatorChoice {
                     label: qsTr("Connection shape")
                     model: root.shapeChoices
@@ -406,6 +517,9 @@ ColumnLayout {
 
     RowLayout {
         Layout.fillWidth: true
+        Layout.column: 0
+        Layout.columnSpan: 2
+        Layout.row: 3
         Switch {
             text: qsTr("Reduce animations")
             checked: MaterialTheme.reducedMotion
@@ -421,6 +535,9 @@ ColumnLayout {
     Label {
         visible: Boolean(root.status)
         Layout.fillWidth: true
+        Layout.column: 0
+        Layout.columnSpan: 2
+        Layout.row: 4
         text: root.status
         color: root.failed ? root.colors.destructive : root.colors.positive
         wrapMode: Text.WordWrap

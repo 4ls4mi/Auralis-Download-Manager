@@ -38,14 +38,69 @@ QtObject {
     })
     readonly property var indicatorChoices: [{ value: "material", label: qsTr("Use material colors") }]
         .concat(Object.keys(indicatorPalettes).map(id => ({ value: id, label: indicatorPalettes[id].label })))
-    readonly property string effectiveProgressPalette: resolvedPalette(progressPalette, "blue-purple")
-    readonly property string effectiveConnectionPalette: resolvedPalette(connectionPalette, "ocean")
-    readonly property string effectiveGraphPalette: resolvedPalette(graphPalette, "blue-purple")
-    readonly property var progressColors: colorsFor(progressPalette, effectiveProgressPalette)
-    readonly property var connectionColors: colorsFor(connectionPalette, effectiveConnectionPalette)
-    readonly property var graphColors: colorsFor(graphPalette, effectiveGraphPalette)
+    readonly property string effectiveProgressPalette: resolvedPalette(progressPalette, "blue-purple", "progress")
+    readonly property string effectiveConnectionPalette: resolvedPalette(connectionPalette, "ocean", "connections")
+    readonly property string effectiveGraphPalette: resolvedPalette(graphPalette, "blue-purple", "graph")
+    readonly property var progressColors: colorsFor(progressPalette, effectiveProgressPalette, "progress")
+    readonly property var connectionColors: colorsFor(connectionPalette, effectiveConnectionPalette, "connections")
+    readonly property var graphColors: colorsFor(graphPalette, effectiveGraphPalette, "graph")
 
     readonly property var builtins: ({
+        "fog-slate": preset({
+            name: qsTr("Fog Slate"), finish: "matte", shape: "round", opaque: true, cleanStudio: true,
+            layout: "fogSlate", background: "#2a2f3b", edge: "#555b6a", shade: "#1e222c", upper: "#e1e6ef",
+            accent: "#ff8791", secondary: "#76dabd", ink: "#f5f6fa", muted: "#bec5d2",
+            divider: "#495164", positive: "#79ddbe", caution: "#ffd38c", destructive: "#ff8992",
+            buttonFace: "#323949", surfaceLine: "#434b5b", sidebarInk: "#252e3d", sidebarMuted: "#4e596a",
+            navigationFill: "#ff8791", navigationInk: "#291c27", rowSelectionFill: "#323b4c",
+            rowSelectionInk: "#f9fafc", summaryFill: "#254b4a", summaryInk: "#e6fff6",
+            menuSurface: "#242934", menuHighlight: "#ff8791", menuRail: "#6ce0c2",
+            translucency: 0, gloss: .14, radius: 6, bevel: 1.4, panelRadius: 6,
+            indicatorDefaults: {
+                progress: {palette: "coral", colors: ["#ff7988", "#ff9c9f"]},
+                connections: {palette: "emerald", colors: ["#52d7b1", "#9af2d4"]},
+                graph: {palette: "emerald", colors: ["#54cdb0", "#98e7d0"]}
+            },
+            roleFaces: {title: "#242936", toolbar: "#2a303e", sidebar: "#dbe0e7", content: "#2b303e",
+                        footer: "#252b38", field: "#222834", card: "#252c39", connections: "#252c39"}
+        }),
+        "violet-rail": preset({
+            name: qsTr("Violet Rail"), finish: "matte", shape: "round", opaque: true, cleanStudio: true,
+            layout: "violetRail", background: "#242634", edge: "#525069", shade: "#1c1d2a", upper: "#e7dcff",
+            accent: "#b199f7", secondary: "#9370f8", ink: "#f6f3ff", muted: "#c3bfd6",
+            divider: "#4c485e", positive: "#82dec1", caution: "#ffcf87", destructive: "#ff899b",
+            buttonFace: "#303045", surfaceLine: "#403e53", railFill: "#523a85",
+            sidebarInk: "#f3efff", sidebarMuted: "#c4b6e4",
+            navigationFill: "#5a4488", navigationInk: "#fff7ff", rowSelectionFill: "#38334e",
+            rowSelectionInk: "#fbf7ff", summaryFill: "#422f68", summaryInk: "#f7efff",
+            menuSurface: "#28253a", menuHighlight: "#614ba1", menuRail: "#ba9dff",
+            translucency: 0, gloss: .15, radius: 8, bevel: 1.4, panelRadius: 8,
+            indicatorDefaults: {
+                progress: {palette: "violet", colors: ["#9069f8", "#ba98ff"]},
+                connections: {palette: "aurora", colors: ["#8c79fb", "#7ce8d0"]},
+                graph: {palette: "violet", colors: ["#9468ec", "#c7a7ff"]}
+            },
+            roleFaces: {title: "#272538", toolbar: "#272838", sidebar: "#2a2939", content: "#262837",
+                        footer: "#242633", field: "#212331", card: "#222534", connections: "#222534"}
+        }),
+        "coral-slate": preset({
+            name: qsTr("Coral Slate"), finish: "matte", shape: "round", opaque: true, cleanStudio: true,
+            layout: "coralSlate", background: "#303344", edge: "#52566b", shade: "#222532", upper: "#e8eaf5",
+            accent: "#ff848b", secondary: "#a581f7", ink: "#f6f6fb", muted: "#c4c8db",
+            divider: "#494e64", positive: "#83e2bd", caution: "#ffd087", destructive: "#ff858d",
+            buttonFace: "#393d50", surfaceLine: "#43475a", sidebarInk: "#f3f2fb", sidebarMuted: "#c2c5d7",
+            navigationFill: "#ff848b", navigationInk: "#271e29", rowSelectionFill: "#252836",
+            rowSelectionInk: "#f9f7fd", summaryFill: "#604fa2", summaryInk: "#fbf7ff",
+            menuSurface: "#282c3b", menuHighlight: "#6652a4", menuRail: "#c1a0ff",
+            translucency: 0, gloss: .14, radius: 10, bevel: 1.4, panelRadius: 12,
+            indicatorDefaults: {
+                progress: {palette: "coral", colors: ["#ff8290", "#b089fa"]},
+                connections: {palette: "aurora", colors: ["#ff8392", "#ac84fa"]},
+                graph: {palette: "violet", colors: ["#a478f5", "#be98ff"]}
+            },
+            roleFaces: {title: "#2d3141", toolbar: "#303344", sidebar: "#303344", content: "#303344",
+                        footer: "#2d3141", field: "#272b3b", card: "#252837", connections: "#252837"}
+        }),
         "black-ceramic": preset({
             name: qsTr("Black Ceramic"), finish: "matte", shape: "round", opaque: true, cleanStudio: true,
             background: "#161312", edge: "#3d302a", shade: "#0d0b0b", upper: "#e4c4b4",
@@ -229,18 +284,25 @@ QtObject {
             destructive: contrast.destructive, accent: colorTheme.accent, secondary: colorTheme.secondary,
             roleFaces: undefined, surfaceLine: contrast.divider, buttonFace: undefined,
             navigationFill: undefined, navigationInk: undefined, menuSurface: undefined,
-            menuHighlight: undefined, menuRail: undefined,
+            menuHighlight: undefined, menuRail: undefined, sidebarInk: undefined, sidebarMuted: undefined,
+            rowSelectionFill: undefined, rowSelectionInk: undefined, summaryFill: undefined, summaryInk: undefined,
             background: Qt.rgba(ground.r * .78 + tone.r * .22, ground.g * .78 + tone.g * .22,
                                 ground.b * .78 + tone.b * .22, 1)
         }));
     }
 
-    function resolvedPalette(selection, fallback) {
-        return selection === "material" ? palette.indicatorPalette || fallback : selection;
+    function resolvedPalette(selection, fallback, role) {
+        return selection === "material" ? palette.indicatorDefaults?.[role]?.palette || palette.indicatorPalette || fallback
+            : selection;
     }
 
-    function colorsFor(selection, effective) {
-        return selection === "material" && palette.liquidColors ? palette.liquidColors : indicatorColors(effective);
+    function colorsFor(selection, effective, role) {
+        if (selection === "material") {
+            const colors = palette.indicatorDefaults?.[role]?.colors || palette.liquidColors;
+            if (colors)
+                return colors;
+        }
+        return indicatorColors(effective);
     }
 
     function indicatorColors(id) {

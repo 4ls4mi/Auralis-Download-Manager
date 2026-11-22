@@ -15,6 +15,12 @@ ApplicationWindow {
     signal hideToTrayRequested(var downloadId)
     property string material: MaterialTheme.current
     readonly property var colors: MaterialTheme.profile(material)
+    readonly property string transferLayout: colors.layout || ""
+    readonly property bool sideTabs: ["fogSlate", "violetRail", "coralSlate"].includes(transferLayout)
+    readonly property color detailSidebarInk: colors.sidebarInk || colors.ink
+    readonly property color detailDivider: colors.surfaceLine || colors.divider
+    readonly property color summaryInk: sideTabs && colors.summaryInk ? colors.summaryInk : colors.text
+    readonly property var transferTabs: [qsTr("Download status"), qsTr("Speed limiter"), qsTr("Options on completion")]
     readonly property string progressShape: selectedShape(WindowAppearance.progressShape)
     readonly property string connectionShape: selectedShape(WindowAppearance.connectionShape)
     readonly property var item: Transfer.find(engine.dashboard.downloads, downloadId)
@@ -364,13 +370,14 @@ ApplicationWindow {
             }
         }
         ToolBar {
+            visible: !root.sideTabs
             Layout.fillWidth: true
             padding: 8
             background: GlassSurface { material: root.material; role: "toolbar"; backdropAvailable: root.backdropAvailable }
             contentItem: RowLayout {
                 spacing: 7
                 Repeater {
-                    model: [qsTr("Download status"), qsTr("Speed limiter"), qsTr("Options on completion")]
+                    model: root.transferTabs
                     delegate: GlassButton {
                         required property int index
                         required property string modelData
@@ -397,11 +404,79 @@ ApplicationWindow {
         onTriggered: phase = (phase + Math.PI * 2 / 29) % (Math.PI * 2)
     }
 
+    Pane {
+        id: transferRail
+        visible: root.sideTabs
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        anchors.left: parent.left
+        width: root.transferLayout === "violetRail"
+            ? Math.max(122, Math.min(169, Math.round(root.width * .21)))
+            : Math.max(115, Math.min(145, Math.round(root.width * .19)))
+        padding: 9
+        topPadding: root.transferLayout === "violetRail" ? 19 : padding
+        background: GlassSurface {
+            material: root.material
+            role: "sidebar"
+            backdropAvailable: root.backdropAvailable
+            Rectangle {
+                anchors.right: parent.right
+                width: 1
+                height: parent.height
+                color: root.detailDivider
+            }
+        }
+        contentItem: ColumnLayout {
+            spacing: 5
+            Repeater {
+                model: root.transferTabs
+                delegate: GlassButton {
+                    id: transferTab
+                    required property int index
+                    required property string modelData
+                    readonly property color tabInk: checked ? root.colors.navigationInk || root.colors.accent : root.detailSidebarInk
+                    material: root.material
+                    text: modelData
+                    checkable: true
+                    autoExclusive: true
+                    checked: root.activeTab === index
+                    onClicked: root.activeTab = index
+                    Layout.fillWidth: true
+                    Layout.minimumHeight: 36
+                    leftPadding: 8
+                    rightPadding: 8
+                    background: Rectangle {
+                        radius: Math.min(7, root.colors.radius)
+                        color: transferTab.checked ? root.colors.navigationFill || root.colors.buttonFace
+                            : transferTab.down ? Qt.alpha(root.detailSidebarInk, .18)
+                            : transferTab.hovered ? Qt.alpha(root.detailSidebarInk, .10) : "transparent"
+                        border.width: transferTab.visualFocus ? 1 : 0
+                        border.color: transferTab.tabInk
+                    }
+                    contentItem: Label {
+                        text: transferTab.text
+                        textFormat: Text.PlainText
+                        font: transferTab.font
+                        color: transferTab.tabInk
+                        verticalAlignment: Text.AlignVCenter
+                        wrapMode: Text.Wrap
+                        maximumLineCount: 2
+                        elide: Text.ElideRight
+                    }
+                }
+            }
+            Item { Layout.fillHeight: true }
+        }
+    }
+
     ScrollView {
         id: view
-        anchors.fill: parent
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        anchors.left: root.sideTabs ? transferRail.right : parent.left
+        anchors.right: parent.right
         clip: true
-        padding: 12
+        padding: root.transferLayout === "fogSlate" ? 10 : 12
         contentWidth: availableWidth
         ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
         Item {
@@ -422,16 +497,20 @@ ApplicationWindow {
                 Pane {
                     visible: !!root.item && root.activeTab === 0
                     Layout.fillWidth: true
-                    padding: 15
+                    padding: root.transferLayout === "fogSlate" ? 12 : 15
                     leftPadding: root.displayFlow ? 27 : padding
-                    background: GlassSurface { material: root.material; role: "card"; backdropAvailable: root.backdropAvailable }
+                    background: GlassSurface {
+                        material: root.material
+                        role: root.sideTabs ? "summary" : "card"
+                        backdropAvailable: root.backdropAvailable
+                    }
                     contentItem: ColumnLayout {
-                        spacing: 10
+                        spacing: root.transferLayout === "fogSlate" ? 8 : 10
                         Label {
                             Layout.fillWidth: true
                             text: root.item ? root.item.file : ""
                             elide: Text.ElideMiddle
-                            color: root.colors.text
+                            color: root.summaryInk
                             font.pixelSize: 19
                             font.bold: true
                         }
@@ -444,7 +523,7 @@ ApplicationWindow {
                         }
                         GridLayout {
                             Layout.fillWidth: true
-                            columns: width >= 560 ? 2 : 1
+                            columns: width >= (root.sideTabs ? 540 : 560) ? 2 : 1
                             rowSpacing: 6
                             columnSpacing: 16
                             Repeater {
@@ -470,8 +549,13 @@ ApplicationWindow {
                                     required property int index
                                     readonly property var cell: measurements.cells[index]
                                     Layout.fillWidth: true
-                                    Label { text: measurement.cell.label; color: root.colors.muted; Layout.preferredWidth: 116; elide: Text.ElideRight }
-                                    Label { text: measurement.cell.value; color: root.colors.text; elide: Text.ElideRight; Layout.fillWidth: true }
+                                    Label {
+                                    text: measurement.cell.label
+                                    color: root.colors.muted
+                                    Layout.preferredWidth: root.sideTabs ? 132 : 116
+                                    elide: Text.ElideRight
+                                }
+                                    Label { text: measurement.cell.value; color: root.summaryInk; elide: Text.ElideRight; Layout.fillWidth: true }
                                 }
                             }
                         }
@@ -495,7 +579,7 @@ ApplicationWindow {
                             }
                             Label {
                                 text: Math.round(Transfer.fraction(root.item) * 100) + "%"
-                                color: root.colors.text
+                                color: root.summaryInk
                                 font.bold: true
                             }
                             Item { Layout.fillWidth: root.progressShape === "bubble"; visible: root.progressShape === "bubble" }
@@ -519,17 +603,23 @@ ApplicationWindow {
                 }
 
                 GridLayout {
+                    id: transferOverview
                     visible: !!root.item && root.activeTab === 0
                     Layout.fillWidth: true
-                    columns: width >= 630 ? 2 : 1
-                    columnSpacing: 10
-                    rowSpacing: 10
+                    columns: root.transferLayout !== "coralSlate" && width >= (root.sideTabs ? 535 : 630) ? 2 : 1
+                    columnSpacing: root.transferLayout === "fogSlate" ? 8 : 10
+                    rowSpacing: root.transferLayout === "fogSlate" ? 8 : 10
                     Pane {
                         Layout.fillWidth: true
-                        Layout.preferredWidth: 355
+                        Layout.preferredWidth: root.transferLayout === "violetRail" ? 315 : 355
+                        Layout.alignment: root.sideTabs ? Qt.AlignTop : Qt.AlignVCenter
                         padding: 12
                         leftPadding: root.displayFlow ? 27 : padding
-                        background: GlassSurface { material: root.material; role: "card"; backdropAvailable: root.backdropAvailable }
+                        background: GlassSurface {
+                            material: root.material
+                            role: root.sideTabs ? "connections" : "card"
+                            backdropAvailable: root.backdropAvailable
+                        }
                         contentItem: ColumnLayout {
                             spacing: 8
                             Label { text: root.torrent ? qsTr("BitTorrent swarm") : qsTr("Connections"); color: root.colors.text; font.bold: true }
@@ -604,7 +694,9 @@ ApplicationWindow {
                     }
                     Pane {
                         Layout.fillWidth: true
-                        Layout.preferredWidth: 325
+                        Layout.preferredWidth: root.transferLayout === "violetRail" ? 380 : 325
+                        Layout.alignment: root.sideTabs ? Qt.AlignTop : Qt.AlignVCenter
+                        Layout.topMargin: root.transferLayout === "violetRail" && transferOverview.columns === 2 ? 19 : 0
                         padding: 12
                         background: GlassSurface { material: root.material; role: "card"; backdropAvailable: root.backdropAvailable }
                         contentItem: ColumnLayout {
@@ -616,7 +708,7 @@ ApplicationWindow {
                             }
                             TransferGraph {
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: 106
+                                Layout.preferredHeight: root.transferLayout === "fogSlate" ? 92 : 106
                                 samples: root.speedSamples
                                 lineColor: MaterialTheme.graphColors[0]
                                 endpointColor: MaterialTheme.graphColors[1]

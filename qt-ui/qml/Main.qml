@@ -20,6 +20,15 @@ ApplicationWindow {
 
     readonly property var colors: MaterialTheme.palette
     readonly property bool studioChrome: colors.cleanStudio === true
+    readonly property string materialLayout: colors.layout || ""
+    readonly property bool violetRail: materialLayout === "violetRail"
+    readonly property bool fogSlate: materialLayout === "fogSlate"
+    readonly property bool coralSlate: materialLayout === "coralSlate"
+    readonly property bool materialDashboard: fogSlate || violetRail || coralSlate
+    readonly property bool sideMenus: materialDashboard && showSidebar
+    readonly property bool groupedQueue: violetRail && filterType === "status" && filterKey === "all"
+    readonly property color sidebarInk: colors.sidebarInk || colors.ink
+    readonly property color sidebarMuted: colors.sidebarMuted || colors.muted
     readonly property color chromeDivider: colors.surfaceLine || colors.divider
     palette.window: colors.background
     palette.windowText: colors.ink
@@ -89,8 +98,9 @@ ApplicationWindow {
         return downloads.filter(item => chosenSet.has(String(item.id)))
     }
     readonly property var currentItem: chosenItems.find(item => String(item.id) === focusedTransferId) || chosenItems[0] || null
+    readonly property var currentVisual: currentItem ? visualById[currentItem.id] || ({}) : ({})
     readonly property var chosenSet: new Set(chosenIds)
-    readonly property int indicatorColumnWidth: compact ? 207 : 330
+    readonly property int indicatorColumnWidth: violetRail && width < 740 ? 183 : compact ? 207 : 330
     readonly property int timeColumnWidth: compact ? 57 : 72
     readonly property int listGutter: list.contentHeight > list.height ? 8 : 0
     property var detailWindows: ({})
@@ -171,12 +181,14 @@ ApplicationWindow {
     }
 
     function synchronizeRows() {
-        if (!rows)
+        if (!rows || !list)
             return
         const terms = searchTerm.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean)
         const queueIds = new Set(filterType === "queue" && currentQueue ? currentQueue.ids.map(Number) : [])
         const shown = downloads.filter(item => matchesFilter(item, queueIds, terms))
         shown.sort((a, b) => {
+            if (groupedQueue && (a.status === "Complete") !== (b.status === "Complete"))
+                return a.status === "Complete" ? 1 : -1
             switch (sortOrder) {
             case 1: return Number(a.id) - Number(b.id)
             case 2: return String(a.file).localeCompare(String(b.file)) || Number(b.id) - Number(a.id)
@@ -191,6 +203,7 @@ ApplicationWindow {
                 transferId: String(entry.id),
                 file: String(entry.file),
                 status: String(entry.status),
+                sectionKey: entry.status === "Complete" ? "completed" : "unfinished",
                 bytes: Number(entry.downloaded || 0),
                 length: entry.size === null || entry.size === undefined ? -1 : Number(entry.size),
                 transferSpeed: Number(entry.speed || 0)
@@ -474,6 +487,7 @@ ApplicationWindow {
     }
     onSearchTermChanged: synchronizeRows()
     onSortOrderChanged: synchronizeRows()
+    onVioletRailChanged: synchronizeRows()
     Component.onCompleted: {
         synchronizeRows()
         engine.refresh()
@@ -853,7 +867,7 @@ ApplicationWindow {
         property string symbol: ""
         property string count: ""
         property color accent: root.colors.accent
-        readonly property color studioInk: checked ? root.colors.navigationInk || root.colors.accent : root.colors.ink
+        readonly property color studioInk: checked ? root.colors.navigationInk || root.colors.accent : root.sidebarInk
 
         hoverEnabled: true
         leftPadding: root.studioChrome ? 10 : 7
@@ -879,7 +893,7 @@ ApplicationWindow {
             Label {
                 visible: libraryButton.count.length > 0
                 text: libraryButton.count
-                color: root.studioChrome && libraryButton.checked ? libraryButton.studioInk : root.colors.muted
+                color: root.studioChrome && libraryButton.checked ? libraryButton.studioInk : root.sidebarMuted
                 font.pixelSize: 11
             }
         }
@@ -891,16 +905,16 @@ ApplicationWindow {
         Component {
             id: studioNavigation
             Rectangle {
-                radius: 6
+                radius: root.materialDashboard ? 9 : 6
                 color: libraryButton.checked
                     ? root.colors.navigationFill || Qt.alpha(root.colors.accent, .13)
-                    : libraryButton.down ? Qt.alpha(root.colors.ink, .09)
-                    : libraryButton.hovered ? Qt.alpha(root.colors.ink, .06) : "transparent"
+                    : libraryButton.down ? Qt.alpha(root.sidebarInk, .13)
+                    : libraryButton.hovered ? Qt.alpha(root.sidebarInk, .08) : "transparent"
                 border.width: libraryButton.visualFocus ? 1 : 0
                 border.color: root.colors.menuRail || root.colors.accent
 
                 Rectangle {
-                    visible: libraryButton.checked
+                    visible: libraryButton.checked && !root.fogSlate && !root.coralSlate
                     anchors.left: parent.left
                     anchors.top: parent.top
                     anchors.bottom: parent.bottom
@@ -944,6 +958,17 @@ ApplicationWindow {
             opacity: grip.pressed ? .96 : grip.active ? .82 : .58
         }
         background: Item {}
+    }
+
+    component CommandMenuButton: AppMenuButton {
+        property string symbol: ""
+        Layout.fillWidth: root.sideMenus
+        Layout.minimumWidth: root.sideMenus ? 0 : -1
+        Layout.preferredWidth: root.sideMenus && root.violetRail ? violetMenuDock.width : -1
+        Layout.preferredHeight: root.sideMenus ? (root.violetRail ? 37 : 25) : -1
+        railIcon: root.sideMenus && root.violetRail ? symbol : ""
+        idleInk: root.sideMenus && root.violetRail ? "#ffffff"
+            : root.sideMenus ? root.sidebarInk : MaterialTheme.menuColors.ink
     }
 
     ColumnLayout {
@@ -1009,158 +1034,221 @@ ApplicationWindow {
         }
 
         Item {
+            id: topMenuDock
+            visible: !root.sideMenus
             Layout.fillWidth: true
             Layout.preferredHeight: 31
-            Rectangle {
+
+            Item {
+                id: menuPanel
+                parent: !root.sideMenus ? topMenuDock : root.violetRail ? violetMenuDock : sideMenuDock
                 anchors.fill: parent
-                radius: 4
-                color: root.studioChrome ? "transparent" : MaterialTheme.menuColors.surface
-            }
-            RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: 6
-                spacing: 2
-                AppMenuButton {
-                    id: taskMenuButton
-                    text: qsTr("&Tasks")
-                    menuOpen: taskMenu.visible
-                    onClicked: taskMenu.open()
-                    AppMenu {
-                        id: taskMenu
-                        y: taskMenuButton.height
-                        AppMenuItem { symbol: "add"; action: addUrl; commandColor: root.colors.positive }
-                        AppMenuItem { symbol: "torrent"; action: addTorrent; commandColor: root.colors.positive }
-                        MenuRule {}
-                        AppMenuItem { symbol: "file"; text: qsTr("Download video from a page…"); enabled: root.online; onTriggered: enginePrompts.video.presentLookup() }
-                        AppMenuItem { symbol: "folder"; text: qsTr("Download a gallery…"); enabled: root.online; onTriggered: galleryDialog.present() }
-                        AppMenuItem { symbol: "queue"; text: qsTr("Batch download…"); enabled: root.online; onTriggered: batchDialog.present() }
-                        AppMenuItem { symbol: "add"; text: qsTr("Link grabber…"); enabled: root.online; onTriggered: enginePrompts.links.present() }
-                        MenuRule {}
-                        AppMenuItem { symbol: "tray"; text: qsTr("Hide in system tray"); enabled: Boolean(engine.trayAvailable); onTriggered: root.hideMainToTray() }
-                        AppMenuItem { symbol: "close"; text: qsTr("Exit"); onTriggered: engine.requestQuit() }
-                    }
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: 4
+                    visible: !root.studioChrome
+                    color: MaterialTheme.menuColors.surface
                 }
-                AppMenuButton {
-                    id: fileMenuButton
-                    text: qsTr("&File")
-                    menuOpen: fileMenu.visible
-                    onClicked: fileMenu.open()
-                    AppMenu {
-                        id: fileMenu
-                        y: fileMenuButton.height
-                        AppMenuItem { symbol: "details"; action: detailsAction }
-                        AppMenuItem { symbol: "file"; text: qsTr("Open"); enabled: root.currentItem !== null && root.currentItem.status === "Complete"; onTriggered: root.openPicked(false) }
-                        AppMenuItem { symbol: "folder"; text: qsTr("Open folder"); enabled: root.currentItem !== null; onTriggered: root.openPicked(true) }
-                        AppMenuItem { symbol: "file"; action: openWith }
-                        AppMenuItem { symbol: "folder"; action: moveFile }
-                        AppMenuItem { symbol: "refresh"; action: restartFile; commandColor: root.colors.caution }
-                        MenuRule {}
-                        AppMenuItem { symbol: "remove"; action: removeSelection; destructive: true }
+
+                GridLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: root.sideMenus ? 0 : 6
+                    columns: root.sideMenus ? 1 : 7
+                    columnSpacing: 2
+                    rowSpacing: root.sideMenus ? 2 : 0
+                    CommandMenuButton {
+                        id: taskMenuButton
+                        symbol: "add"
+                        text: qsTr("&Tasks")
+                        menuOpen: taskMenu.visible
+                        onClicked: taskMenu.open()
+                        AppMenu {
+                            id: taskMenu
+                            x: root.sideMenus ? taskMenuButton.width : 0
+                            y: root.sideMenus ? 0 : taskMenuButton.height
+                            AppMenuItem { symbol: "add"; action: addUrl; commandColor: root.colors.positive }
+                            AppMenuItem { symbol: "torrent"; action: addTorrent; commandColor: root.colors.positive }
+                            MenuRule {}
+                            AppMenuItem { symbol: "file"; text: qsTr("Download video from a page…"); enabled: root.online; onTriggered: enginePrompts.video.presentLookup() }
+                            AppMenuItem { symbol: "folder"; text: qsTr("Download a gallery…"); enabled: root.online; onTriggered: galleryDialog.present() }
+                            AppMenuItem { symbol: "queue"; text: qsTr("Batch download…"); enabled: root.online; onTriggered: batchDialog.present() }
+                            AppMenuItem { symbol: "add"; text: qsTr("Link grabber…"); enabled: root.online; onTriggered: enginePrompts.links.present() }
+                            MenuRule {}
+                            AppMenuItem { symbol: "tray"; text: qsTr("Hide in system tray"); enabled: Boolean(engine.trayAvailable); onTriggered: root.hideMainToTray() }
+                            AppMenuItem { symbol: "close"; text: qsTr("Exit"); onTriggered: engine.requestQuit() }
+                        }
                     }
-                }
-                AppMenuButton {
-                    id: downloadMenuButton
-                    text: qsTr("&Downloads")
-                    menuOpen: downloadMenu.visible
-                    onClicked: downloadMenu.open()
-                    AppMenu {
-                        id: downloadMenu
-                        y: downloadMenuButton.height
-                        AppMenuItem { symbol: "start"; action: resumeTransfers; commandColor: root.colors.positive }
-                        AppMenuItem { symbol: "pause"; action: pauseTransfers; commandColor: root.colors.caution }
-                        AppMenuItem { symbol: "stop"; action: stopAll; commandColor: root.colors.caution }
-                        AppMenuItem { symbol: "check"; action: removeCompleted; destructive: true }
-                        MenuRule {}
-                        AppMenuItem { symbol: "start"; action: startQueue; commandColor: root.colors.positive }
-                        AppMenuItem { symbol: "stop"; action: stopQueue; commandColor: root.colors.caution }
-                        AppMenuItem { symbol: "clock"; action: schedulerAction }
+                    CommandMenuButton {
+                        id: fileMenuButton
+                        symbol: "file"
+                        text: qsTr("&File")
+                        menuOpen: fileMenu.visible
+                        onClicked: fileMenu.open()
+                        AppMenu {
+                            id: fileMenu
+                            x: root.sideMenus ? fileMenuButton.width : 0
+                            y: root.sideMenus ? 0 : fileMenuButton.height
+                            AppMenuItem { symbol: "details"; action: detailsAction }
+                            AppMenuItem { symbol: "file"; text: qsTr("Open"); enabled: root.currentItem !== null && root.currentItem.status === "Complete"; onTriggered: root.openPicked(false) }
+                            AppMenuItem { symbol: "folder"; text: qsTr("Open folder"); enabled: root.currentItem !== null; onTriggered: root.openPicked(true) }
+                            AppMenuItem { symbol: "file"; action: openWith }
+                            AppMenuItem { symbol: "folder"; action: moveFile }
+                            AppMenuItem { symbol: "refresh"; action: restartFile; commandColor: root.colors.caution }
+                            MenuRule {}
+                            AppMenuItem { symbol: "remove"; action: removeSelection; destructive: true }
+                        }
                     }
-                }
-                AppMenuButton {
-                    id: viewMenuButton
-                    text: qsTr("&View")
-                    menuOpen: viewMenu.visible
-                    onClicked: viewMenu.open()
-                    AppMenu {
-                        id: viewMenu
-                        y: viewMenuButton.height
-                        AppMenuItem { symbol: "refresh"; action: refreshAction }
-                        AppMenuItem { symbol: "search"; action: findAction }
-                        AppMenuItem { text: root.showSidebar ? qsTr("Hide sidebar") : qsTr("Show sidebar"); onTriggered: root.showSidebar = !root.showSidebar }
-                        MenuRule {}
-                        AppMenuItem { symbol: "settings"; text: qsTr("Appearance"); onTriggered: settingsWindow.showCategory("Appearance") }
+                    CommandMenuButton {
+                        id: downloadMenuButton
+                        symbol: "downloads"
+                        text: qsTr("&Downloads")
+                        menuOpen: downloadMenu.visible
+                        onClicked: downloadMenu.open()
+                        AppMenu {
+                            id: downloadMenu
+                            x: root.sideMenus ? downloadMenuButton.width : 0
+                            y: root.sideMenus ? 0 : downloadMenuButton.height
+                            AppMenuItem { symbol: "start"; action: resumeTransfers; commandColor: root.colors.positive }
+                            AppMenuItem { symbol: "pause"; action: pauseTransfers; commandColor: root.colors.caution }
+                            AppMenuItem { symbol: "stop"; action: stopAll; commandColor: root.colors.caution }
+                            AppMenuItem { symbol: "check"; action: removeCompleted; destructive: true }
+                            MenuRule {}
+                            AppMenuItem { symbol: "start"; action: startQueue; commandColor: root.colors.positive }
+                            AppMenuItem { symbol: "stop"; action: stopQueue; commandColor: root.colors.caution }
+                            AppMenuItem { symbol: "clock"; action: schedulerAction }
+                        }
                     }
-                }
-                AppMenuButton {
-                    id: helpMenuButton
-                    text: qsTr("&Help")
-                    menuOpen: helpMenu.visible
-                    onClicked: helpMenu.open()
-                    AppMenu {
-                        id: helpMenu
-                        y: helpMenuButton.height
-                        AppMenuItem { symbol: "keys"; text: qsTr("Keyboard shortcuts"); onTriggered: shortcutsDialog.open() }
-                        AppMenuItem { symbol: "web"; text: qsTr("Browser integration"); onTriggered: settingsWindow.showCategory("Browser Integration") }
-                        AppMenuItem { symbol: "refresh"; text: qsTr("Check for updates"); onTriggered: root.showUpdates() }
-                        AppMenuItem { symbol: "details"; text: qsTr("Project guide"); onTriggered: Qt.openUrlExternally("https://github.com/4ls4mi/Auralis-Download-Manager#guides-and-recovery") }
+                    CommandMenuButton {
+                        id: viewMenuButton
+                        symbol: "details"
+                        text: qsTr("&View")
+                        menuOpen: viewMenu.visible
+                        onClicked: viewMenu.open()
+                        AppMenu {
+                            id: viewMenu
+                            x: root.sideMenus ? viewMenuButton.width : 0
+                            y: root.sideMenus ? 0 : viewMenuButton.height
+                            AppMenuItem { symbol: "refresh"; action: refreshAction }
+                            AppMenuItem { symbol: "search"; action: findAction }
+                            AppMenuItem { text: root.showSidebar ? qsTr("Hide sidebar") : qsTr("Show sidebar"); onTriggered: root.showSidebar = !root.showSidebar }
+                            MenuRule {}
+                            AppMenuItem { symbol: "settings"; text: qsTr("Appearance"); onTriggered: settingsWindow.showCategory("Appearance") }
+                        }
                     }
-                }
-                Item { Layout.fillWidth: true }
-                GlassButton {
-                    visible: Boolean(settingsWindow.availableUpdate)
-                    text: qsTr("Update available")
-                    Accessible.description: settingsWindow.availableUpdate
-                        ? qsTr("Auralis %1").arg(settingsWindow.availableUpdate.version) : ""
-                    onClicked: root.showUpdates()
+                    CommandMenuButton {
+                        id: helpMenuButton
+                        symbol: "keys"
+                        text: qsTr("&Help")
+                        menuOpen: helpMenu.visible
+                        onClicked: helpMenu.open()
+                        AppMenu {
+                            id: helpMenu
+                            x: root.sideMenus ? helpMenuButton.width : 0
+                            y: root.sideMenus ? 0 : helpMenuButton.height
+                            AppMenuItem { symbol: "keys"; text: qsTr("Keyboard shortcuts"); onTriggered: shortcutsDialog.open() }
+                            AppMenuItem { symbol: "web"; text: qsTr("Browser integration"); onTriggered: settingsWindow.showCategory("Browser Integration") }
+                            AppMenuItem { symbol: "refresh"; text: qsTr("Check for updates"); onTriggered: root.showUpdates() }
+                            AppMenuItem { symbol: "details"; text: qsTr("Project guide"); onTriggered: Qt.openUrlExternally("https://github.com/4ls4mi/Auralis-Download-Manager#guides-and-recovery") }
+                        }
+                    }
+                    Item { Layout.fillWidth: true; Layout.fillHeight: root.sideMenus }
+                    GlassButton {
+                        visible: !root.sideMenus && Boolean(settingsWindow.availableUpdate)
+                        text: qsTr("Update available")
+                        Accessible.description: settingsWindow.availableUpdate
+                            ? qsTr("Auralis %1").arg(settingsWindow.availableUpdate.version) : ""
+                        onClicked: root.showUpdates()
+                    }
                 }
             }
         }
 
         Item {
+            id: topActionDock
+            visible: !root.materialDashboard
             Layout.fillWidth: true
             Layout.preferredHeight: 51
-            GlassSurface { anchors.fill: parent; role: "toolbar" }
-            RowLayout {
+            Item {
+                id: actionPanel
+                parent: root.materialDashboard ? workspaceActionDock : topActionDock
                 anchors.fill: parent
-                anchors.leftMargin: 7
-                anchors.rightMargin: 7
-                spacing: root.compact ? 4 : 7
-                Repeater {
-                    model: [
-                        {command: addUrl, icon: "add"},
-                        {command: addTorrent, icon: "torrent"},
-                        {command: resumeTransfers, icon: "start"},
-                        {command: pauseTransfers, icon: "pause"},
-                        {command: stopAll, icon: "stop"},
-                        {command: removeSelection, icon: "remove"},
-                        {command: removeCompleted, icon: "check"},
-                        {command: settingsAction, icon: "settings"},
-                        {command: schedulerAction, icon: "clock"},
-                        {command: startQueue, icon: "start", accentKey: "queueStart"},
-                        {command: stopQueue, icon: "pause", accentKey: "queueStop"}
-                    ]
-                    delegate: GlassButton {
-                        id: actionButton
-                        required property var modelData
-                        Layout.preferredWidth: root.compact ? 41 : 54
-                        Layout.preferredHeight: 36
-                        action: modelData.command
-                        accent: root.studioChrome
-                            ? (modelData.icon === "remove" ? root.colors.destructive : root.colors.accent)
-                            : MaterialTheme.actionColor(modelData.accentKey || modelData.icon, root.colors.light)
-                        contentItem: DashboardIcon {
-                            symbol: actionButton.modelData.icon
-                            bold: true
-                            solid: symbol === "start" || symbol === "stop"
-                            ink: root.studioChrome && !actionButton.hovered && !actionButton.down
-                                && !actionButton.visualFocus ? root.colors.ink : actionButton.displayAccent
+                GlassSurface { anchors.fill: parent; role: "toolbar" }
+                RowLayout {
+                    id: actionControls
+                    anchors.fill: parent
+                    anchors.leftMargin: 7
+                    anchors.rightMargin: 7
+                    spacing: root.materialDashboard || root.compact ? 4 : 7
+                    Repeater {
+                        model: [
+                            {command: addUrl, icon: "add"},
+                            {command: addTorrent, icon: "torrent"},
+                            {command: resumeTransfers, icon: "start"},
+                            {command: pauseTransfers, icon: "pause"},
+                            {command: stopAll, icon: "stop"},
+                            {command: removeSelection, icon: "remove"},
+                            {command: removeCompleted, icon: "check"},
+                            {command: settingsAction, icon: "settings"},
+                            {command: schedulerAction, icon: "clock"},
+                            {command: startQueue, icon: "start", accentKey: "queueStart"},
+                            {command: stopQueue, icon: "pause", accentKey: "queueStop"}
+                        ]
+                        delegate: GlassButton {
+                            id: actionButton
+                            required property var modelData
+                            readonly property bool primaryCommand: modelData.command === addUrl
+                            readonly property bool fogResume: root.fogSlate && modelData.command === resumeTransfers
+                            readonly property bool fogPause: root.fogSlate && modelData.command === pauseTransfers
+                            readonly property string label: primaryCommand ? qsTr("Add download")
+                                : fogResume ? qsTr("Resume") : qsTr("Pause")
+                            readonly property bool showLabel: (primaryCommand && root.materialDashboard
+                                && actionControls.width >= 640)
+                                || ((fogResume || fogPause) && actionControls.width >= 730)
+                            readonly property color commandInk: filled ? fillInk
+                                : root.studioChrome && !root.materialDashboard && !hovered && !down && !visualFocus
+                                    ? root.colors.ink : displayAccent
+                            Layout.preferredWidth: root.materialDashboard
+                                ? (showLabel ? Math.max(102, buttonLabel.implicitWidth + 40)
+                                    : Math.min(43, Math.floor((actionControls.width - 48) / 11)))
+                                : root.compact ? 41 : 54
+                            Layout.preferredHeight: root.fogSlate ? 39 : 36
+                            action: modelData.command
+                            filled: (root.materialDashboard && primaryCommand) || fogResume
+                            leftPadding: root.materialDashboard && !showLabel ? 5 : 13
+                            rightPadding: leftPadding
+                            accent: fogResume ? root.colors.positive
+                                : root.materialDashboard && primaryCommand ? root.colors.accent
+                                : root.studioChrome && !root.materialDashboard
+                                    ? (modelData.icon === "remove" ? root.colors.destructive : root.colors.accent)
+                                    : MaterialTheme.actionColor(modelData.accentKey || modelData.icon, root.colors.light)
+                            contentItem: RowLayout {
+                                spacing: 5
+                                DashboardIcon {
+                                    Layout.fillWidth: !actionButton.showLabel
+                                    Layout.fillHeight: true
+                                    Layout.preferredWidth: 19
+                                    symbol: actionButton.modelData.icon
+                                    bold: true
+                                    solid: symbol === "start" || symbol === "stop"
+                                    ink: actionButton.commandInk
+                                }
+                                Label {
+                                    id: buttonLabel
+                                    visible: actionButton.showLabel
+                                    Layout.fillWidth: true
+                                    text: actionButton.label
+                                    color: actionButton.commandInk
+                                    font.weight: Font.DemiBold
+                                }
+                            }
+                            ToolTip.visible: hovered
+                            ToolTip.text: text
+                            ToolTip.delay: 420
                         }
-                        ToolTip.visible: hovered
-                        ToolTip.text: text
-                        ToolTip.delay: 420
                     }
+                    Item { Layout.fillWidth: true }
                 }
-                Item { Layout.fillWidth: true }
             }
         }
 
@@ -1202,6 +1290,18 @@ ApplicationWindow {
             Layout.fillWidth: true
             spacing: 7
 
+            Item {
+                id: violetMenuDock
+                visible: root.sideMenus && root.violetRail
+                Layout.fillHeight: true
+                Layout.preferredWidth: 45
+                Rectangle {
+                    anchors.fill: parent
+                    radius: 8
+                    color: root.colors.railFill || root.colors.accent
+                }
+            }
+
             Frame {
                 visible: root.showSidebar
                 Layout.preferredWidth: root.compact ? 151 : 184
@@ -1210,7 +1310,7 @@ ApplicationWindow {
                 background: Item {
                     GlassSurface { anchors.fill: parent; role: "sidebar" }
                     Rectangle {
-                        visible: root.studioChrome
+                        visible: root.studioChrome && !root.coralSlate
                         anchors.right: parent.right
                         anchors.top: parent.top
                         anchors.bottom: parent.bottom
@@ -1221,6 +1321,7 @@ ApplicationWindow {
                 ScrollView {
                     id: libraryScroll
                     anchors.fill: parent
+                    anchors.bottomMargin: sideMenuDock.visible ? sideMenuDock.height + 6 : 0
                     clip: true
                     contentWidth: availableWidth
                     ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
@@ -1244,7 +1345,7 @@ ApplicationWindow {
                         }
                         Label {
                             text: qsTr("Categories")
-                            color: root.colors.muted
+                            color: root.sidebarMuted
                             leftPadding: 8
                             topPadding: 9
                             bottomPadding: 4
@@ -1267,7 +1368,7 @@ ApplicationWindow {
                         Label {
                             visible: root.queues.length > 0
                             text: qsTr("Queues")
-                            color: root.colors.muted
+                            color: root.sidebarMuted
                             leftPadding: 8
                             topPadding: 9
                             bottomPadding: 4
@@ -1290,6 +1391,19 @@ ApplicationWindow {
                         }
                     }
                 }
+                Item {
+                    id: sideMenuDock
+                    visible: root.sideMenus && !root.violetRail
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    height: 139
+                    Rectangle {
+                        width: parent.width
+                        height: 1
+                        color: Qt.alpha(root.sidebarInk, .16)
+                    }
+                }
             }
 
             Frame {
@@ -1300,7 +1414,13 @@ ApplicationWindow {
                 background: GlassSurface { role: "content" }
                 ColumnLayout {
                     anchors.fill: parent
-                    spacing: 5
+                    spacing: root.materialDashboard ? 8 : 5
+                    Item {
+                        id: workspaceActionDock
+                        visible: root.materialDashboard
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 44
+                    }
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 7
@@ -1344,6 +1464,11 @@ ApplicationWindow {
                             background: GlassSurface { role: "field" }
                             Accessible.name: qsTr("Search downloads")
                         }
+                        GlassButton {
+                            visible: root.sideMenus && Boolean(settingsWindow.availableUpdate)
+                            text: qsTr("Update available")
+                            onClicked: root.showUpdates()
+                        }
                     }
                     RowLayout {
                         Layout.fillWidth: true
@@ -1357,6 +1482,101 @@ ApplicationWindow {
                         GlassButton { action: removeSelection; accent: root.colors.destructive }
                         GlassButton { text: qsTr("Clear"); onClicked: root.clearSelection() }
                         Item { Layout.fillWidth: true }
+                    }
+                    RowLayout {
+                        visible: root.coralSlate && root.height >= 580
+                        Layout.fillWidth: true
+                        Layout.minimumHeight: 76
+                        Layout.maximumHeight: 76
+                        spacing: 8
+
+                        GlassSurface {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            role: "card"
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.margins: 10
+                                spacing: 13
+                                Column {
+                                    spacing: 3
+                                    Label { text: qsTr("Total speed"); color: root.colors.muted; font.pixelSize: 11 }
+                                    Label {
+                                        text: TransferData.rate(engine.dashboard.speed || 0)
+                                        color: root.colors.ink
+                                        font.pixelSize: 19
+                                        font.weight: Font.DemiBold
+                                    }
+                                }
+                                TransferGraph {
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    samples: root.graphValues
+                                    lineColor: MaterialTheme.graphColors[0]
+                                    endpointColor: MaterialTheme.graphColors[1]
+                                    gridColor: root.colors.divider
+                                    Accessible.name: qsTr("Recent total transfer speed")
+                                }
+                            }
+                        }
+                        GlassSurface {
+                            Layout.preferredWidth: Math.max(120, activeSummary.implicitWidth + 26)
+                            Layout.fillHeight: true
+                            role: "summary"
+                            Column {
+                                id: activeSummary
+                                anchors.left: parent.left
+                                anchors.leftMargin: 13
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 4
+                                Label {
+                                    text: qsTr("Active downloads")
+                                    color: root.colors.summaryInk || root.colors.ink
+                                    font.pixelSize: 11
+                                }
+                                Label {
+                                    text: String(root.counts.downloading)
+                                    color: root.colors.summaryInk || root.colors.ink
+                                    font.pixelSize: 21
+                                    font.weight: Font.DemiBold
+                                }
+                            }
+                        }
+                        GlassSurface {
+                            id: connectionSummary
+                            readonly property var workers: (root.currentVisual.connections || []).slice(0, 4)
+                            visible: !root.compact && workers.length > 0
+                            Layout.preferredWidth: 145
+                            Layout.fillHeight: true
+                            role: "connections"
+
+                            Column {
+                                anchors.fill: parent
+                                anchors.margins: 10
+                                spacing: 3
+                                Label { text: qsTr("Connections"); color: root.colors.muted; font.pixelSize: 11 }
+                                Repeater {
+                                    model: connectionSummary.workers
+                                    delegate: Rectangle {
+                                        required property var modelData
+                                        required property int index
+                                        readonly property var assignedFraction: TransferData.assigned(modelData.id, root.currentVisual.segments)
+                                        width: parent.width
+                                        height: 5
+                                        radius: 2.5
+                                        color: root.colors.divider
+                                        Accessible.name: qsTr("Connection %1").arg(index + 1)
+                                        Rectangle {
+                                            width: parent.width * (parent.assignedFraction || 0)
+                                            height: parent.height
+                                            radius: parent.radius
+                                            color: index % 2 ? MaterialTheme.connectionColors[1]
+                                                : MaterialTheme.connectionColors[0]
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                     Item {
                         Layout.preferredHeight: 30
@@ -1413,7 +1633,7 @@ ApplicationWindow {
                                 }
                                 Label {
                                     Layout.fillWidth: true
-                                    text: qsTr("Activity")
+                                    text: root.compact && root.materialDashboard ? qsTr("Speed") : qsTr("Activity")
                                     elide: Text.ElideRight
                                     color: root.colors.muted
                                 }
@@ -1433,6 +1653,18 @@ ApplicationWindow {
                         focus: true
                         keyNavigationEnabled: false
                         reuseItems: true
+                        section.property: root.groupedQueue ? "sectionKey" : ""
+                        section.delegate: Label {
+                            required property string section
+                            width: list.width - root.listGutter
+                            leftPadding: 12
+                            topPadding: 7
+                            bottomPadding: 5
+                            text: section === "completed" ? qsTr("Recently completed") : qsTr("Unfinished")
+                            color: root.colors.ink
+                            font.weight: Font.DemiBold
+                            background: GlassSurface { role: "card" }
+                        }
                         Accessible.role: Accessible.List
                         Accessible.name: qsTr("Downloads list")
                         ScrollBar.vertical: LibraryScrollBar {}
@@ -1552,11 +1784,18 @@ ApplicationWindow {
                         {title: qsTr("Active"), value: String(root.counts.downloading)},
                         {title: qsTr("Completed"), value: String(root.counts.finished)}
                     ]
-                    delegate: ColumnLayout {
+                    delegate: Item {
                         required property var modelData
-                        spacing: 2
-                        Label { text: modelData.title; color: root.colors.muted; font.pixelSize: 11 }
-                        Label { text: modelData.value; color: root.colors.ink; font.weight: Font.DemiBold }
+                        Layout.preferredWidth: footerMetric.implicitWidth + (root.fogSlate ? 20 : 0)
+                        Layout.preferredHeight: footerMetric.implicitHeight + (root.fogSlate ? 12 : 0)
+                        GlassSurface { anchors.fill: parent; visible: root.fogSlate; role: "card" }
+                        ColumnLayout {
+                            id: footerMetric
+                            anchors.centerIn: parent
+                            spacing: 2
+                            Label { text: modelData.title; color: root.colors.muted; font.pixelSize: 11 }
+                            Label { text: modelData.value; color: root.colors.ink; font.weight: Font.DemiBold }
+                        }
                     }
                 }
                 TransferGraph {
