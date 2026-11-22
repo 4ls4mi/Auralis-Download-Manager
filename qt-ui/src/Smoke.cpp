@@ -60,6 +60,15 @@ EngineSmoke::EngineSmoke(Engine &engine, TrayCheck checkTray)
     connect(observe, &QTimer::timeout, this, &EngineSmoke::inspectTransfers);
     observe->start(100);
     QTimer::singleShot(45000, this, [this] {
+        const auto downloads = m_engine.dashboard().value(QStringLiteral("downloads")).toList();
+        for (const auto &entry : downloads) {
+            const auto download = entry.toMap();
+            if (download.value(QStringLiteral("url")).toString() == m_url)
+                qInfo() << "Smoke: fixture status at timeout" << download.value(QStringLiteral("status"))
+                        << download.value(QStringLiteral("downloaded"));
+        }
+        qInfo() << "Smoke: progress window/frame/resize at timeout" << bool(m_window) << m_framePresented
+                << m_expectedProgressSize;
         fail(QStringLiteral("The Qt transfer test timed out at step %1.").arg(static_cast<int>(m_step)));
     });
 }
@@ -98,6 +107,7 @@ void EngineSmoke::confirmDownload()
         return;
     }
     m_step = Step::Starting;
+    qInfo("Smoke: independent file confirmation opened. Invoking Start download.");
     if (!QMetaObject::invokeMethod(confirm, "clicked"))
         fail(QStringLiteral("The Start download action could not be invoked."));
 }
@@ -113,7 +123,8 @@ void EngineSmoke::inspectTransfers()
     const auto downloads = m_engine.dashboard().value(QStringLiteral("downloads")).toList();
     for (const auto &entry : downloads) {
         const auto download = entry.toMap();
-        if (download.value(QStringLiteral("file")).toString() != m_name)
+        if (download.value(QStringLiteral("file")).toString() != m_name &&
+            download.value(QStringLiteral("url")).toString() != m_url)
             continue;
         const auto id = download.value(QStringLiteral("id")).toULongLong();
         const auto status = download.value(QStringLiteral("status")).toString();
@@ -153,9 +164,9 @@ void EngineSmoke::inspectTransfers()
             return;
         }
         if ((m_step == Step::Starting || m_step == Step::WaitingForResume) &&
-            status == QStringLiteral("Downloading") && download.value(QStringLiteral("downloaded")).toLongLong() > 0) {
+            status == QStringLiteral("Downloading")) {
             observeTransferWindow(id);
-            if (!m_framePresented)
+            if (!m_framePresented || download.value(QStringLiteral("downloaded")).toLongLong() <= 0)
                 return;
             if (!m_resizeVerified) {
                 if (!m_expectedProgressSize.isValid()) {
@@ -167,6 +178,7 @@ void EngineSmoke::inspectTransfers()
                     return;
                 }
                 m_resizeVerified = true;
+                qInfo("Smoke: active progress window resized.");
             }
             verifyTrayMenu(m_step == Step::WaitingForResume);
         }
@@ -218,6 +230,7 @@ void EngineSmoke::observeTransferWindow(qulonglong id)
             disconnect(m_frameConnection);
             m_window = progress;
             m_framePresented = false;
+            qInfo("Smoke: found the independent progress window.");
             m_frameConnection = connect(progress, &QQuickWindow::frameSwapped, this, [this] {
                 if (m_window && m_window->isVisible() && m_window->property("runningTransfer").toBool())
                     m_framePresented = true;
@@ -230,7 +243,6 @@ void EngineSmoke::observeTransferWindow(qulonglong id)
 
 void EngineSmoke::resizeTransferWindow()
 {
-    m_framePresented = false;
     const QPoint corner(m_window->width() - 4, m_window->height() - 4);
     const QPoint origin = m_window->mapToGlobal(corner);
     const QPoint delta(28, 24);

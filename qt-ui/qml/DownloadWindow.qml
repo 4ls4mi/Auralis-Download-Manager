@@ -664,14 +664,17 @@ ApplicationWindow {
                                 }
                             }
                         }
-                        RowLayout {
+                        Item {
                             id: progressLine
                             Layout.fillWidth: true
+                            implicitHeight: Math.max(38, progressPercent.implicitHeight)
                             GlassProgress {
                                 id: downloadProgress
-                                Layout.preferredWidth: progressLine.width * .53
-                                Layout.minimumWidth: 0
-                                Layout.preferredHeight: 38
+                                anchors.left: parent.left
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: Math.max(0, Math.min(progressLine.width * .53,
+                                    progressLine.width - progressPercent.width - progressPercent.anchors.leftMargin))
+                                height: 38
                                 value: Transfer.fraction(root.item)
                                 animated: root.runningTransfer && !root.interactiveFrame
                                 shape: root.progressShape
@@ -683,11 +686,14 @@ ApplicationWindow {
                                 Accessible.name: qsTr("Download progress")
                             }
                             Label {
+                                id: progressPercent
+                                anchors.left: downloadProgress.right
+                                anchors.leftMargin: 5
+                                anchors.verticalCenter: parent.verticalCenter
                                 text: Math.round(Transfer.fraction(root.item) * 100) + "%"
                                 color: root.summaryInk
                                 font.bold: true
                             }
-                            Item { Layout.fillWidth: true; Layout.minimumWidth: 0 }
                         }
                         Label {
                             visible: root.mixed
