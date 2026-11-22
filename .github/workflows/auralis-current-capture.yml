@@ -50,10 +50,20 @@ jobs:
             }
           }
           '@
-          $processes = @(Get-Process -Name 'auralis-download-manager' -ErrorAction SilentlyContinue)
-          if (!$processes.Count) { throw 'Auralis is not running in the runner session. Open Auralis and the windows you want captured, then retry.' }
-          $windows = @([AuralisWindowCapture]::Find([int[]]@($processes | ForEach-Object { $_.Id })))
-          if (!$windows.Count) { throw 'No visible Auralis windows were found in the runner session. Restore the windows and retry.' }
+          # Give the user time to restore the app after the capture was requested.
+          $deadline=[DateTime]::UtcNow.AddMinutes(2)
+          $windows=@(); $processes=@()
+          do {
+            $processes = @(Get-Process -Name 'auralis-download-manager' -ErrorAction SilentlyContinue)
+            if ($processes.Count) { $windows = @([AuralisWindowCapture]::Find([int[]]@($processes | ForEach-Object { $_.Id }))) }
+            if ($windows.Count) { break }
+            Start-Sleep -Seconds 2
+          } while ([DateTime]::UtcNow -lt $deadline)
+          if (!$windows.Count) {
+            $runnerSession=(Get-Process -Id $PID).SessionId
+            $appSessions=if ($processes.Count) { (@($processes | ForEach-Object { $_.SessionId } | Sort-Object -Unique) -join ',') } else { 'not running' }
+            throw "No visible Auralis window was found. Runner session: $runnerSession; app session(s): $appSessions. Restore Auralis in the runner's interactive Windows session and retry."
+          }
           $out = Join-Path $env:RUNNER_TEMP ("auralis-current-capture-" + $env:GITHUB_RUN_ID)
           New-Item -ItemType Directory -Path $out -Force | Out-Null
           function Save-AuralisWindow([IntPtr]$handle, [string]$path, [bool]$jpeg) {
