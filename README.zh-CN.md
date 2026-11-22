@@ -6,35 +6,9 @@ Auralis 是适用于 Windows x64 的免费开源下载管理器，提供玻璃�
 
 [下载最新 Windows 版本](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest) · [浏览器扩展](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest) · [版本说明](CHANGELOG.md)
 
-## Windows 上的 Auralis
+## Auralis 运行演示
 
-这些是 Auralis 0.3.49 实际运行时的局部截图；录制时右侧和底部被截断。下方是较早的示例截图。
-
-![下载列表（局部）](docs/images/auralis/current-main-partial.png)
-
-![外观和连接指示器（局部）](docs/images/auralis/current-settings-partial.png)
-
-![录制片段（局部）](docs/images/auralis/current-recording-excerpt.gif)
-
-## 界面图片
-
-图片展示使用示例下载的 Auralis 界面。外观、材质和颜色均可配置。
-
-| 下载列表 | 当前下载 |
-| --- | --- |
-| ![下载列表](docs/images/auralis/main.png) | ![当前下载](docs/images/auralis/download.png) |
-
-| 外观与指示器设置 | 下载文件信息 |
-| --- | --- |
-| ![外观与指示器设置](docs/images/auralis/settings.png) | ![下载文件信息](docs/images/auralis/file-info.png) |
-
-![下载完成窗口](docs/images/auralis/complete.png)
-
-### 流体指示器
-
-可分别选择进度条、连接和图表的材质、颜色与形状。流体样式为填充、液滴和波浪添加动画；进度与连接状态来自下载器。
-
-![进度、连接与速度图动画](docs/images/auralis/liquid-flow.gif)
+![实时下载进度、连接和传输速度图表](docs/images/auralis/user-transfer.gif)
 
 ## 功能
 

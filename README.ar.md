@@ -6,35 +6,9 @@
 
 [تنزيل أحدث إصدار لنظام Windows](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest) · [حزم إضافة المتصفح](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest) · [ملاحظات الإصدارات](CHANGELOG.md)
 
-## من تطبيق أوراليس على Windows
+## أوراليس أثناء العمل
 
-لقطات جزئية من جلسة فعلية للإصدار 0.3.49؛ اقتص التسجيل الحافتين اليمنى والسفلية. تليها صور نموذجية أقدم.
-
-![قائمة التنزيلات (عرض جزئي)](docs/images/auralis/current-main-partial.png)
-
-![المظهر ومؤشرات الاتصال (عرض جزئي)](docs/images/auralis/current-settings-partial.png)
-
-![مقتطف من التسجيل (عرض جزئي)](docs/images/auralis/current-recording-excerpt.gif)
-
-## صور التطبيق
-
-تعرض الصور واجهة أوراليس مع تنزيلات نموذجية. يمكن تخصيص المظهر والخامات والألوان والمؤشرات.
-
-| مكتبة التنزيلات | نافذة التنزيل الحالية |
-| --- | --- |
-| ![مكتبة التنزيلات](docs/images/auralis/main.png) | ![نافذة التنزيل الحالية](docs/images/auralis/download.png) |
-
-| إعدادات المظهر والمؤشرات | معلومات ملف التنزيل |
-| --- | --- |
-| ![إعدادات المظهر والمؤشرات](docs/images/auralis/settings.png) | ![معلومات ملف التنزيل](docs/images/auralis/file-info.png) |
-
-![نافذة اكتمال التنزيل](docs/images/auralis/complete.png)
-
-### المؤشرات السائلة
-
-اختر خامات التقدم والاتصالات والمخطط كلًا على حدة، ثم اختر ألوانها وأشكالها. تضيف الأنماط السائلة حركة للملء والقطرات والموجات، بينما تستند حالات التقدم والاتصال إلى بيانات مدير التنزيل الفعلية.
-
-![حركة شريط التقدم والاتصالات والمخطط](docs/images/auralis/liquid-flow.gif)
+![تنزيل مباشر مع شريط التقدم والاتصالات ومخطط سرعة النقل](docs/images/auralis/user-transfer.gif)
 
 ## المزايا
 

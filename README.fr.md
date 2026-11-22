@@ -6,35 +6,9 @@ Auralis est un gestionnaire de téléchargement gratuit pour Windows x64, doté 
 
 [Télécharger la dernière version Windows](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest) · [Extensions de navigateur](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest) · [Notes de version](CHANGELOG.md)
 
-## Auralis sous Windows
+## Auralis en action
 
-Captures partielles d’une session réelle d’Auralis 0.3.49 ; l’enregistrement a coupé les bords droit et inférieur. Des exemples plus anciens suivent.
-
-![Liste des téléchargements (vue partielle)](docs/images/auralis/current-main-partial.png)
-
-![Apparence et indicateurs de connexion (vue partielle)](docs/images/auralis/current-settings-partial.png)
-
-![Extrait de l’enregistrement (vue partielle)](docs/images/auralis/current-recording-excerpt.gif)
-
-## Captures
-
-Les images montrent l’interface avec des téléchargements d’exemple. Apparence, matériaux et couleurs sont configurables.
-
-| Bibliothèque de téléchargements | Téléchargement en cours |
-| --- | --- |
-| ![Bibliothèque de téléchargements](docs/images/auralis/main.png) | ![Téléchargement en cours](docs/images/auralis/download.png) |
-
-| Apparence et indicateurs | Informations du fichier |
-| --- | --- |
-| ![Apparence et indicateurs](docs/images/auralis/settings.png) | ![Informations du fichier](docs/images/auralis/file-info.png) |
-
-![Téléchargement terminé](docs/images/auralis/complete.png)
-
-### Indicateurs liquides
-
-Choisissez séparément les matériaux, couleurs et formes de la progression, des connexions et du graphique. Les styles liquides animent les remplissages, gouttes et vagues ; les états proviennent du gestionnaire.
-
-![Animation de progression, connexions et graphique](docs/images/auralis/liquid-flow.gif)
+![Téléchargement en direct avec progression, connexions et graphique de transfert](docs/images/auralis/user-transfer.gif)
 
 ## Fonctionnalités
 

@@ -6,35 +6,9 @@ Auralis ist ein kostenloser Download-Manager für Windows x64 mit glasähnlicher
 
 [Aktuelle Windows-Version herunterladen](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest) · [Browser-Erweiterungen](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest) · [Versionshinweise](CHANGELOG.md)
 
-## Auralis unter Windows
+## Auralis in Aktion
 
-Teilansichten einer echten Auralis-0.3.49-Sitzung; bei der Aufnahme wurden der rechte und untere Rand abgeschnitten. Ältere Beispielbilder folgen.
-
-![Downloadliste (Teilansicht)](docs/images/auralis/current-main-partial.png)
-
-![Darstellung und Verbindungsanzeigen (Teilansicht)](docs/images/auralis/current-settings-partial.png)
-
-![Aufzeichnungsausschnitt (Teilansicht)](docs/images/auralis/current-recording-excerpt.gif)
-
-## Bilder
-
-Die Bilder zeigen die Oberfläche mit Beispieldownloads. Darstellung, Materialien und Farben sind einstellbar.
-
-| Download-Bibliothek | Aktueller Download |
-| --- | --- |
-| ![Download-Bibliothek](docs/images/auralis/main.png) | ![Aktueller Download](docs/images/auralis/download.png) |
-
-| Darstellung und Anzeigen | Dateiinformationen |
-| --- | --- |
-| ![Darstellung und Anzeigen](docs/images/auralis/settings.png) | ![Dateiinformationen](docs/images/auralis/file-info.png) |
-
-![Abgeschlossener Download](docs/images/auralis/complete.png)
-
-### Flüssige Anzeigen
-
-Material, Farbe und Form von Fortschritt, Verbindungen und Diagramm lassen sich getrennt wählen. Flüssige Stile animieren Füllung, Tropfen und Wellen; die Zustände stammen vom Download-Manager.
-
-![Animation von Fortschritt, Verbindungen und Diagramm](docs/images/auralis/liquid-flow.gif)
+![Live-Download mit Fortschritt, Verbindungen und Übertragungsdiagramm](docs/images/auralis/user-transfer.gif)
 
 ## Funktionen
 
