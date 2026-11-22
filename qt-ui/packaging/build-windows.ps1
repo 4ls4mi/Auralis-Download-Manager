@@ -37,7 +37,7 @@ try {
 
     $exe = Join-Path $stage 'auralis-download-manager.exe'
     Invoke-Checked (Join-Path $env:AURALIS_QT_ROOT 'bin/windeployqt.exe') @('--release','--no-translations',
-        '--no-compiler-runtime','--add-plugins','qsvg,qsvgicon','--qmldir',$source,'--dir',$stage,$exe)
+        '--no-compiler-runtime','--include-plugins','qsvg,qsvgicon,ffmpegmediaplugin','--qmldir',$source,'--dir',$stage,$exe)
     # Bundle the x64 C++ runtime app-local so setup stays per-user.
     $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
     $vs = & $vswhere -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -latest -property installationPath
@@ -52,7 +52,8 @@ try {
 
     foreach ($file in @('auralis-download-manager.exe','auralis_engine.dll','auralis-browser-host.exe','deno.exe',
         'Qt6Core.dll','Qt6Quick3D.dll','Qt6Multimedia.dll','platforms/qwindows.dll','qml/QtQuick3D/qmldir',
-        'qml/QtQuick/Controls/qmldir','msvcp140.dll','vcruntime140.dll','auralis-extension/manifest.json')) {
+        'qml/QtQuick/Controls/qmldir','qml/QtMultimedia/qmldir','multimedia/ffmpegmediaplugin.dll',
+        'msvcp140.dll','vcruntime140.dll','auralis-extension/manifest.json')) {
         if (!(Test-Path (Join-Path $stage $file))) { throw "Missing deployed Qt package file: $file" }
     }
     Get-ChildItem -LiteralPath $stage -Recurse -File -Filter '*.pdb' | Remove-Item -Force

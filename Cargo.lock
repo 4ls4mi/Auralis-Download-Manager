@@ -636,10 +636,12 @@ dependencies = [
 name = "auralis-qt-engine"
 version = "0.3.57"
 dependencies = [
+ "hex",
  "mdm-app",
  "mdm-ipc",
  "reqwest 0.13.5",
  "semver",
+ "serde",
  "serde_json",
  "sha2",
 ]

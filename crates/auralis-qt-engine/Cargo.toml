@@ -20,8 +20,10 @@ mdm-ipc.workspace = true
 serde_json.workspace = true
 
 [target.'cfg(windows)'.dependencies]
+hex.workspace = true
 reqwest = { workspace = true, features = ["blocking", "json"] }
 semver = "1"
+serde.workspace = true
 sha2.workspace = true
 
 [lints.rust]

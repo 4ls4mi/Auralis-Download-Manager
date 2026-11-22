@@ -198,7 +198,7 @@ fn hash_file(path: &std::path::Path) -> Result<(String, u64), String> {
         }
         hash.update(&buf[..got]);
     }
-    Ok((format!("{:x}", hash.finalize()), n))
+    Ok((hex::encode(hash.finalize()), n))
 }
 fn download() -> Result<(), String> {
     let c = lock()?.clone().ok_or("Check for an update first")?;
