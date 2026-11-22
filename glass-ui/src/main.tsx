@@ -27,6 +27,7 @@ import "./crystal.css";
 import "./crystal-overrides.css";
 import "./ice-crystal.css";
 import "./material-controls.css";
+import "./scrollbars.css";
 
 function Main() {
   const query = new URLSearchParams(window.location.search);

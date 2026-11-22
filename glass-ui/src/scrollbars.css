@@ -1,0 +1,28 @@
+/* Consistent, compact scrollbars across Auralis WebView windows. */
+.cg-window, .cg-window * {
+  scrollbar-width: auto;
+  scrollbar-color: auto;
+}
+.cg-window ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.cg-window ::-webkit-scrollbar-track {
+  background: transparent;
+}
+.cg-window ::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgba(var(--accent-rgb, 153, 127, 227), .7);
+  background-clip: padding-box;
+}
+.cg-window ::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(var(--accent-rgb, 153, 127, 227), 1);
+}
+.cg-window ::-webkit-scrollbar-corner { background: transparent; }
+.cg-window ::-webkit-scrollbar-button { display: none; }
+@media (forced-colors: active) {
+  .cg-window, .cg-window * { scrollbar-color: auto; scrollbar-width: auto; }
+  .cg-window ::-webkit-scrollbar-thumb { background: ButtonText; }
+  .cg-window ::-webkit-scrollbar-track { background: Canvas; }
+}
