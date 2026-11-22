@@ -5,6 +5,10 @@ import {fileURLToPath} from 'node:url';
 import {chromium} from 'playwright-core';
 import {createServer} from 'vite';
 const executablePath=process.env.AURALIS_TEST_BROWSER||(process.platform==='linux'?'/usr/bin/chromium':'');
+
+function cssAlpha(color) {
+ return color.startsWith('rgba(') ? Number(color.slice(5, -1).split(',').at(-1)) : 1;
+}
 test('dark and light Aurora materials stay distinct and save across reload', {skip:!executablePath||!existsSync(executablePath)}, async()=>{
  const server=await createServer({configFile:false,root:fileURLToPath(new URL('..',import.meta.url)),server:{host:'127.0.0.1',port:0},logLevel:'silent'});await server.listen();
  const browser=await chromium.launch({headless:true,executablePath,args:['--no-sandbox']});
@@ -21,7 +25,7 @@ test('dark and light Aurora materials stay distinct and save across reload', {sk
  assert.notEqual(styles[0],styles[1]);
  } finally {await browser.close();await server.close()}
 });
-test('Aurora shows translucent panes and faceted action colors with desktop acrylic', {
+test('Aurora shows translucent panes and action colors with desktop acrylic', {
  skip: !executablePath || !existsSync(executablePath)
 }, async () => {
  const server = await createServer({
@@ -31,33 +35,19 @@ test('Aurora shows translucent panes and faceted action colors with desktop acry
   logLevel: 'silent'
  });
  await server.listen();
- const browser = await chromium.launch({headless: true, executablePath, args: ['--no-sandbox', '--enable-unsafe-swiftshader', '--use-angle=swiftshader']});
+ const browser = await chromium.launch({headless: true, executablePath, args: ['--no-sandbox']});
  try {
   for (const material of ['builtin-aurora-night', 'builtin-aurora-ice']) {
-   const page = await browser.newPage({viewport: {width: 960, height: 690}});
-   await page.addInitScript(material => {
+   const context = await browser.newContext({viewport: {width: 960, height: 690}});
+   await context.addInitScript(material => {
     localStorage.setItem('auralis-browser-guide-seen', '1');
     localStorage.setItem('mh-glass-material', material);
-    localStorage.setItem('mh-glass-back-main', 'desktop');
-    const draw = WebGLRenderingContext.prototype.drawArrays;
-    WebGLRenderingContext.prototype.drawArrays = function (...args) {
-     draw.apply(this, args);
-     if (!this.canvas.classList.contains('cg-aurora-optics')) return;
-     const width = this.drawingBufferWidth;
-     const height = this.drawingBufferHeight;
-     const pixels = new Uint8Array(width * height * 4);
-     this.readPixels(0, 0, width, height, this.RGBA, this.UNSIGNED_BYTE, pixels);
-     const alphas = pixels.filter((_, index) => index % 4 === 3);
-     window.auroraPixels = {
-      clear: alphas.some(alpha => alpha < 6),
-      face: alphas.some(alpha => alpha > 26 && alpha < 80),
-      rim: alphas.some(alpha => alpha > 120),
-      opaque: alphas.some(alpha => alpha === 255)
-     };
-    };
+    localStorage.setItem('mh-glass-back-main', 'wallpaper');
+    localStorage.setItem('mh-glass-back-details', 'wallpaper');
+    const label = new URLSearchParams(location.search).has('settings') ? 'settings' : 'main';
     window.__TAURI_EVENT_PLUGIN_INTERNALS__ = {unregisterListener: () => {}};
     window.__TAURI_INTERNALS__ = {
-     metadata: {currentWindow: {label: 'main'}, currentWebview: {label: 'main'}},
+     metadata: {currentWindow: {label}, currentWebview: {label}},
      transformCallback: () => 1,
      unregisterCallback: () => {},
      invoke: async (command, args) => {
@@ -68,17 +58,14 @@ test('Aurora shows translucent panes and faceted action colors with desktop acry
      }
     };
    }, material);
+   const page = await context.newPage();
    await page.goto(server.resolvedUrls.local[0]);
    const add = page.locator('.cg-toolbar button[data-action=add]');
    const settings = page.locator('.cg-toolbar button[data-action=settings]');
    await add.waitFor();
    await page.waitForFunction(() => window.auroraEffects?.includes('acrylic'));
    assert.equal(await page.locator('.cg-wallpaper').count(), 0);
-   const variant = material.endsWith('night') ? 'dark' : 'light';
-   await page.locator(`.cg-aurora-optics[data-rendered='${variant}']`).waitFor();
-   assert.deepEqual(await page.evaluate(() => window.auroraPixels), {
-    clear: true, face: true, rim: true, opaque: false
-   });
+   assert.equal(await page.locator('.cg-aurora-optics').count(), 0);
    assert.equal(
     await page.locator('.cg-content').evaluate(element => getComputedStyle(element).backdropFilter),
     'none'
@@ -87,36 +74,67 @@ test('Aurora shows translucent panes and faceted action colors with desktop acry
     const shell = getComputedStyle(document.querySelector('.cg-content'));
     const sidebar = getComputedStyle(document.querySelector('.cg-sidebar'));
     const pane = getComputedStyle(document.querySelector('.cg-list-panel'));
+    const title = getComputedStyle(document.querySelector('.cg-window-top'));
+    const toolbar = getComputedStyle(document.querySelector('.cg-toolbar'));
     return {
      shellBase: shell.backgroundColor,
      paneBase: pane.backgroundColor,
+     titleBase: title.backgroundColor,
+     toolbarBase: toolbar.backgroundColor,
      sidebarLayers: sidebar.backgroundImage,
+     paneRim: pane.boxShadow,
      panelLayers: pane.backgroundImage
     };
    });
-   assert.match(optics.shellBase, /^rgba\(/);
-   assert.match(optics.paneBase, /^rgba\(/);
+   assert.ok(cssAlpha(optics.shellBase) > 0 && cssAlpha(optics.shellBase) < 1);
+   assert.ok(cssAlpha(optics.paneBase) > 0 && cssAlpha(optics.paneBase) < cssAlpha(optics.titleBase));
+   assert.ok(cssAlpha(optics.paneBase) < cssAlpha(optics.toolbarBase));
+   assert.ok(cssAlpha(optics.titleBase) < cssAlpha(optics.shellBase));
+   assert.ok(cssAlpha(optics.toolbarBase) < cssAlpha(optics.shellBase));
    assert.notEqual(optics.sidebarLayers, optics.panelLayers);
    assert.match(optics.panelLayers, material.endsWith('night') ? /radial-gradient/ : /linear-gradient/);
+   assert.match(optics.paneRim, /inset/);
    const buttonSurface = element => {
-    const rim = getComputedStyle(element, '::before');
-    const face = getComputedStyle(element, '::after');
-    return {shape: rim.clipPath, face: face.backgroundImage, ink: getComputedStyle(element.querySelector('svg')).color};
+    const style = getComputedStyle(element);
+    return {
+     radius: style.borderRadius,
+     clip: style.clipPath,
+     rim: getComputedStyle(element, '::before').content,
+     face: style.backgroundColor,
+     layers: style.backgroundImage,
+     ink: getComputedStyle(element.querySelector('svg')).color
+    };
    };
    const addSurface = await add.evaluate(buttonSurface);
    const settingsSurface = await settings.evaluate(buttonSurface);
-   assert.match(addSurface.shape, /^polygon\(/);
+   assert.equal(addSurface.radius, '7px');
+   assert.equal(addSurface.clip, 'none');
+   assert.equal(addSurface.rim, 'none');
+   assert.match(addSurface.face, /^rgba\(/);
    assert.notEqual(addSurface.ink, settingsSurface.ink);
-   if (material.endsWith('night')) {
-    assert.equal(addSurface.ink, 'rgb(8, 233, 121)');
-    assert.equal(settingsSurface.ink, 'rgb(184, 64, 255)');
-   } else {
-    assert.match(addSurface.ink, /^color\(srgb /);
-    assert.match(settingsSurface.ink, /^color\(srgb /);
-   }
    await settings.hover();
-   assert.notEqual((await settings.evaluate(buttonSurface)).face, settingsSurface.face);
-   await page.close();
+   assert.notEqual((await settings.evaluate(buttonSurface)).layers, settingsSurface.layers);
+
+   const settingsPage = await context.newPage();
+   await settingsPage.goto(server.resolvedUrls.local[0] + '?settings=1&tab=Appearance');
+   await settingsPage.waitForFunction(() => window.auroraEffects?.includes('acrylic'));
+   assert.equal(await settingsPage.locator('.cg-wallpaper').count(), 0);
+   assert.equal(await settingsPage.locator('.cg-aurora-optics').count(), 0);
+   const settingsShell = settingsPage.locator('.cg-content');
+   assert.equal(await settingsShell.evaluate(element => getComputedStyle(element).backgroundColor), optics.shellBase);
+   assert.equal(await settingsPage.locator('.cg-window-top').evaluate(element => getComputedStyle(element).backgroundColor), optics.titleBase);
+   const slider = settingsPage.getByRole('slider', {name: 'Glass translucency', exact: false});
+   await slider.press('End');
+   await page.waitForFunction(() => document.querySelector('.cg-window').style.getPropertyValue('--glass-window-opacity') === '0');
+   for (const frame of [page, settingsPage]) {
+    const surfaces = await frame.evaluate(() => ({
+     shell: getComputedStyle(document.querySelector('.cg-content')).backgroundColor,
+     pane: getComputedStyle(document.querySelector('.cg-sidebar,.cg-settings-nav')).backgroundColor
+    }));
+    assert.equal(cssAlpha(surfaces.shell), 0);
+    assert.equal(cssAlpha(surfaces.pane), 0);
+   }
+   await context.close();
   }
  } finally {
   await browser.close();

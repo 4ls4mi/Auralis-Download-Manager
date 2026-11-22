@@ -4,7 +4,7 @@ import {parseMaterial, type MaterialFile} from './customMaterials.ts';
 // local wallpaper paths, or arbitrary URLs.
 export type ThemePalette = {name:string;accent:string;secondary:string;surface:[number,number,number]|null;light:boolean};
 export type ThemeSettings = {
-  tintStrength:number; fontFamily:string; fontSize:number; highContrast:boolean; uiScale:number; dim:number; blur:number;
+  glassTranslucency?:number|null; tintStrength:number; fontFamily:string; fontSize:number; highContrast:boolean; uiScale:number; dim:number; blur:number;
   indicator:string; connectionIndicator:string; graphIndicator:string;
   progressMaterial:string; connectionMaterial:string; graphMaterial:string;
   progressShape:string; connectionShape:string; graphShape:string;
@@ -38,6 +38,11 @@ export function parseTheme(input:unknown):ThemeFile {
  const s=object(v.settings);const out:Record<string,unknown>={};
  for(const [key,values] of Object.entries(choice)){if(typeof s[key]!=='string'||!values.includes(s[key] as string))throw Error(`Invalid ${key}.`);out[key]=s[key]}
  for(const [key,min,max] of [['tintStrength',0,65],['fontSize',12,20],['uiScale',80,150],['dim',0,80],['blur',0,20]] as const){const n=s[key];if(typeof n!=='number'||!Number.isFinite(n)||n<min||n>max)throw Error(`Invalid ${key}.`);out[key]=n}
+ if (s.glassTranslucency !== undefined) {
+  const value = s.glassTranslucency;
+  if (value !== null && (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > 100)) throw Error('Invalid glassTranslucency.');
+  out.glassTranslucency = value;
+ }
  if(typeof s.highContrast!=='boolean')throw Error('Invalid highContrast.');out.highContrast=s.highContrast;
  return {format:'auralis-theme',version:1,palette:{name:p.name.trim(),accent:p.accent.toLowerCase(),secondary:p.secondary.toLowerCase(),surface:p.surface as ThemePalette['surface'],light:p.light},material:v.material,customMaterial:custom,settings:out as ThemeSettings};
 }

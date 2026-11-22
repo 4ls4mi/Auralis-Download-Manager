@@ -1,9 +1,7 @@
-/* Fill the native backdrop all the way to the edge of the visible frame. */
-.cg-window.cg-window.cg-native-backdrop .cg-content {
+/* Match the square WebView frame to the full native client area in every mode. */
+.cg-window.cg-window.cg-window > .cg-content,
+.cg-window.cg-window.cg-window > :is(.cg-wallpaper, .cg-solid) {
   inset: 0 !important;
-  border-radius: var(--native-backdrop-radius) !important;
-}
-
-.cg-window.cg-window.cg-native-backdrop:is(.cg-maximized, .cg-tiled) .cg-content {
   border-radius: 0 !important;
+  clip-path: none !important;
 }

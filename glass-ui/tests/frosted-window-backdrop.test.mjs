@@ -5,7 +5,7 @@ import {fileURLToPath} from 'node:url';
 import {chromium} from 'playwright-core';
 import {createServer} from 'vite';
 const browserPath=process.env.AURALIS_TEST_BROWSER||(process.platform==='linux'?'/usr/bin/chromium':'');
-test('floating frosted windows clear the rectangular backdrop and restore it when maximized',{skip:!browserPath||!existsSync(browserPath)},async()=>{
+test('Frosted Layers keep desktop acrylic while moving between square floating and maximized frames',{skip:!browserPath||!existsSync(browserPath)},async()=>{
  const server=await createServer({configFile:false,root:fileURLToPath(new URL('..',import.meta.url)),server:{host:'127.0.0.1',port:0},logLevel:'silent'});await server.listen();
  const browser=await chromium.launch({headless:true,executablePath:browserPath,args:['--no-sandbox']});
  try{
@@ -23,8 +23,14 @@ test('floating frosted windows clear the rectangular backdrop and restore it whe
     return null;
    }};
   });
-  await page.goto(server.resolvedUrls.local[0]);await page.waitForFunction(()=>window.effects.length>0);assert.equal(await page.evaluate(()=>window.effects.at(-1)),null);
-  await page.evaluate(()=>{window.maximized=true;window.dispatchEvent(new Event('resize'))});await page.waitForFunction(()=>window.effects.at(-1)?.effects?.includes('acrylic'));
-  await page.evaluate(()=>{window.maximized=false;window.dispatchEvent(new Event('resize'))});await page.waitForFunction(()=>window.effects.length>=3&&window.effects.at(-1)===null);
+  await page.goto(server.resolvedUrls.local[0]);
+  await page.waitForFunction(()=>window.effects.at(-1)?.effects?.includes('acrylic'));
+  for(const maximize of [true,false]) {
+   const previous=await page.evaluate(()=>window.effects.length);
+   await page.evaluate(maximize=>{window.maximized=maximize;window.dispatchEvent(new Event('resize'))},maximize);
+   await page.waitForFunction(({maximize,previous})=>document.querySelector('.cg-window')?.classList.contains('cg-maximized')===maximize&&window.effects.length>previous,{maximize,previous});
+   assert.ok(await page.evaluate(()=>window.effects.at(-1)?.effects?.includes('acrylic')));
+  }
+  assert.ok(await page.locator('.cg-frost-canvas').isVisible());
  }finally{await browser.close();await server.close()}
 });

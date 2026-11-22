@@ -1,6 +1,91 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {existsSync} from 'node:fs';import {fileURLToPath} from 'node:url';import {chromium} from 'playwright-core';import {createServer} from 'vite';
-const executablePath=process.env.AURALIS_TEST_BROWSER||(process.platform==='linux'?'/usr/bin/chromium':'');
-test('materials give actions distinct shapes, backgrounds, and selected states without hiding controls',{skip:!executablePath||!existsSync(executablePath)},async()=>{
- const server=await createServer({configFile:false,root:fileURLToPath(new URL('..',import.meta.url)),server:{host:'127.0.0.1',port:0},logLevel:'silent'});await server.listen();const browser=await chromium.launch({headless:true,executablePath,args:['--no-sandbox']});
- try{const page=await browser.newPage({viewport:{width:1100,height:720}});await page.goto(server.resolvedUrls.local[0]);await page.addStyleTag({url:'/src/material-controls.css'});const result=await page.evaluate(()=>{document.body.innerHTML=`<style>*{transition:none!important}</style><div class="cg-window cg-dark" style="--accent:#32e5a0;--accent-rgb:50,229,160;--theme-action-rgb:50,229,160;--theme-primary-rgb:80,220,180;--theme-warn-rgb:90,200,180;--theme-danger-rgb:100,190,190;--theme-tool-rgb:110,180,200;--glass:8,20,30;--glass-tint:rgba(40,120,150,.3)"><div class="cg-toolbar cg-glass"><button data-action="add" class="primary" style="--tone-rgb:69,235,142;--tone:#45eb8e">+</button><button data-action="settings" style="--tone-rgb:200,136,255;--tone:#c888ff">S</button></div><aside class="cg-sidebar"><button class="selected">Selected</button></aside></div>`;const w=document.querySelector('.cg-window'),b=w.querySelector('button'),selected=w.querySelector('.selected');const ids=['brushed-glass','rose-pine','window-glass','oversimplified','frosted-water-351','builtin-obsidian-matte','builtin-smoked-glass','builtin-pearl-frost'];return ids.map(id=>{w.className=`cg-window cg-dark cg-material-${id}`;const x=getComputedStyle(b),s=getComputedStyle(selected);return {id,background:x.backgroundImage,radius:x.borderRadius,display:x.display,selected:s.backgroundImage,selectedColor:s.backgroundColor,tone:x.getPropertyValue("--tone-rgb").trim(),themeAccent:getComputedStyle(w).getPropertyValue("--theme-primary-rgb").trim()}})});assert.equal(result.length,8);assert.equal(new Set(result.map(x=>x.tone)).size,1,"the selected theme controls action colors across materials");assert.ok(result.every(x=>x.tone===x.themeAccent),"button colors follow the selected theme");assert.ok(new Set(result.map(x=>x.background)).size>=6);assert.ok(new Set(result.map(x=>x.radius)).size>=4);for(const x of result){assert.notEqual(x.display,'none');assert.ok(x.selected!=='none'||x.selectedColor!=='rgba(0, 0, 0, 0)',JSON.stringify(x))}}finally{await browser.close();await server.close()}
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {existsSync} from 'node:fs';
+import {fileURLToPath} from 'node:url';
+import {chromium} from 'playwright-core';
+import {createServer} from 'vite';
+
+const executablePath = process.env.AURALIS_TEST_BROWSER ||
+  (process.platform === 'linux' ? '/usr/bin/chromium' : '');
+
+test('every material provides translucent actions, small corners, and legible states', {
+ skip: !executablePath || !existsSync(executablePath)
+}, async () => {
+ const server = await createServer({
+  configFile: false,
+  root: fileURLToPath(new URL('..', import.meta.url)),
+  server: {host: '127.0.0.1', port: 0},
+  logLevel: 'silent'
+ });
+ await server.listen();
+ const browser = await chromium.launch({headless: true, executablePath, args: ['--no-sandbox']});
+ try {
+  const page = await browser.newPage({viewport: {width: 1100, height: 720}, reducedMotion: 'reduce'});
+  await page.addInitScript(() => {
+   localStorage.setItem('auralis-browser-guide-seen', '1');
+   window.__TAURI_EVENT_PLUGIN_INTERNALS__ = {unregisterListener: () => {}};
+   window.__TAURI_INTERNALS__ = {
+    metadata: {currentWindow: {label: 'main'}, currentWebview: {label: 'main'}},
+    transformCallback: () => 1,
+    unregisterCallback: () => {},
+    invoke: async command => {
+     if (command === 'dashboard_snapshot') return {downloads: [], queues: [], categories: [], speed: 0};
+     if (command === 'dashboard_visuals') return {downloads: []};
+     return null;
+    }
+   };
+  });
+  await page.goto(server.resolvedUrls.local[0]);
+  await page.waitForSelector('.cg-toolbar');
+  const results = await page.evaluate(() => {
+   const windowRoot = document.querySelector('.cg-window');
+   const ids = [
+    'brushed-glass', 'frosted-water-351', 'rose-pine', 'oversimplified',
+    'builtin-obsidian-matte', 'builtin-smoked-glass', 'builtin-black-glass',
+    'builtin-pearl-frost', 'builtin-aurora-night', 'builtin-aurora-ice'
+   ];
+   const originalClass = windowRoot.className;
+   const styles = ids.map(id => {
+    windowRoot.className = `cg-window cg-material-${id} ${id === 'builtin-aurora-ice' ? 'cg-light' : 'cg-dark'}`;
+    const primary = windowRoot.querySelector('[data-action=add]');
+    const settings = windowRoot.querySelector('[data-action=settings]');
+    const disabled = getComputedStyle(windowRoot.querySelector('[data-action=start]'));
+    const style = getComputedStyle(primary);
+    return {
+     id,
+     alpha: Number(style.backgroundColor.match(/^rgba\(.*?, ([\d.]+)\)$/)?.[1]),
+     background: style.backgroundImage,
+     radius: Number.parseFloat(style.borderRadius),
+     shape: style.clipPath,
+     addColor: getComputedStyle(primary.querySelector('svg')).color,
+     settingsColor: getComputedStyle(settings.querySelector('svg')).color,
+     disabledOpacity: Number(disabled.opacity),
+    };
+   });
+   windowRoot.className = originalClass;
+   return styles;
+  });
+  for (const result of results) {
+   assert.ok(result.alpha >= 0 && result.alpha <= 0.4, JSON.stringify(result));
+   assert.ok(result.radius >= 4 && result.radius <= 9, JSON.stringify(result));
+   assert.equal(result.shape, 'none');
+   assert.notEqual(result.addColor, result.settingsColor);
+   assert.ok(result.disabledOpacity < 0.6, JSON.stringify(result));
+  }
+  assert.ok(new Set(results.map(result => result.background)).size >= 7);
+  assert.ok(new Set(results.map(result => result.radius)).size >= 4);
+
+  const settings = page.locator('[data-action=settings]');
+  const idle = await settings.evaluate(element => getComputedStyle(element).backgroundImage);
+  await settings.hover();
+  assert.notEqual(await settings.evaluate(element => getComputedStyle(element).backgroundImage), idle);
+  await page.locator('[data-action=add]').focus();
+  await page.keyboard.press('Tab');
+  const focused = page.locator('.cg-toolbar > button:focus-visible');
+  assert.ok(await focused.count(), 'toolbar can receive focus by keyboard');
+  assert.equal(await focused.evaluate(element => getComputedStyle(element).outlineStyle), 'solid');
+ } finally {
+  await browser.close();
+  await server.close();
+ }
 });

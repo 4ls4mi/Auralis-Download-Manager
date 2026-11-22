@@ -100,28 +100,48 @@ try {
  await until(()=>page.evaluate(()=>window.__TAURI_INTERNALS__.invoke('plugin:window|is_maximized',{label:'main'})),'Maximize button did not maximize the window');
  await maximize.click();
  await until(async()=>!(await page.evaluate(()=>window.__TAURI_INTERNALS__.invoke('plugin:window|is_maximized',{label:'main'}))),'Maximize button did not restore the window');
- // Check the installed app's native region without capturing the runner's desktop.
- await page.evaluate(()=>{
-  localStorage.setItem('mh-glass-material','builtin-aurora-night');
-  localStorage.setItem('mh-glass-back-main','desktop');
-  window.dispatchEvent(new Event('storage'));
- });
- const acrylicFrame=page.locator('.cg-native-backdrop.cg-material-builtin-aurora-night:not(.cg-maximized, .cg-tiled) .cg-content');
- await acrylicFrame.waitFor();
- const frameStyle=await acrylicFrame.evaluate(element=>{
-  const style=getComputedStyle(element);
-  return {inset:style.inset,radius:style.borderTopLeftRadius};
- });
- assert.equal(frameStyle.inset,'0px');
- assert.equal(frameStyle.radius,'20px');
- await until(async()=>{
-  const frame=await page.evaluate(async()=>({
-   region:await window.__TAURI_INTERNALS__.invoke('inspect_material_window_region'),
-   notice:document.querySelector('.cg-window-notice')?.textContent,
-  }));
-  assert.ok(frame.region.rounded,JSON.stringify(frame));
-  return true;
- },'The installed app did not apply a rounded native acrylic region',10000);
+ // Inspect the actual HWND and CSS in both windows without desktop captures.
+ await page.evaluate(()=>window.__TAURI_INTERNALS__.invoke('open_glass_window',{
+  label:'settings',url:'/?settings=1&tab=Appearance',width:800,height:650,
+ }));
+ const settings=await until(()=>browser.contexts().flatMap(context=>context.pages())
+  .find(candidate=>!candidate.isClosed()&&candidate.url().includes('settings=1')),
+  'The Settings WebView did not open',15000);
+
+ async function verifyAcrylic(view,material,windowName){
+  const acrylicFrame=view.locator(`.cg-native-backdrop.cg-material-${material}:not(.cg-maximized, .cg-tiled) .cg-content`);
+  await acrylicFrame.waitFor({timeout:10000});
+  const frameStyle=await acrylicFrame.evaluate(element=>{
+   const style=getComputedStyle(element);
+   return {inset:style.inset,radius:style.borderTopLeftRadius,face:style.backgroundColor};
+  });
+  assert.equal(frameStyle.inset,'0px');
+  assert.equal(frameStyle.radius,'0px');
+  assert.match(frameStyle.face,/^rgba\(/,`${windowName} glass face must be translucent`);
+  assert.equal(await view.locator('.cg-wallpaper').count(),0);
+  await until(async()=>{
+   const frame=await view.evaluate(async()=>({
+    region:await window.__TAURI_INTERNALS__.invoke('inspect_material_window_region'),
+    notice:document.querySelector('.cg-window-notice')?.textContent,
+   }));
+   assert.ok(frame.region.square,JSON.stringify(frame));
+   // Older Windows versions have no system backdrop attribute. The app uses
+   // the legacy effect there, while Windows 11 reports Desktop Acrylic as 3.
+   if(frame.region.systemBackdrop!==null)assert.equal(frame.region.systemBackdrop,3,JSON.stringify(frame));
+   return true;
+  },`${windowName} did not apply a square acrylic frame for ${material}`,10000);
+ }
+ for(const material of ['builtin-aurora-night','builtin-aurora-ice']){
+  await page.evaluate(material=>{
+   localStorage.setItem('mh-glass-back-main','wallpaper');
+   localStorage.setItem('mh-glass-back-details','wallpaper');
+   localStorage.setItem('mh-glass-material',material);
+   window.dispatchEvent(new Event('storage'));
+  },material);
+  await verifyAcrylic(page,material,'Main window');
+  await verifyAcrylic(settings,material,'Settings');
+ }
+ await settings.getByRole('button',{name:'Close',exact:true}).click();
  const ps=spawnSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',`Get-CimInstance Win32_Process -Filter 'ParentProcessId=${app.pid}' | Select-Object -ExpandProperty Name`],{encoding:'utf8',timeout:15000});assert.equal(ps.status,0,'Could not inspect child processes');assert.doesNotMatch(ps.stdout,/^mdm-legacy\.exe\s*$/im,'A legacy downloader process was launched');
  const downloadUrl=`http://127.0.0.1:${server.address().port}/embedded-smoke-${Date.now()}.bin`;
  addResponse=await ipc({url:downloadUrl,silent:true});

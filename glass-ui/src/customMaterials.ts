@@ -43,3 +43,11 @@ export function materialBackdrop(id:string, material:MaterialFile): 'material'|'
   case 'matte': return 'material';
  }
 }
+
+export function isAuroraMaterial(id:string): boolean {
+ return id === 'builtin-aurora-night' || id === 'builtin-aurora-ice';
+}
+
+export function resolveMaterial(id:string): MaterialFile {
+ return extraMaterials[id] ?? materialPresets[id] ?? loadMaterials().find(material => materialId(material) === id) ?? materialPresets['frosted-water-351'];
+}

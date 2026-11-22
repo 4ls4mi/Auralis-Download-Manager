@@ -1,0 +1,155 @@
+/* A single face opacity controls the glass. Lighting is concentrated at the
+   edges so it stays visible when the backing is set to see through. */
+.cg-window {
+  --material-face-opacity: var(--glass-window-opacity, var(--panel-opacity, .65));
+  --material-pane-density: .32;
+  --material-edge-light: 198 230 255;
+  --material-edge-shadow: 6 16 36;
+  --material-chroma: 101 169 224;
+  --material-edge-strength: .66;
+  --material-reflection: .14;
+  --material-shadow-strength: .55;
+  --material-face-reflection: calc(var(--material-reflection) * (.6 + .8 * var(--material-shading, .5)));
+  --material-face-shadow: calc(var(--material-shadow-strength) * (.65 + .7 * var(--material-shading, .5)));
+  --material-face-pattern: linear-gradient(transparent, transparent);
+}
+
+.cg-window.cg-light {
+  --material-edge-light: 250 255 255;
+  --material-edge-shadow: 60 96 122;
+  --material-chroma: 117 168 201;
+  --material-shadow-strength: .34;
+}
+
+.cg-window.cg-material-brushed-glass {
+  --material-reflection: .16;
+  --material-face-pattern: repeating-linear-gradient(112deg, #e5f7ff06 0 1px, transparent 1px 5px);
+}
+
+.cg-window.cg-material-rose-pine {
+  --material-chroma: 212 153 191;
+  --material-reflection: .11;
+  --material-pane-density: .44;
+}
+
+.cg-window.cg-material-oversimplified {
+  --material-edge-strength: .37;
+  --material-reflection: .08;
+  --material-shadow-strength: .31;
+}
+
+.cg-window.cg-finish-gloss {
+  --material-reflection: .27;
+  --material-edge-strength: .88;
+}
+
+.cg-window.cg-finish-satin {
+  --material-face-pattern: repeating-linear-gradient(115deg, #ffffff0c 0 1px, transparent 1px 5px);
+}
+
+.cg-window.cg-material-builtin-obsidian-matte,
+.cg-window.cg-finish-matte {
+  --material-reflection: .08;
+  --material-shadow-strength: .59;
+}
+
+.cg-window.cg-material-builtin-smoked-glass {
+  --material-chroma: 166 196 231;
+  --material-reflection: .13;
+  --material-pane-density: .29;
+}
+
+.cg-window.cg-material-builtin-black-glass {
+  --material-chroma: 139 166 210;
+  --material-reflection: .09;
+  --material-pane-density: .53;
+}
+
+.cg-window.cg-material-builtin-pearl-frost {
+  --material-edge-light: 231 248 255;
+  --material-chroma: 168 184 226;
+  --material-edge-strength: .9;
+  --material-reflection: .21;
+  --material-pane-density: .26;
+}
+
+.cg-window.cg-material-frosted-water-351 {
+  --material-edge-light: 225 247 255;
+  --material-chroma: 154 205 230;
+  --material-reflection: .19;
+}
+
+/* The animated Frosted Layers render over this same tint and beveled edge. */
+.cg-window:is(.cg-dark,.cg-light):is(.cg-target-main,.cg-target-details):not(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-content {
+  background:
+    var(--material-face-pattern),
+    linear-gradient(109deg, rgb(var(--material-edge-light) / calc(var(--material-face-reflection) * .58)), transparent 17%, transparent 91%, rgb(var(--material-chroma) / .07)),
+    linear-gradient(180deg, rgb(var(--material-edge-light) / var(--material-face-reflection)), transparent 30px, transparent calc(100% - 26px), rgb(var(--material-edge-shadow) / .12)),
+    linear-gradient(141deg, color-mix(in srgb, var(--glass-tint) calc(55% * var(--material-face-opacity)), transparent), transparent 42%),
+    rgba(var(--glass), var(--material-face-opacity)) !important;
+  border-color: rgb(var(--material-edge-light) / calc(var(--material-edge-strength) * .48)) !important;
+  box-shadow:
+    inset 0 1px 1px rgb(var(--material-edge-light) / var(--material-edge-strength)),
+    inset 0 0 0 2px rgb(var(--material-edge-light) / .10),
+    inset 0 -2px 4px rgb(var(--material-chroma) / .28),
+    inset 0 -16px 24px -25px rgb(var(--material-edge-shadow) / var(--material-face-shadow)),
+    0 5px 17px rgb(var(--material-edge-shadow) / .30) !important;
+}
+
+.cg-window:is(.cg-dark,.cg-light):is(.cg-target-main,.cg-target-details):not(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-fit-content :is(.cg-glass,.cg-window-top,.cg-menubar,.cg-page-tabs) {
+  background:
+    linear-gradient(90deg, rgb(var(--material-edge-light) / calc(var(--material-face-reflection) * .66)), transparent 8px, transparent calc(100% - 8px), rgb(var(--material-chroma) / .09)),
+    linear-gradient(180deg, rgb(var(--material-edge-light) / var(--material-face-reflection)), transparent 31px, transparent calc(100% - 18px), rgb(var(--material-edge-shadow) / .10)),
+    rgba(var(--glass), calc(var(--material-face-opacity) * var(--material-pane-density))) !important;
+  border-color: rgb(var(--material-edge-light) / calc(var(--material-edge-strength) * .39)) !important;
+  box-shadow:
+    inset 0 1px 1px rgb(var(--material-edge-light) / calc(var(--material-edge-strength) * .85)),
+    inset 0 0 0 2px rgb(var(--material-edge-light) / .068),
+    inset 0 -1px 2px rgb(var(--material-chroma) / .19),
+    0 2px 7px rgb(var(--material-edge-shadow) / .20) !important;
+}
+
+.cg-window:is(.cg-target-main,.cg-target-details):not(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-fit-content :is(.cg-toolbar,.cg-footer) {
+  --material-pane-density: .43;
+}
+
+.cg-window:is(.cg-target-main,.cg-target-details):not(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-fit-content :is(.cg-list-panel,.cg-settings-body) {
+  --material-pane-density: .24;
+}
+
+/* On desktop Windows supplies the pixel blur behind the entire shell.
+   An outer WebView filter can replace that transparent surface. */
+.cg-window.cg-native-backdrop.cg-mode-desktop .cg-content {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.cg-translucency-settings {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px 12px;
+  margin: 12px 0;
+  padding: 10px 12px;
+}
+
+.cg-translucency-settings .cg-slider {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.cg-translucency-settings .cg-slider > span {
+  margin-bottom: 4px;
+}
+
+.cg-translucency-settings .cg-btn {
+  justify-self: start;
+  min-height: 28px;
+  padding: 3px 9px;
+}
+
+@media (max-width: 600px) {
+  .cg-translucency-settings {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

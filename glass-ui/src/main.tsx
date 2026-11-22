@@ -27,7 +27,9 @@ import "./crystal.css";
 import "./crystal-overrides.css";
 import "./ice-crystal.css";
 import "./material-controls.css";
+import "./material-surfaces.css";
 import "./aurora-glass.css";
+import "./action-controls.css";
 import "./scrollbars.css";
 import "./native-frame.css";
 

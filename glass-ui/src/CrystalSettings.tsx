@@ -1,6 +1,6 @@
 import {savePreferences,restorePreferences} from "./preferencesBackup";
 
-import {loadMaterials,materialId,materialPresets,extraMaterials,parseMaterial,MATERIALS_KEY} from "./customMaterials";
+import {loadMaterials,materialId,materialPresets,extraMaterials,parseMaterial,MATERIALS_KEY,isAuroraMaterial,resolveMaterial} from "./customMaterials";
 import {loadThemes,parseTheme,paletteForTheme,themeId,THEMES_KEY,type ThemeFile,type ThemeSettings} from "./themeFiles";
 import { listen } from "@tauri-apps/api/event";
 import CrystalAccounts from "./CrystalAccounts";
@@ -72,7 +72,7 @@ export default function CrystalSettings(){
   const exportTheme=async()=>{
     const custom=customMaterials.find(m=>materialId(m)===appearance.material)??null;
     const settingsKeys:(keyof ThemeSettings)[]=['tintStrength','fontFamily','fontSize','highContrast','uiScale','dim','blur','indicator','connectionIndicator','graphIndicator','progressMaterial','connectionMaterial','graphMaterial','progressShape','connectionShape','graphShape','trackFinish','trackColor','connectionTrackFinish','connectionTrackColor'];
-    const settings=Object.fromEntries(settingsKeys.map(key=>[key,appearance[key]]));
+    const settings={...Object.fromEntries(settingsKeys.map(key=>[key,appearance[key]])),glassTranslucency:appearance.glassTranslucency};
     const data=parseTheme({format:'auralis-theme',version:1,palette:{name:theme.name,accent:theme.accent,secondary:theme.secondary,surface:theme.neutralTint??null,light:theme.light===true||theme.id==='white-frost'||theme.id==='white-pearl'},material:custom?'custom':appearance.material,customMaterial:custom,settings});
     const file=await invoke<string|null>('export_theme_file',{contents:JSON.stringify(data,null,2)+'\n'});if(file)setNotice('Theme exported. Edit the JSON file and import it here.');
   };
@@ -105,16 +105,21 @@ export default function CrystalSettings(){
         min={min} max={max} disabled={!cfg||busy} key={String(cfg?.[key])}
         defaultValue={Number(cfg?.[key]??0)}
         onBlur={e=>{const v=Number(e.target.value);if(Number.isInteger(v)&&v>=min&&v<=max&&v!==cfg?.[key])void change(key,v);else if(v<min||v>max)setError(`${title} must be between ${min} and ${max}.`)}}/></label>;
+  const aurora = isAuroraMaterial(appearance.material);
+  const translucency = appearance.glassTranslucency ?? resolveMaterial(appearance.material).translucency;
   const mode=(target:"main"|"details")=>{
-    const current=target==="main"?appearance.mainMode:appearance.detailMode;
+    const saved=target==="main"?appearance.mainMode:appearance.detailMode;
+    const current=aurora && saved==="wallpaper" ? "desktop" : saved;
+    const options: BackgroundMode[] = aurora ? ["desktop","solid"] : ["desktop","wallpaper","solid"];
     const key: keyof Appearance=target==="main"?"mainMode":"detailMode";
     return <div className="cg-glass" style={{padding:13,margin:"12px 0"}}>
       <strong>{target==="main"?"Main window background":"Download and other popup backgrounds"}</strong>
-      <div className="cg-wall-choice">{(["desktop","wallpaper","solid"] as BackgroundMode[]).map(m=>
+      <div className="cg-wall-choice">{options.map(m=>
         <button key={m} className={`cg-btn ${current===m?"cg-btn-primary":""}`} onClick={()=>set(key,m)}>
           {m==="desktop"?"See-through desktop":m==="wallpaper"?"Custom wallpaper":"Solid color"}
         </button>)}
       </div>
+      {!aurora&&<>
       <button className="cg-btn" onClick={async()=>{
         try{
           const file=await invoke<string|null>("select_wallpaper",{target});
@@ -126,6 +131,7 @@ export default function CrystalSettings(){
         set(key,"desktop");
       }}>Remove wallpaper</button>
       <p>{target==="main"?appearance.wallMain||"Default Alpine wallpaper":appearance.wallDetail||"Inherits main wallpaper if none selected"}</p>
+      </>}
     </div>;
   };
   const slider=(name:keyof Appearance,title:string,min:number,max:number,suffix:string)=>
@@ -212,13 +218,19 @@ export default function CrystalSettings(){
         <small>Material files define a finish, control shape, translucency and shading. They do not contain code. The Frosted Layers template approximates its animated glass using these editable settings.</small>{slider("tintStrength","Theme tint strength",0,65,"%")}</>}
         {appearanceTab==="Indicators"&&<><h3>Indicator styles</h3><p>Choose each indicator independently. Previews update as you choose.</p><nav className="cg-indicator-tabs" aria-label="Indicator preview">{["Progress","Connections","Graph"].map(name=><button key={name} type="button" aria-pressed={indicatorTab===name} className={indicatorTab===name?"selected":""} onClick={()=>setIndicatorTab(name)}>{name}</button>)}</nav><div className="cg-indicator-cards">{([ ["Progress", "progressShape", "indicator"], ["Connections", "connectionShape", "connectionIndicator"] ] as const).map(([label,shapeKey,colorKey])=><section className="cg-indicator-card" key={label} hidden={indicatorTab!==label}><strong>{label}</strong>{label==="Progress"&&<label className="cg-field">Fill<select value={appearance.progressMaterial} onChange={e=>set("progressMaterial",e.target.value)}><option value="gradient">Default</option><option value="liquid-glass">Sculpted Liquid Glass</option></select></label>}{label==="Connections"&&<label className="cg-field">Fill<select value={appearance.connectionMaterial} onChange={e=>set("connectionMaterial",e.target.value)}><option value="gradient">Default</option><option value="liquid-glass">Sculpted Liquid Glass</option></select></label>}<label className="cg-field">Shape<select value={appearance[shapeKey]} onChange={e=>set(shapeKey,e.target.value)}>{[["rounded","Rounded"],["faceted","Faceted"],["bubble","Bubble"],["square","Square"]].map(([id,name])=><option key={id} value={id}>{name}</option>)}</select></label><label className="cg-field">Gradient<select value={appearance[colorKey]} onChange={e=>set(colorKey,e.target.value)}>{Object.entries(indicatorPalettes).filter(([id])=>id!=="neon").map(([id,p])=><option key={id} value={id}>{p.label}</option>)}</select></label><div className="cg-card-preview">{label==="Progress"?<GradientBar percent={64} showLabel/>:<ConnectionMap compact downloading connections={Array.from({length:8},(_,id)=>({id,downloaded:40+id*5,speed:2,state:"Receiving"}))} segments={Array.from({length:8},(_,id)=>({start:0,cursor:40+id*5,end:100,worker:id}))}/>}</div></section>)}<section className="cg-indicator-card" hidden={indicatorTab!=="Progress"}><strong>Progress backdrop</strong><label className="cg-field">Finish<select value={appearance.trackFinish} onChange={e=>set("trackFinish",e.target.value)}><option value="default">Default</option><option value="clear">Clear glass</option><option value="frosted">Frosted</option><option value="recessed">Recessed</option></select></label><label className="cg-field">Backdrop tint<select value={appearance.trackColor} onChange={e=>set("trackColor",e.target.value)}><option value="ice">Ice</option><option value="violet">Violet</option><option value="teal">Teal</option><option value="amber">Amber</option><optgroup label="Gradient and solid palettes">{Object.entries(indicatorPalettes).filter(([id])=>id!=="neon").map(([id,p])=><option key={id} value={`palette:${id}`}>{p.label}</option>)}</optgroup></select></label><div className="cg-card-preview"><GradientBar percent={64} showLabel/></div></section><section className="cg-indicator-card" hidden={indicatorTab!=="Connections"}><strong>Connections backdrop</strong><label className="cg-field">Finish<select value={appearance.connectionTrackFinish} onChange={e=>set("connectionTrackFinish",e.target.value)}><option value="default">Default</option><option value="clear">Clear glass</option><option value="frosted">Frosted</option><option value="recessed">Recessed</option></select></label><label className="cg-field">Backdrop tint<select value={appearance.connectionTrackColor} onChange={e=>set("connectionTrackColor",e.target.value)}><option value="ice">Ice</option><option value="violet">Violet</option><option value="teal">Teal</option><option value="amber">Amber</option><optgroup label="Gradient and solid palettes">{Object.entries(indicatorPalettes).filter(([id])=>id!=="neon").map(([id,p])=><option key={id} value={`palette:${id}`}>{p.label}</option>)}</optgroup></select></label><div className="cg-card-preview"><ConnectionMap compact downloading connections={Array.from({length:8},(_,id)=>({id,downloaded:40+id*5,speed:2,state:"Receiving"}))} segments={Array.from({length:8},(_,id)=>({start:0,cursor:40+id*5,end:100,worker:id}))}/></div></section><section className="cg-indicator-card" hidden={indicatorTab!=="Graph"}><strong>Graph</strong><label className="cg-field">Material<select value={appearance.graphMaterial} onChange={e=>set("graphMaterial",e.target.value)}><option value="gradient">Default</option><option value="liquid-glass">Sculpted Liquid Glass</option></select></label><label className="cg-field">Shape<select value={appearance.graphShape} onChange={e=>set("graphShape",e.target.value)}><option value="area">Filled area</option><option value="line">Line</option><option value="bars">Bars</option></select></label><label className="cg-field">Gradient<select value={appearance.graphIndicator} onChange={e=>set("graphIndicator",e.target.value)}>{Object.entries(indicatorPalettes).filter(([id])=>id!=="neon").map(([id,p])=><option key={id} value={id}>{p.label}</option>)}</select></label><div className="cg-card-preview"><SpeedGraph values={[2,4,3,7,6,10,8,11,9,12]}/></div></section></div></>}
         {appearanceTab==="Appearance"&&<>
-        <p>The selected material automatically controls its translucency and Windows backdrop effect. Your color theme supplies the tint.</p>
+        <div className="cg-glass cg-translucency-settings">
+          <label className="cg-slider"><span>Glass translucency<b>{translucency}%</b></span>
+            <input type="range" data-setting="glassTranslucency" min={0} max={100} value={translucency}
+              onChange={event=>set("glassTranslucency",Number(event.target.value))}/>
+          </label>
+          <small>Applies to the main window and popups with translucent backgrounds.</small>
+          {appearance.glassTranslucency!==null&&<button className="cg-btn" onClick={()=>set("glassTranslucency",null)}>Use material default</button>}
+        </div>
         <h3>Independent translucent backgrounds</h3>
         {mode("main")}{mode("details")}
         </>}
         {appearanceTab==="Appearance"&&<>
-        {slider("blur","Wallpaper blur",0,20," px")}
-        {slider("dim","Wallpaper darkness",0,80,"%")}
+        {!aurora&&<>{slider("blur","Wallpaper blur",0,20," px")}{slider("dim","Wallpaper darkness",0,80,"%")}</>}
         {slider("uiScale","Interface size",80,150,"%")}
         </>}
         {appearanceTab==="Typography"&&<>
@@ -239,7 +251,7 @@ export default function CrystalSettings(){
         <label className="cg-toggle"><span><strong>Show actual download popup automatically</strong><small>Open the separate floating progress window when a download starts</small></span>
           <input type="checkbox" checked={appearance.autoPopups} onChange={e=>set("autoPopups",e.target.checked)}/></label>
         <button className="cg-btn" style={{marginTop:15}} onClick={()=>{
-          set("mainMode","desktop");set("detailMode","desktop");
+          set("mainMode","desktop");set("detailMode","desktop");set("glassTranslucency",null);
           set("acrylic",false);set("surfaceStyle","material");set("dim",26);set("opacity",100);set("blur",6);
           set("uiScale",97);set("lightMode",false);set("fontFamily","Trebuchet MS");
           set("fontSize",14);set("highContrast",true);set("theme","ocean");set("material","rose-pine");set("tintHue",203);set("tintStrength",0);set("indicator","aurora");set("connectionIndicator","aurora");set("graphIndicator","aurora");set("progressMaterial","liquid-aero");set("connectionMaterial","liquid-aero");set("graphMaterial","gradient");set("progressShape","rounded");set("connectionShape","rounded");set("trackFinish","recessed");set("connectionTrackFinish","recessed");set("trackColor","ice");set("connectionTrackColor","ice");

@@ -27,6 +27,6 @@ test('black blur glass uses the Windows acrylic backdrop', async()=>{
  const {nativeBackdrop}=await import('../src/nativeBackdrop.ts');
  const material=extraMaterials['builtin-black-glass'];
  assert.equal(materialBackdrop('builtin-black-glass',material),'tinted');
- assert.equal(nativeBackdrop('desktop','builtin-black-glass',materialBackdrop('builtin-black-glass',material),false),'acrylic');
- assert.equal(nativeBackdrop('wallpaper','builtin-black-glass','tinted',false),null);
+ assert.equal(nativeBackdrop('desktop',materialBackdrop('builtin-black-glass',material)),'acrylic');
+ assert.equal(nativeBackdrop('wallpaper','tinted'),null);
 });
