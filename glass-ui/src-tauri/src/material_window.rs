@@ -141,3 +141,72 @@ pub fn set_material_window_shape(
         Err("Native material outlines are available on Windows".into())
     }
 }
+
+/// Read back the actual region from the HWND that rendered the smoke-test page.
+#[tauri::command]
+pub fn inspect_material_window_region(
+    window: tauri::WebviewWindow,
+) -> Result<serde_json::Value, String> {
+    if !super::is_isolated_test() || window.label() != "main" {
+        return Err("Material region inspection requires an isolated main window".into());
+    }
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::Foundation::RECT;
+        use windows_sys::Win32::Graphics::Gdi::{
+            COMPLEXREGION, CreateRectRgn, DeleteObject, GetRgnBox, GetWindowRgn, PtInRegion,
+        };
+
+        let hwnd = window.hwnd().map_err(|error| error.to_string())?.0 as _;
+        let scale = window.scale_factor().map_err(|error| error.to_string())?;
+        let region = unsafe { CreateRectRgn(0, 0, 0, 0) };
+        if region.is_null() {
+            return Err("Could not allocate a region for inspection".into());
+        }
+
+        let mut bounds = RECT::default();
+        let kind = unsafe { GetWindowRgn(hwnd, region) };
+        let bounds_kind = unsafe { GetRgnBox(region, &mut bounds) };
+        let RECT {
+            left,
+            top,
+            right,
+            bottom,
+        } = bounds;
+        let mid_x = left + (right - left) / 2;
+        let mid_y = top + (bottom - top) / 2;
+        let corner = (4.0 * scale).floor().max(1.0) as i32;
+        let edge = (2.0 * scale).ceil().max(1.0) as i32;
+        let contains = |x, y| unsafe { PtInRegion(region, x, y) != 0 };
+        // GDI excludes right and bottom coordinates. Sample just inside each
+        // edge to avoid treating differences at the outermost pixel as a gap.
+        let corners = [
+            contains(left + corner, top + corner),
+            contains(right - 1 - corner, top + corner),
+            contains(left + corner, bottom - 1 - corner),
+            contains(right - 1 - corner, bottom - 1 - corner),
+        ];
+        let edges = [
+            contains(mid_x, top + edge),
+            contains(mid_x, bottom - 1 - edge),
+            contains(left + edge, mid_y),
+            contains(right - 1 - edge, mid_y),
+        ];
+        unsafe { DeleteObject(region as _) };
+
+        Ok(serde_json::json!({
+            "rounded": kind == COMPLEXREGION && bounds_kind == COMPLEXREGION
+                && corners.iter().all(|inside| !inside) && edges.iter().all(|inside| *inside),
+            "regionKind": kind,
+            "boundsKind": bounds_kind,
+            "bounds": [left, top, right, bottom],
+            "cornersInside": corners,
+            "edgesInside": edges,
+            "scale": scale,
+        }))
+    }
+    #[cfg(not(windows))]
+    {
+        Err("Native material outlines are available on Windows".into())
+    }
+}
