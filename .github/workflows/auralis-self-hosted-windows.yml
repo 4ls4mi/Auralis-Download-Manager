@@ -181,7 +181,7 @@ jobs:
       - name: Test download engine
         shell: pwsh
         run: |
-          cargo test -p mdm-engine --target x86_64-pc-windows-msvc --lib --test e2e --test ftp
+          cargo test -p mdm-engine --target x86_64-pc-windows-msvc --lib --test e2e --test ftp -- --test-threads=1
           if ($LASTEXITCODE) { throw 'Download engine tests failed.' }
 
       - name: Test embedded downloader service

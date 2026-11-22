@@ -1097,6 +1097,10 @@ async fn resume_overlap_check_detects_changed_data() {
             seg.cursor = seg.start + (seg.end - seg.start) / 2;
         }
     }
+    // This fixture deliberately rewinds segment cursors. Existing hashes may then
+    // describe bytes beyond the new cursors, so model a legacy unhashed checkpoint
+    // and exercise the server overlap check independently of local block hashes.
+    saved.block_hashes.clear();
     std::fs::write(&state, serde_json::to_vec(&saved).unwrap()).unwrap();
     let mut flipped = 0;
     for seg in &saved.segments {
