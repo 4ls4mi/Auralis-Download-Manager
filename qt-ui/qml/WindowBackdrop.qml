@@ -7,8 +7,11 @@ Item {
 
     required property Window hostWindow
     property string target: "details"
-    property bool acrylic: false
     readonly property var selection: WindowAppearance.background(target)
+    readonly property bool desktopGlass: selection.mode === "desktop"
+        && Qt.platform.os === "windows"
+        && MaterialTheme.opacityFor(MaterialTheme.current) < 1
+    readonly property bool backdropAvailable: desktopGlass || pictureReady || movieReady
     readonly property string media: selection.mode === "wallpaper" ? selection.media : ""
     readonly property bool video: /\.(mp4|webm|mov|m4v)(?:$|[?#])/i.test(media)
     readonly property bool pictureReady: !video && image.status === Image.Ready && Boolean(media)
@@ -16,13 +19,15 @@ Item {
 
     function refresh() {
         if (!hostWindow.visible) return
-        const glass = selection.mode === "desktop" && MaterialTheme.opacityFor(MaterialTheme.current) < 1
-        acrylic = engine.applyBackdrop(hostWindow, glass, !MaterialTheme.palette.light)
-        if (target === "main") MaterialTheme.backdropAvailable = acrylic
+        engine.applyBackdrop(hostWindow, desktopGlass, !MaterialTheme.palette.light)
     }
 
     Component.onCompleted: Qt.callLater(refresh)
     onSelectionChanged: Qt.callLater(refresh)
+    onDesktopGlassChanged: Qt.callLater(refresh)
+    onBackdropAvailableChanged: {
+        if (target === "main") MaterialTheme.backdropAvailable = backdropAvailable
+    }
 
     Connections {
         target: root.hostWindow
@@ -33,7 +38,6 @@ Item {
     Connections {
         target: MaterialTheme
         function onPaletteChanged() { Qt.callLater(root.refresh) }
-        function onTranslucencyChanged() { Qt.callLater(root.refresh) }
     }
 
     function syncPlayback() {
@@ -72,6 +76,6 @@ Item {
         radius: 0
         solidColor: root.selection.mode === "solid" && root.selection.color ?
             root.selection.color : MaterialTheme.palette.background
-        backdropAvailable: root.acrylic || root.pictureReady || root.movieReady
+        backdropAvailable: root.backdropAvailable
     }
 }

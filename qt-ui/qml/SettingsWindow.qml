@@ -168,7 +168,7 @@ ApplicationWindow {
     }
 
     background: WindowBackdrop {
-        id: backdrop
+        id: settingsBackdrop
         hostWindow: root
         target: "details"
     }
@@ -197,12 +197,12 @@ ApplicationWindow {
     component Card: Frame {
         Layout.fillWidth: true
         padding: 14
-        background: GlassSurface { role: "content"; backdropAvailable: backdrop.acrylic }
+        background: GlassSurface { role: "content"; backdropAvailable: settingsBackdrop.backdropAvailable }
     }
 
     header: ToolBar {
         padding: 0
-        background: GlassSurface { role: "title"; radius: 0; backdropAvailable: backdrop.acrylic }
+        background: GlassSurface { role: "title"; radius: 0; backdropAvailable: settingsBackdrop.backdropAvailable }
 
         contentItem: RowLayout {
             spacing: 7
@@ -240,7 +240,7 @@ ApplicationWindow {
             Layout.fillHeight: true
             Layout.preferredWidth: 188
             padding: 9
-            background: GlassSurface { role: "sidebar"; backdropAvailable: backdrop.acrylic }
+            background: GlassSurface { role: "sidebar"; backdropAvailable: settingsBackdrop.backdropAvailable }
 
             ScrollView {
                 id: navigation
@@ -272,7 +272,7 @@ ApplicationWindow {
             Layout.fillWidth: true
             Layout.fillHeight: true
             padding: 13
-            background: GlassSurface { role: "content"; backdropAvailable: backdrop.acrylic }
+            background: GlassSurface { role: "content"; backdropAvailable: settingsBackdrop.backdropAvailable }
 
             ColumnLayout {
                 anchors.fill: parent
@@ -286,7 +286,7 @@ ApplicationWindow {
                     selectByMouse: true
                     color: root.colors.text
                     placeholderTextColor: root.colors.muted
-                    background: GlassSurface { role: "field"; backdropAvailable: backdrop.acrylic }
+                    background: GlassSurface { role: "field"; backdropAvailable: settingsBackdrop.backdropAvailable }
                 }
 
                 ScrollView {
@@ -345,14 +345,14 @@ ApplicationWindow {
                                 id: backups
                                 Layout.fillWidth: true
                                 visible: !root.term && root.category === "General"
-                                backdrop: backdrop
+                                backdrop: settingsBackdrop
                                 onSettingsRestored: root.load()
                             }
 
                             SettingsAppearance {
                                 Layout.fillWidth: true
                                 visible: !root.term && root.category === "Appearance"
-                                backdrop: backdrop
+                                backdrop: settingsBackdrop
                             }
 
                             SettingsScheduler {
@@ -386,7 +386,7 @@ ApplicationWindow {
     }
 
     footer: ToolBar {
-        background: GlassSurface { role: "footer"; radius: 0; backdropAvailable: backdrop.acrylic }
+        background: GlassSurface { role: "footer"; radius: 0; backdropAvailable: settingsBackdrop.backdropAvailable }
         contentItem: RowLayout {
             spacing: 8
             Label {

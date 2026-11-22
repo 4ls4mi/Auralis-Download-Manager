@@ -58,7 +58,7 @@ ColumnLayout {
     component Tile: Frame {
         Layout.fillWidth: true
         padding: 14
-        background: GlassSurface { role: "content"; backdropAvailable: root.backdrop.acrylic }
+        background: GlassSurface { role: "content"; backdropAvailable: root.backdrop.backdropAvailable }
     }
 
     component Heading: Label {

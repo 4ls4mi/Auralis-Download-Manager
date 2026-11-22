@@ -348,20 +348,26 @@ bool Engine::applyBackdrop(QWindow *window, bool enabled, bool dark) const
     int current = 0;
     if (FAILED(DwmGetWindowAttribute(hwnd, SystemBackdropType, &current, sizeof current)))
         return false;
-    const BOOL darkMode = dark;
-    DwmSetWindowAttribute(hwnd, ImmersiveDarkMode, &darkMode, sizeof darkMode);
+    // Desktop Acrylic uses a solid fallback when the window is inactive.
+    // Clear it behind Settings so the Qt window can keep its own alpha.
+    const bool useAcrylic = enabled && GetForegroundWindow() == hwnd;
+    if (useAcrylic) {
+        const BOOL darkMode = dark;
+        DwmSetWindowAttribute(hwnd, ImmersiveDarkMode, &darkMode, sizeof darkMode);
+    }
     constexpr int None = 1;
     constexpr int DesktopAcrylic = 3;
-    const int type = enabled ? DesktopAcrylic : None;
-    const int margin = enabled ? -1 : 0;
+    const int type = useAcrylic ? DesktopAcrylic : None;
+    const int margin = useAcrylic ? -1 : 0;
     const MARGINS margins{margin, margin, margin, margin};
-    if (FAILED(DwmSetWindowAttribute(hwnd, SystemBackdropType, &type, sizeof type)))
+    if (FAILED(DwmExtendFrameIntoClientArea(hwnd, &margins)))
         return false;
-    if (FAILED(DwmExtendFrameIntoClientArea(hwnd, &margins))) {
-        DwmSetWindowAttribute(hwnd, SystemBackdropType, &None, sizeof None);
+    if (FAILED(DwmSetWindowAttribute(hwnd, SystemBackdropType, &type, sizeof type))) {
+        const MARGINS reset{0, 0, 0, 0};
+        DwmExtendFrameIntoClientArea(hwnd, &reset);
         return false;
     }
-    return enabled;
+    return useAcrylic;
 #else
     Q_UNUSED(window);
     Q_UNUSED(enabled);

@@ -24,7 +24,7 @@ ApplicationWindow {
     readonly property string recoveryStage: telemetry && telemetry.recovery_stage || ""
     readonly property bool recoveryBusy: !!pendingResult || recoveryStage === "searching" || recoveryStage === "preparing"
     readonly property bool torrentRecoveryAllowed: !details.checksum
-    readonly property bool acrylic: windowBackdrop.acrylic || windowBackdrop.pictureReady || windowBackdrop.movieReady
+    readonly property bool backdropAvailable: windowBackdrop.backdropAvailable || windowBackdrop.pictureReady || windowBackdrop.movieReady
     property string message: ""
     property bool error: false
     property bool busy: false
@@ -282,7 +282,7 @@ ApplicationWindow {
 
     header: ToolBar {
         padding: 10
-        background: GlassSurface { material: root.material; role: "toolbar"; backdropAvailable: root.acrylic }
+        background: GlassSurface { material: root.material; role: "toolbar"; backdropAvailable: root.backdropAvailable }
         contentItem: RowLayout {
             spacing: 7
             Repeater {
@@ -322,7 +322,7 @@ ApplicationWindow {
                 visible: !!root.item && root.activeTab === 0
                 Layout.fillWidth: true
                 padding: 15
-                background: GlassSurface { material: root.material; role: "card"; backdropAvailable: root.acrylic }
+                background: GlassSurface { material: root.material; role: "card"; backdropAvailable: root.backdropAvailable }
                 contentItem: ColumnLayout {
                     spacing: 10
                     Label {
@@ -421,7 +421,7 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     Layout.preferredWidth: 355
                     padding: 12
-                    background: GlassSurface { material: root.material; role: "card"; backdropAvailable: root.acrylic }
+                    background: GlassSurface { material: root.material; role: "card"; backdropAvailable: root.backdropAvailable }
                     contentItem: ColumnLayout {
                         spacing: 8
                         Label { text: root.torrent ? qsTr("BitTorrent swarm") : qsTr("Connections"); color: root.colors.text; font.bold: true }
@@ -502,7 +502,7 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     Layout.preferredWidth: 325
                     padding: 12
-                    background: GlassSurface { material: root.material; role: "card"; backdropAvailable: root.acrylic }
+                    background: GlassSurface { material: root.material; role: "card"; backdropAvailable: root.backdropAvailable }
                     contentItem: ColumnLayout {
                         spacing: 8
                         RowLayout {
@@ -527,7 +527,7 @@ ApplicationWindow {
                 visible: root.activeTab === 0 && root.ordinary && !root.runningTransfer && !root.finished
                 Layout.fillWidth: true
                 padding: 14
-                background: GlassSurface { material: root.material; role: "card"; backdropAvailable: root.acrylic }
+                background: GlassSurface { material: root.material; role: "card"; backdropAvailable: root.backdropAvailable }
                 contentItem: ColumnLayout {
                     spacing: 8
                     Label { text: qsTr("Download recovery"); color: root.colors.text; font.bold: true }
@@ -644,7 +644,7 @@ ApplicationWindow {
                 visible: root.activeTab === 1
                 Layout.fillWidth: true
                 padding: 14
-                background: GlassSurface { material: root.material; role: "card"; backdropAvailable: root.acrylic }
+                background: GlassSurface { material: root.material; role: "card"; backdropAvailable: root.backdropAvailable }
                 contentItem: ColumnLayout {
                     spacing: 10
                     CheckBox { id: limitEnabled; text: qsTr("Limit this download's speed") }
@@ -672,7 +672,7 @@ ApplicationWindow {
                 visible: root.activeTab === 2
                 Layout.fillWidth: true
                 padding: 14
-                background: GlassSurface { material: root.material; role: "card"; backdropAvailable: root.acrylic }
+                background: GlassSurface { material: root.material; role: "card"; backdropAvailable: root.backdropAvailable }
                 contentItem: ColumnLayout {
                     spacing: 8
                     CheckBox { id: hangUp; text: qsTr("Disconnect on completion") }
@@ -702,7 +702,7 @@ ApplicationWindow {
 
     footer: ToolBar {
         padding: 10
-        background: GlassSurface { material: root.material; role: "footer"; backdropAvailable: root.acrylic }
+        background: GlassSurface { material: root.material; role: "footer"; backdropAvailable: root.backdropAvailable }
         contentItem: Flow {
             spacing: 7
             GlassButton { material: root.material; text: qsTr("Open folder"); enabled: !!root.item; onClicked: root.openLocation(true) }
