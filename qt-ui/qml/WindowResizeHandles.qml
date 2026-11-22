@@ -10,8 +10,12 @@ Item {
     property int borderSize: 7
     property int cornerSize: 13
     property bool windowMouseEvents: false
+    property bool coalesceGeometry: false
     property bool showGrip: false
     property color gripColor: "white"
+    readonly property bool resizing: activeHandle !== null
+    property Item activeHandle: null
+    property rect pendingGeometry
 
     // ApplicationWindow's content item is inset by the header and footer.
     parent: hostWindow.contentItem.parent ?? hostWindow.contentItem
@@ -19,6 +23,45 @@ Item {
     z: 20
     objectName: "windowResizeHandles"
     visible: hostWindow.visibility === Window.Windowed
+
+    onVisibleChanged: if (!visible && activeHandle) finishResize(activeHandle, false)
+
+    function queueResize(geometry) {
+        pendingGeometry = geometry
+        if (coalesceGeometry) {
+            if (!resizeFrame.running)
+                resizeFrame.start()
+        } else {
+            applyResize()
+        }
+    }
+
+    function applyResize() {
+        if (!activeHandle)
+            return
+        const window = hostWindow
+        const geometry = pendingGeometry
+        if (window.x !== geometry.x || window.y !== geometry.y
+            || window.width !== geometry.width || window.height !== geometry.height)
+            window.setGeometry(geometry.x, geometry.y, geometry.width, geometry.height)
+    }
+
+    function finishResize(handle, completed) {
+        if (activeHandle !== handle)
+            return
+        if (resizeFrame.running) {
+            resizeFrame.stop()
+            if (completed)
+                applyResize()
+        }
+        activeHandle = null
+    }
+
+    Timer {
+        id: resizeFrame
+        interval: 16
+        onTriggered: root.applyResize()
+    }
 
     Component.onCompleted: {
         if (windowMouseEvents && Qt.platform.os === "windows")
@@ -69,14 +112,13 @@ Item {
             startPosition = mapToGlobal(mouse.x, mouse.y)
             startGeometry = Qt.rect(window.x, window.y, window.width, window.height)
             manualResize = framelessWindows || !window.startSystemResize(edges)
+            if (manualResize)
+                root.activeHandle = resizeArea
         }
 
-        onPositionChanged: mouse => {
-            if (!pressed || !manualResize)
-                return
-
+        function moveEdge(pointerX, pointerY) {
             const window = root.hostWindow
-            const position = mapToGlobal(mouse.x, mouse.y)
+            const position = mapToGlobal(pointerX, pointerY)
             const dx = Math.round(position.x - startPosition.x)
             const dy = Math.round(position.y - startPosition.y)
             const left = edges & Qt.LeftEdge
@@ -90,13 +132,27 @@ Item {
                 ? Math.max(window.minimumHeight, Math.min(window.maximumHeight, startGeometry.height + (top ? -dy : dy)))
                 : startGeometry.height
 
-            window.setGeometry(startGeometry.x + (left ? startGeometry.width - width : 0),
-                               startGeometry.y + (top ? startGeometry.height - height : 0),
-                               width, height)
+            root.queueResize(Qt.rect(startGeometry.x + (left ? startGeometry.width - width : 0),
+                                     startGeometry.y + (top ? startGeometry.height - height : 0),
+                                     width, height))
         }
 
-        onReleased: manualResize = false
-        onCanceled: manualResize = false
+        onPositionChanged: mouse => {
+            if (pressed && manualResize && root.activeHandle === resizeArea)
+                moveEdge(mouse.x, mouse.y)
+        }
+
+        onReleased: mouse => {
+            if (manualResize && root.activeHandle === resizeArea)
+                moveEdge(mouse.x, mouse.y)
+            root.finishResize(resizeArea, true)
+            manualResize = false
+        }
+
+        onCanceled: {
+            root.finishResize(resizeArea, false)
+            manualResize = false
+        }
     }
 
     Repeater {
@@ -120,8 +176,7 @@ Item {
         model: [
             {edges: Qt.TopEdge | Qt.LeftEdge, right: false, bottom: false, cursor: Qt.SizeFDiagCursor},
             {edges: Qt.TopEdge | Qt.RightEdge, right: true, bottom: false, cursor: Qt.SizeBDiagCursor},
-            {edges: Qt.BottomEdge | Qt.LeftEdge, right: false, bottom: true, cursor: Qt.SizeBDiagCursor},
-            {edges: Qt.BottomEdge | Qt.RightEdge, right: true, bottom: true, cursor: Qt.SizeFDiagCursor}
+            {edges: Qt.BottomEdge | Qt.LeftEdge, right: false, bottom: true, cursor: Qt.SizeBDiagCursor}
         ]
         delegate: ResizeArea {
             required property var modelData
@@ -132,5 +187,15 @@ Item {
             y: modelData.bottom ? root.height - height : 0
             cursorShape: modelData.cursor
         }
+    }
+
+    ResizeArea {
+        objectName: "bottomRightResizeHandle"
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        edges: Qt.BottomEdge | Qt.RightEdge
+        width: root.cornerSize
+        height: root.cornerSize
+        cursorShape: Qt.SizeFDiagCursor
     }
 }

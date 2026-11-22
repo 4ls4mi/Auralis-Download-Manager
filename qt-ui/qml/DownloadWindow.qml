@@ -9,6 +9,7 @@ import "TransferData.js" as Transfer
 
 ApplicationWindow {
     id: root
+    objectName: "downloadProgressWindow"
     property var downloadId: null
     property bool trayEnabled: false
     property bool minimizeToTray: false
@@ -37,7 +38,9 @@ ApplicationWindow {
     readonly property bool ordinary: !!(telemetry && !telemetry.is_torrent && !telemetry.is_video && !telemetry.is_gallery && !telemetry.is_remote)
     readonly property bool runningTransfer: !!(item && item.status === "Downloading")
     readonly property bool displayFlow: activeTab === 0 && !!item && !!item.url
-    readonly property bool showWaterFlow: visible && displayFlow && runningTransfer
+    readonly property bool interactiveFrame: resizeHandles.resizing || downloadCaption.dragging
+    readonly property bool showWaterFlow: visible && visibility !== Window.Minimized && displayFlow
+        && runningTransfer && !interactiveFrame
     readonly property var progressColors: MaterialTheme.progressColors
     readonly property var connectionColors: MaterialTheme.connectionColors
     readonly property bool finished: !!(item && item.status === "Complete")
@@ -378,8 +381,10 @@ ApplicationWindow {
                         color: root.colors.ink
                     }
                     CaptionMoveArea {
+                        id: downloadCaption
                         objectName: "downloadTitleDragArea"
                         hostWindow: root
+                        allowManualMove: true
                         anchors.fill: parent
                         onDoubleClickRequested: root.toggleMaximized()
                     }
@@ -489,8 +494,11 @@ ApplicationWindow {
     }
 
     WindowResizeHandles {
+        id: resizeHandles
         hostWindow: root
-        windowMouseEvents: true
+        // The Quick grips own the pointer grab. A second Win32 capture path
+        // would compete with the same drag on this transparent window.
+        coalesceGeometry: true
         borderSize: 11
         cornerSize: 19
         showGrip: true
@@ -500,10 +508,10 @@ ApplicationWindow {
     Timer {
         id: water
         property real phase: 0
-        interval: 32
+        interval: root.workerRows.length > 16 ? 96 : root.workerRows.length > 8 ? 64 : 48
         repeat: true
         running: root.showWaterFlow && !MaterialTheme.reducedMotion
-        onTriggered: phase = (phase + Math.PI * 2 / 29) % (Math.PI * 2)
+        onTriggered: phase = (phase + Math.PI * 2 * interval / 1120) % (Math.PI * 2)
     }
 
     Pane {
@@ -665,7 +673,7 @@ ApplicationWindow {
                                 Layout.minimumWidth: 0
                                 Layout.preferredHeight: 38
                                 value: Transfer.fraction(root.item)
-                                animated: root.runningTransfer
+                                animated: root.runningTransfer && !root.interactiveFrame
                                 shape: root.progressShape
                                 fillStyle: WindowAppearance.progressFill
                                 startColor: root.progressColors[0]
@@ -759,6 +767,7 @@ ApplicationWindow {
                                             shape: root.connectionShape
                                             fillStyle: WindowAppearance.connectionFill
                                             value: worker.saved
+                                            paintingPaused: root.interactiveFrame
                                             receiving: worker.receiving
                                             phase: worker.receiving ? water.phase : 0
                                             startColor: root.connectionColors[0]
@@ -807,6 +816,7 @@ ApplicationWindow {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: root.transferLayout === "fogSlate" ? 92 : 106
                                 samples: root.speedSamples
+                                paintingPaused: root.interactiveFrame
                                 lineColor: MaterialTheme.graphColors[0]
                                 endpointColor: MaterialTheme.graphColors[1]
                                 gridColor: root.colors.divider
@@ -1041,6 +1051,7 @@ ApplicationWindow {
                 gridItem: waterGrid
                 workers: waterWorkers
                 phase: water.phase
+                paintingPaused: root.interactiveFrame
                 flowing: root.showWaterFlow
                 progressStart: root.progressColors[0]
                 progressEnd: root.progressColors[1]

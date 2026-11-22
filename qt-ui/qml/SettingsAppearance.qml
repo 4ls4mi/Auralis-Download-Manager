@@ -262,7 +262,13 @@ GridLayout {
                 }
             }
 
-            Heading { text: qsTr("Translucency") }
+            Heading { text: qsTr("Window background opacity") }
+            Label {
+                Layout.fillWidth: true
+                text: qsTr("100% is solid. Lower values show more of the background.")
+                color: root.colors.muted
+                wrapMode: Text.WordWrap
+            }
 
             RowLayout {
                 Layout.fillWidth: true
@@ -272,12 +278,12 @@ GridLayout {
                     from: 0
                     to: 100
                     stepSize: 1
-                    value: (1 - MaterialTheme.opacityFor(MaterialTheme.current)) * 100
-                    onMoved: MaterialTheme.translucency = value / 100
-                    Accessible.name: qsTr("Translucency")
+                    value: Math.round(MaterialTheme.opacityFor(MaterialTheme.current) * 100)
+                    onMoved: MaterialTheme.translucency = (100 - value) / 100
+                    Accessible.name: qsTr("Window background opacity")
                 }
                 Label {
-                    text: qsTr("%1%").arg(Math.round((1 - MaterialTheme.opacityFor(MaterialTheme.current)) * 100))
+                    text: qsTr("%1% opaque").arg(Math.round(MaterialTheme.opacityFor(MaterialTheme.current) * 100))
                     color: root.colors.text
                 }
                 GlassButton {
@@ -371,7 +377,7 @@ GridLayout {
                 Heading { text: backgroundCard.modelData.title }
                 Choice {
                     selection: backgroundCard.selected.mode
-                    model: [{label: qsTr("See-through desktop"), value: "desktop"}, {label: qsTr("Solid color"), value: "solid"},
+                    model: [{label: qsTr("See-through desktop"), value: "desktop"}, {label: qsTr("Custom color"), value: "solid"},
                         {label: qsTr("Personal image or video"), value: "wallpaper"}]
                     onActivated: WindowAppearance.set(backgroundCard.modelData.key + "Mode", currentValue)
                     Accessible.name: backgroundCard.modelData.title

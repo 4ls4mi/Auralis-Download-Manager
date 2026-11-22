@@ -143,6 +143,21 @@ impl App {
             return Some(json!({"id": serial, "info": info,
                 "categories":Category::all().into_iter().map(|c|json!({"key":c.key(),"name":c.label()})).collect::<Vec<_>>(), "waiting": self.file_info_waiting.len()+self.glass_video_waiting.len()}).to_string());
         }
+        if cmd.query.as_deref() == Some("glass-completion-details") {
+            let Some(item) = cmd.ids.first().and_then(|id| {
+                self.items.iter().find(|item| item.id == *id && item.status == Status::Complete)
+            }) else {
+                return Some(json!({"error": "Completed download not found"}).to_string());
+            };
+            return Some(json!({
+                "url": item.file_address().as_str(),
+                "path": item.dest.to_string_lossy(),
+                "downloaded_exact": item.downloaded.to_string(),
+                "moved_away": item.moved_away,
+                "moving": self.moving.iter().any(|(id, _, _)| *id == item.id),
+                "notices": item.notices,
+            }).to_string());
+        }
         if cmd.query.as_deref()==Some("glass-move-status") {
             let Some(id)=cmd.ids.first().copied() else {return Some(json!({"error":"Choose a download"}).to_string());};
             let Some(item)=self.items.iter().find(|item|item.id==id) else {return Some(json!({"error":"Download not found"}).to_string());};
@@ -154,6 +169,9 @@ impl App {
             {
                 let Some(id)=cmd.ids.first().copied() else{return Some(json!({"error":"Choose a download"}).to_string());};
                 let Some(item)=self.items.iter().find(|item|item.id==id && item.status==Status::Complete) else{return Some(json!({"error":"Select a completed download"}).to_string());};
+                if item.moved_away || self.moving.iter().any(|(moving_id, _, _)| *moving_id == id) {
+                    return Some(json!({"error": "The downloaded file is being moved or is no longer at its saved location"}).to_string());
+                }
                 let payload:Value=serde_json::from_str(cmd.queue.as_deref().unwrap_or("")).unwrap_or(Value::Null);
                 let Some(hwnd)=payload["hwnd"].as_i64().and_then(|n|isize::try_from(n).ok()) else{return Some(json!({"error":"Invalid window"}).to_string());};
                 let Some(pid)=payload["pid"].as_u64().and_then(|n|u32::try_from(n).ok()) else{return Some(json!({"error":"Invalid window"}).to_string());};
@@ -265,6 +283,9 @@ impl App {
                 if let Some(progress)=self.progress.iter_mut().find(|p|p.id==id){progress.glass_set_completion(&payload,self.settings.show_complete);}
             }
             "move" => {
+                if self.moving.iter().any(|(moving_id, _, _)| *moving_id == id) {
+                    return fail("This download is already being moved");
+                }
                 let target = dialogs::resolve_path(value);
                 if !target.is_absolute() || target.file_name().is_none() || target.exists() {
                     return fail("Choose a new, unused destination filename");

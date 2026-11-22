@@ -8,10 +8,13 @@ Item {
     required property Window hostWindow
     property string target: "details"
     readonly property var selection: WindowAppearance.background(target)
-    readonly property bool desktopGlass: selection.mode === "desktop"
-        && Qt.platform.os === "windows"
-        && MaterialTheme.opacityFor(MaterialTheme.current) < 1
-    readonly property bool backdropAvailable: desktopGlass || pictureReady || movieReady
+    readonly property bool customColor: selection.mode === "solid"
+    readonly property real backgroundOpacity: MaterialTheme.opacityFor(MaterialTheme.current)
+    readonly property bool transparentBackground: backgroundOpacity < 1
+        && (selection.mode === "desktop" || (customColor && MaterialTheme.translucency >= 0))
+    readonly property bool desktopGlass: transparentBackground && selection.mode === "desktop"
+        && !MaterialTheme.palette.opaque
+    readonly property bool backdropAvailable: transparentBackground || pictureReady || movieReady
     readonly property string media: selection.mode === "wallpaper" ? selection.media : ""
     readonly property bool video: /\.(mp4|webm|mov|m4v)(?:$|[?#])/i.test(media)
     readonly property bool pictureReady: !video && image.status === Image.Ready && Boolean(media)
@@ -77,8 +80,9 @@ Item {
         anchors.fill: parent
         role: "window"
         radius: 0
-        solidColor: root.selection.mode === "solid" && root.selection.color ?
+        solidColor: root.customColor && root.selection.color ?
             root.selection.color : MaterialTheme.palette.background
+        tintBacking: !root.customColor
         backdropAvailable: root.backdropAvailable
         mediaOverlay: MaterialTheme.translucency < 0 && MaterialTheme.palette.opaque
             && (root.pictureReady || root.movieReady) ? .78 : -1

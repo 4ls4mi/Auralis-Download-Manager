@@ -6,6 +6,7 @@ Canvas {
     property var value: null
     property bool receiving: false
     property real phase: 0
+    property bool paintingPaused: false
     property string shape: "round"
     property string fillStyle: "sculpted"
     property string material: MaterialTheme.current
@@ -26,6 +27,7 @@ Canvas {
     Accessible.ignored: true
 
     onAvailableChanged: requestPaint()
+    onPaintingPausedChanged: if (!paintingPaused) requestPaint()
     onWidthChanged: requestPaint()
     onHeightChanged: requestPaint()
     onWaterPhaseChanged: requestPaint()
@@ -91,9 +93,13 @@ Canvas {
     }
 
     onPaint: {
+        if (paintingPaused)
+            return
         const w = width
         const h = height
         const ctx = getContext("2d")
+        if (!ctx)
+            return
         ctx.reset()
         ctx.clearRect(0, 0, w, h)
         if (w < 5 || h < 5)

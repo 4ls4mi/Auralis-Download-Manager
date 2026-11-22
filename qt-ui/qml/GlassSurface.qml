@@ -14,6 +14,7 @@ Item {
     property color accent: profile.accent
     property real emphasis: 0
     property color solidColor: profile.background
+    property bool tintBacking: true
     property real mediaOverlay: -1
     property real radius: studioPanel ? profile.panelRadius : profile.radius
     property bool showReflection: role === "toolbar" && profile.shape === "aero"
@@ -33,8 +34,10 @@ Item {
     readonly property string outline: shell ? "square" : profile.softChrome ? "round" : profile.shape
     readonly property color flatFace: (role === "summary" ? profile.summaryFill : profile.roleFaces?.[role])
         || profile.background
+    readonly property bool plainMaterialAlpha: backdropAvailable && profile.opaque && MaterialTheme.translucency > 0
+    readonly property real foregroundBacking: role === "field" ? .94 : role === "sidebar" ? .88 : .78
     readonly property real flatFaceOpacity: backdropAvailable && MaterialTheme.translucency >= 0
-        ? MaterialTheme.opacityFor(material) : 1
+        ? Math.max(foregroundBacking, MaterialTheme.opacityFor(material)) : 1
     readonly property real bevel: Math.max(1, Math.min(profile.bevel, height * .14, width * .10))
     readonly property real depth: Math.min(height / 3, 28 + profile.bevel)
     readonly property real reflectivity: profile.gloss * (role === "field" ? .54 : role === "button" ? .82 : 1)
@@ -42,16 +45,24 @@ Item {
         const amount = MaterialTheme.opacityFor(material);
         if (shell)
             return mediaOverlay >= 0 ? mediaOverlay : backdropAvailable ? amount : 1;
-        if (role === "field")
-            return Math.min(.82, .18 + amount * .72);
         if (button)
             return profile.opaque ? 1 : Math.min(.97, .41 + amount * .33 + emphasis * .30);
+        if (plainMaterialAlpha)
+            return Math.max(foregroundBacking, amount);
+        if (role === "field")
+            return Math.min(.82, .18 + amount * .72);
         return amount * (recess ? .32 : role === "toolbar" || role === "footer" ? .65 : .45);
     }
-    readonly property color backing: shell && !backdropAvailable
-        ? solidColor : button
-            ? MaterialTheme.mix(profile.buttonFace || profile.background, accent, .07 + emphasis * .38, backingAlpha)
-            : MaterialTheme.tint(profile.background, backingAlpha)
+    readonly property color backing: {
+        if (shell) {
+            if (!backdropAvailable)
+                return solidColor;
+            return tintBacking ? MaterialTheme.tint(solidColor, backingAlpha) : MaterialTheme.rgba(solidColor, backingAlpha);
+        }
+        if (button)
+            return MaterialTheme.mix(profile.buttonFace || profile.background, accent, .07 + emphasis * .38, backingAlpha);
+        return MaterialTheme.tint(profile.background, backingAlpha);
+    }
     readonly property color rim: button
         ? MaterialTheme.mix(profile.edge, accent, .35 + emphasis * .45, .43 + emphasis * .52)
         : MaterialTheme.rgba(profile.edge, .33 + .32 * reflectivity)

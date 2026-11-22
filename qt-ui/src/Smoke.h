@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QPointer>
+#include <QSize>
 #include <QTcpServer>
 #include <QString>
 
@@ -20,13 +21,16 @@ public:
 
 private:
     enum class Step {
-        Starting, CheckingInitialTrayMenu, WaitingForPause,
+        WaitingForConfirmation, Starting, CheckingInitialTrayMenu, WaitingForPause,
         WaitingForResume, CheckingResumedTrayMenu, Finishing, Stopped
     };
 
     void startDownload();
+    void confirmDownload();
     void inspectTransfers();
     void observeTransferWindow(qulonglong id);
+    void resizeTransferWindow();
+    bool verifyCompletion(const QVariantMap &download);
     void verifyTrayMenu(bool resumed);
     bool pauseTransfer();
     void fail(const QString &message);
@@ -39,8 +43,11 @@ private:
     QPointer<QQuickWindow> m_window;
     QMetaObject::Connection m_frameConnection;
     QString m_name;
-    Step m_step = Step::Starting;
+    QString m_url;
+    QSize m_expectedProgressSize;
+    Step m_step = Step::WaitingForConfirmation;
     bool m_started = false;
     bool m_framePresented = false;
+    bool m_resizeVerified = false;
     bool m_transferVerified = false;
 };

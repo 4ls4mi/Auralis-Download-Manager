@@ -4,6 +4,7 @@ Canvas {
     id: root
 
     property var samples: []
+    property bool paintingPaused: false
     property color lineColor: MaterialTheme.graphColors[0]
     property color endpointColor: MaterialTheme.graphColors[1]
     property color gridColor: MaterialTheme.palette.divider
@@ -14,6 +15,7 @@ Canvas {
 
     renderTarget: Canvas.Image
     onSamplesChanged: requestPaint()
+    onPaintingPausedChanged: if (!paintingPaused) requestPaint()
     onLineColorChanged: requestPaint()
     onEndpointColorChanged: requestPaint()
     onGridColorChanged: requestPaint()
@@ -66,7 +68,11 @@ Canvas {
     }
 
     onPaint: {
+        if (paintingPaused)
+            return
         const ctx = getContext("2d")
+        if (!ctx)
+            return
         ctx.reset()
         ctx.clearRect(0, 0, width, height)
         if (width < 2 || height < 3)

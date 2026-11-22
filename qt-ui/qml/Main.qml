@@ -383,20 +383,12 @@ ApplicationWindow {
     }
 
     function chooseAdd(torrent) {
-        addDialog.torrentMode = torrent
-        addDialog.open()
+        addDialog.openAddress(torrent)
     }
 
     function addDownload() {
-        if (online && !busy) {
-            if (!visible)
-                show()
-            if (visibility === Window.Minimized)
-                showNormal()
-            raise()
-            requestActivate()
+        if (online && !busy)
             chooseAdd(false)
-        }
     }
 
     function showBatchDownload() {
@@ -488,7 +480,7 @@ ApplicationWindow {
         const wasHidden = hiddenProgressIds.includes(key)
         let details = detailWindows[key]
         if (!details) {
-            details = detailsFactory.createObject(root, {downloadId: Number(id)})
+            details = detailsFactory.createObject(downloadWindowOwner, {downloadId: Number(id)})
             if (!details) {
                 actionError = qsTr("The download window could not open.")
                 return
@@ -577,7 +569,9 @@ ApplicationWindow {
         automaticChecks: settingsWindow.automaticUpdateChecks
         presentation: settingsWindow.updatePresentation
     }
-    AddDownloadDialog { id: addDialog; hostWindow: root }
+    AddDownloadDialog { id: addDialog }
+    // Preserve QObject ownership without making the dashboard their native parent.
+    QtObject { id: downloadWindowOwner }
     Component {
         id: detailsFactory
         DownloadWindow {
@@ -599,7 +593,16 @@ ApplicationWindow {
             if (!root.hiddenProgressIds.includes(String(downloadId)))
                 root.showDownload(downloadId)
         }
-        onDownloadCompleted: downloadId => root.forgetHiddenProgress(downloadId)
+        onDownloadCompleted: downloadId => {
+            root.forgetHiddenProgress(downloadId)
+            const details = root.detailWindows[String(downloadId)]
+            if (details) {
+                Qt.callLater(() => {
+                    if (details.finished)
+                        details.close()
+                })
+            }
+        }
         onQuitRequested: engine.requestQuit()
     }
 

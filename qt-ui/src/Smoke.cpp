@@ -5,6 +5,7 @@
 #include <QDir>
 #include <QFile>
 #include <QGuiApplication>
+#include <QMouseEvent>
 #include <QQuickWindow>
 #include <QRegularExpression>
 #include <QSaveFile>
@@ -12,12 +13,37 @@
 #include <QTimer>
 #include <QUuid>
 
+#ifdef Q_OS_WIN
+#include <QtCore/qt_windows.h>
+#endif
+
 #include <utility>
 
 namespace {
 const QByteArray Payload = QByteArray("Auralis Qt downloader integrity test\n").repeated(56 * 1024);
 constexpr qsizetype InitialBytes = 320 * 1024;
 constexpr qsizetype ChunkBytes = 32 * 1024;
+
+QQuickWindow *visibleWindow(const QString &name)
+{
+    for (auto *window : QGuiApplication::allWindows()) {
+        if (window->isVisible() && window->objectName() == name)
+            return qobject_cast<QQuickWindow *>(window);
+    }
+    return nullptr;
+}
+
+bool isIndependent(QWindow &window)
+{
+    if (window.parent() || window.transientParent() || window.modality() != Qt::NonModal ||
+        (window.flags() & Qt::WindowType_Mask) != Qt::Window)
+        return false;
+#ifdef Q_OS_WIN
+    return !GetWindow(reinterpret_cast<HWND>(window.winId()), GW_OWNER);
+#else
+    return true;
+#endif
+}
 }
 
 EngineSmoke::EngineSmoke(Engine &engine, TrayCheck checkTray)
@@ -43,23 +69,47 @@ void EngineSmoke::startDownload()
     if (m_started || !m_engine.ready())
         return;
     m_started = true;
-    qInfo("Smoke: Rust service connected. Starting the local download.");
+    qInfo("Smoke: Rust service connected. Requesting the local download confirmation.");
     if (!m_server.listen(QHostAddress::LocalHost, 0)) {
         fail(m_server.errorString());
         return;
     }
-    const QString url = QStringLiteral("http://127.0.0.1:%1/%2").arg(m_server.serverPort()).arg(m_name);
-    m_engine.request({{QStringLiteral("url"), url},
-                      {QStringLiteral("dir"), m_engine.dataDirectory()},
-                      {QStringLiteral("name"), m_name},
-                      {QStringLiteral("silent"), true},
-                      {QStringLiteral("connections"), 1}});
+    m_url = QStringLiteral("http://127.0.0.1:%1/%2").arg(m_server.serverPort()).arg(m_name);
+    m_engine.request({{QStringLiteral("url"), m_url}, {QStringLiteral("name"), m_name}});
+}
+
+void EngineSmoke::confirmDownload()
+{
+    auto *prompt = visibleWindow(QStringLiteral("addDownloadWindow"));
+    if (!prompt || !prompt->property("confirming").toBool() || prompt->property("busy").toBool())
+        return;
+    if (!isIndependent(*prompt)) {
+        fail(QStringLiteral("The download confirmation is owned by another window or is modal."));
+        return;
+    }
+    auto *destination = prompt->findChild<QObject *>(QStringLiteral("downloadDestination"));
+    auto *connections = prompt->findChild<QObject *>(QStringLiteral("downloadConnectionCount"));
+    auto *confirm = prompt->findChild<QObject *>(QStringLiteral("confirmStartDownload"));
+    if (!destination || !connections || !confirm || !confirm->property("enabled").toBool() ||
+        !prompt->setProperty("destinationEdited", true) ||
+        !destination->setProperty("text", QDir(m_engine.dataDirectory()).filePath(m_name)) ||
+        !connections->setProperty("value", 1)) {
+        fail(QStringLiteral("The download confirmation controls could not be used."));
+        return;
+    }
+    m_step = Step::Starting;
+    if (!QMetaObject::invokeMethod(confirm, "clicked"))
+        fail(QStringLiteral("The Start download action could not be invoked."));
 }
 
 void EngineSmoke::inspectTransfers()
 {
     if (!m_started || m_step == Step::Stopped)
         return;
+    if (m_step == Step::WaitingForConfirmation) {
+        confirmDownload();
+        return;
+    }
     const auto downloads = m_engine.dashboard().value(QStringLiteral("downloads")).toList();
     for (const auto &entry : downloads) {
         const auto download = entry.toMap();
@@ -76,12 +126,14 @@ void EngineSmoke::inspectTransfers()
                 fail(QStringLiteral("The transfer completed before both active progress windows were exercised."));
                 return;
             }
+            if (!verifyCompletion(download))
+                return;
             QFile file(download.value(QStringLiteral("path")).toString());
-            m_transferVerified = file.open(QIODevice::ReadOnly) && file.readAll() == Payload;
-            if (!m_transferVerified) {
+            if (!file.open(QIODevice::ReadOnly) || file.readAll() != Payload) {
                 fail(QStringLiteral("The downloaded smoke-test file differs from the local payload."));
                 return;
             }
+            m_transferVerified = true;
             m_step = Step::Stopped;
             qInfo("Smoke: downloaded bytes verified after pause and resume. Stopping the service.");
             m_engine.requestQuit();
@@ -105,6 +157,17 @@ void EngineSmoke::inspectTransfers()
             observeTransferWindow(id);
             if (!m_framePresented)
                 return;
+            if (!m_resizeVerified) {
+                if (!m_expectedProgressSize.isValid()) {
+                    resizeTransferWindow();
+                    return;
+                }
+                if (m_window->size() != m_expectedProgressSize) {
+                    fail(QStringLiteral("The active progress window did not respond to its resize grip."));
+                    return;
+                }
+                m_resizeVerified = true;
+            }
             verifyTrayMenu(m_step == Step::WaitingForResume);
         }
         return;
@@ -144,9 +207,14 @@ void EngineSmoke::observeTransferWindow(qulonglong id)
         return;
     for (auto *window : QGuiApplication::allWindows()) {
         auto *progress = qobject_cast<QQuickWindow *>(window);
-        if (!progress || !progress->isVisible() || progress->property("downloadId").toULongLong() != id)
+        if (!progress || !progress->isVisible() || progress->objectName() != QStringLiteral("downloadProgressWindow") ||
+            progress->property("downloadId").toULongLong() != id)
             continue;
         if (m_window != progress) {
+            if (!isIndependent(*progress)) {
+                fail(QStringLiteral("The download progress window is owned by another window or is modal."));
+                return;
+            }
             disconnect(m_frameConnection);
             m_window = progress;
             m_framePresented = false;
@@ -158,6 +226,60 @@ void EngineSmoke::observeTransferWindow(qulonglong id)
         progress->update();
         break;
     }
+}
+
+void EngineSmoke::resizeTransferWindow()
+{
+    m_framePresented = false;
+    const QPoint corner(m_window->width() - 4, m_window->height() - 4);
+    const QPoint origin = m_window->mapToGlobal(corner);
+    const QPoint delta(28, 24);
+    const QPoint target = origin + delta;
+    m_expectedProgressSize = m_window->size() + QSize(delta.x(), delta.y());
+    QMouseEvent press(QEvent::MouseButtonPress, corner, origin, Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(m_window, &press);
+    QMouseEvent move(QEvent::MouseMove, m_window->mapFromGlobal(target), target, Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(m_window, &move);
+    QMouseEvent release(QEvent::MouseButtonRelease, m_window->mapFromGlobal(target), target, Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(m_window, &release);
+    m_window->update();
+}
+
+bool EngineSmoke::verifyCompletion(const QVariantMap &download)
+{
+    auto *completion = visibleWindow(QStringLiteral("downloadCompleteWindow"));
+    if (!completion)
+        return false;
+    const QString exactBytes = completion->property("exactBytes").toString();
+    if (exactBytes.isEmpty())
+        return false;
+    if (m_window && m_window->isVisible()) {
+        fail(QStringLiteral("The progress window remained open after the download completed."));
+        return false;
+    }
+    auto *address = completion->findChild<QObject *>(QStringLiteral("completedDownloadAddress"));
+    auto *path = completion->findChild<QObject *>(QStringLiteral("completedDownloadPath"));
+    auto *size = completion->findChild<QObject *>(QStringLiteral("completedDownloadSize"));
+    const QString savedPath = QDir::fromNativeSeparators(download.value(QStringLiteral("path")).toString());
+    if (!address || address->property("text").toString() != m_url || !path ||
+        QDir::fromNativeSeparators(path->property("text").toString()) != savedPath ||
+        exactBytes != QString::number(Payload.size()) || !size || size->property("text").toString().isEmpty()) {
+        fail(QStringLiteral("The completion window did not show the download address, saved path, and size."));
+        return false;
+    }
+    const QStringList actions = {
+        QStringLiteral("completedDownloadOpen"), QStringLiteral("completedDownloadOpenWith"),
+        QStringLiteral("completedDownloadOpenFolder"), QStringLiteral("completedDownloadMove"),
+        QStringLiteral("completedDownloadDrag"), QStringLiteral("hideDownloadCompletion"),
+        QStringLiteral("completedDownloadClose")
+    };
+    for (const auto &name : actions) {
+        if (!completion->findChild<QObject *>(name)) {
+            fail(QStringLiteral("The completion window is missing %1.").arg(name));
+            return false;
+        }
+    }
+    return true;
 }
 
 bool EngineSmoke::pauseTransfer()
@@ -183,7 +305,7 @@ void EngineSmoke::verifyShutdown(bool clean)
     }
     qInfo("Smoke: Rust service stopped cleanly.");
     QSaveFile marker(QDir(m_engine.dataDirectory()).filePath(QStringLiteral("qt-engine-smoke.ok")));
-    const QByteArray confirmation("Qt progress windows and tray menus opened on start and resume. Rust transfer and file integrity verified.\n");
+    const QByteArray confirmation("Independent confirmation and progress windows, active resizing, tray menus, completion details, and file integrity verified.\n");
     if (!marker.open(QIODevice::WriteOnly) || marker.write(confirmation) != confirmation.size() || !marker.commit())
         qFatal("Could not persist the Qt engine integration result.");
 }

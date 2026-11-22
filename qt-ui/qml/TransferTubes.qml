@@ -9,6 +9,7 @@ Canvas {
     property Repeater workers
     property bool flowing: false
     property real phase: 0
+    property bool paintingPaused: false
     property color progressStart: MaterialTheme.palette.accent
     property color progressEnd: MaterialTheme.palette.secondary
     property color connectionStart: progressStart
@@ -23,6 +24,7 @@ Canvas {
     Accessible.ignored: true
 
     onAvailableChanged: requestPaint()
+    onPaintingPausedChanged: if (!paintingPaused) requestPaint()
     onWidthChanged: requestPaint()
     onHeightChanged: requestPaint()
     onVisibleChanged: requestPaint()
@@ -170,7 +172,11 @@ Canvas {
     }
 
     onPaint: {
+        if (paintingPaused)
+            return
         const ctx = getContext("2d")
+        if (!ctx)
+            return
         ctx.reset()
         ctx.clearRect(0, 0, width, height)
         if (!sourceItem || !progressItem || sourceItem.width <= 0 || progressItem.width <= 0)

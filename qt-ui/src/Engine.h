@@ -45,6 +45,8 @@ public:
     Q_INVOKABLE void refresh();
     Q_INVOKABLE void requestQuit(int exitCode = 0);
     Q_INVOKABLE QString localPath(const QUrl &url) const;
+    Q_INVOKABLE QUrl localFileUrl(const QString &path) const;
+    Q_INVOKABLE void dragCompletedFile(QWindow *window, quint64 id, const QJSValue &callback);
     Q_INVOKABLE bool openPath(const QString &path) const;
     Q_INVOKABLE bool openFolder(const QString &path) const;
     Q_INVOKABLE void setTrayDownloadItems(const QVariantList &items) { emit trayDownloadItemsChanged(items); }

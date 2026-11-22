@@ -20,4 +20,6 @@ foreach ($browser in @('chromium','edge-store','firefox')) {
     }
     Compress-Archive -Path (Join-Path $folder '*') -DestinationPath (Join-Path $packages "auralis-$browser.zip")
 }
+# Both stores assign the extension identity, so they use the same key-free Chromium package.
+Copy-Item -LiteralPath (Join-Path $packages 'auralis-edge-store.zip') -Destination (Join-Path $packages 'auralis-chrome-store.zip')
 "AURALIS_QT_EXTENSIONS=$packages" >> $env:GITHUB_ENV

@@ -20,15 +20,21 @@ QtObject {
     property var completed: []
     property var settings: ({})
     property int settingRefresh: 0
+    property int completionPreferenceRevision: 0
 
     function refresh() {
         if (!popupParent || !engine.ready || polling)
             return
-        if (settingRefresh++ % 10 === 0)
+        if (settingRefresh++ % 10 === 0) {
+            const revision = completionPreferenceRevision
             engine.request({query: "glass-settings"}, function (reply, error) {
-                if (!Transfer.problem(reply, error) && reply)
+                if (revision === completionPreferenceRevision && !Transfer.problem(reply, error) && reply) {
                     settings = reply
+                    if (settings.show_complete === false)
+                        completed = []
+                }
             })
+        }
         if (question.visible) {
             if (question.kind === "power" && !question.busy)
                 refreshPower()
@@ -101,12 +107,10 @@ QtObject {
                         return
                     }
                 }
-                if (completed.length > 0) {
+                if (!completion.visible && settings.show_complete === true && completed.length > 0) {
                     const file = completed[0]
                     completed = completed.slice(1)
-                    polling = false
-                    question.present("complete", file)
-                    return
+                    completion.present(file)
                 }
                 pollBrowserPrompts()
             })
@@ -156,7 +160,7 @@ QtObject {
                 continue
             if (file.status === "Complete") {
                 downloadCompleted(file.id)
-                if (settings.show_complete === true)
+                if (settings.show_complete !== false)
                     pending.push(file)
             } else if (file.status === "Downloading" && autoProgress && settings.show_progress !== false) {
                 started.push(file.id)
@@ -191,6 +195,17 @@ QtObject {
         material: root.material
     }
 
+    property DownloadCompleteWindow completion: DownloadCompleteWindow {
+        hostWindow: root.hostWindow
+        material: root.material
+        onCompletionPreferenceSaved: show => {
+            root.completionPreferenceRevision++
+            root.settings = Object.assign({}, root.settings, {show_complete: show})
+            if (!show)
+                root.completed = []
+        }
+    }
+
     property DetachedDialogWindow question: DetachedDialogWindow {
         id: prompt
         hostWindow: root.hostWindow
@@ -200,10 +215,9 @@ QtObject {
         property string failure: ""
         property bool replacing: false
         width: 576
-        modality: kind === "complete" ? Qt.NonModal : Qt.WindowModal
         onDismissRequested: cancel()
         title: kind === "duplicate" ? qsTr("Download already listed") : kind === "queue" ? qsTr("Choose a download queue")
-            : kind === "power" ? qsTr("Download completion action") : qsTr("Download complete")
+            : qsTr("Download completion action")
 
         function present(type, data) {
             kind = type
@@ -258,18 +272,6 @@ QtObject {
                 hide()
         }
 
-        function openSaved(folder) {
-            failure = ""
-            const id = info.id
-            engine.request({query: "glass-move-status", ids: [id]}, function (state, error) {
-                if (prompt.info.id !== id)
-                    return
-                failure = Transfer.problem(state, error)
-                if (!failure && (!state || state.moved_away || !state.path || !(folder ? engine.openFolder(state.path) : engine.openPath(state.path))))
-                    failure = qsTr("The saved file or folder could not be opened.")
-            })
-        }
-
         bodyContent: [
             Label {
                 Layout.fillWidth: true
@@ -281,19 +283,6 @@ QtObject {
                     : prompt.kind === "power" && prompt.info.data ? qsTr("%1 in %2 second(s).").arg(prompt.info.data.mode === "ShutDown"
                        ? qsTr("Shut down") : prompt.info.data.mode === "Hibernate" ? qsTr("Hibernate") : qsTr("Sleep")).arg(prompt.info.data.seconds)
                     : prompt.info.file || ""
-            },
-            Label {
-                visible: prompt.kind === "complete"
-                text: Transfer.bytes(prompt.info.size === null ? prompt.info.downloaded : prompt.info.size)
-                color: root.colors.muted
-            },
-            Label {
-                visible: prompt.kind === "complete"
-                Layout.fillWidth: true
-                text: prompt.info.path || ""
-                textFormat: Text.PlainText
-                color: root.colors.muted
-                elide: Text.ElideMiddle
             },
             GlassComboBox {
                 id: queueName
@@ -326,7 +315,7 @@ QtObject {
                 anchors.fill: parent
                 anchors.margins: 10
                 spacing: 7
-                GlassButton { material: root.material; text: prompt.kind === "complete" ? qsTr("Close") : qsTr("Cancel"); enabled: !prompt.busy; onClicked: prompt.cancel() }
+                GlassButton { material: root.material; text: qsTr("Cancel"); enabled: !prompt.busy; onClicked: prompt.cancel() }
                 GlassButton { material: root.material; text: qsTr("Use existing"); visible: prompt.kind === "duplicate"; enabled: !prompt.busy; onClicked: prompt.choose(3) }
                 GlassButton { material: root.material; text: qsTr("Keep both"); visible: prompt.kind === "duplicate"; enabled: !prompt.busy; onClicked: prompt.choose(1) }
                 GlassButton {
@@ -344,8 +333,6 @@ QtObject {
                 }
                 GlassButton { material: root.material; text: qsTr("Add to queue"); visible: prompt.kind === "queue"; enabled: !prompt.busy && queueName.currentIndex >= 0; onClicked: prompt.choose(0) }
                 GlassButton { material: root.material; text: qsTr("Run now"); accent: root.colors.caution; visible: prompt.kind === "power"; enabled: !prompt.busy; onClicked: prompt.power("execute") }
-                GlassButton { material: root.material; text: qsTr("Open file"); accent: root.colors.positive; visible: prompt.kind === "complete"; onClicked: prompt.openSaved(false) }
-                GlassButton { material: root.material; text: qsTr("Open folder"); visible: prompt.kind === "complete"; onClicked: prompt.openSaved(true) }
             }
         }
     }

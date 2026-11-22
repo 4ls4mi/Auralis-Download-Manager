@@ -357,6 +357,34 @@ QString Engine::localPath(const QUrl &url) const
     return url.isLocalFile() ? QDir::toNativeSeparators(url.toLocalFile()) : QString();
 }
 
+QUrl Engine::localFileUrl(const QString &path) const
+{
+    return QFileInfo(path).isAbsolute() ? QUrl::fromLocalFile(path) : QUrl();
+}
+
+void Engine::dragCompletedFile(QWindow *window, quint64 id, const QJSValue &callback)
+{
+#ifdef Q_OS_WIN
+    if (window && window->isVisible()) {
+        const auto hwnd = static_cast<qlonglong>(window->winId());
+        const QVariantMap source{{QStringLiteral("hwnd"), hwnd},
+                                 {QStringLiteral("pid"), QCoreApplication::applicationPid()}};
+        request({{QStringLiteral("action"), QStringLiteral("glass-drag-file")},
+                 {QStringLiteral("ids"), QVariantList{QVariant::fromValue(id)}},
+                 {QStringLiteral("queue"), QString::fromUtf8(QJsonDocument::fromVariant(source).toJson(QJsonDocument::Compact))}},
+                callback);
+        return;
+    }
+    const QString error = tr("The download window is no longer available.");
+#else
+    Q_UNUSED(window);
+    Q_UNUSED(id);
+    const QString error = tr("File dragging is available on Windows.");
+#endif
+    if (callback.isCallable())
+        callback.call({QJSValue(QJSValue::NullValue), QJSValue(error)});
+}
+
 bool Engine::openPath(const QString &path) const
 {
     const QFileInfo entry(path);

@@ -35,6 +35,7 @@ release_json="$work/release.json"
 files=(
     "$work/installer/$asset"
     "$work/extensions/auralis-chromium.zip"
+    "$work/extensions/auralis-chrome-store.zip"
     "$work/extensions/auralis-edge-store.zip"
     "$work/extensions/auralis-firefox.zip"
 )
@@ -73,7 +74,9 @@ from pathlib import Path
 work = Path(sys.argv[1])
 for archive_name, folder, expected, limit in (
     ("windows.zip", "installer", [sys.argv[2]], 256 * 1024 * 1024),
-    ("extensions.zip", "extensions", ["auralis-chromium.zip", "auralis-edge-store.zip", "auralis-firefox.zip"], 16 * 1024 * 1024),
+    ("extensions.zip", "extensions", [
+        "auralis-chromium.zip", "auralis-chrome-store.zip", "auralis-edge-store.zip", "auralis-firefox.zip"
+    ], 16 * 1024 * 1024),
 ):
     destination = work / folder
     destination.mkdir()

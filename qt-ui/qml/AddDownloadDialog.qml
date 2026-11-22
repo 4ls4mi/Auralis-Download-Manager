@@ -17,9 +17,19 @@ DetachedDialogWindow {
     signal downloadAdded(var id, bool later)
 
     width: 595
-    modality: confirming ? Qt.WindowModal : Qt.NonModal
+    flags: Qt.Window | Qt.WindowTitleHint | Qt.WindowSystemMenuHint | Qt.WindowMinMaxButtonsHint | Qt.WindowCloseButtonHint
+    transientParent: null
+    modality: Qt.NonModal
     title: confirming ? (requestInfo.info.video ? qsTr("Confirm video download") : qsTr("Download File Info"))
                       : torrentMode ? qsTr("Add torrent") : qsTr("Add URL")
+
+    function openAddress(torrent) {
+        if (!confirming && !busy)
+            torrentMode = torrent
+        if (visibility === Window.Minimized)
+            showNormal()
+        open()
+    }
 
     function openForRequest(reply) {
         if (!reply || !reply.info)
@@ -181,6 +191,7 @@ DetachedDialogWindow {
             Layout.fillWidth: true
             TextField {
                 id: destination
+            objectName: "downloadDestination"
                 Layout.fillWidth: true
                 placeholderText: qsTr("Destination file name")
                 onTextEdited: root.destinationEdited = true
@@ -210,6 +221,7 @@ DetachedDialogWindow {
             Label { text: qsTr("Connections"); color: root.colors.muted }
             SpinBox {
                 id: connectionCount
+                objectName: "downloadConnectionCount"
                 from: 0
                 to: 128
                 editable: true
@@ -254,6 +266,7 @@ DetachedDialogWindow {
             GlassButton {
                 material: root.material
                 accent: root.colors.positive
+                objectName: "confirmStartDownload"
                 text: root.busy ? qsTr("Working…") : root.confirming || root.torrentMode ? qsTr("Start download") : qsTr("Continue")
                 enabled: !root.busy
                 onClicked: root.submit(false)

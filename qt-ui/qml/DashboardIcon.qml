@@ -30,6 +30,7 @@ Item {
         file: "M5 3 H14 L19 8 V21 H5 Z M14 3 V8 H19",
         video: "M3.5 8 H20.5 V20.5 H3.5 Z M3.5 8 L5.5 3.5 H20.5 L18.5 8 M8 3.5 L10.5 8 M13.5 3.5 L16 8 M10 11.5 L15 14.5 L10 17.5 Z",
         search: "M17 10 A7 7 0 1 0 3 10 A7 7 0 1 0 17 10 Z M15 15 L21 21",
+        move: "M12 3 V21 M3 12 H21 M9 6 L12 3 L15 6 M9 18 L12 21 L15 18 M6 9 L3 12 L6 15 M18 9 L21 12 L18 15",
         tray: "M12 3 V12 M8 8 L12 12 L16 8 M4 11 V19 H20 V11 M4 15 H8 L10 17 H14 L16 15 H20",
         minimize: "M4 12 H20",
         maximize: "M6 6 H18 V18 H6 Z",
