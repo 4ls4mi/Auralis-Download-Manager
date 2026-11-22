@@ -1,0 +1,103 @@
+name: Capture current Auralis windows
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: auralis-self-hosted-windows
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, Windows, X64, auralis]
+    timeout-minutes: 8
+    steps:
+      - name: Capture currently visible Auralis windows
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Add-Type -AssemblyName System.Drawing
+          Add-Type -TypeDefinition @'
+          using System;
+          using System.Collections.Generic;
+          using System.Runtime.InteropServices;
+          public static class AuralisWindowCapture {
+            public delegate bool EnumCallback(IntPtr hwnd, IntPtr parameter);
+            [StructLayout(LayoutKind.Sequential)] public struct Rect { public int Left, Top, Right, Bottom; }
+            [DllImport("user32.dll")] private static extern bool EnumWindows(EnumCallback callback, IntPtr parameter);
+            [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
+            [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr hwnd);
+            [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
+            [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hwnd, out Rect rect);
+            [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr hwnd, IntPtr dc, uint flags);
+            public static IntPtr[] Find(int[] processIds) {
+              var ids = new HashSet<int>(processIds);
+              var windows = new List<IntPtr>();
+              EnumWindows((hwnd, _) => {
+                uint id; GetWindowThreadProcessId(hwnd, out id);
+                Rect rect;
+                if (ids.Contains((int)id) && IsWindowVisible(hwnd) && !IsIconic(hwnd) && GetWindowRect(hwnd, out rect)) {
+                  int width=rect.Right-rect.Left, height=rect.Bottom-rect.Top;
+                  if (width>=300 && height>=180 && width<=4096 && height<=4096) windows.Add(hwnd);
+                }
+                return true;
+              }, IntPtr.Zero);
+              return windows.ToArray();
+            }
+          }
+          '@
+          $processes = @(Get-Process -Name 'auralis-download-manager' -ErrorAction SilentlyContinue)
+          if (!$processes.Count) { throw 'Auralis is not running in the runner session. Open Auralis and the windows you want captured, then retry.' }
+          $windows = @([AuralisWindowCapture]::Find([int[]]@($processes | ForEach-Object { $_.Id })))
+          if (!$windows.Count) { throw 'No visible Auralis windows were found in the runner session. Restore the windows and retry.' }
+          $out = Join-Path $env:RUNNER_TEMP ("auralis-current-capture-" + $env:GITHUB_RUN_ID)
+          New-Item -ItemType Directory -Path $out -Force | Out-Null
+          function Save-AuralisWindow([IntPtr]$handle, [string]$path, [bool]$jpeg) {
+            $rect=New-Object AuralisWindowCapture+Rect
+            if (-not [AuralisWindowCapture]::GetWindowRect($handle,[ref]$rect)) { throw 'An Auralis window disappeared during capture.' }
+            $width=$rect.Right-$rect.Left; $height=$rect.Bottom-$rect.Top
+            if ($width -lt 300 -or $height -lt 180 -or $width -gt 4096 -or $height -gt 4096) { throw 'An Auralis window has invalid capture dimensions.' }
+            $bitmap=New-Object System.Drawing.Bitmap($width,$height)
+            $graphics=[System.Drawing.Graphics]::FromImage($bitmap)
+            try {
+              $dc=$graphics.GetHdc()
+              try { $ok=[AuralisWindowCapture]::PrintWindow($handle,$dc,2) } finally { $graphics.ReleaseHdc($dc) }
+              if (-not $ok) { throw 'Windows could not render an Auralis window for capture.' }
+              if ($jpeg) { $bitmap.Save($path,[System.Drawing.Imaging.ImageFormat]::Jpeg) }
+              else { $bitmap.Save($path,[System.Drawing.Imaging.ImageFormat]::Png) }
+            } finally { $graphics.Dispose(); $bitmap.Dispose() }
+          }
+          $largest=[IntPtr]::Zero; $largestArea=0; $index=0
+          foreach ($window in @($windows | Select-Object -First 8)) {
+            $index++
+            Save-AuralisWindow $window (Join-Path $out ("auralis-window-{0:D2}.png" -f $index)) $false
+            $r=New-Object AuralisWindowCapture+Rect
+            if ([AuralisWindowCapture]::GetWindowRect($window,[ref]$r)) {
+              $area=($r.Right-$r.Left)*($r.Bottom-$r.Top)
+              if ($area -gt $largestArea) { $largestArea=$area; $largest=$window }
+            }
+          }
+          $frames=Join-Path $out 'video-frames'
+          New-Item -ItemType Directory -Path $frames -Force | Out-Null
+          for ($i=0; $i -lt 48; $i++) {
+            Save-AuralisWindow $largest (Join-Path $frames ("frame-{0:D4}.jpg" -f $i)) $true
+            Start-Sleep -Milliseconds 125
+          }
+          $ffmpeg=Get-Command ffmpeg.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($ffmpeg) {
+            & $ffmpeg.Source -hide_banner -loglevel error -y -framerate 8 -i (Join-Path $frames 'frame-%04d.jpg') -vf 'pad=ceil(iw/2)*2:ceil(ih/2)*2' -c:v libx264 -pix_fmt yuv420p (Join-Path $out 'auralis-current.mp4')
+            if ($LASTEXITCODE -ne 0) { Write-Warning 'Could not encode MP4; captured frames remain available.' }
+          } else { Write-Warning 'FFmpeg is not on the runner PATH; captured frames remain available for encoding.' }
+          "AURALIS_CAPTURE_DIR=$out" >> $env:GITHUB_ENV
+          Write-Host "Captured $index Auralis window(s) and 48 video frames. Review the images for private information before publishing."
+      - name: Upload captures for review
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: auralis-current-windows-and-video
+          path: ${{ env.AURALIS_CAPTURE_DIR }}/
+          if-no-files-found: error
+          retention-days: 3
