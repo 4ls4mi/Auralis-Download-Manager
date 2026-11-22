@@ -59,9 +59,32 @@ jobs:
       - name: Use a short persistent build path
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           $targetDir = Join-Path $env:LOCALAPPDATA 'AuralisRunner/target'
+          $volumes = @(Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' | Where-Object { $_.FreeSpace -ne $null } | Sort-Object FreeSpace -Descending)
+          foreach ($volume in $volumes) { Write-Host ("Build volume {0}: {1:N1} GiB free" -f $volume.DeviceID, ($volume.FreeSpace / 1GB)) }
+          $systemDrive = $volumes | Where-Object { $_.DeviceID -eq $env:SystemDrive } | Select-Object -First 1
+          $alternate = $volumes | Where-Object { $_.DeviceID -ne $env:SystemDrive -and $_.FreeSpace -ge 20GB } | Select-Object -First 1
+          if ($systemDrive -and $systemDrive.FreeSpace -lt 4GB -and $alternate) {
+            $targetDir = Join-Path ($alternate.DeviceID + '\') 'AuralisRunner/target'
+            Write-Host 'The system drive is low on space; using a separate build cache on another fixed drive.'
+          }
           New-Item -ItemType Directory -Force $targetDir | Out-Null
           "CARGO_TARGET_DIR=$targetDir" >> $env:GITHUB_ENV
+          $tempConfigured = $false
+          foreach ($volume in $volumes) {
+            if ($volume.FreeSpace -lt 3GB) { continue }
+            $testTemp = if ($volume.DeviceID -eq $env:SystemDrive) { Join-Path $env:LOCALAPPDATA 'AuralisRunner/temp' } else { Join-Path ($volume.DeviceID + '\') 'AuralisRunner/temp' }
+            try {
+              New-Item -ItemType Directory -Force $testTemp -ErrorAction Stop | Out-Null
+              "TEMP=$testTemp" >> $env:GITHUB_ENV
+              "TMP=$testTemp" >> $env:GITHUB_ENV
+              Write-Host ("Using {0} for build and test temporary files." -f $volume.DeviceID)
+              $tempConfigured = $true
+              break
+            } catch { Write-Warning ("Could not create test temporary storage on {0}." -f $volume.DeviceID) }
+          }
+          if (!$tempConfigured) { throw 'The build needs at least 3 GiB free on a writable fixed drive for temporary files. Free disk space, then rerun this workflow.' }
 
       - name: Set up cached Rust toolchain
         shell: pwsh
