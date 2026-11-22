@@ -14,6 +14,11 @@
   --aurora-depth: #070c2bae;
   --aurora-top: #886bea70;
   --aurora-panel-accent: 167 122 255;
+  --aurora-return-light: #59cfff67;
+  --aurora-edge-tint: #b28aff3d;
+  --aurora-edge-band:
+    linear-gradient(90deg, #b9e0ff25, #885dec14 4px, transparent 19px, transparent calc(100% - 9px), #5876c83d),
+    linear-gradient(0deg, #79dfff3e 1px, #446fd938 3px, transparent 13px);
   --aurora-pane-radius: 8px 17px;
   --aurora-raised-radius: 13px 6px;
   --material-layout-gap: 10px;
@@ -40,6 +45,11 @@
   --aurora-depth: #24688b75;
   --aurora-top: #faffffb3;
   --aurora-panel-accent: 51 165 216;
+  --aurora-return-light: #77d9fa9e;
+  --aurora-edge-tint: #c6eaff72;
+  --aurora-edge-band:
+    linear-gradient(130deg, #fff8 0 7px, #97d6f55c 8px, transparent 25px),
+    linear-gradient(0deg, #79dafa55 0 2px, #c3edff33 3px, transparent 13px);
   --aurora-pane-radius: 3px 11px 11px 3px;
   --aurora-raised-radius: 6px;
   --material-layout-gap: 5px;
@@ -64,14 +74,16 @@
   background:
     radial-gradient(98% 96px at 83% 0, #a16bf766, transparent 83%),
     radial-gradient(90% 46px at 89% 100%, #1acff24d, transparent 83%),
+    linear-gradient(90deg, #7e6cff56 0 1px, #4a87bf43 2px, transparent 25px, transparent calc(100% - 16px), #60daff37),
     linear-gradient(163deg, var(--aurora-top), transparent min(13%, 60px), transparent calc(100% - 34px), var(--aurora-bottom)),
     rgb(var(--aurora-shell) / var(--aurora-shell-opacity)) !important;
   border-color: var(--aurora-edge) !important;
   box-shadow:
     inset 0 1px 1px var(--aurora-light),
     inset 0 0 0 1px var(--aurora-inner-rim),
-    inset 0 0 0 3px #caeaff19,
+    inset 0 0 0 3px var(--aurora-edge-tint),
     inset 0 -2px 2px var(--aurora-lower-rim),
+    inset 0 -5px 7px -4px var(--aurora-return-light),
     inset 0 -7px 14px -9px var(--aurora-depth) !important;
 }
 
@@ -79,6 +91,7 @@
   background:
     linear-gradient(133deg, #fff8 0 12px, #92daff4a 13px, transparent 36px),
     linear-gradient(315deg, #eafaff66 0 15px, #66c7f142 16px, transparent 46px),
+    linear-gradient(90deg, #e7fbff7a 0 2px, #9fddf335 3px, transparent 16px, transparent calc(100% - 12px), #5baecb44),
     linear-gradient(180deg, var(--aurora-top), transparent 31px, transparent calc(100% - 24px), var(--aurora-bottom)),
     rgb(var(--aurora-shell) / var(--aurora-shell-opacity)) !important;
 }
@@ -101,13 +114,16 @@
 }
 
 .cg-window.cg-material-builtin-aurora-ice .cg-content::before {
-  background: radial-gradient(83% 12% at 74% 0%, #ffffff65, transparent 74%);
-  box-shadow: inset 1px 1px 4px white, inset -1px -2px 5px #9debffb0;
+  background:
+    radial-gradient(83% 12% at 74% 0%, #ffffff65, transparent 74%),
+    radial-gradient(87% 28px at 16% 100%, #bbf3ff51, transparent 87%);
+  box-shadow: inset 1px 1px 4px #fff, inset -1px -2px 5px #9debffb0;
 }
 
 /* Pane tint and inset edges let the shared acrylic remain visible. */
 .cg-window.cg-surface-frosted:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice):is(.cg-target-main,.cg-target-details) .cg-fit-content :is(.cg-glass,.cg-window-top,.cg-menubar) {
   background:
+    var(--aurora-edge-band),
     linear-gradient(90deg, rgb(var(--aurora-panel-light) / var(--aurora-side-light, .12)), transparent 8px, transparent calc(100% - 8px), rgb(var(--aurora-panel-light) / .08)),
     linear-gradient(180deg, rgb(var(--aurora-panel-light) / .18), transparent min(40%, 32px)),
     rgb(var(--aurora-pane) / calc(var(--aurora-shell-opacity) * var(--aurora-pane-density))) !important;
@@ -116,8 +132,9 @@
   border-radius: var(--aurora-pane-radius) !important;
   box-shadow:
     inset 0 1px 1px var(--aurora-light),
-    inset 0 0 0 2px rgb(var(--aurora-panel-light) / .09),
+    inset 0 0 0 2px var(--aurora-edge-tint),
     inset 0 -1px 0 var(--aurora-lower-rim),
+    inset 0 -4px 6px -4px var(--aurora-return-light),
     0 1px 4px rgb(var(--aurora-panel-cast) / .39) !important;
 }
 
@@ -126,9 +143,10 @@
 .cg-window.cg-surface-frosted:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice):is(.cg-target-main,.cg-target-details) .cg-fit-content :is(.cg-list-panel,.cg-sidebar,.cg-settings-body,.cg-settings-nav) {
   box-shadow:
     inset 0 1px 1px var(--aurora-light),
-    inset 0 0 0 1px var(--aurora-inner-rim),
-    inset 0 3px 9px -5px rgb(var(--aurora-panel-cast) / .48),
+    inset 0 0 0 2px var(--aurora-inner-rim),
+    inset 0 7px 13px -8px rgb(var(--aurora-panel-cast) / .66),
     inset 0 -1px 0 var(--aurora-lower-rim),
+    inset 0 -5px 8px -5px var(--aurora-return-light),
     0 1px 2px rgb(var(--aurora-panel-cast) / .28) !important;
 }
 
@@ -139,24 +157,28 @@
 
 .cg-window.cg-material-builtin-aurora-night.cg-surface-frosted .cg-fit-content .cg-list-panel.cg-glass {
   background:
-    radial-gradient(ellipse 100% 48px at 25% 0, rgb(var(--aurora-panel-light) / .21), transparent 100%),
-    linear-gradient(90deg, rgb(var(--aurora-panel-light) / .14), transparent 10px),
+    radial-gradient(ellipse 100% 63px at 25% 0, #aa86ff46, transparent 92%),
+    radial-gradient(ellipse 86% 30px at 80% 100%, #6bd5ff40, transparent 89%),
+    var(--aurora-edge-band),
     rgb(var(--aurora-pane) / calc(var(--aurora-shell-opacity) * var(--aurora-pane-density))) !important;
 }
 
 .cg-window.cg-surface-frosted:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice):is(.cg-target-main,.cg-target-details) .cg-fit-content :is(.cg-toolbar,.cg-footer).cg-glass {
   --aurora-pane-density: .54;
   background:
-    linear-gradient(170deg, rgb(var(--aurora-panel-light) / .30), transparent 48%),
+    var(--aurora-edge-band),
+    linear-gradient(170deg, rgb(var(--aurora-panel-light) / .37), transparent 46%),
     linear-gradient(0deg, rgb(var(--aurora-panel-light) / .12), transparent 15px),
     rgb(var(--aurora-pane) / calc(var(--aurora-shell-opacity) * var(--aurora-pane-density))) !important;
   border-color: var(--aurora-edge) !important;
   border-radius: var(--aurora-raised-radius) !important;
   box-shadow:
     inset 0 1px 1px var(--aurora-light),
-    inset 0 0 0 2px var(--aurora-inner-rim),
+    inset 0 0 0 3px var(--aurora-edge-tint),
     inset 0 -2px 2px var(--aurora-lower-rim),
-    0 3px 7px rgb(var(--aurora-panel-cast) / .50) !important;
+    inset 0 -5px 6px -4px var(--aurora-return-light),
+    0 1px 2px rgb(var(--aurora-panel-cast) / .30),
+    0 4px 10px rgb(var(--aurora-panel-cast) / .48) !important;
 }
 
 .cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-fit-content :is(.cg-title,.cg-sidebar button,.cg-settings-nav button,.cg-menubar button,.cg-row) {
@@ -181,15 +203,16 @@
 
 .cg-window.cg-material-builtin-aurora-night.cg-surface-frosted .cg-fit-content :is(.cg-sidebar,.cg-settings-nav).cg-glass {
   background:
-    radial-gradient(90% 65px at 78% 0, #b578ff42, transparent 89%),
-    linear-gradient(90deg, #57d5ff24, transparent 9px),
+    radial-gradient(90% 65px at 78% 0, #b578ff51, transparent 89%),
+    var(--aurora-edge-band),
     rgb(var(--aurora-pane) / calc(var(--aurora-shell-opacity) * var(--aurora-pane-density))) !important;
 }
 
 .cg-window.cg-material-builtin-aurora-ice.cg-surface-frosted .cg-fit-content .cg-list-panel.cg-glass {
   background:
     linear-gradient(134deg, #f6ffffba 0 8px, #beeaff49 9px, transparent 30px),
-    linear-gradient(0deg, #74c8f24d, transparent 34px),
+    radial-gradient(75% 35px at 87% 100%, #78d8ed62, transparent 83%),
+    var(--aurora-edge-band),
     rgb(var(--aurora-pane) / calc(var(--aurora-shell-opacity) * var(--aurora-pane-density))) !important;
 }
 

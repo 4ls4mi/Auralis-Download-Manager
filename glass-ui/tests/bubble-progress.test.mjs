@@ -64,3 +64,67 @@ test('Bubble keeps animated liquid and a transparent surround across backdrop fi
     await server.close();
   }
 });
+
+test('Bubble takes about half the progress width and reserves enough height for nearby indicators', {skip: !executablePath || !existsSync(executablePath)}, async () => {
+  const server = await createServer({configFile: false, root: fileURLToPath(new URL('..', import.meta.url)), server: {host: '127.0.0.1', port: 0}, logLevel: 'silent'});
+  await server.listen();
+  const browser = await chromium.launch({headless: true, executablePath, args: ['--no-sandbox']});
+  try {
+    const page = await browser.newPage({viewport: {width: 960, height: 720}, reducedMotion: 'reduce'});
+    await page.addInitScript(() => {
+      if (!localStorage.getItem('mh-glass-progress-shape')) localStorage.setItem('mh-glass-progress-shape', 'bubble');
+      localStorage.setItem('auralis-browser-guide-seen', '1');
+      const label = location.search.includes('detail=') ? 'download-1' : 'main';
+      const file = {id: 1, file: 'sample.zip', url: 'https://example.org/sample.zip', path: 'C:\\Downloads\\sample.zip', status: 'Downloading', size: 100, downloaded: 64, speed: 10, category: 'Compressed'};
+      const visual = {id: 1, active_connections: 1, resumable: true, segments: [{start: 0, cursor: 64, end: 100, worker: 0}], connections: [{id: 0, downloaded: 64, speed: 10, state: 'Receiving'}]};
+      window.__TAURI_EVENT_PLUGIN_INTERNALS__ = {unregisterListener() {}};
+      window.__TAURI_INTERNALS__ = {
+        metadata: {currentWindow: {label}, currentWebview: {label}},
+        transformCallback: () => 1,
+        unregisterCallback: () => {},
+        invoke: async command => {
+          if (command === 'dashboard_snapshot') return {downloads: [file], queues: [], categories: [], speed: 10};
+          if (command === 'dashboard_visuals') return {downloads: [visual]};
+          return null;
+        },
+      };
+    });
+    const url = server.resolvedUrls.local[0];
+    for (const [route, trackSelector, nextSelector, expectedHeight] of [
+      ['', '.cg-row-progress .cg-bubble-track', '.cg-row-progress .cg-chunks', 26],
+      ['?detail=1', '.cg-progress-tube .cg-bubble-track', '.cg-indicator-row', 36],
+    ]) {
+      await page.goto(url + route);
+      const track = page.locator(trackSelector);
+      await track.waitFor();
+      for (const width of [960, 520]) {
+        await page.setViewportSize({width, height: 720});
+        const {ratio, height, separated, labelFits, withinWrap} = await track.evaluate((element, nextSelector) => {
+          const wrap = element.parentElement.getBoundingClientRect();
+          const vessel = element.getBoundingClientRect();
+          const label = element.nextElementSibling.getBoundingClientRect();
+          const next = document.querySelector(nextSelector).getBoundingClientRect();
+          return {
+            ratio: vessel.width / wrap.width,
+            height: parseFloat(getComputedStyle(element).height),
+            separated: vessel.bottom + 2 <= next.top + 1,
+            labelFits: label.left > vessel.right && label.right <= wrap.right + 1 && element.nextElementSibling.textContent === '64%',
+            withinWrap: vessel.top >= wrap.top && vessel.bottom <= wrap.bottom,
+          };
+        }, nextSelector);
+        assert.ok(ratio >= .4 && ratio <= (width >= 960 ? .58 : .74), `Unexpected Bubble width ratio ${ratio} in ${route || 'main'}`);
+        assert.ok(Math.abs(height - expectedHeight) < .25);
+        assert.ok(separated && labelFits && withinWrap, `Bubble layout collision in ${route || 'main'} at ${width}px`);
+      }
+    }
+    await page.evaluate(() => localStorage.setItem('mh-glass-progress-shape', 'rounded'));
+    await page.reload();
+    const fullTrack = page.locator('.cg-overall .cg-percent-track');
+    await fullTrack.waitFor();
+    assert.ok(await fullTrack.evaluate(element => element.clientWidth > element.parentElement.clientWidth * .8));
+    assert.ok(await fullTrack.evaluate(element => Math.abs(parseFloat(getComputedStyle(element).height) - 24) < .25));
+  } finally {
+    await browser.close();
+    await server.close();
+  }
+});

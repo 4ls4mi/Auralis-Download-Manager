@@ -18,7 +18,7 @@ function rgba(value) {
   return { color: components.slice(1, 4).join(','), alpha: Number(components[4]) };
 }
 
-test('all built-in materials have distinct translucent palettes and layouts at the default window size', {
+test('built-in materials have distinct translucent layers and layouts at the default window size', {
   skip: !executablePath || !existsSync(executablePath)
 }, async () => {
   const server = await createServer({
@@ -53,9 +53,11 @@ test('all built-in materials have distinct translucent palettes and layouts at t
     const settings = await context.newPage();
     const origin = server.resolvedUrls.local[0];
     await main.goto(origin);
+    await main.locator('.cg-empty .cg-btn-primary').waitFor();
     await settings.goto(origin + '?settings=1&tab=Appearance');
     const palettes = new Set();
     const layouts = new Set();
+    const paneEffects = new Set();
     const materialIds = [];
     for (const label of labels) {
       const option = settings.getByRole('button', { name: label, exact: false });
@@ -64,18 +66,27 @@ test('all built-in materials have distinct translucent palettes and layouts at t
       await main.locator(`.cg-material-${id}`).waitFor({ state: 'attached', timeout: 7000 });
       materialIds.push(id);
       const styles = await main.evaluate(() => {
+        const button = document.querySelector('.cg-empty .cg-btn-primary').getBoundingClientRect();
+        const viewport = document.querySelector('.cg-table-viewport').getBoundingClientRect();
+        const addBounds = {top: button.top, bottom: button.bottom, clipTop: viewport.top, clipBottom: viewport.bottom};
         const shell = getComputedStyle(document.querySelector('.cg-content'));
         const list = getComputedStyle(document.querySelector('.cg-list-panel'));
         const nav = getComputedStyle(document.querySelector('.cg-sidebar'));
+        const toolbar = getComputedStyle(document.querySelector('.cg-toolbar'));
         const heading = getComputedStyle(document.querySelector('.cg-list-title'));
         const workspace = getComputedStyle(document.querySelector('.cg-workspace'));
         const mainBody = getComputedStyle(document.querySelector('.cg-main-body'));
         const overflow = [...document.querySelectorAll('.cg-content,.cg-workspace,.cg-toolbar')].filter(el => el.scrollWidth > el.clientWidth + 1).map(el => el.className);
         return {
+          addBounds,
           shell: shell.backgroundColor,
           pane: list.backgroundColor,
           radius: list.borderRadius,
           shade: list.boxShadow,
+          shellLayers: shell.backgroundImage,
+          paneLayers: list.backgroundImage,
+          toolbarLayers: toolbar.backgroundImage,
+          toolbarShade: toolbar.boxShadow,
           navDirection: nav.flexDirection,
           overflow,
           heading: heading.display,
@@ -88,7 +99,23 @@ test('all built-in materials have distinct translucent palettes and layouts at t
       const pane = rgba(styles.pane);
       assert.ok(shell.alpha > 0 && shell.alpha < .8, `${label} shell alpha: ${shell.alpha}`);
       assert.ok(pane.alpha < shell.alpha, `${label} inset pane alpha: ${pane.alpha}`);
-      assert.match(styles.shade, /inset/);
+      assert.ok((styles.shade.match(/inset/g) ?? []).length >= 3, `${label} inset depth`);
+      assert.notEqual(styles.shade, styles.toolbarShade, `${label} raised and recessed shadows differ`);
+      for (const layers of [styles.shellLayers, styles.paneLayers, styles.toolbarLayers]) {
+        assert.ok((layers.match(/gradient\(/g) ?? []).length >= 3, `${label} uses multiple reflection layers`);
+        assert.doesNotMatch(layers, /url\(/, `${label} desktop material has no wallpaper`);
+      }
+      const clearPane = await main.evaluate(() => {
+        const frame = document.querySelector('.cg-window');
+        const value = frame.style.getPropertyValue('--glass-window-opacity');
+        frame.style.setProperty('--glass-window-opacity', '0');
+        const color = getComputedStyle(frame.querySelector('.cg-list-panel')).backgroundColor;
+        frame.style.setProperty('--glass-window-opacity', value);
+        return color;
+      });
+      assert.equal(rgba(clearPane).alpha, 0, `${label} honors fully transparent backing`);
+      const {top, bottom, clipTop, clipBottom} = styles.addBounds;
+      assert.ok(top >= clipTop && bottom <= clipBottom + 1, `${label} keeps Add URL visible: ${JSON.stringify(styles.addBounds)}`);
       assert.deepEqual(styles.overflow, [], `${label} default-width overflow`);
       assert.equal(await settings.locator('.cg-content').evaluate(el => getComputedStyle(el).backgroundColor), styles.shell);
       if (id === 'oversimplified') assert.equal(styles.navDirection, 'row');
@@ -96,10 +123,12 @@ test('all built-in materials have distinct translucent palettes and layouts at t
       if (id === 'builtin-obsidian-matte') assert.equal(styles.mainBody, 'grid');
       if (id === 'builtin-smoked-glass') assert.equal(styles.gap, '0px');
       palettes.add(shell.color);
+      paneEffects.add(styles.paneLayers);
       layouts.add([styles.radius, styles.grid, styles.gap, styles.navDirection].join('|'));
     }
     assert.equal(palettes.size, labels.length);
     assert.equal(layouts.size, labels.length);
+    assert.equal(paneEffects.size, labels.length);
 
     await main.setViewportSize({ width: 560, height: 450 });
     for (const [index, label] of labels.entries()) {

@@ -7,15 +7,21 @@
   --action-light: #e6f5ff;
   --action-shade: #000b21;
   --action-sheen: 14%;
-  --action-edge: 25%;
-  --action-hover: 29%;
+  --action-edge: 56%;
+  --action-rest: 26%;
+  --action-hover: 46%;
+  --action-secondary: #408eff;
+  --action-underlay: #071321a8;
+  --action-ink-base: #f6fbff;
+  --action-ink-mix: 70%;
+  --action-glow-origin: 24% 0%;
   --action-reflection: linear-gradient(150deg, color-mix(in srgb, var(--action-light) var(--action-sheen), transparent), transparent 53%);
-  --action-add: #61cfab;
-  --action-play: #5cc9f2;
-  --action-stop: #ebbc73;
-  --action-remove: #e4879c;
-  --action-tools: #beadf0;
-  --action-time: #78d3db;
+  --action-add: #25f1a7;
+  --action-play: #31cfff;
+  --action-stop: #ffbc43;
+  --action-remove: #ff6895;
+  --action-tools: #c389ff;
+  --action-time: #43f1e7;
 }
 
 .cg-window.cg-light {
@@ -23,7 +29,10 @@
   --action-light: #fff;
   --action-shade: #426781;
   --action-sheen: 52%;
-  --action-edge: 30%;
+  --action-edge: 67%;
+  --action-underlay: #f7fcffc2;
+  --action-ink-base: #071b2c;
+  --action-ink-mix: 32%;
 }
 
 .cg-window.cg-material-brushed-glass {
@@ -32,13 +41,17 @@
   --action-face: #10424d38;
   --action-light: #d5edf5;
   --action-sheen: 18%;
+  --action-secondary: #1fbbc7;
+  --action-glow-origin: 35% 0%;
+  --action-rest: 22%;
+  --action-hover: 43%;
   --action-reflection: repeating-linear-gradient(168deg, #d6f9f70c 0 1px, transparent 1px 4px), linear-gradient(180deg, #9fdfe34a, transparent 46%);
-  --action-add: #4addbb;
-  --action-play: #66d3dc;
-  --action-stop: #efc48c;
-  --action-remove: #ed9a95;
-  --action-tools: #a8bfdb;
-  --action-time: #83e0ca;
+  --action-add: #11edba;
+  --action-play: #2adbfa;
+  --action-stop: #ffc851;
+  --action-remove: #ff8069;
+  --action-tools: #a8bfff;
+  --action-time: #71f6e0;
 }
 
 .cg-window.cg-material-frosted-water-351 {
@@ -46,14 +59,17 @@
   --action-face: #9ed5f93f;
   --action-light: #effcff;
   --action-sheen: 32%;
-  --action-hover: 30%;
+  --action-secondary: #59acf9;
+  --action-glow-origin: 48% 5%;
+  --action-rest: 27%;
+  --action-hover: 49%;
   --action-reflection: radial-gradient(ellipse 105% 65% at 38% 0, #effcff82, transparent 86%), linear-gradient(0deg, #90cfff2c, transparent 37%);
-  --action-add: #77ddd7;
-  --action-play: #73c6ff;
-  --action-stop: #fad399;
-  --action-remove: #f3a8bd;
-  --action-tools: #b4b6ff;
-  --action-time: #98eced;
+  --action-add: #63ffd1;
+  --action-play: #44bbff;
+  --action-stop: #ffc765;
+  --action-remove: #ff73a6;
+  --action-tools: #9e96ff;
+  --action-time: #76fbff;
 }
 
 .cg-window.cg-material-rose-pine {
@@ -62,14 +78,17 @@
   --action-face: #56304a54;
   --action-light: #ffe5ed;
   --action-shade: #302037;
-  --action-hover: 33%;
+  --action-secondary: #dc55a1;
+  --action-glow-origin: 68% 2%;
+  --action-rest: 27%;
+  --action-hover: 52%;
   --action-reflection: radial-gradient(ellipse 135% 100% at 72% 100%, #de7eab43, transparent 72%), linear-gradient(162deg, #ffe4ed39, transparent 48%);
-  --action-add: #efa9be;
-  --action-play: #c5b6f3;
-  --action-stop: #f7c789;
-  --action-remove: #fa82a3;
-  --action-tools: #edb3e2;
-  --action-time: #a7c8cd;
+  --action-add: #fa82b8;
+  --action-play: #bb9dff;
+  --action-stop: #ffbc61;
+  --action-remove: #ff5d87;
+  --action-tools: #f08ae3;
+  --action-time: #6fe3de;
 }
 
 .cg-window.cg-material-oversimplified {
@@ -77,15 +96,18 @@
   --action-gap: 5px;
   --action-face: transparent;
   --action-sheen: 7%;
-  --action-edge: 19%;
-  --action-hover: 22%;
+  --action-edge: 42%;
+  --action-secondary: #6478fe;
+  --action-glow-origin: 25% 100%;
+  --action-rest: 16%;
+  --action-hover: 40%;
   --action-reflection: linear-gradient(0deg, #6681ee35, transparent 18%);
-  --action-add: #75a8fa;
-  --action-play: #83ccf2;
-  --action-stop: #deb27b;
-  --action-remove: #ed91a5;
-  --action-tools: #b49bfa;
-  --action-time: #96bedf;
+  --action-add: #638aff;
+  --action-play: #5fdaff;
+  --action-stop: #f8b854;
+  --action-remove: #ff7089;
+  --action-tools: #b594ff;
+  --action-time: #7fdedc;
 }
 
 .cg-window.cg-material-builtin-obsidian-matte {
@@ -94,14 +116,17 @@
   --action-face: #201b1959;
   --action-light: #f5dfb8;
   --action-sheen: 9%;
-  --action-hover: 24%;
+  --action-secondary: #b48137;
+  --action-glow-origin: 21% 0%;
+  --action-rest: 24%;
+  --action-hover: 42%;
   --action-reflection: linear-gradient(180deg, #ddb9822e, transparent 31%, #0e0d0d61);
-  --action-add: #dfb565;
-  --action-play: #a5c6d5;
-  --action-stop: #f1c281;
-  --action-remove: #db8c73;
-  --action-tools: #cab6a1;
-  --action-time: #adc5ab;
+  --action-add: #ffcc58;
+  --action-play: #7dd8ea;
+  --action-stop: #ffab45;
+  --action-remove: #ff7969;
+  --action-tools: #e7a0f2;
+  --action-time: #b6ed80;
 }
 
 .cg-window.cg-material-builtin-smoked-glass {
@@ -110,14 +135,17 @@
   --action-face: #46392e45;
   --action-light: #f6dfc9;
   --action-sheen: 18%;
-  --action-hover: 34%;
+  --action-secondary: #d78f58;
+  --action-glow-origin: 73% 0%;
+  --action-rest: 30%;
+  --action-hover: 53%;
   --action-reflection: linear-gradient(176deg, #f3d4a44a, #a98c7340 28%, transparent 60%, #1a161a34);
-  --action-add: #dcbe85;
-  --action-play: #a5bddb;
-  --action-stop: #f4b575;
-  --action-remove: #db9e9b;
-  --action-tools: #cfc0b4;
-  --action-time: #bbcaaf;
+  --action-add: #ffd96e;
+  --action-play: #7dc0f9;
+  --action-stop: #ffa163;
+  --action-remove: #ff6b84;
+  --action-tools: #df96e8;
+  --action-time: #c5ea97;
 }
 
 .cg-window.cg-material-builtin-black-glass {
@@ -126,14 +154,17 @@
   --action-face: #05070c43;
   --action-light: #e0ecfa;
   --action-sheen: 16%;
-  --action-hover: 27%;
+  --action-secondary: #7494dd;
+  --action-glow-origin: 50% 0%;
+  --action-rest: 21%;
+  --action-hover: 47%;
   --action-reflection: radial-gradient(ellipse 74% 64% at 48% 0, #d8edff4a, transparent 82%), linear-gradient(0deg, #7284ab24, transparent 45%);
-  --action-add: #c8dfe8;
-  --action-play: #8ec8eb;
-  --action-stop: #c9b496;
-  --action-remove: #d297ad;
-  --action-tools: #b1b7d9;
-  --action-time: #a5c5c7;
+  --action-add: #b7f6ed;
+  --action-play: #43baf6;
+  --action-stop: #e4be7b;
+  --action-remove: #fa76ab;
+  --action-tools: #bca4ff;
+  --action-time: #86e9db;
 }
 
 .cg-window.cg-material-builtin-pearl-frost {
@@ -142,14 +173,17 @@
   --action-face: #e3d7ef49;
   --action-light: #fff6e9;
   --action-sheen: 34%;
-  --action-hover: 31%;
+  --action-secondary: #be79ec;
+  --action-glow-origin: 28% 1%;
+  --action-rest: 30%;
+  --action-hover: 54%;
   --action-reflection: radial-gradient(ellipse 130% 62% at 34% 0, #fff2ce84, transparent 88%), linear-gradient(117deg, #d8a9e34f, transparent 55%, #b6e8f764);
-  --action-add: #e8c3f3;
-  --action-play: #a9d5ed;
-  --action-stop: #f1cb9f;
-  --action-remove: #e4a9be;
-  --action-tools: #cbb7f8;
-  --action-time: #bbe3cc;
+  --action-add: #fca3eb;
+  --action-play: #75d5ff;
+  --action-stop: #ffc37b;
+  --action-remove: #fb7d9f;
+  --action-tools: #b69aff;
+  --action-time: #95f1c9;
 }
 
 .cg-window.cg-material-builtin-aurora-night {
@@ -158,14 +192,17 @@
   --action-light: #c0dcff;
   --action-shade: #020b23;
   --action-sheen: 22%;
-  --action-hover: 38%;
+  --action-secondary: #9860fd;
+  --action-glow-origin: 23% 3%;
+  --action-rest: 34%;
+  --action-hover: 60%;
   --action-reflection: linear-gradient(141deg, #9b78f556, transparent 52%, #59ceff40), radial-gradient(ellipse 90% 72% at 100% 0, #8ceaff55, transparent 80%);
-  --action-add: #53e5c4;
-  --action-play: #66d6ff;
-  --action-stop: #f3b187;
-  --action-remove: #f187bc;
-  --action-tools: #c49bff;
-  --action-time: #86e1ec;
+  --action-add: #37ff83;
+  --action-play: #25ceff;
+  --action-stop: #ffae3d;
+  --action-remove: #ff538c;
+  --action-tools: #c27aff;
+  --action-time: #22f9ff;
 }
 
 .cg-window.cg-material-builtin-aurora-ice {
@@ -174,14 +211,17 @@
   --action-light: #fbfeff;
   --action-shade: #3b79a3;
   --action-sheen: 62%;
-  --action-hover: 35%;
+  --action-secondary: #448ef6;
+  --action-glow-origin: 72% 7%;
+  --action-rest: 30%;
+  --action-hover: 52%;
   --action-reflection: linear-gradient(136deg, #ffffffa1, #d2f3ff32 42%, transparent 43%, #8bd3f049 91%, #fff9);
-  --action-add: #138b83;
-  --action-play: #137abb;
-  --action-stop: #b67320;
-  --action-remove: #bc557f;
-  --action-tools: #805caf;
-  --action-time: #237e9d;
+  --action-add: #20df7e;
+  --action-play: #24c8ff;
+  --action-stop: #ffa92b;
+  --action-remove: #ff4b8d;
+  --action-tools: #a065ff;
+  --action-time: #00c8e8;
 }
 
 .cg-window[class*="cg-material-custom-"].cg-controls-angular { --action-radius: 4px }
@@ -209,74 +249,104 @@
   }
 
   .cg-window .cg-fit-content :where(.cg-toolbar > button[data-action], .cg-btn) {
-    --action-tint: var(--accent);
-    --action-wash: 10%;
+    --action-tint: color-mix(in oklab, var(--accent) 60%, var(--action-secondary));
+    --action-glint: color-mix(in oklab, var(--action-tint) 69%, var(--action-light));
+    --action-wash: var(--action-rest);
     --action-rim: var(--action-edge);
-    --action-icon: color-mix(in srgb, var(--action-tint) 55%, var(--ink));
-    border: 1px solid color-mix(in srgb, var(--action-tint) var(--action-rim), transparent) !important;
+    --action-bloom: 23%;
+    --action-glass-gleam: var(--action-sheen);
+    --action-depth: 32%;
+    --action-icon: color-mix(in oklab, var(--action-tint) var(--action-ink-mix), var(--action-ink-base));
+    border: 1px solid color-mix(in srgb, var(--action-tint) var(--action-rim), var(--edge)) !important;
     border-radius: var(--action-radius) !important;
     background:
+      radial-gradient(ellipse 95% 55% at var(--action-glow-origin), color-mix(in srgb, var(--action-glint) var(--action-bloom), transparent), transparent),
       var(--action-reflection),
-      linear-gradient(0deg, color-mix(in srgb, var(--action-tint) var(--action-wash), transparent), transparent 79%),
+      linear-gradient(154deg, color-mix(in srgb, var(--action-tint) var(--action-wash), transparent), color-mix(in srgb, var(--action-secondary) 12%, transparent) 83%),
+      linear-gradient(var(--action-underlay), var(--action-underlay)),
       var(--action-face) !important;
-    color: color-mix(in srgb, var(--action-tint) 19%, var(--ink)) !important;
+    color: color-mix(in oklab, var(--action-tint) 13%, var(--action-ink-base)) !important;
     text-shadow: none !important;
     box-shadow:
-      inset 0 1px 0 color-mix(in srgb, var(--action-light) var(--action-sheen), transparent),
-      0 1px 2px color-mix(in srgb, var(--action-shade) 30%, transparent) !important;
+      inset 0 1px color-mix(in srgb, var(--action-light) var(--action-glass-gleam), transparent),
+      inset 0 -2px color-mix(in srgb, var(--action-shade) var(--action-depth), transparent),
+      0 2px 4px color-mix(in srgb, var(--action-shade) 34%, transparent) !important;
     filter: none !important;
+    transition: border-color 150ms ease, box-shadow 150ms ease, transform 90ms ease !important;
   }
 
-  /* Keep label buttons readable inside the circular Black Blur toolbar profile. */
+  /* Keep labeled controls readable alongside the circular Black Blur toolbar. */
   .cg-window.cg-material-builtin-black-glass .cg-fit-content .cg-btn {
     --action-radius: 15px;
   }
 
-  .cg-window.cg-light .cg-fit-content :is(.cg-toolbar > button[data-action], .cg-btn) {
-    --action-icon: color-mix(in srgb, var(--action-tint) 43%, var(--ink));
-  }
-
   .cg-window .cg-fit-content :is(.cg-toolbar > button[data-action], .cg-btn) > svg {
     color: var(--action-icon) !important;
-    filter: none !important;
+    filter: drop-shadow(0 1px 1px var(--action-underlay)) !important;
     transform: none !important;
   }
 
-  .cg-window .cg-fit-content :is([data-action=add], [data-action=torrent], .cg-btn-primary) {
-    --action-tint: color-mix(in srgb, var(--action-add) 80%, var(--accent));
+  .cg-window .cg-fit-content :is([data-action=add], .cg-btn-primary) {
+    --action-tint: var(--action-add);
   }
 
-  .cg-window .cg-fit-content :is([data-action=start], [data-action=queue-start]) {
-    --action-tint: color-mix(in srgb, var(--action-play) 80%, var(--accent));
+  .cg-window .cg-fit-content [data-action=torrent] {
+    --action-tint: color-mix(in oklab, var(--action-add) 52%, var(--action-stop));
   }
 
-  .cg-window .cg-fit-content :is([data-action=stop], [data-action=stop-all], [data-action=queue-stop]) {
-    --action-tint: color-mix(in srgb, var(--action-stop) 80%, var(--accent));
+  .cg-window .cg-fit-content :is([data-action=start], .cg-neon-mint) {
+    --action-tint: var(--action-play);
   }
 
-  .cg-window .cg-fit-content :is([data-action=remove], [data-action=delete-completed], .cg-btn-danger) {
-    --action-tint: color-mix(in srgb, var(--action-remove) 80%, var(--accent));
+  .cg-window .cg-fit-content [data-action=queue-start] {
+    --action-tint: color-mix(in oklab, var(--action-play) 47%, var(--action-tools));
+  }
+
+  .cg-window .cg-fit-content :is([data-action=stop], .cg-neon-amber) {
+    --action-tint: var(--action-stop);
+  }
+
+  .cg-window .cg-fit-content [data-action=stop-all] {
+    --action-tint: color-mix(in oklab, var(--action-stop) 68%, var(--action-remove));
+  }
+
+  .cg-window .cg-fit-content [data-action=queue-stop] {
+    --action-tint: color-mix(in oklab, var(--action-stop) 47%, var(--action-remove));
+  }
+
+  .cg-window .cg-fit-content :is([data-action=remove], .cg-btn-danger) {
+    --action-tint: var(--action-remove);
+  }
+
+  .cg-window .cg-fit-content [data-action=delete-completed] {
+    --action-tint: color-mix(in oklab, var(--action-remove) 61%, var(--action-tools));
   }
 
   .cg-window .cg-fit-content :is([data-action=settings], .cg-neon-violet) {
-    --action-tint: color-mix(in srgb, var(--action-tools) 80%, var(--accent));
+    --action-tint: var(--action-tools);
   }
 
   .cg-window .cg-fit-content [data-action=scheduler] {
-    --action-tint: color-mix(in srgb, var(--action-time) 80%, var(--accent));
+    --action-tint: var(--action-time);
   }
 
   .cg-window .cg-fit-content :is(.cg-toolbar > .primary, .cg-btn-primary, .cg-btn[aria-pressed=true]) {
-    --action-wash: 20%;
-    --action-rim: 46%;
+    --action-wash: calc(var(--action-rest) + 11%);
+    --action-rim: calc(var(--action-edge) + 12%);
+    --action-bloom: 31%;
   }
 
   .cg-window .cg-fit-content :is(.cg-toolbar > button[data-action], .cg-btn):is(:hover,:focus-visible):not(:disabled) {
     --action-wash: var(--action-hover);
-    --action-rim: 65%;
+    --action-rim: 87%;
+    --action-bloom: 42%;
+    --action-glass-gleam: max(var(--action-sheen), 46%);
+    --action-depth: 44%;
     box-shadow:
-      inset 0 1px 0 color-mix(in srgb, var(--action-light) 37%, transparent),
-      0 1px 4px color-mix(in srgb, var(--action-shade) 38%, transparent) !important;
+      inset 0 1px color-mix(in srgb, var(--action-light) var(--action-glass-gleam), transparent),
+      inset 0 -2px color-mix(in srgb, var(--action-shade) var(--action-depth), transparent),
+      0 0 8px color-mix(in srgb, var(--action-tint) 34%, transparent),
+      0 2px 6px color-mix(in srgb, var(--action-shade) 48%, transparent) !important;
     transform: none !important;
   }
 
@@ -286,14 +356,19 @@
   }
 
   .cg-window .cg-fit-content :is(.cg-toolbar > button[data-action], .cg-btn):active:not(:disabled) {
-    --action-wash: 23%;
-    box-shadow: inset 0 1px 3px color-mix(in srgb, var(--action-shade) 40%, transparent) !important;
+    --action-wash: calc(var(--action-rest) + 6%);
+    --action-bloom: 12%;
+    box-shadow:
+      inset 0 2px 5px color-mix(in srgb, var(--action-shade) 70%, transparent),
+      inset 0 -1px color-mix(in srgb, var(--action-tint) 36%, transparent) !important;
     transform: translateY(1px) !important;
   }
 
   .cg-window .cg-fit-content :is(.cg-toolbar > button[data-action], .cg-btn):disabled {
-    --action-wash: 0%;
-    --action-rim: 12%;
+    --action-tint: color-mix(in srgb, var(--action-ink-base) 52%, var(--action-shade));
+    --action-wash: 6%;
+    --action-rim: 38%;
+    --action-bloom: 0%;
     opacity: .48 !important;
     box-shadow: none !important;
   }
@@ -318,6 +393,7 @@
 
     .cg-window .cg-fit-content :is(.cg-toolbar > button[data-action], .cg-btn) > svg {
       color: currentColor !important;
+      filter: none !important;
     }
 
     .cg-window .cg-fit-content :is(.cg-toolbar > button[data-action], .cg-btn):focus-visible {

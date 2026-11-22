@@ -1,0 +1,118 @@
+/* Navigation uses each material's palette with a thinner glass face than
+   action buttons. The active or focused control gets a brighter edge. */
+@layer auralis-navigation-controls {
+  .cg-window.cg-light {
+    --navigation-label-strength: 25%;
+    --navigation-icon-strength: 55%;
+    --navigation-tint-top: 21%;
+    --navigation-tint-bottom: 12%;
+    --navigation-light-strength: 62%;
+    --navigation-shadow-strength: 16%;
+    --navigation-highlight-label: 30%;
+    --navigation-highlight-top: 34%;
+    --navigation-highlight-bottom: 20%;
+    --navigation-highlight-underlay: #ffffff80;
+  }
+
+  .cg-window .cg-fit-content :where(
+    .cg-sidebar button,
+    .cg-settings-nav button,
+    .cg-preference-list button,
+    .cg-page-tabs button,
+    .cg-appearance-tabs button,
+    .cg-indicator-tabs button,
+    .cg-pagination button,
+    .cg-menu-trigger,
+    .cg-dropdown button,
+    .cg-context button,
+    .cg-winbuttons button
+  ):not(.cg-btn) {
+    --navigation-tint: var(--action-play);
+    --navigation-mirror: var(--action-secondary, var(--action-light));
+    --navigation-tint-weight: var(--navigation-label-strength, 38%);
+    --navigation-icon-weight: var(--navigation-icon-strength, 86%);
+    --navigation-upper: var(--navigation-tint-top, 16%);
+    --navigation-lower: var(--navigation-tint-bottom, 9%);
+    --navigation-rim: 24%;
+    --navigation-reflection: var(--navigation-light-strength, 13%);
+    --navigation-shadow: var(--navigation-shadow-strength, 28%);
+    --navigation-underlay: transparent;
+    --navigation-foreground: color-mix(in srgb, var(--navigation-tint) var(--navigation-tint-weight), var(--ink));
+    --navigation-icon: color-mix(in srgb, var(--navigation-tint) var(--navigation-icon-weight), var(--ink));
+    background:
+      linear-gradient(153deg, color-mix(in srgb, var(--navigation-tint) var(--navigation-upper), transparent), transparent 52%),
+      linear-gradient(0deg, color-mix(in srgb, var(--navigation-mirror) var(--navigation-lower), transparent), transparent 53%),
+      var(--navigation-underlay) !important;
+    border-color: color-mix(in srgb, var(--navigation-tint) var(--navigation-rim), transparent) !important;
+    color: var(--navigation-foreground) !important;
+    box-shadow:
+      inset 0 1px color-mix(in srgb, var(--action-light) var(--navigation-reflection), transparent),
+      inset 0 -1px color-mix(in srgb, var(--action-shade) var(--navigation-shadow), transparent) !important;
+    filter: none !important;
+
+    &:nth-of-type(9n + 1) { --navigation-tint: var(--action-add); }
+    &:nth-of-type(9n + 3) { --navigation-tint: var(--action-tools); }
+    &:nth-of-type(9n + 4) { --navigation-tint: var(--action-stop); }
+    &:nth-of-type(9n + 5) { --navigation-tint: var(--action-time); }
+    &:nth-of-type(9n + 6) { --navigation-tint: var(--action-remove); }
+    &:nth-of-type(9n + 7) { --navigation-tint: color-mix(in srgb, var(--action-play), var(--action-tools)); }
+    &:nth-of-type(9n + 8) { --navigation-tint: color-mix(in srgb, var(--action-stop), var(--action-remove)); }
+    &:nth-of-type(9n) { --navigation-tint: color-mix(in srgb, var(--action-add), var(--action-tools)); }
+
+    & > svg {
+      color: var(--navigation-icon) !important;
+      filter: none !important;
+    }
+
+    &:is(:hover, :focus-visible, .selected, .active, [aria-pressed="true"]):not(:disabled) {
+      --navigation-tint-weight: var(--navigation-highlight-label, 53%);
+      --navigation-upper: var(--navigation-highlight-top, 42%);
+      --navigation-lower: var(--navigation-highlight-bottom, 26%);
+      --navigation-rim: 69%;
+      --navigation-reflection: 52%;
+      --navigation-shadow: 53%;
+      --navigation-underlay: var(--navigation-highlight-underlay, color-mix(in srgb, var(--action-face) 82%, transparent));
+      box-shadow:
+        inset 0 1px color-mix(in srgb, var(--action-light) var(--navigation-reflection), transparent),
+        inset 0 -2px color-mix(in srgb, var(--navigation-tint) 68%, transparent),
+        inset 0 -5px 8px -5px color-mix(in srgb, var(--action-shade) var(--navigation-shadow), transparent) !important;
+      transform: none !important;
+
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--navigation-icon) !important;
+      outline-offset: -2px !important;
+    }
+
+    &:active:not(:disabled) {
+      --navigation-reflection: 24%;
+      --navigation-upper: 35%;
+    }
+
+    &:disabled {
+      opacity: .55 !important;
+    }
+
+    @media (forced-colors: active) {
+      background: ButtonFace !important;
+      color: ButtonText !important;
+      box-shadow: none !important;
+      &:is(.selected, .active, [aria-pressed="true"]) {
+        background: Highlight !important;
+        color: HighlightText !important;
+      }
+      &:focus-visible { outline-color: Highlight !important; }
+      & > svg { color: currentColor !important; }
+    }
+  }
+
+  .cg-window .cg-fit-content .cg-menu-parent:nth-child(3) > .cg-menu-trigger { --navigation-tint: var(--action-tools); }
+  .cg-window .cg-fit-content .cg-menu-parent:nth-child(4) > .cg-menu-trigger { --navigation-tint: var(--action-stop); }
+  .cg-window .cg-fit-content .cg-menu-parent:nth-child(5) > .cg-menu-trigger { --navigation-tint: var(--action-time); }
+  .cg-window .cg-fit-content .cg-menu-parent:nth-child(2) > .cg-menu-trigger { --navigation-tint: var(--action-play); }
+  .cg-window .cg-fit-content .cg-winbuttons .tray { --navigation-tint: var(--action-time); }
+  .cg-window .cg-fit-content .cg-winbuttons .minimize { --navigation-tint: var(--action-stop); }
+  .cg-window .cg-fit-content .cg-winbuttons .maximize { --navigation-tint: var(--action-tools); }
+  .cg-window .cg-fit-content .cg-winbuttons .close { --navigation-tint: var(--action-remove); }
+}

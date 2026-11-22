@@ -816,13 +816,39 @@
 .cg-window:is(.cg-material-frosted-water-351,.cg-material-builtin-smoked-glass,.cg-material-builtin-pearl-frost) :is(.cg-toolbar>button,.cg-btn):not(:disabled) {border-color:var(--vivid,var(--accent))!important;box-shadow:inset 0 1px #ffffff80,0 0 5px var(--vivid,var(--accent))!important}
 .cg-window:is(.cg-material-frosted-water-351,.cg-material-builtin-smoked-glass,.cg-material-builtin-pearl-frost) :is(.cg-toolbar>button,.cg-btn):hover:not(:disabled) {background:color-mix(in srgb,var(--vivid,var(--accent)) 35%,transparent)!important;box-shadow:inset 0 1px #fff,0 0 14px var(--vivid,var(--accent))!important}
 
-/* Lobed Bubble progress shape: the empty vessel and filled liquid share one outline. */
-.cg-window.cg-progress-shape-bubble .cg-percent-track {position:relative;overflow:visible;height:40px;min-height:40px;background:none!important;box-shadow:none!important;border:0!important;border-radius:0!important;clip-path:none!important;mask-image:none!important;-webkit-mask-image:none!important}
-.cg-window.cg-progress-shape-bubble .cg-percent-track::after {display:none!important}
-.cg-window.cg-progress-shape-bubble .cg-bubble-vessel {display:block;width:100%;height:100%;overflow:visible}
+/* Reserve the Bubble's full height so the label and the next row never overlap. */
+.cg-window .cg-percent-wrap:has(> .cg-bubble-track) {
+  height:auto;
+  overflow:visible;
+  padding:3px 0 3px 4px;
+}
+.cg-window.cg-progress-shape-bubble .cg-bubble-track {
+  position:relative;
+  overflow:visible;
+  flex:0 1 max(50%,104px);
+  min-width:0;
+  height:46px;
+  min-height:46px;
+  background:none!important;
+  box-shadow:none!important;
+  border:0!important;
+  border-radius:0!important;
+  clip-path:none!important;
+  mask-image:none!important;
+  -webkit-mask-image:none!important;
+}
+.cg-window .cg-percent-wrap:has(> .cg-bubble-track)>strong {flex:none}
+.cg-window.cg-progress-shape-bubble .cg-bubble-track::after {display:none!important}
+.cg-window .cg-bubble-vessel {display:block;width:100%;height:100%;overflow:visible}
 .cg-bubble-prism-halo {opacity:.45;filter:blur(2.5px)}
 .cg-bubble-liquid-host .cg-liquid-progress {opacity:.88;filter:none}
-.cg-window.cg-progress-shape-bubble .cg-card-preview .cg-percent-track {height:58px;min-height:58px}
-.cg-window.cg-progress-shape-bubble .cg-row-progress .cg-percent-track {height:22px!important;min-height:22px!important}
+.cg-window.cg-progress-shape-bubble .cg-piped-progress-page .cg-progress-tube .cg-bubble-track {height:36px;min-height:36px}
+.cg-window.cg-progress-shape-bubble .cg-card-preview .cg-bubble-track {height:64px;min-height:64px}
+.cg-window.cg-progress-shape-bubble .cg-table .cg-row-progress .cg-bubble-track {
+  flex-basis:max(50%,88px);
+  height:26px;
+  min-height:26px;
+}
+.cg-row-progress .cg-bubble-prism-halo {opacity:.35;filter:blur(1.8px)}
 
 .cg-bubble-liquid-host{position:relative;width:100%;height:100%;overflow:hidden}

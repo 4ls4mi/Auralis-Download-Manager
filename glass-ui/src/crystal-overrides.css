@@ -159,3 +159,24 @@
   .cg-live-graph .cg-graph{height:70px}
   .cg-footer{min-height:42px}
 }
+
+@media (max-height: 600px) {
+  .cg-list-panel .cg-empty {
+    min-height: 0;
+    padding: 8px;
+    gap: 6px 9px;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .cg-list-panel .cg-empty > p {
+    max-width: none;
+    flex-basis: 100%;
+    order: 1;
+  }
+
+  .cg-list-panel .cg-empty > svg {
+    width: 25px;
+    height: 25px;
+  }
+}

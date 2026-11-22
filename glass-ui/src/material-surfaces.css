@@ -8,6 +8,7 @@
   --material-edge-light: 198 230 255;
   --material-edge-shadow: 6 16 36;
   --material-chroma: 101 169 224;
+  --material-refracted-light: 179 153 232;
   --material-edge-strength: .66;
   --material-reflection: .14;
   --material-shadow-strength: .55;
@@ -15,11 +16,25 @@
   --material-face-shadow: calc(var(--material-shadow-strength) * (.65 + .7 * var(--material-shading, .5)));
   --material-face-pattern: linear-gradient(transparent, transparent);
   --material-pane-pattern: linear-gradient(transparent, transparent);
+  --material-pane-profile: linear-gradient(transparent, transparent);
   --material-pane-radius: 9px;
   --material-light-angle: 180deg;
   --material-light-width: 30px;
   --material-bevel: 1px;
   --material-cast: 7px;
+  --material-rim-width: 5px;
+  --material-return-width: 16px;
+  --material-rim: calc(var(--material-bevel) + 2px);
+  --material-reflection-band:
+    linear-gradient(180deg, rgb(var(--material-edge-light) / calc(var(--material-face-reflection) * .85)), transparent var(--material-rim-width), transparent calc(100% - var(--material-return-width)), rgb(var(--material-refracted-light) / calc(var(--material-face-reflection) * .65))),
+    linear-gradient(90deg, rgb(var(--material-chroma) / .17), transparent var(--material-return-width), transparent calc(100% - var(--material-rim-width)), rgb(var(--material-edge-shadow) / .17));
+  --material-pane-shadow:
+    inset 0 var(--material-bevel) var(--material-bevel) rgb(var(--material-edge-light) / calc(var(--material-edge-strength) * .94)),
+    inset 1px 0 rgb(var(--material-chroma) / .35),
+    inset 0 0 0 var(--material-rim) rgb(var(--material-refracted-light) / .12),
+    inset 0 -2px 3px rgb(var(--material-chroma) / .32),
+    inset 0 -12px 15px -13px rgb(var(--material-edge-shadow) / var(--material-face-shadow)),
+    0 2px var(--material-cast) rgb(var(--material-edge-shadow) / .24);
   --material-layout-gap: 8px;
   --material-layout-inset: 9px;
   --material-sidebar-width: 17vw;
@@ -31,6 +46,7 @@
   --material-edge-light: 250 255 255;
   --material-edge-shadow: 60 96 122;
   --material-chroma: 117 168 201;
+  --material-refracted-light: 154 169 217;
   --material-shadow-strength: .34;
 }
 
@@ -56,10 +72,14 @@
 .cg-window.cg-material-brushed-glass {
   --material-edge-light: 192 245 239;
   --material-chroma: 110 224 207;
+  --material-refracted-light: 168 220 247;
   --material-reflection: .22;
   --material-edge-strength: .68;
   --material-face-pattern: repeating-linear-gradient(0deg, #b2fff40b 0 1px, transparent 1px 4px);
-  --material-pane-pattern: repeating-linear-gradient(0deg, #d1fff80e 0 1px, transparent 1px 5px);
+  --material-pane-pattern:
+    linear-gradient(90deg, #83f5d72b, transparent 23px, transparent calc(100% - 18px), #b9e8ff24),
+    repeating-linear-gradient(0deg, #d1fff80e 0 1px, transparent 1px 5px);
+  --material-return-width: 11px;
   --material-pane-radius: 3px;
   --material-raised-radius: 5px;
   --material-layout-gap: 5px;
@@ -75,6 +95,7 @@
   --material-edge-light: 211 245 255;
   --material-edge-shadow: 20 61 99;
   --material-chroma: 127 211 255;
+  --material-refracted-light: 180 169 253;
   --material-edge-strength: .87;
   --material-reflection: .29;
   --material-light-width: 48px;
@@ -86,7 +107,11 @@
   --material-sidebar-width: 16vw;
   --material-settings-width: 178px;
   --material-face-pattern: radial-gradient(110% 70px at 20% 0, #d6f8ff4a, transparent 83%);
-  --material-pane-pattern: linear-gradient(137deg, #d9f9ff42, transparent 15%, transparent 89%, #7db8ec27);
+  --material-pane-pattern:
+    linear-gradient(137deg, #d9f9ff66 0 8px, #85d8ff44 9px, #8bbcff18 11px, transparent 34px),
+    linear-gradient(317deg, #bcb7ff42 0 12px, #73bded24 13px, transparent 38px);
+  --material-rim-width: 7px;
+  --material-return-width: 24px;
   --material-bevel: 3px;
   --material-cast: 13px;
 }
@@ -96,12 +121,16 @@
   --material-edge-light: 255 213 219;
   --material-edge-shadow: 54 16 39;
   --material-chroma: 239 157 177;
+  --material-refracted-light: 244 180 135;
   --material-reflection: .20;
   --material-pane-density: .36;
   --material-raised-density: .48;
   --material-light-angle: 148deg;
   --material-face-pattern: radial-gradient(95% 92px at 78% 0, #f8ac9d38, transparent 90%);
-  --material-pane-pattern: radial-gradient(74% 52px at 0 0, #e49eb72e, transparent 86%);
+  --material-pane-pattern:
+    radial-gradient(113% 58px at 10% 0, #f4b3c955, transparent 85%),
+    radial-gradient(91% 35px at 94% 100%, #f5ab7636, transparent 87%);
+  --material-return-width: 22px;
   --material-pane-radius: 17px;
   --material-raised-radius: 20px;
   --material-layout-gap: 10px;
@@ -116,6 +145,7 @@
 .cg-window.cg-material-oversimplified {
   --material-edge-light: 191 191 255;
   --material-chroma: 156 153 252;
+  --material-refracted-light: 118 229 209;
   --material-edge-strength: .23;
   --material-reflection: .045;
   --material-pane-density: .11;
@@ -123,6 +153,9 @@
   --material-recess-density: .075;
   --material-shadow-strength: .22;
   --material-cast: 0px;
+  --material-rim-width: 2px;
+  --material-return-width: 6px;
+  --material-pane-pattern: linear-gradient(90deg, #7c76ff18, transparent 22px);
   --material-pane-radius: 0px;
   --material-layout-gap: 4px;
   --material-layout-inset: 6px;
@@ -136,6 +169,7 @@
   --material-edge-light: 255 224 174;
   --material-edge-shadow: 40 28 21;
   --material-chroma: 243 180 91;
+  --material-refracted-light: 221 123 61;
   --material-edge-strength: .34;
   --material-pane-density: .46;
   --material-raised-density: .62;
@@ -147,6 +181,10 @@
   --material-sidebar-width: 19vw;
   --material-settings-width: 188px;
   --material-cast: 5px;
+  --material-rim-width: 3px;
+  --material-return-width: 8px;
+  --material-face-pattern: linear-gradient(180deg, #edb27739 0 1px, #8b532540 2px, transparent 14px);
+  --material-pane-pattern: linear-gradient(180deg, #ffbf7a41 0 1px, #33251965 2px, transparent 17px);
 }
 
 /* Smoked glass: warm glass with a shaded lower edge and broad side catches. */
@@ -154,6 +192,7 @@
   --material-edge-light: 255 232 189;
   --material-edge-shadow: 41 23 12;
   --material-chroma: 244 180 118;
+  --material-refracted-light: 205 179 128;
   --material-reflection: .19;
   --material-pane-density: .31;
   --material-raised-density: .51;
@@ -161,7 +200,10 @@
   --material-light-angle: 110deg;
   --material-light-width: 56px;
   --material-face-pattern: linear-gradient(90deg, #f2bd8246, transparent 54px, transparent calc(100% - 35px), #1d100c25);
-  --material-pane-pattern: linear-gradient(0deg, #2d160a43, transparent 19px);
+  --material-pane-pattern:
+    linear-gradient(0deg, #28180e67, #442b1937 7px, transparent 28px),
+    radial-gradient(56% 54px at 21% 0, #f7c08d44, transparent 86%);
+  --material-return-width: 29px;
   --material-pane-radius: 15px 4px 15px 4px;
   --material-raised-radius: 4px 15px;
   --material-layout-gap: 9px;
@@ -177,6 +219,7 @@
   --material-edge-light: 200 204 215;
   --material-edge-shadow: 0 0 0;
   --material-chroma: 164 173 192;
+  --material-refracted-light: 184 199 220;
   --material-reflection: .07;
   --material-edge-strength: .29;
   --material-pane-density: .53;
@@ -188,6 +231,9 @@
   --material-sidebar-width: 16vw;
   --material-settings-width: 153px;
   --material-cast: 9px;
+  --material-rim-width: 3px;
+  --material-return-width: 10px;
+  --material-pane-pattern: linear-gradient(180deg, #d6e1f129 0 1px, #02030540 2px, transparent 16px);
 }
 
 /* Pearl: soft opalescent edges, lilac shadows, and spacious creamy panels. */
@@ -195,6 +241,7 @@
   --material-edge-light: 255 240 255;
   --material-edge-shadow: 64 40 79;
   --material-chroma: 222 185 244;
+  --material-refracted-light: 254 198 163;
   --material-edge-strength: .72;
   --material-reflection: .28;
   --material-pane-density: .26;
@@ -202,7 +249,11 @@
   --material-light-angle: 156deg;
   --material-light-width: 38px;
   --material-face-pattern: radial-gradient(58% 60px at 79% 0, #ffe6d94b, transparent 90%), radial-gradient(42% 40px at 8% 100%, #d7b0ff38, transparent 94%);
-  --material-pane-pattern: linear-gradient(115deg, #f2bcff2a, transparent 20%, transparent 82%, #ffe9c332);
+  --material-pane-pattern:
+    radial-gradient(80% 48px at 13% 0, #f3caff4d, transparent 87%),
+    radial-gradient(82% 29px at 88% 100%, #ffd7b847, transparent 88%);
+  --material-rim-width: 8px;
+  --material-return-width: 22px;
   --material-pane-radius: 20px 20px 10px 10px;
   --material-raised-radius: 24px;
   --material-layout-gap: 13px;
@@ -220,37 +271,53 @@
 .cg-window:is(.cg-dark,.cg-light):is(.cg-target-main,.cg-target-details):not(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-content {
   background:
     var(--material-face-pattern),
+    var(--material-reflection-band),
     linear-gradient(var(--material-light-angle), rgb(var(--material-edge-light) / var(--material-face-reflection)), transparent var(--material-light-width), transparent calc(100% - 26px), rgb(var(--material-edge-shadow) / .12)),
     linear-gradient(141deg, color-mix(in srgb, var(--glass-tint) calc(55% * var(--material-face-opacity)), transparent), transparent 42%),
     rgb(var(--material-face-rgb) / var(--material-face-opacity)) !important;
   border-color: rgb(var(--material-edge-light) / calc(var(--material-edge-strength) * .48)) !important;
   box-shadow:
     inset 0 var(--material-bevel) var(--material-bevel) rgb(var(--material-edge-light) / var(--material-edge-strength)),
-    inset 0 0 0 calc(var(--material-bevel) + 1px) rgb(var(--material-edge-light) / .10),
-    inset 0 -2px 4px rgb(var(--material-chroma) / .28),
+    inset 0 0 0 var(--material-rim) rgb(var(--material-edge-light) / .12),
+    inset 2px 0 4px rgb(var(--material-chroma) / .34),
+    inset 0 -3px 5px rgb(var(--material-refracted-light) / .25),
     inset 0 -16px 24px -25px rgb(var(--material-edge-shadow) / var(--material-face-shadow)) !important;
 }
 
 .cg-window:is(.cg-dark,.cg-light):is(.cg-target-main,.cg-target-details):not(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-fit-content :is(.cg-glass,.cg-window-top,.cg-menubar,.cg-page-tabs) {
   background:
     var(--material-pane-pattern),
-    linear-gradient(90deg, rgb(var(--material-edge-light) / calc(var(--material-face-reflection) * .66)), transparent 8px, transparent calc(100% - 8px), rgb(var(--material-chroma) / .09)),
+    var(--material-pane-profile),
+    var(--material-reflection-band),
     linear-gradient(var(--material-light-angle), rgb(var(--material-edge-light) / var(--material-face-reflection)), transparent var(--material-light-width), transparent calc(100% - 18px), rgb(var(--material-edge-shadow) / .10)),
     rgb(var(--material-pane-rgb) / calc(var(--material-face-opacity) * var(--material-pane-density))) !important;
   border-color: rgb(var(--material-edge-light) / calc(var(--material-edge-strength) * .39)) !important;
-  box-shadow:
-    inset 0 var(--material-bevel) var(--material-bevel) rgb(var(--material-edge-light) / calc(var(--material-edge-strength) * .85)),
-    inset 0 0 0 calc(var(--material-bevel) + 1px) rgb(var(--material-edge-light) / .068),
-    inset 0 -1px 2px rgb(var(--material-chroma) / .19),
-    0 2px var(--material-cast) rgb(var(--material-edge-shadow) / .25) !important;
+  box-shadow: var(--material-pane-shadow) !important;
 }
 
+/* Tracks and trays are raised above the inset work area. Translucent color
+   bands follow their rims without increasing the backing alpha. */
 .cg-window:is(.cg-target-main,.cg-target-details) .cg-fit-content :is(.cg-toolbar,.cg-footer) {
   --material-pane-density: var(--material-raised-density);
+  --material-pane-profile: linear-gradient(180deg, rgb(var(--material-edge-light) / .16), rgb(var(--material-chroma) / .10) 8px, transparent 24px);
+  --material-pane-shadow:
+    inset 0 var(--material-bevel) var(--material-bevel) rgb(var(--material-edge-light) / var(--material-edge-strength)),
+    inset 0 0 0 var(--material-rim) rgb(var(--material-chroma) / .21),
+    inset 0 -2px 4px rgb(var(--material-refracted-light) / .32),
+    inset 0 -11px 15px -13px rgb(var(--material-edge-shadow) / var(--material-face-shadow)),
+    0 2px 2px rgb(var(--material-edge-shadow) / .26),
+    0 4px var(--material-cast) rgb(var(--material-edge-shadow) / .32);
 }
 
 .cg-window:is(.cg-target-main,.cg-target-details) .cg-fit-content :is(.cg-list-panel,.cg-settings-body) {
   --material-pane-density: var(--material-recess-density);
+  --material-pane-profile: linear-gradient(180deg, rgb(var(--material-edge-shadow) / .24), transparent 13px);
+  --material-pane-shadow:
+    inset 0 1px rgb(var(--material-edge-light) / calc(var(--material-edge-strength) * .54)),
+    inset 0 0 0 var(--material-rim) rgb(var(--material-chroma) / .12),
+    inset 0 7px 14px -9px rgb(var(--material-edge-shadow) / var(--material-face-shadow)),
+    inset 0 -2px 3px rgb(var(--material-refracted-light) / .26),
+    0 1px 2px rgb(var(--material-edge-shadow) / .20);
 }
 
 .cg-window:is(.cg-dark,.cg-light) .cg-fit-content :is(.cg-glass,.cg-menubar,.cg-page-tabs) {
@@ -309,7 +376,10 @@
 }
 
 .cg-window.cg-material-oversimplified:is(.cg-dark,.cg-light):is(.cg-target-main,.cg-target-details) .cg-fit-content :is(.cg-sidebar,.cg-settings-nav,.cg-list-panel) {
-  box-shadow: inset 0 -1px rgb(var(--material-chroma) / .45) !important;
+  box-shadow:
+    inset 0 -1px rgb(var(--material-chroma) / .52),
+    inset 0 -2px rgb(var(--material-refracted-light) / .18),
+    inset 0 5px 12px -9px rgb(var(--material-edge-shadow) / .34) !important;
   border-color: transparent !important;
 }
 

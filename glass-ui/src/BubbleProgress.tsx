@@ -1,9 +1,30 @@
 import {useId} from 'react';
 import {isLiquidMaterial, LiquidProgress} from './LiquidIndicators';
 
-const vessel = 'M4 50 C4 15 24 3 49 7 C86 11 98 33 132 33 C169 33 181 12 215 13 C253 14 268 35 304 34 C341 33 357 8 395 8 C435 8 450 33 486 32 C523 31 536 15 573 17 C611 19 627 33 663 33 C700 33 715 16 752 16 C789 16 806 34 841 33 C878 32 892 7 931 7 C971 7 996 18 996 50 C996 82 971 93 931 93 C892 93 878 68 841 67 C806 66 789 84 752 84 C715 84 700 67 663 67 C627 67 611 81 573 83 C536 85 523 69 486 68 C450 67 435 92 395 92 C357 92 341 67 304 66 C268 65 253 86 215 87 C181 88 169 67 132 67 C98 67 86 89 49 93 C24 97 4 85 4 50 Z';
-const reflectedLight = 'M21 37 C30 19 54 15 80 27 C56 23 39 26 26 39 Q20 44 21 37 Z M171 35 C186 21 214 16 239 25 C214 23 194 28 175 37 Q169 41 171 35 Z M347 36 C364 18 392 12 419 21 C395 20 374 27 351 39 Q345 42 347 36 Z M532 36 C550 24 572 20 598 30 C574 28 557 30 536 39 Q530 42 532 36 Z M716 38 C734 24 756 21 778 29 C757 28 738 33 720 40 Q714 43 716 38 Z M886 39 C906 18 938 12 963 22 C942 20 918 27 891 41 Q884 45 886 39 Z';
-const caustic = 'M20 62 C48 91 77 82 104 73 S153 64 173 76 S225 91 258 74 S305 66 333 78 S387 91 424 74 S467 65 503 78 S553 89 591 75 S636 66 671 78 S727 90 763 75 S803 65 837 77 S890 88 919 75 S959 65 978 57';
+// Four rounded chambers in one continuous silhouette. The outline has one
+// upper edge and one lower edge throughout, including at the narrower joins.
+const vessel = [
+  'M4 50 C4 23 27 9 66 9 C120 9 142 32 199 32',
+  'C249 32 272 11 324 11 C378 11 400 29 455 30',
+  'C516 31 542 10 603 10 C667 10 690 32 750 32',
+  'C812 32 846 8 913 8 C966 8 996 23 996 50',
+  'C996 77 966 92 913 92 C846 92 812 68 750 68',
+  'C690 68 667 90 603 90 C542 90 516 69 455 70',
+  'C400 71 378 89 324 89 C272 89 249 68 199 68',
+  'C142 68 120 91 66 91 C27 91 4 77 4 50 Z',
+].join(' ');
+const reflectedLight = [
+  'M27 37 C47 19 81 15 109 24 C78 20 51 26 33 39 Q27 43 27 37 Z',
+  'M273 34 C290 21 321 16 352 24 C322 21 294 28 278 38 Q272 41 273 34 Z',
+  'M550 35 C570 18 605 15 637 23 C606 20 573 26 555 39 Q549 43 550 35 Z',
+  'M865 35 C888 18 920 12 954 21 C924 18 891 26 870 39 Q863 43 865 35 Z',
+].join(' ');
+const caustic = [
+  'M23 62 C45 82 78 88 111 77',
+  'M270 75 C300 88 335 87 370 76',
+  'M545 75 C574 87 618 88 653 76',
+  'M860 75 C907 90 953 88 978 62',
+].join(' ');
 
 const tintColors: Record<string, string> = {
   ice: '#a9dfff',
@@ -77,9 +98,9 @@ export function BubbleProgress({percent, colors, backdrop, finish, tint, active,
       </foreignObject>}
       <g clipPath={`url(#${id}fill)`}>
         {!sculpted && <rect width="1000" height="100" fill={`url(#${id}color)`} fillOpacity=".84"/>}
-        <path d="M0 72 C75 51 111 85 185 72 S300 57 372 72 S484 88 557 70 S668 56 740 73 S860 87 940 67 L1000 78 L1000 100 L0 100 Z" fill="#021c70" fillOpacity=".23"/>
-        <ellipse cx="240" cy="51" rx="12" ry="15" fill={`url(#${id}bubble)`} stroke="#e8ffff" strokeOpacity=".50" vectorEffect="non-scaling-stroke"/>
-        <ellipse cx="520" cy="56" rx="9" ry="12" fill={`url(#${id}bubble)`} stroke="#e8ffff" strokeOpacity=".50" vectorEffect="non-scaling-stroke"/>
+        <path d="M0 69 C99 53 129 80 229 70 S350 58 456 70 S600 81 704 69 S852 58 1000 72 L1000 100 L0 100 Z" fill="#021c70" fillOpacity=".23"/>
+        <ellipse cx="323" cy="53" rx="13" ry="12" fill={`url(#${id}bubble)`} stroke="#e8ffff" strokeOpacity=".50" vectorEffect="non-scaling-stroke"/>
+        <ellipse cx="598" cy="55" rx="10" ry="10" fill={`url(#${id}bubble)`} stroke="#e8ffff" strokeOpacity=".50" vectorEffect="non-scaling-stroke"/>
       </g>
       <path d={vessel} fill={`url(#${id}depth)`}/>
       <path d={caustic} fill="none" stroke={`url(#${id}spectrum)`} strokeOpacity=".43" strokeWidth="3" vectorEffect="non-scaling-stroke"/>
