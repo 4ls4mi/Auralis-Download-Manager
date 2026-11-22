@@ -12,6 +12,7 @@ Item {
 
     readonly property var paths: ({
         app: "M4 4 H20 V20 H4 Z M12 6 V15 M8 11 L12 15 L16 11",
+        studioMark: "M2 15 C5 15 6 6 10 6 C14 6 15 18 18 18 C20 18 21 12 22 12",
         add: "M12 4 V20 M4 12 H20",
         torrent: "M6 3 H14 L19 8 V20 H5 V3 Z M14 3 V8 H19 M10 8 V17 M8 10 L10 8 L12 10 M8 15 L10 17 L12 15",
         start: "M8 4 L20 12 L8 20 Z",
@@ -27,6 +28,7 @@ Item {
         folder: "M3 6 H9 L11 8 H21 V19 H3 Z",
         queue: "M3 6 H21 M3 12 H16 M3 18 H11",
         file: "M5 3 H14 L19 8 V21 H5 Z M14 3 V8 H19",
+        video: "M3.5 8 H20.5 V20.5 H3.5 Z M3.5 8 L5.5 3.5 H20.5 L18.5 8 M8 3.5 L10.5 8 M13.5 3.5 L16 8 M10 11.5 L15 14.5 L10 17.5 Z",
         search: "M17 10 A7 7 0 1 0 3 10 A7 7 0 1 0 17 10 Z M15 15 L21 21",
         tray: "M12 3 V12 M8 8 L12 12 L16 8 M4 11 V19 H20 V11 M4 15 H8 L10 17 H14 L16 15 H20",
         minimize: "M4 12 H20",
@@ -35,6 +37,10 @@ Item {
         close: "M6 6 L18 18 M18 6 L6 18",
         peers: "M12 3 L21 18 H3 Z M12 3 V13 M3 18 L12 13 L21 18",
         mixed: "M4 4 H10 V10 H4 Z M10 7 H17 L20 10 L17 13 M17 10 V16 H21 V21 H16 V16",
+        details: "M21 12 A9 9 0 1 0 3 12 A9 9 0 1 0 21 12 Z M12 11 V17 M12 7 V8",
+        refresh: "M19 9 A8 8 0 1 0 19 16 M19 3 V9 H13",
+        keys: "M3 5 H21 V18 H3 Z M6 9 H7 M10 9 H11 M14 9 H15 M17 9 H18 M7 14 H17",
+        web: "M21 12 A9 9 0 1 0 3 12 A9 9 0 1 0 21 12 Z M3 12 H21 M12 3 Q4 12 12 21 Q20 12 12 3",
         chevron: "M6 9 L12 15 L18 9"
     })
 

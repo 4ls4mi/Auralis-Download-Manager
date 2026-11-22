@@ -15,6 +15,11 @@ ApplicationWindow {
     property bool positioned: false
     property int innerPadding: 16
     property alias bodyContent: body.data
+    readonly property int preferredHeight: Math.ceil(Math.max(minimumHeight,
+        Math.min(650, body.implicitHeight + header.implicitHeight
+                 + (footer && footer.visible ? footer.implicitHeight : 0) + 2 * innerPadding)))
+    property size fittedSize
+    property bool userResized: false
 
     signal opened()
     signal dismissed()
@@ -23,8 +28,7 @@ ApplicationWindow {
     width: 510
     minimumWidth: 365
     minimumHeight: 155
-    height: Math.max(minimumHeight, Math.min(650, body.implicitHeight + header.height
-                 + (footer && footer.visible ? footer.height : 0) + 2 * innerPadding))
+    height: minimumHeight
     color: "transparent"
     flags: Qt.Dialog | Qt.WindowTitleHint | Qt.WindowSystemMenuHint | Qt.WindowCloseButtonHint
     transientParent: hostWindow && hostWindow.visible && hostWindow.visibility !== Window.Minimized ? hostWindow : null
@@ -37,7 +41,20 @@ ApplicationWindow {
     palette.highlight: colors.accent
     palette.placeholderText: colors.muted
 
+    function fitInitialHeight() {
+        if (userResized)
+            return
+        if (fittedSize.width > 0 && (width !== fittedSize.width || height !== fittedSize.height)) {
+            userResized = true
+            return
+        }
+        fittedSize = Qt.size(width, preferredHeight)
+        height = fittedSize.height
+    }
+
     function open() {
+        if (!visible)
+            fitInitialHeight()
         if (!visible && !positioned) {
             if (transientParent) {
                 x = Math.round(transientParent.x + (transientParent.width - width) / 2)
@@ -50,6 +67,7 @@ ApplicationWindow {
         requestActivate()
     }
 
+    onPreferredHeightChanged: if (visible) Qt.callLater(fitInitialHeight)
     onVisibleChanged: {
         if (visible)
             opened()
@@ -114,6 +132,8 @@ ApplicationWindow {
             spacing: 9
         }
     }
+
+    WindowResizeHandles { hostWindow: root }
 
     Shortcut {
         sequence: "Escape"

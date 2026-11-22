@@ -79,11 +79,42 @@ ColumnLayout {
     }
 
     component Choice: GlassComboBox {
+        id: choice
+
+        required property string selection
+
         Layout.fillWidth: true
         textRole: "label"
         valueRole: "value"
-        currentIndex: indexOfValue(selection)
+        currentIndex: (model || []).findIndex(option => option.value === choice.selection)
+    }
+
+    component IndicatorChoice: ColumnLayout {
+        id: field
+
+        required property string label
         required property string selection
+        property alias model: control.model
+        signal chosen(var value)
+
+        Layout.fillWidth: true
+        Layout.preferredWidth: 1
+        spacing: 4
+
+        Label {
+            Layout.fillWidth: true
+            text: field.label
+            color: root.colors.text
+            font.weight: Font.Medium
+            wrapMode: Text.WordWrap
+        }
+
+        Choice {
+            id: control
+            selection: field.selection
+            Accessible.name: field.label
+            onActivated: field.chosen(currentValue)
+        }
     }
 
     TabBar {
@@ -116,6 +147,7 @@ ColumnLayout {
                         Layout.minimumWidth: 120
                         material: modelData.id
                         text: modelData.name
+                        Accessible.description: materialPalette.opaque ? qsTr("Opaque material") : ""
                         checkable: true
                         checked: MaterialTheme.current === modelData.id
                         highlighted: checked
@@ -277,24 +309,24 @@ ColumnLayout {
             Heading { text: qsTr("Progress") }
             RowLayout {
                 Layout.fillWidth: true
-                Choice {
+                IndicatorChoice {
+                    label: qsTr("Progress shape")
                     model: root.shapeChoices
                     selection: WindowAppearance.progressShape
-                    onActivated: WindowAppearance.set("progressShape", currentValue)
-                    Accessible.name: qsTr("Progress shape")
+                    onChosen: value => WindowAppearance.set("progressShape", value)
                 }
-                Choice {
+                IndicatorChoice {
+                    label: qsTr("Progress fill")
                     model: root.fillChoices
                     selection: WindowAppearance.progressFill
-                    onActivated: WindowAppearance.set("progressFill", currentValue)
-                    Accessible.name: qsTr("Progress fill")
+                    onChosen: value => WindowAppearance.set("progressFill", value)
                 }
             }
-            Choice {
+            IndicatorChoice {
+                label: qsTr("Progress colors")
                 model: MaterialTheme.indicatorChoices
                 selection: MaterialTheme.progressPalette
-                onActivated: MaterialTheme.progressPalette = currentValue
-                Accessible.name: qsTr("Progress color")
+                onChosen: value => MaterialTheme.progressPalette = value
             }
             GlassProgress {
                 Layout.fillWidth: true
@@ -311,24 +343,24 @@ ColumnLayout {
             Heading { text: qsTr("Connections") }
             RowLayout {
                 Layout.fillWidth: true
-                Choice {
+                IndicatorChoice {
+                    label: qsTr("Connection shape")
                     model: root.shapeChoices
                     selection: WindowAppearance.connectionShape
-                    onActivated: WindowAppearance.set("connectionShape", currentValue)
-                    Accessible.name: qsTr("Connection shape")
+                    onChosen: value => WindowAppearance.set("connectionShape", value)
                 }
-                Choice {
+                IndicatorChoice {
+                    label: qsTr("Connection fill")
                     model: root.fillChoices
                     selection: WindowAppearance.connectionFill
-                    onActivated: WindowAppearance.set("connectionFill", currentValue)
-                    Accessible.name: qsTr("Connection fill")
+                    onChosen: value => WindowAppearance.set("connectionFill", value)
                 }
             }
-            Choice {
+            IndicatorChoice {
+                label: qsTr("Connection colors")
                 model: MaterialTheme.indicatorChoices
                 selection: MaterialTheme.connectionPalette
-                onActivated: MaterialTheme.connectionPalette = currentValue
-                Accessible.name: qsTr("Connection color")
+                onChosen: value => MaterialTheme.connectionPalette = value
             }
             RowLayout {
                 Layout.fillWidth: true
@@ -349,17 +381,17 @@ ColumnLayout {
                 }
             }
             Heading { text: qsTr("Transfer speed graph") }
-            Choice {
+            IndicatorChoice {
+                label: qsTr("Graph style")
                 model: [{label: qsTr("Area"), value: "area"}, {label: qsTr("Line"), value: "line"}, {label: qsTr("Bars"), value: "bars"}]
                 selection: WindowAppearance.graphShape
-                onActivated: WindowAppearance.set("graphShape", currentValue)
-                Accessible.name: qsTr("Graph style")
+                onChosen: value => WindowAppearance.set("graphShape", value)
             }
-            Choice {
+            IndicatorChoice {
+                label: qsTr("Graph colors")
                 model: MaterialTheme.indicatorChoices
                 selection: MaterialTheme.graphPalette
-                onActivated: MaterialTheme.graphPalette = currentValue
-                Accessible.name: qsTr("Graph color")
+                onChosen: value => MaterialTheme.graphPalette = value
             }
             TransferGraph {
                 Layout.fillWidth: true

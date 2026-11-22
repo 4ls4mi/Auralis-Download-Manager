@@ -15,9 +15,9 @@ QtObject {
     property var userMaterials: ({})
     property var colorTheme: null
     property string forcedAccent: ""
-    property string progressPalette: "blue-purple"
-    property string connectionPalette: "ocean"
-    property string graphPalette: "blue-purple"
+    property string progressPalette: "material"
+    property string connectionPalette: "material"
+    property string graphPalette: "material"
 
     readonly property var indicatorPalettes: ({
         "blue-purple": { label: qsTr("Blue / Purple"), colors: ["#13bafa", "#9f57f8"] },
@@ -36,13 +36,43 @@ QtObject {
         fire: { label: qsTr("Fire"), colors: ["#ffdb32", "#fa3652"] },
         forest: { label: qsTr("Forest"), colors: ["#aef244", "#049c91"] }
     })
-    readonly property var indicatorChoices: Object.keys(indicatorPalettes).map(id =>
-        ({ value: id, label: indicatorPalettes[id].label }))
-    readonly property var progressColors: indicatorColors(progressPalette)
-    readonly property var connectionColors: indicatorColors(connectionPalette)
-    readonly property var graphColors: indicatorColors(graphPalette)
+    readonly property var indicatorChoices: [{ value: "material", label: qsTr("Use material colors") }]
+        .concat(Object.keys(indicatorPalettes).map(id => ({ value: id, label: indicatorPalettes[id].label })))
+    readonly property string effectiveProgressPalette: resolvedPalette(progressPalette, "blue-purple")
+    readonly property string effectiveConnectionPalette: resolvedPalette(connectionPalette, "ocean")
+    readonly property string effectiveGraphPalette: resolvedPalette(graphPalette, "blue-purple")
+    readonly property var progressColors: colorsFor(progressPalette, effectiveProgressPalette)
+    readonly property var connectionColors: colorsFor(connectionPalette, effectiveConnectionPalette)
+    readonly property var graphColors: colorsFor(graphPalette, effectiveGraphPalette)
 
     readonly property var builtins: ({
+        "black-ceramic": preset({
+            name: qsTr("Black Ceramic"), finish: "matte", shape: "round", opaque: true, cleanStudio: true,
+            background: "#161312", edge: "#3d302a", shade: "#0d0b0b", upper: "#e4c4b4",
+            accent: "#ff8056", secondary: "#ffab87", ink: "#fff6f1", muted: "#cec0bb",
+            divider: "#6d5650", positive: "#ff9870", caution: "#ffd080", destructive: "#ff817b",
+            buttonFace: "#241b18", surfaceLine: "#45332e",
+            navigationFill: "#3d241d", navigationInk: "#ffac8c",
+            menuSurface: "#201816", menuHighlight: "#ff754d", menuRail: "#ffd4a5",
+            translucency: 0, gloss: .19, radius: 8, bevel: 1.8,
+            indicatorPalette: "tangerine", liquidColors: ["#ff512d", "#ffca7f"],
+            roleFaces: {title: "#191413", toolbar: "#191514", sidebar: "#1c1615",
+                        content: "#171312", footer: "#1b1514", field: "#251b18", card: "#211917"}
+        }),
+        "monochrome-studio": preset({
+            name: qsTr("Monochrome Studio"), finish: "satin", shape: "round", opaque: true,
+            light: true, cleanStudio: true,
+            background: "#fefefe", edge: "#d9d4df", shade: "#c4b9ce", upper: "#ffffff",
+            accent: "#6024cf", secondary: "#007b54", ink: "#18141e", muted: "#554e5a",
+            divider: "#a29ba9", positive: "#067350", caution: "#975410", destructive: "#a82d52",
+            buttonFace: "#f1edf5", surfaceLine: "#e1dce5",
+            navigationFill: "#eee7fb", navigationInk: "#551dbb",
+            menuSurface: "#ffffff", menuHighlight: "#641bde", menuRail: "#b897ff",
+            translucency: 0, gloss: .23, radius: 9, bevel: 2,
+            indicatorPalette: "emerald", liquidColors: ["#18dd8c", "#69ffba"],
+            roleFaces: {title: "#ffffff", toolbar: "#fbfafc", sidebar: "#f8f7fa",
+                        content: "#ffffff", footer: "#f9f7fb", field: "#f6f3f8", card: "#f7f5f9"}
+        }),
         carbon: preset({
             name: qsTr("Carbon"), finish: "matte", shape: "round", opaque: true,
             background: "#171c24", edge: "#73859f", accent: "#6bdcff", secondary: "#bb93ff",
@@ -139,6 +169,7 @@ QtObject {
     })
 
     readonly property var palette: profile(current)
+    readonly property var menuColors: menuPalette(palette)
     readonly property var materials: Object.keys(builtins)
         .filter(id => id !== "window-glass")
         .concat(Object.keys(userMaterials))
@@ -196,9 +227,20 @@ QtObject {
             light: light, text: contrast.text, ink: contrast.ink, muted: contrast.muted,
             divider: contrast.divider, positive: contrast.positive, caution: contrast.caution,
             destructive: contrast.destructive, accent: colorTheme.accent, secondary: colorTheme.secondary,
+            roleFaces: undefined, surfaceLine: contrast.divider, buttonFace: undefined,
+            navigationFill: undefined, navigationInk: undefined, menuSurface: undefined,
+            menuHighlight: undefined, menuRail: undefined,
             background: Qt.rgba(ground.r * .78 + tone.r * .22, ground.g * .78 + tone.g * .22,
                                 ground.b * .78 + tone.b * .22, 1)
         }));
+    }
+
+    function resolvedPalette(selection, fallback) {
+        return selection === "material" ? palette.indicatorPalette || fallback : selection;
+    }
+
+    function colorsFor(selection, effective) {
+        return selection === "material" && palette.liquidColors ? palette.liquidColors : indicatorColors(effective);
     }
 
     function indicatorColors(id) {
@@ -214,13 +256,49 @@ QtObject {
     }
 
     function withAccent(profile) {
-        if (!forcedAccent) return profile;
-        const accent = safeAccent(forcedAccent, profile.light);
-        return Object.assign({}, profile, {
-            accent: accent,
-            secondary: mix(accent, profile.secondary, .30, 1),
-            edge: mix(profile.edge, accent, .48, 1)
-        });
+        const accent = safeAccent(forcedAccent || profile.accent, profile.light);
+        const text = profile.cleanStudio ? profile.ink : mix(profile.ink, accent, profile.light ? .10 : .16, 1);
+        const muted = profile.cleanStudio ? profile.muted : mix(profile.muted, accent, profile.light ? .14 : .22, 1);
+        const tones = { ink: text, text: text, muted: muted };
+        if (forcedAccent) {
+            tones.accent = accent;
+            tones.secondary = mix(accent, profile.secondary, .30, 1);
+            tones.edge = mix(profile.edge, accent, .48, 1);
+            if (profile.cleanStudio) {
+                tones.navigationFill = mix(profile.background, accent, .16, 1);
+                tones.navigationInk = accent;
+            }
+        }
+        return Object.assign({}, profile, tones);
+    }
+
+    function relativeLuminance(color) {
+        const value = rgba(color, 1);
+        const linear = channel => channel <= .04045 ? channel / 12.92 : Math.pow((channel + .055) / 1.055, 2.4);
+        return .2126 * linear(value.r) + .7152 * linear(value.g) + .0722 * linear(value.b);
+    }
+
+    function menuPalette(profile) {
+        const pure = rgba(profile.accent, 1);
+        const hue = pure.hsvSaturation > .12 ? pure.hsvHue : .62;
+        const vivid = Qt.hsva(hue, Math.max(.75, pure.hsvSaturation), profile.light ? 1 : .74, 1);
+        const customHighlight = !forcedAccent && profile.menuHighlight;
+        const highlight = customHighlight || (profile.light ? mix(vivid, "#ffffff", .42, 1) : vivid);
+        const lightInk = relativeLuminance(highlight) < .179;
+        return {
+            studio: profile.cleanStudio === true,
+            showShortcuts: profile.cleanStudio === true && profile.light,
+            surface: profile.menuSurface || mix(profile.background, profile.light ? "#ffffff" : "#080b15", profile.light ? .47 : .27, 1),
+            ink: profile.ink,
+            muted: profile.muted,
+            icon: profile.cleanStudio ? profile.ink : safeAccent(profile.accent, profile.light),
+            danger: profile.destructive,
+            border: rgba(profile.surfaceLine || profile.divider, profile.cleanStudio ? .91 : .42),
+            highlight: highlight,
+            highlightInk: lightInk ? "#ffffff" : "#050810",
+            pressed: mix(highlight, lightInk ? "#000000" : "#ffffff", .15, 1),
+            rail: customHighlight && profile.menuRail ? profile.menuRail : lightInk ? "#a9f5ff" : "#101e35"
+        };
     }
 
     function actionColor(symbol, light) {

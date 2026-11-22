@@ -24,6 +24,9 @@ Item {
     property bool cursorFocused: false
     property bool transferring: false
     property real waterPhase: 0
+    readonly property bool studioChrome: colors.cleanStudio === true
+    readonly property string fileSymbol: mixed ? "mixed" : torrent ? "peers"
+        : studioChrome && (telemetry.is_video || /\.(mp4|mkv|mov|webm|avi|m4v)$/i.test(fileName)) ? "video" : "file"
     readonly property int connectionCount: torrent ? Number(telemetry.torrent?.peers || 0) : Number(telemetry.active_connections || 0)
     readonly property string connectionLabel: torrent
         ? (connectionCount === 1 ? qsTr("1 peer") : qsTr("%1 peers").arg(connectionCount))
@@ -51,11 +54,26 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        radius: 8
-        color: row.chosen ? Qt.alpha(row.colors.accent, row.colors.light ? .22 : .20)
-             : pointer.containsMouse ? Qt.alpha(row.colors.accent, .11) : "transparent"
-        border.width: row.chosen || row.cursorFocused ? 1 : 0
-        border.color: Qt.alpha(row.colors.accent, row.cursorFocused ? .9 : .66)
+        radius: row.studioChrome ? 5 : 8
+        color: row.chosen
+            ? (row.studioChrome && row.colors.navigationFill
+                ? row.colors.navigationFill : Qt.alpha(row.colors.accent, row.colors.light ? .22 : .20))
+            : pointer.containsMouse ? Qt.alpha(row.studioChrome ? row.colors.ink : row.colors.accent,
+                                               row.studioChrome ? .055 : .11) : "transparent"
+        border.width: row.cursorFocused || (row.chosen && !row.studioChrome) ? 1 : 0
+        border.color: row.studioChrome ? row.colors.menuRail || row.colors.accent
+            : Qt.alpha(row.colors.accent, row.cursorFocused ? .9 : .66)
+
+        Rectangle {
+            visible: row.studioChrome && row.chosen
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            anchors.left: parent.left
+            anchors.margins: 2
+            width: 3
+            radius: 1.5
+            color: row.colors.menuRail || row.colors.accent
+        }
     }
 
     MouseArea {
@@ -95,8 +113,9 @@ Item {
             }
         }
         DashboardIcon {
-            symbol: row.mixed ? "mixed" : row.torrent ? "peers" : "file"
-            ink: row.mixed ? row.colors.secondary : row.colors.accent
+            symbol: row.fileSymbol
+            ink: row.mixed ? row.colors.secondary
+                : row.studioChrome && row.colors.light ? row.colors.ink : row.colors.accent
             Layout.preferredWidth: 21
             Layout.preferredHeight: 21
         }
@@ -156,10 +175,13 @@ Item {
             }
         }
         RowLayout {
-            Layout.preferredWidth: row.indicatorWidth
+            Layout.fillWidth: false
+            Layout.minimumWidth: row.indicatorWidth
+            Layout.maximumWidth: row.indicatorWidth
             spacing: 7
 
             RowLayout {
+                Layout.fillWidth: false
                 Layout.preferredWidth: Math.floor(row.indicatorWidth * .49)
                 Layout.minimumWidth: 71
                 spacing: 4
@@ -178,12 +200,14 @@ Item {
                     Layout.preferredWidth: 30
                     text: Math.floor(row.progress * 100) + "%"
                     horizontalAlignment: Text.AlignRight
-                    color: row.colors.ink
-                    font.pixelSize: 11
+                    color: row.studioChrome ? row.colors.navigationInk || row.colors.accent : row.colors.ink
+                    font.pixelSize: row.studioChrome ? 12 : 11
+                    font.weight: row.studioChrome ? Font.Bold : Font.Normal
                 }
             }
 
             ColumnLayout {
+                Layout.fillWidth: false
                 Layout.preferredWidth: Math.floor(row.indicatorWidth * .24)
                 Layout.minimumWidth: 46
                 spacing: 1
@@ -251,7 +275,7 @@ Item {
         anchors.rightMargin: 10
         anchors.bottom: parent.bottom
         height: 1
-        color: row.colors.divider
+        color: (row.studioChrome && row.colors.surfaceLine) || row.colors.divider
     }
 
     ToolTip.visible: pointer.containsMouse && (fileNameLabel.truncated || torrent || recoveryLabel.length > 0)

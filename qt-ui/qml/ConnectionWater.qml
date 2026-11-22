@@ -98,7 +98,7 @@ Canvas {
             return
 
         const color = MaterialTheme.rgba
-        const frost = "rgba(235,250,255,0.86)"
+        const frost = MaterialTheme.mix(endColor, "#edfcff", .62, .97)
         const track = ctx.createLinearGradient(0, 0, w, h)
         track.addColorStop(0, color(profile.upper, .30))
         track.addColorStop(.24, color(trackColor, .18))
@@ -119,10 +119,10 @@ Canvas {
 
             ctx.lineJoin = "round"
             const water = ctx.createLinearGradient(0, surfaceY, w * .32, h)
-            water.addColorStop(0, color(endColor, .94))
-            water.addColorStop(.28, color(startColor, .87))
-            water.addColorStop(.70, color(startColor, sculpted ? .64 : .81))
-            water.addColorStop(1, color(endColor, .89))
+            water.addColorStop(0, MaterialTheme.mix(endColor, "#def8ff", .23, .98))
+            water.addColorStop(.28, color(startColor, .95))
+            water.addColorStop(.70, color(startColor, sculpted ? .73 : .89))
+            water.addColorStop(1, color(endColor, .96))
             ctx.save()
             ctx.lineTo(w, h)
             ctx.lineTo(0, h)
@@ -133,8 +133,11 @@ Canvas {
 
             if (amount < 1) {
                 traceSurface(ctx, w, surface, amplitude)
-                ctx.lineWidth = sculpted ? 3.4 : 3
-                ctx.strokeStyle = color(endColor, .66)
+                ctx.lineWidth = Math.min(5.6, h * .22)
+                ctx.strokeStyle = color(endColor, .45)
+                ctx.stroke()
+                ctx.lineWidth = Math.min(3.6, h * .14)
+                ctx.strokeStyle = color(endColor, .80)
                 ctx.stroke()
                 ctx.lineWidth = 1.15
                 ctx.strokeStyle = frost
@@ -166,8 +169,8 @@ Canvas {
         }
 
         outline(ctx, w, h)
-        ctx.lineWidth = receiving ? 2.2 : 1.4
-        ctx.strokeStyle = color(endColor, receiving ? .62 : .26)
+        ctx.lineWidth = receiving ? 3.1 : 1.8
+        ctx.strokeStyle = color(endColor, receiving ? .62 : .28)
         ctx.stroke()
         ctx.lineWidth = .8
         ctx.strokeStyle = color(profile.upper, amount > 0 ? .73 : .48)

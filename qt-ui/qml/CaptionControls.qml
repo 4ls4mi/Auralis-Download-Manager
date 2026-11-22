@@ -9,6 +9,7 @@ RowLayout {
 
     property string material: MaterialTheme.current
     readonly property var colors: MaterialTheme.profile(material)
+    readonly property bool studioChrome: colors.cleanStudio === true
     property bool trayEnabled: false
     property bool maximized: false
     property string closeLabel: qsTr("Close")
@@ -45,7 +46,8 @@ RowLayout {
                 width: 21
                 height: 21
                 symbol: button.symbol
-                ink: button.displayAccent
+                ink: root.studioChrome && (button.symbol !== "close" || !(button.hovered || button.down))
+                    ? root.colors.ink : button.displayAccent
             }
         }
     }
@@ -62,21 +64,21 @@ RowLayout {
         objectName: "minimizeCaption"
         symbol: "minimize"
         text: root.minimizeLabel
-        accent: root.colors.light ? "#0777ae" : "#4cddff"
+        accent: root.studioChrome ? root.colors.accent : (root.colors.light ? "#0777ae" : "#4cddff")
         onClicked: root.minimizeRequested()
     }
     CaptionButton {
         objectName: "maximizeCaption"
         symbol: root.maximized ? "restore" : "maximize"
         text: root.maximized ? qsTr("Restore window") : qsTr("Maximize")
-        accent: root.colors.secondary
+        accent: root.studioChrome ? root.colors.accent : root.colors.secondary
         onClicked: root.maximizeRequested()
     }
     CaptionButton {
         objectName: "closeCaption"
         symbol: "close"
         text: root.closeLabel
-        accent: root.colors.light ? "#c83856" : "#ff718a"
+        accent: root.studioChrome ? root.colors.destructive : (root.colors.light ? "#c83856" : "#ff718a")
         onClicked: root.closeRequested()
     }
 }

@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Controls.Basic as Basic
 import QtQuick.Layouts
 import QtQuick.Dialogs
 import QtQuick.Window
@@ -11,13 +12,15 @@ ApplicationWindow {
     title: qsTr("Auralis Download Manager")
     width: 1120
     height: 735
-    minimumWidth: 740
-    minimumHeight: 524
+    minimumWidth: 680
+    minimumHeight: 450
     visible: !engine.startHidden || !engine.trayAvailable
     color: "transparent"
     flags: Qt.Window | Qt.FramelessWindowHint
 
     readonly property var colors: MaterialTheme.palette
+    readonly property bool studioChrome: colors.cleanStudio === true
+    readonly property color chromeDivider: colors.surfaceLine || colors.divider
     palette.window: colors.background
     palette.windowText: colors.ink
     palette.base: colors.background
@@ -767,33 +770,50 @@ ApplicationWindow {
         }
     }
 
-    Menu {
+    component MenuRule: Basic.MenuSeparator {
+        implicitHeight: 9
+        leftPadding: 8
+        rightPadding: 8
+        topPadding: 4
+        bottomPadding: 4
+        contentItem: Rectangle {
+            implicitHeight: 1
+            color: MaterialTheme.menuColors.border
+        }
+    }
+
+    AppMenu {
         id: contextMenu
-        MenuItem { action: detailsAction }
-        MenuItem {
+        objectName: "downloadContextMenu"
+        parent: root.contentItem
+        AppMenuItem { symbol: "details"; action: detailsAction }
+        AppMenuItem {
+            symbol: "file"
             text: qsTr("Open")
             enabled: root.currentItem !== null && root.currentItem.status === "Complete"
             onTriggered: root.openPicked(false)
         }
-        MenuItem {
+        AppMenuItem {
+            symbol: "folder"
             text: qsTr("Open folder")
             enabled: root.currentItem !== null
             onTriggered: root.openPicked(true)
         }
-        MenuItem { action: openWith }
-        MenuItem { action: moveFile }
-        MenuItem { action: restartFile }
-        MenuSeparator {}
-        MenuItem { action: resumeTransfers }
-        MenuItem { action: pauseTransfers }
-        Menu {
+        AppMenuItem { symbol: "file"; action: openWith }
+        AppMenuItem { symbol: "folder"; action: moveFile }
+        AppMenuItem { symbol: "refresh"; action: restartFile; commandColor: root.colors.caution }
+        MenuRule {}
+        AppMenuItem { symbol: "start"; action: resumeTransfers; commandColor: root.colors.positive }
+        AppMenuItem { symbol: "pause"; action: pauseTransfers; commandColor: root.colors.caution }
+        AppMenu {
             id: queueMenu
             title: qsTr("Add to queue")
             enabled: root.currentItem !== null && root.queues.length > 0
             Instantiator {
                 model: root.queues
-                delegate: MenuItem {
+                delegate: AppMenuItem {
                     required property var modelData
+                    symbol: "queue"
                     text: modelData.name
                     onTriggered: root.itemAction("queue-add", root.currentItem, modelData.name)
                 }
@@ -801,13 +821,14 @@ ApplicationWindow {
                 onObjectRemoved: (index, object) => queueMenu.removeItem(object)
             }
         }
-        MenuItem {
+        AppMenuItem {
+            symbol: "queue"
             text: qsTr("Remove from queue")
             enabled: root.currentItem !== null && root.queues.some(q => q.ids.includes(root.currentItem.id))
             onTriggered: root.itemAction("queue-remove", root.currentItem)
         }
-        MenuSeparator {}
-        MenuItem { action: removeSelection }
+        MenuRule {}
+        AppMenuItem { symbol: "remove"; action: removeSelection; destructive: true }
     }
 
     function openPicked(folder) {
@@ -832,9 +853,10 @@ ApplicationWindow {
         property string symbol: ""
         property string count: ""
         property color accent: root.colors.accent
+        readonly property color studioInk: checked ? root.colors.navigationInk || root.colors.accent : root.colors.ink
 
         hoverEnabled: true
-        leftPadding: 7
+        leftPadding: root.studioChrome ? 10 : 7
         rightPadding: 7
         topPadding: 3
         bottomPadding: 3
@@ -842,7 +864,7 @@ ApplicationWindow {
             spacing: 7
             DashboardIcon {
                 symbol: libraryButton.symbol
-                ink: libraryButton.accent
+                ink: root.studioChrome ? libraryButton.studioInk : libraryButton.accent
                 Layout.preferredWidth: 17
                 Layout.preferredHeight: 17
             }
@@ -850,19 +872,49 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 elide: Text.ElideRight
                 text: libraryButton.text
-                color: root.colors.ink
+                color: root.studioChrome ? libraryButton.studioInk : root.colors.ink
                 font.pixelSize: 12
+                font.weight: root.studioChrome && libraryButton.checked ? Font.DemiBold : Font.Normal
             }
             Label {
                 visible: libraryButton.count.length > 0
                 text: libraryButton.count
-                color: root.colors.muted
+                color: root.studioChrome && libraryButton.checked ? libraryButton.studioInk : root.colors.muted
                 font.pixelSize: 11
             }
         }
         background: Loader {
             active: libraryButton.hovered || libraryButton.checked || libraryButton.visualFocus
-            sourceComponent: GlassSurface {
+            sourceComponent: root.studioChrome ? studioNavigation : glassNavigation
+        }
+
+        Component {
+            id: studioNavigation
+            Rectangle {
+                radius: 6
+                color: libraryButton.checked
+                    ? root.colors.navigationFill || Qt.alpha(root.colors.accent, .13)
+                    : libraryButton.down ? Qt.alpha(root.colors.ink, .09)
+                    : libraryButton.hovered ? Qt.alpha(root.colors.ink, .06) : "transparent"
+                border.width: libraryButton.visualFocus ? 1 : 0
+                border.color: root.colors.menuRail || root.colors.accent
+
+                Rectangle {
+                    visible: libraryButton.checked
+                    anchors.left: parent.left
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    anchors.margins: 1
+                    width: 3
+                    radius: 1.5
+                    color: root.colors.menuRail || root.colors.accent
+                }
+            }
+        }
+
+        Component {
+            id: glassNavigation
+            GlassSurface {
                 role: "button"
                 accent: libraryButton.accent
                 emphasis: libraryButton.checked ? .32 : .13
@@ -917,17 +969,18 @@ ApplicationWindow {
                 anchors.rightMargin: 6
                 spacing: 8
                 DashboardIcon {
-                    symbol: "app"
-                    ink: root.colors.accent
+                    symbol: root.studioChrome ? "studioMark" : "app"
+                    ink: root.studioChrome && root.colors.light ? root.colors.ink : root.colors.accent
+                    bold: root.studioChrome
                     Layout.preferredWidth: 23
                     Layout.preferredHeight: 23
                 }
                 Label {
                     Layout.fillWidth: true
-                    text: root.title
+                    text: root.studioChrome ? qsTr("Auralis") : root.title
                     color: root.colors.ink
-                    font.pixelSize: 16
-                    font.weight: Font.DemiBold
+                    font.pixelSize: root.studioChrome ? 19 : 16
+                    font.weight: root.studioChrome ? Font.Bold : Font.DemiBold
                     elide: Text.ElideRight
                 }
                 Rectangle {
@@ -958,89 +1011,98 @@ ApplicationWindow {
         Item {
             Layout.fillWidth: true
             Layout.preferredHeight: 31
-            GlassSurface { anchors.fill: parent; role: "menu" }
+            Rectangle {
+                anchors.fill: parent
+                radius: 4
+                color: root.studioChrome ? "transparent" : MaterialTheme.menuColors.surface
+            }
             RowLayout {
                 anchors.fill: parent
                 anchors.leftMargin: 6
                 spacing: 2
-                GlassButton {
+                AppMenuButton {
                     id: taskMenuButton
-                    text: qsTr("Tasks")
+                    text: qsTr("&Tasks")
+                    menuOpen: taskMenu.visible
                     onClicked: taskMenu.open()
-                    Menu {
+                    AppMenu {
                         id: taskMenu
                         y: taskMenuButton.height
-                        MenuItem { action: addUrl }
-                        MenuItem { action: addTorrent }
-                        MenuSeparator {}
-                        MenuItem { text: qsTr("Download video from a page…"); enabled: root.online; onTriggered: enginePrompts.video.presentLookup() }
-                        MenuItem { text: qsTr("Download a gallery…"); enabled: root.online; onTriggered: galleryDialog.present() }
-                        MenuItem { text: qsTr("Batch download…"); enabled: root.online; onTriggered: batchDialog.present() }
-                        MenuItem { text: qsTr("Link grabber…"); enabled: root.online; onTriggered: enginePrompts.links.present() }
-                        MenuSeparator {}
-                        MenuItem { text: qsTr("Hide in system tray"); enabled: Boolean(engine.trayAvailable); onTriggered: root.hideMainToTray() }
-                        MenuItem { text: qsTr("Exit"); onTriggered: engine.requestQuit() }
+                        AppMenuItem { symbol: "add"; action: addUrl; commandColor: root.colors.positive }
+                        AppMenuItem { symbol: "torrent"; action: addTorrent; commandColor: root.colors.positive }
+                        MenuRule {}
+                        AppMenuItem { symbol: "file"; text: qsTr("Download video from a page…"); enabled: root.online; onTriggered: enginePrompts.video.presentLookup() }
+                        AppMenuItem { symbol: "folder"; text: qsTr("Download a gallery…"); enabled: root.online; onTriggered: galleryDialog.present() }
+                        AppMenuItem { symbol: "queue"; text: qsTr("Batch download…"); enabled: root.online; onTriggered: batchDialog.present() }
+                        AppMenuItem { symbol: "add"; text: qsTr("Link grabber…"); enabled: root.online; onTriggered: enginePrompts.links.present() }
+                        MenuRule {}
+                        AppMenuItem { symbol: "tray"; text: qsTr("Hide in system tray"); enabled: Boolean(engine.trayAvailable); onTriggered: root.hideMainToTray() }
+                        AppMenuItem { symbol: "close"; text: qsTr("Exit"); onTriggered: engine.requestQuit() }
                     }
                 }
-                GlassButton {
+                AppMenuButton {
                     id: fileMenuButton
-                    text: qsTr("File")
+                    text: qsTr("&File")
+                    menuOpen: fileMenu.visible
                     onClicked: fileMenu.open()
-                    Menu {
+                    AppMenu {
                         id: fileMenu
                         y: fileMenuButton.height
-                        MenuItem { action: detailsAction }
-                        MenuItem { text: qsTr("Open"); enabled: root.currentItem !== null && root.currentItem.status === "Complete"; onTriggered: root.openPicked(false) }
-                        MenuItem { text: qsTr("Open folder"); enabled: root.currentItem !== null; onTriggered: root.openPicked(true) }
-                        MenuItem { action: openWith }
-                        MenuItem { action: moveFile }
-                        MenuItem { action: restartFile }
-                        MenuSeparator {}
-                        MenuItem { action: removeSelection }
+                        AppMenuItem { symbol: "details"; action: detailsAction }
+                        AppMenuItem { symbol: "file"; text: qsTr("Open"); enabled: root.currentItem !== null && root.currentItem.status === "Complete"; onTriggered: root.openPicked(false) }
+                        AppMenuItem { symbol: "folder"; text: qsTr("Open folder"); enabled: root.currentItem !== null; onTriggered: root.openPicked(true) }
+                        AppMenuItem { symbol: "file"; action: openWith }
+                        AppMenuItem { symbol: "folder"; action: moveFile }
+                        AppMenuItem { symbol: "refresh"; action: restartFile; commandColor: root.colors.caution }
+                        MenuRule {}
+                        AppMenuItem { symbol: "remove"; action: removeSelection; destructive: true }
                     }
                 }
-                GlassButton {
+                AppMenuButton {
                     id: downloadMenuButton
-                    text: qsTr("Downloads")
+                    text: qsTr("&Downloads")
+                    menuOpen: downloadMenu.visible
                     onClicked: downloadMenu.open()
-                    Menu {
+                    AppMenu {
                         id: downloadMenu
                         y: downloadMenuButton.height
-                        MenuItem { action: resumeTransfers }
-                        MenuItem { action: pauseTransfers }
-                        MenuItem { action: stopAll }
-                        MenuItem { action: removeCompleted }
-                        MenuSeparator {}
-                        MenuItem { action: startQueue }
-                        MenuItem { action: stopQueue }
-                        MenuItem { action: schedulerAction }
+                        AppMenuItem { symbol: "start"; action: resumeTransfers; commandColor: root.colors.positive }
+                        AppMenuItem { symbol: "pause"; action: pauseTransfers; commandColor: root.colors.caution }
+                        AppMenuItem { symbol: "stop"; action: stopAll; commandColor: root.colors.caution }
+                        AppMenuItem { symbol: "check"; action: removeCompleted; destructive: true }
+                        MenuRule {}
+                        AppMenuItem { symbol: "start"; action: startQueue; commandColor: root.colors.positive }
+                        AppMenuItem { symbol: "stop"; action: stopQueue; commandColor: root.colors.caution }
+                        AppMenuItem { symbol: "clock"; action: schedulerAction }
                     }
                 }
-                GlassButton {
+                AppMenuButton {
                     id: viewMenuButton
-                    text: qsTr("View")
+                    text: qsTr("&View")
+                    menuOpen: viewMenu.visible
                     onClicked: viewMenu.open()
-                    Menu {
+                    AppMenu {
                         id: viewMenu
                         y: viewMenuButton.height
-                        MenuItem { action: refreshAction }
-                        MenuItem { action: findAction }
-                        MenuItem { text: root.showSidebar ? qsTr("Hide sidebar") : qsTr("Show sidebar"); onTriggered: root.showSidebar = !root.showSidebar }
-                        MenuSeparator {}
-                        MenuItem { text: qsTr("Appearance"); onTriggered: settingsWindow.showCategory("Appearance") }
+                        AppMenuItem { symbol: "refresh"; action: refreshAction }
+                        AppMenuItem { symbol: "search"; action: findAction }
+                        AppMenuItem { text: root.showSidebar ? qsTr("Hide sidebar") : qsTr("Show sidebar"); onTriggered: root.showSidebar = !root.showSidebar }
+                        MenuRule {}
+                        AppMenuItem { symbol: "settings"; text: qsTr("Appearance"); onTriggered: settingsWindow.showCategory("Appearance") }
                     }
                 }
-                GlassButton {
+                AppMenuButton {
                     id: helpMenuButton
-                    text: qsTr("Help")
+                    text: qsTr("&Help")
+                    menuOpen: helpMenu.visible
                     onClicked: helpMenu.open()
-                    Menu {
+                    AppMenu {
                         id: helpMenu
                         y: helpMenuButton.height
-                        MenuItem { text: qsTr("Keyboard shortcuts"); onTriggered: shortcutsDialog.open() }
-                        MenuItem { text: qsTr("Browser integration"); onTriggered: settingsWindow.showCategory("Browser Integration") }
-                        MenuItem { text: qsTr("Check for updates"); onTriggered: root.showUpdates() }
-                        MenuItem { text: qsTr("Project guide"); onTriggered: Qt.openUrlExternally("https://github.com/4ls4mi/Auralis-Download-Manager#guides-and-recovery") }
+                        AppMenuItem { symbol: "keys"; text: qsTr("Keyboard shortcuts"); onTriggered: shortcutsDialog.open() }
+                        AppMenuItem { symbol: "web"; text: qsTr("Browser integration"); onTriggered: settingsWindow.showCategory("Browser Integration") }
+                        AppMenuItem { symbol: "refresh"; text: qsTr("Check for updates"); onTriggered: root.showUpdates() }
+                        AppMenuItem { symbol: "details"; text: qsTr("Project guide"); onTriggered: Qt.openUrlExternally("https://github.com/4ls4mi/Auralis-Download-Manager#guides-and-recovery") }
                     }
                 }
                 Item { Layout.fillWidth: true }
@@ -1083,12 +1145,15 @@ ApplicationWindow {
                         Layout.preferredWidth: root.compact ? 41 : 54
                         Layout.preferredHeight: 36
                         action: modelData.command
-                        accent: MaterialTheme.actionColor(modelData.accentKey || modelData.icon, root.colors.light)
+                        accent: root.studioChrome
+                            ? (modelData.icon === "remove" ? root.colors.destructive : root.colors.accent)
+                            : MaterialTheme.actionColor(modelData.accentKey || modelData.icon, root.colors.light)
                         contentItem: DashboardIcon {
                             symbol: actionButton.modelData.icon
                             bold: true
                             solid: symbol === "start" || symbol === "stop"
-                            ink: actionButton.displayAccent
+                            ink: root.studioChrome && !actionButton.hovered && !actionButton.down
+                                && !actionButton.visualFocus ? root.colors.ink : actionButton.displayAccent
                         }
                         ToolTip.visible: hovered
                         ToolTip.text: text
@@ -1142,7 +1207,17 @@ ApplicationWindow {
                 Layout.preferredWidth: root.compact ? 151 : 184
                 Layout.fillHeight: true
                 padding: 6
-                background: GlassSurface { role: "sidebar" }
+                background: Item {
+                    GlassSurface { anchors.fill: parent; role: "sidebar" }
+                    Rectangle {
+                        visible: root.studioChrome
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        anchors.bottom: parent.bottom
+                        width: 1
+                        color: root.chromeDivider
+                    }
+                }
                 ScrollView {
                     id: libraryScroll
                     anchors.fill: parent
@@ -1236,7 +1311,7 @@ ApplicationWindow {
                                 Layout.fillWidth: true
                                 text: root.filterTitle
                                 color: root.colors.ink
-                                font.pixelSize: root.compact ? 17 : 22
+                                font.pixelSize: root.studioChrome ? (root.compact ? 20 : 24) : (root.compact ? 17 : 22)
                                 font.weight: Font.Bold
                                 elide: Text.ElideRight
                             }
@@ -1286,7 +1361,15 @@ ApplicationWindow {
                     Item {
                         Layout.preferredHeight: 30
                         Layout.fillWidth: true
-                        GlassSurface { anchors.fill: parent; role: "field" }
+                        GlassSurface { visible: !root.studioChrome; anchors.fill: parent; role: "field" }
+                        Rectangle {
+                            visible: root.studioChrome
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.bottom: parent.bottom
+                            height: 1
+                            color: root.chromeDivider
+                        }
                         RowLayout {
                             anchors.fill: parent
                             anchors.leftMargin: 11
@@ -1312,7 +1395,9 @@ ApplicationWindow {
                             Item { Layout.preferredWidth: 21 }
                             Label { Layout.fillWidth: true; Layout.minimumWidth: 85; text: qsTr("File name"); color: root.colors.muted; font.weight: Font.DemiBold }
                             RowLayout {
-                                Layout.preferredWidth: root.indicatorColumnWidth
+                                Layout.fillWidth: false
+                                Layout.minimumWidth: root.indicatorColumnWidth
+                                Layout.maximumWidth: root.indicatorColumnWidth
                                 spacing: 7
                                 Label {
                                     Layout.preferredWidth: Math.floor(root.indicatorColumnWidth * .49)
@@ -1416,8 +1501,13 @@ ApplicationWindow {
                                 if (root.currentItem)
                                     root.showDownload(root.currentItem.id)
                                 event.accepted = true
-                            } else if (event.key === Qt.Key_Menu && root.currentItem) {
-                                contextMenu.popup()
+                            } else if ((event.key === Qt.Key_Menu || (event.key === Qt.Key_F10 &&
+                                        (event.modifiers & Qt.ShiftModifier))) && root.currentItem) {
+                                const row = list.currentItem
+                                if (row)
+                                    contextMenu.popup(row.mapToItem(root.contentItem, 12, row.height))
+                                else
+                                    contextMenu.popup()
                                 event.accepted = true
                             } else if (event.key === Qt.Key_Escape) {
                                 root.clearSelection()
@@ -1493,42 +1583,5 @@ ApplicationWindow {
         }
     }
 
-    Repeater {
-        model: [
-            {edges: Qt.TopEdge, horizontal: true, trailing: false},
-            {edges: Qt.BottomEdge, horizontal: true, trailing: true},
-            {edges: Qt.LeftEdge, horizontal: false, trailing: false},
-            {edges: Qt.RightEdge, horizontal: false, trailing: true}
-        ]
-        delegate: MouseArea {
-            required property var modelData
-            z: 5
-            visible: root.visibility !== Window.Maximized
-            width: modelData.horizontal ? root.width - 10 : 5
-            height: modelData.horizontal ? 5 : root.height - 10
-            x: modelData.horizontal ? 5 : modelData.trailing ? root.width - width : 0
-            y: modelData.horizontal ? modelData.trailing ? root.height - height : 0 : 5
-            cursorShape: modelData.horizontal ? Qt.SizeVerCursor : Qt.SizeHorCursor
-            onPressed: root.startSystemResize(modelData.edges)
-        }
-    }
-    Repeater {
-        model: [
-            {edges: Qt.TopEdge | Qt.LeftEdge, right: false, bottom: false, cursor: Qt.SizeFDiagCursor},
-            {edges: Qt.TopEdge | Qt.RightEdge, right: true, bottom: false, cursor: Qt.SizeBDiagCursor},
-            {edges: Qt.BottomEdge | Qt.LeftEdge, right: false, bottom: true, cursor: Qt.SizeBDiagCursor},
-            {edges: Qt.BottomEdge | Qt.RightEdge, right: true, bottom: true, cursor: Qt.SizeFDiagCursor}
-        ]
-        delegate: MouseArea {
-            required property var modelData
-            z: 6
-            visible: root.visibility !== Window.Maximized
-            width: 7
-            height: 7
-            x: modelData.right ? root.width - width : 0
-            y: modelData.bottom ? root.height - height : 0
-            cursorShape: modelData.cursor
-            onPressed: root.startSystemResize(modelData.edges)
-        }
-    }
+    WindowResizeHandles { hostWindow: root }
 }

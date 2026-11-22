@@ -206,7 +206,7 @@ ColumnLayout {
                 textRole: "label"
                 valueRole: "value"
                 model: [{label: qsTr("Start minimized"), value: "minimized"}, {label: qsTr("Show the main window"), value: "window"}]
-                currentIndex: indexOfValue(root.startup.mode)
+                currentIndex: (model || []).findIndex(option => option.value === root.startup.mode)
                 onActivated: root.saveStartup(root.startup.enabled, currentValue)
                 Accessible.name: qsTr("Startup window behavior")
             }

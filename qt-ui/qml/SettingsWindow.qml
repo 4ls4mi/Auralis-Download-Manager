@@ -12,8 +12,8 @@ ApplicationWindow {
     title: qsTr("Settings — Auralis Download Manager")
     width: 1050
     height: 760
-    minimumWidth: 710
-    minimumHeight: 540
+    minimumWidth: 650
+    minimumHeight: 440
     visible: false
     color: "transparent"
     flags: Qt.Window | Qt.FramelessWindowHint
@@ -272,8 +272,10 @@ ApplicationWindow {
                 Label {
                     anchors.left: parent.left
                     anchors.leftMargin: 15
+                    anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
                     text: root.title
+                    elide: Text.ElideRight
                     font.weight: Font.DemiBold
                     color: root.colors.text
                 }
@@ -456,12 +458,7 @@ ApplicationWindow {
         }
     }
 
-    WindowResizeHandles {
-        parent: root.contentItem
-        anchors.fill: parent
-        hostWindow: root
-        z: 20
-    }
+    WindowResizeHandles { hostWindow: root }
 
     footer: ToolBar {
         background: GlassSurface { role: "footer"; radius: 0; backdropAvailable: settingsBackdrop.backdropAvailable }

@@ -25,6 +25,7 @@ Item {
     readonly property bool sculpted: ["bubble", "aero"].includes(profile.shape)
     readonly property bool stacked: ["smoke", "frost"].includes(profile.shape)
     readonly property bool faceted: ["prism", "ice", "chamfer"].includes(profile.shape)
+    readonly property bool flatStudio: profile.cleanStudio === true
     readonly property bool cleanChrome: profile.opaque || profile.softChrome === true
     readonly property bool reflectionPlane: faceted && (!cleanChrome || shell || role === "toolbar")
     readonly property string outline: shell ? "square" : profile.softChrome ? "round" : profile.shape
@@ -50,8 +51,29 @@ Item {
         : MaterialTheme.rgba(profile.edge, .33 + .32 * reflectivity)
     readonly property string framePath: Geometry.frame(.6, .6, width - 1.2, height - 1.2, radius, outline)
 
+    Rectangle {
+        anchors.fill: parent
+        visible: surface.flatStudio
+        radius: surface.button || surface.role === "field" ? surface.radius : 0
+        color: surface.shell ? surface.backing : surface.button
+            ? MaterialTheme.mix(surface.profile.buttonFace || surface.profile.background, surface.accent,
+                Math.max(0, surface.emphasis - .12) * .37, 1)
+            : surface.profile.roleFaces?.[surface.role] || surface.profile.background
+        border.width: surface.shell || surface.role === "field" ? 1 : 0
+        border.color: surface.profile.surfaceLine || surface.profile.divider
+
+        Rectangle {
+            width: parent.width
+            height: 1
+            y: surface.role === "footer" ? 0 : parent.height - height
+            visible: ["title", "toolbar", "footer"].includes(surface.role)
+            color: surface.profile.surfaceLine || surface.profile.divider
+        }
+    }
+
     Shape {
         anchors.fill: parent
+        visible: !surface.flatStudio
         preferredRendererType: Shape.CurveRenderer
 
         ShapePath {

@@ -46,8 +46,8 @@ ApplicationWindow {
 
     width: 790
     height: 625
-    minimumWidth: 485
-    minimumHeight: 400
+    minimumWidth: 450
+    minimumHeight: 340
     color: "transparent"
     flags: Qt.Window | Qt.FramelessWindowHint
     transientParent: null
@@ -386,12 +386,7 @@ ApplicationWindow {
         }
     }
 
-    WindowResizeHandles {
-        parent: root.contentItem
-        anchors.fill: parent
-        hostWindow: root
-        z: 20
-    }
+    WindowResizeHandles { hostWindow: root }
 
     Timer {
         id: water
@@ -566,10 +561,12 @@ ApplicationWindow {
                                         readonly property var connection: root.workerRows[index] || {}
                                         readonly property var saved: Transfer.assigned(connection.id, root.telemetry && root.telemetry.segments)
                                         readonly property bool receiving: root.runningTransfer && connection.state === "Receiving"
+                                        readonly property real liquidSurface: chunkWater.surfaceY
                                         Layout.fillWidth: true
                                         Layout.preferredWidth: 31
                                         Layout.preferredHeight: 39
                                         ConnectionWater {
+                                            id: chunkWater
                                             anchors.fill: parent
                                             material: root.material
                                             shape: root.connectionShape
@@ -582,7 +579,8 @@ ApplicationWindow {
                                             trackColor: root.colors.background
                                         }
                                         Label {
-                                            anchors.horizontalCenter: parent.horizontalCenter
+                                            anchors.left: parent.left
+                                            anchors.leftMargin: 4
                                             anchors.top: parent.top
                                             anchors.topMargin: 4
                                             color: root.colors.text

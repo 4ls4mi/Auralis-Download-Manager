@@ -85,8 +85,8 @@ function barContour(width, height, shape, amount, phase) {
     if (width <= 0 || height <= 0 || amount <= 0)
         return "";
     const cut = width * Math.min(1, amount);
-    const lip = shape === "bubble" && amount < 1
-        ? Math.min(cut * .32, height * (.15 + .05 * Math.sin(phase)), width - cut)
+    const lip = amount < 1
+        ? Math.min(cut * .32, height * (shape === "bubble" ? .17 : .12), width - cut)
         : 0;
     const last = cut - lip;
     const steps = Math.max(10, Math.min(80, Math.ceil(last / Math.max(1, height * .28))));
@@ -108,7 +108,8 @@ function barContour(width, height, shape, amount, phase) {
     const bottom = traceBarEdge(samples.reverse(), width, height, shape, true, !faceted);
     const endY = barEdge(last, width, height, shape);
     const turn = lip > 0
-        ? ` C ${cut} ${endY + height * .17} ${cut} ${height - endY - height * .17} ${last} ${height - endY}`
+        ? ` C ${cut + lip * .35 * Math.sin(phase)} ${endY + height * .17}
+               ${cut - lip * .35 * Math.sin(phase)} ${height - endY - height * .17} ${last} ${height - endY}`
         : ` L ${last} ${height - endY}`;
     return top + turn + bottom + " Z";
 }
