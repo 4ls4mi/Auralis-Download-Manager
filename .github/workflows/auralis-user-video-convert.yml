@@ -1,0 +1,46 @@
+name: Convert supplied Auralis recordings
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: auralis-self-hosted-windows
+  cancel-in-progress: false
+jobs:
+  convert:
+    runs-on: [self-hosted, Windows, X64, auralis]
+    timeout-minutes: 15
+    steps:
+      - name: Find and convert the two specified recordings
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $ffmpeg = Get-Command ffmpeg.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $ffmpeg) { throw 'FFmpeg is not available on this runner.' }
+          $names = @('20261122-0148-22.6900177.mp4','20261122-0154-35.6497838.mp4')
+          $roots = @([Environment]::GetFolderPath('MyVideos'), [Environment]::GetFolderPath('Desktop'), (Join-Path $env:USERPROFILE 'Downloads')) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -Unique
+          $out = Join-Path $env:RUNNER_TEMP ("auralis-supplied-gifs-" + $env:GITHUB_RUN_ID)
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          $count = 0
+          foreach ($name in $names) {
+            $match = $null
+            foreach ($root in $roots) {
+              $match = Get-ChildItem -LiteralPath $root -Filter $name -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+              if ($match) { break }
+            }
+            if (-not $match) { Write-Warning "Not found in Videos, Desktop, or Downloads: $name"; continue }
+            $count++
+            $dest = Join-Path $out ("auralis-recording-$count.gif")
+            & $ffmpeg.Source -hide_banner -loglevel error -y -i $match.FullName -t 8 -vf 'fps=6,scale=700:-2:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:diff_mode=rectangle' $dest
+            if ($LASTEXITCODE -ne 0) { throw "Conversion failed for $name" }
+            Write-Host "Converted requested recording: $name"
+          }
+          if ($count -eq 0) { throw 'Neither recording was found in the usual folders.' }
+          "AURALIS_GIFS_DIR=$out" >> $env:GITHUB_ENV
+      - name: Upload GIFs for review
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: auralis-user-recording-gifs
+          path: ${{ env.AURALIS_GIFS_DIR }}/*.gif
+          if-no-files-found: error
+          retention-days: 3
