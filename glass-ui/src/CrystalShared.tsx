@@ -354,7 +354,7 @@ export function CrystalWindow({ children, target = "main" }: {
   const selectedMaterial=customMaterial??materialPresets[appearance.material]??materialPresets["frosted-water-351"];
   const surfaceStyle=materialBackdrop(appearance.material,selectedMaterial);
   const surfaceOpacity=Math.min(1,Math.max(.2,1-selectedMaterial.translucency/125));
-  const themeTintRgb=useMemo(()=>(theme.neutralTint??theme.rgb.split(",").map(Number)) as [number,number,number],[theme]);
+  const themeTintRgb=useMemo(()=>(appearance.material==="builtin-aurora-night"?[21,37,76]:appearance.material==="builtin-aurora-ice"?[225,244,255]:(theme.neutralTint??theme.rgb.split(",").map(Number))) as [number,number,number],[theme,appearance.material]);
   const path = main ? appearance.wallMain : (appearance.wallDetail || appearance.wallMain);
   const src = path ? convertFileSrc(path) : "/alpine.svg";
   const video = /\.(mp4|webm|mov|m4v)$/i.test(path);
@@ -374,24 +374,26 @@ export function CrystalWindow({ children, target = "main" }: {
   }, [mode, appearance.material, surfaceStyle,maximized,tiled]);
   // White palettes need light surfaces and dark foregrounds in every material.
   const blackGlass = appearance.material === "builtin-black-glass";
-  const effectiveLight = !blackGlass && (theme.light === true || theme.id === "white-frost" || theme.id === "white-pearl");
+  const auroraDark = appearance.material === "builtin-aurora-night";
+  const auroraLight = appearance.material === "builtin-aurora-ice";
+  const effectiveLight = auroraLight || (!auroraDark && !blackGlass && (theme.light === true || theme.id === "white-frost" || theme.id === "white-pearl"));
   const lightAccentRgb = theme.light ? theme.rgb.split(",").map(v=>Math.round(Number(v)*.36)).join(",") : theme.id === "white-pearl" ? "101,86,67" : "64,91,112";
   const lightAccent = `rgb(${lightAccentRgb})`;
   const style = {
-    "--accent": effectiveLight ? lightAccent : theme.accent,
-    "--accent-secondary": theme.secondary,
-    "--palette-hue": themeHue(theme),
+    "--accent": auroraLight ? "#087eb8" : auroraDark ? "#46d8ff" : effectiveLight ? lightAccent : theme.accent,
+    "--accent-secondary": auroraDark || auroraLight ? "#a752ff" : theme.secondary,
+    "--palette-hue": auroraDark || auroraLight ? 210 : themeHue(theme),
     "--theme-action-rgb": effectiveLight ? lightAccentRgb : mixColor(theme.rgb.split(",").map(Number),[255,255,255],.20),
     "--theme-primary-rgb": effectiveLight ? lightAccentRgb : mixColor(theme.rgb.split(",").map(Number),[255,255,255],.10),
     "--theme-warn-rgb": effectiveLight ? lightAccentRgb : mixColor(theme.rgb.split(",").map(Number),secondaryRgb(theme),.55),
     "--theme-danger-rgb": effectiveLight ? lightAccentRgb : mixColor(theme.rgb.split(",").map(Number),secondaryRgb(theme),.80),
     "--theme-tool-rgb": effectiveLight ? lightAccentRgb : mixColor(secondaryRgb(theme),[255,255,255],.18),
-    "--accent-rgb": effectiveLight ? lightAccentRgb : theme.rgb,
-    "--glass": blackGlass ? "8,10,14" : effectiveLight ? themeTintRgb.join(",") : themeTintRgb.map(n=>Math.round(n*(theme.neutralTint ? .65 : .20))).join(","),
-    "--glass-tint": blackGlass ? "rgba(0,0,0,0)" : `rgba(${(theme.neutralTint??theme.rgb.split(",").map(Number)).join(",")},${Math.max(0,Math.min(65,appearance.tintStrength))/100})`,
-    "--surface": blackGlass ? "rgba(12,14,18,.46)" : effectiveLight ? `rgba(${themeTintRgb.join(",")},.75)` : `rgba(${themeTintRgb.join(",")},.13)`,
-    "--field": blackGlass ? "rgba(6,8,12,.78)" : effectiveLight ? `rgba(${themeTintRgb.join(",")},.92)` : `rgba(${themeTintRgb.map(n=>Math.round(n*.12)).join(",")},.82)`,
-    "--popover": blackGlass ? "rgb(20,23,29)" : effectiveLight ? `rgb(${themeTintRgb.join(",")})` : `rgb(${themeTintRgb.map(n=>Math.round(n*(theme.neutralTint ? .65 : .18))).join(",")})`,
+    "--accent-rgb": auroraLight ? "8,126,184" : auroraDark ? "70,216,255" : effectiveLight ? lightAccentRgb : theme.rgb,
+    "--glass": auroraDark ? "12,23,51" : auroraLight ? "225,244,255" : blackGlass ? "8,10,14" : effectiveLight ? themeTintRgb.join(",") : themeTintRgb.map(n=>Math.round(n*(theme.neutralTint ? .65 : .20))).join(","),
+    "--glass-tint": auroraDark ? "rgba(36,68,152,.20)" : auroraLight ? "rgba(157,219,255,.20)" : blackGlass ? "rgba(0,0,0,0)" : `rgba(${(theme.neutralTint??theme.rgb.split(",").map(Number)).join(",")},${Math.max(0,Math.min(65,appearance.tintStrength))/100})`,
+    "--surface": auroraDark ? "rgba(41,65,120,.36)" : auroraLight ? "rgba(221,243,255,.66)" : blackGlass ? "rgba(12,14,18,.46)" : effectiveLight ? `rgba(${themeTintRgb.join(",")},.75)` : `rgba(${themeTintRgb.join(",")},.13)`,
+    "--field": auroraDark ? "rgba(7,18,46,.78)" : auroraLight ? "rgba(239,251,255,.82)" : blackGlass ? "rgba(6,8,12,.78)" : effectiveLight ? `rgba(${themeTintRgb.join(",")},.92)` : `rgba(${themeTintRgb.map(n=>Math.round(n*.12)).join(",")},.82)`,
+    "--popover": auroraDark ? "rgb(16,31,70)" : auroraLight ? "rgb(230,247,255)" : blackGlass ? "rgb(20,23,29)" : effectiveLight ? `rgb(${themeTintRgb.join(",")})` : `rgb(${themeTintRgb.map(n=>Math.round(n*(theme.neutralTint ? .65 : .18))).join(",")})`,
     "--panel-opacity": surfaceOpacity,
     "--backdrop-opacity": surfaceOpacity,
     "--material-opacity": customMaterial ? Math.max(.12,(1-customMaterial.translucency/125)) : undefined,
@@ -405,7 +407,7 @@ export function CrystalWindow({ children, target = "main" }: {
     "--min-window-button": (30/Math.min(1,Math.max(.4,fit)))+"px",
     "--font-size": Math.max(Math.min(20,Math.max(12,appearance.fontSize)),12/Math.max(.4,fit))+"px"
   } as CSSProperties;
-  return <div className={`cg-window cg-mode-${mode} cg-material-${appearance.material} cg-surface-${surfaceStyle} cg-theme-${theme.id} ${theme.light&&!blackGlass?"cg-custom-light":""} ${customMaterial?`cg-custom-material cg-finish-${customMaterial.finish} cg-controls-${customMaterial.controls} cg-layout-${customMaterial.layout??'standard'} cg-text-${customMaterial.text??'crisp'}`:""} cg-progress-shape-${appearance.progressShape} cg-connection-shape-${appearance.connectionShape} ${maximized?"cg-maximized":""} ${tiled?"cg-tiled":""} ${effectiveLight?"cg-light":"cg-dark"} ${appearance.highContrast?"cg-high-contrast":""}`} style={style}>
+  return <div className={`cg-window cg-mode-${mode} cg-material-${appearance.material} cg-surface-${surfaceStyle} cg-theme-${theme.id} ${theme.light&&effectiveLight?"cg-custom-light":""} ${customMaterial?`cg-custom-material cg-finish-${customMaterial.finish} cg-controls-${customMaterial.controls} cg-layout-${customMaterial.layout??'standard'} cg-text-${customMaterial.text??'crisp'}`:""} cg-progress-shape-${appearance.progressShape} cg-connection-shape-${appearance.connectionShape} ${maximized?"cg-maximized":""} ${tiled?"cg-tiled":""} ${effectiveLight?"cg-light":"cg-dark"} ${appearance.highContrast?"cg-high-contrast":""}`} style={style}>
     {mode === "wallpaper" && <div className="cg-wallpaper">
       {video ? <video key={src} autoPlay loop muted playsInline src={src} /> :
         <div style={{ backgroundImage: `url("${src}")` }} />}

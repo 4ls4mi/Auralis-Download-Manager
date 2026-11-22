@@ -25,6 +25,8 @@ export const materialPresets:Record<string,MaterialFile>={
  'oversimplified':{format:'auralis-material',version:1,name:'Oversimplified & Accentuated',finish:'matte',controls:'rounded',translucency:10,shading:20}
 };
 export const extraMaterials:Record<string,MaterialFile>={
+ 'builtin-aurora-night':{format:'auralis-material',version:1,name:'Aurora Glass — Dark',finish:'frosted',controls:'angular',translucency:65,shading:55},
+ 'builtin-aurora-ice':{format:'auralis-material',version:1,name:'Aurora Glass — Light',finish:'frosted',controls:'angular',translucency:65,shading:30},
  'builtin-obsidian-matte':{format:'auralis-material',version:1,name:'Matte Obsidian',finish:'matte',controls:'angular',translucency:8,shading:75},
  'builtin-smoked-glass':{format:'auralis-material',version:1,name:'Smoked Glass',finish:'clear',controls:'soft',translucency:65,shading:65},
  'builtin-black-glass':{format:'auralis-material',version:1,name:'Black Blur Glass',finish:'clear',controls:'soft',translucency:72,shading:20},

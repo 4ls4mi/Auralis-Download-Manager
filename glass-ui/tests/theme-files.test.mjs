@@ -15,6 +15,9 @@ test('theme files retain current palette, material, text and independent indicat
  const custom=parseTheme({...theme,material:'custom',customMaterial:materialPresets['brushed-glass']});
  assert.equal(custom.customMaterial.finish,'satin');
 });
+test('Aurora materials and bubble shapes survive theme export and import',()=>{
+ for(const material of ['builtin-aurora-night','builtin-aurora-ice']){const parsed=parseTheme({...theme,material,settings:{...settings,progressShape:'bubble',connectionShape:'bubble'}});assert.equal(parsed.material,material);assert.equal(parsed.settings.progressShape,'bubble');assert.equal(parsed.settings.connectionShape,'bubble')}
+});
 test('theme files reject unsafe or invalid values and discard unrecognized content',()=>{
  for(const change of [{format:'other'},{version:2},{material:'url(evil)'},{palette:{...theme.palette,accent:'red;display:none'}},{palette:{...theme.palette,surface:[0,256,1]}},{palette:{...theme.palette,light:false}},{settings:{...settings,fontSize:100}},{settings:{...settings,graphShape:'bad'}}])assert.throws(()=>parseTheme({...theme,...change}));
  const parsed=parseTheme({...theme,css:'body{display:none}',palette:{...theme.palette,css:'unsafe'}});

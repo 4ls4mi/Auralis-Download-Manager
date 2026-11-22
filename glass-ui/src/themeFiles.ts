@@ -17,12 +17,12 @@ const liquid=['liquid-glass','liquid-crystal','liquid-aero'];
 const choice:Record<string,string[]>={
   indicator:indicators,connectionIndicator:indicators,graphIndicator:indicators,
   progressMaterial:['gradient','frosted-ribbon',...liquid],connectionMaterial:['gradient',...liquid],graphMaterial:['gradient',...liquid],
-  progressShape:['rounded','faceted','droplet','square'],connectionShape:['rounded','faceted','droplet','square'],graphShape:['area','line','bars'],
+  progressShape:['rounded','faceted','droplet','bubble','square'],connectionShape:['rounded','faceted','droplet','bubble','square'],graphShape:['area','line','bars'],
   trackFinish:['default','clear','frosted','recessed'],connectionTrackFinish:['default','clear','frosted','recessed'],
   trackColor:['ice','violet','teal','amber',...indicators.map(id=>`palette:${id}`)],connectionTrackColor:['ice','violet','teal','amber',...indicators.map(id=>`palette:${id}`)],
   fontFamily:['Segoe UI','Inter','Arial','Consolas','Trebuchet MS','Verdana','Georgia','Candara','Century Gothic','Palatino Linotype','Tahoma']
 };
-const builtinMaterials=['brushed-glass','frosted-water-351','rose-pine','window-glass','oversimplified','builtin-obsidian-matte','builtin-smoked-glass','builtin-black-glass','builtin-pearl-frost'];
+const builtinMaterials=['brushed-glass','frosted-water-351','rose-pine','window-glass','oversimplified','builtin-obsidian-matte','builtin-smoked-glass','builtin-black-glass','builtin-pearl-frost','builtin-aurora-night','builtin-aurora-ice'];
 const object=(v:unknown):Record<string,unknown>=>{if(!v||typeof v!=='object'||Array.isArray(v))throw Error('Expected a JSON object.');return v as Record<string,unknown>};
 export function parseTheme(input:unknown):ThemeFile {
  const v=object(input);if(v.format!=='auralis-theme'||v.version!==1)throw Error('Expected an Auralis theme file (version 1).');
