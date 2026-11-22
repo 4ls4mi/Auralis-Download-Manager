@@ -30,7 +30,7 @@ jobs:
     permissions:
       contents: read
     # Only explicitly named, owner-maintained branches may run on a personal computer.
-    if: github.ref == 'refs/heads/feature/auralis-frosted-candidate' || (github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/feature/auralis-embedded-engine' || github.ref == 'refs/heads/feature/auralis-preferences-ui' || github.ref == 'refs/heads/feature/auralis-recovery-validation' || github.ref == 'refs/heads/wip/auralis-torrent-recovery' || github.ref == 'refs/heads/wip/auralis-release-candidate'))
+    if: github.ref == 'refs/heads/feature/auralis-frosted-candidate' || (github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/feature/auralis-embedded-engine' || github.ref == 'refs/heads/feature/auralis-preferences-ui' || github.ref == 'refs/heads/feature/auralis-recovery-validation' || github.ref == 'refs/heads/wip/auralis-torrent-recovery' || github.ref == 'refs/heads/wip/auralis-release-candidate' || github.ref == 'refs/heads/wip/auralis-visual-updates'))
     runs-on: [self-hosted, Windows, X64, auralis]
     timeout-minutes: 180
     steps:
