@@ -50,7 +50,8 @@ async function show() {
   $("take").disabled = !s.connected;
   $("open").disabled = $("options").disabled = false;
   $("version").textContent = s.version ? `Extension v${s.version}` : "";
-  $("engine-version").textContent = s.engine ? `Engine v${s.engine}` : "";
+  // Show the Auralis version supplied by its helper, not the internal engine version.
+  $("app-version").textContent = s.connected && !s.remote && s.app ? `Auralis v${s.app}` : "";
   // Send downloads to: this computer, or another MDM (#157).
   $("to-here").checked = !s.remote && $("remote-form").hidden;
   $("to-remote").checked = Boolean(s.remote) || !$("remote-form").hidden;

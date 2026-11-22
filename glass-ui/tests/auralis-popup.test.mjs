@@ -9,7 +9,7 @@ test('popup restores hidden video controls and reports failed actions',{skip:!ch
   const page=await browser.newPage();
   await page.addInitScript(()=>{
    window.calls=[];window.closedByPopup=false;window.close=()=>{window.closedByPopup=true};
-   window.chrome={i18n:{getMessage:k=>k,getUILanguage:()=> 'en'},tabs:{query:async()=>[{id:5,url:'https://www.youtube.com/watch?v=abcdef'}]},storage:{local:{get:async v=>v,set:async()=>{}}},runtime:{getManifest:()=>({permissions:[]}),sendMessage:async m=>{window.calls.push(m);if(m.type==='state')return {connected:true};if(m.type==='video-panel-site')return {ok:true,on:false};if(m.type==='site-excluded')return {excluded:false};if(m.type==='media')return {media:[]};if(m.type==='video-panel-set')return {ok:true};if(m.type==='open-options')return {ok:false};return {ok:true}}}};
+   window.chrome={i18n:{getMessage:k=>k,getUILanguage:()=> 'en'},tabs:{query:async()=>[{id:5,url:'https://www.youtube.com/watch?v=abcdef'}]},storage:{local:{get:async v=>v,set:async()=>{}}},runtime:{getManifest:()=>({permissions:[]}),sendMessage:async m=>{window.calls.push(m);if(m.type==='state')return {connected:true,app:'0.3.49',engine:'0.5.2',version:'0.1.15'};if(m.type==='video-panel-site')return {ok:true,on:false};if(m.type==='site-excluded')return {excluded:false};if(m.type==='media')return {media:[]};if(m.type==='video-panel-set')return {ok:true};if(m.type==='open-options')return {ok:false};return {ok:true}}}};
   });
   // Start from a settled document. Navigating to an invalid host can finish
   // on a browser error page after setContent begins, destroying its context.
@@ -18,6 +18,8 @@ test('popup restores hidden video controls and reports failed actions',{skip:!ch
   await page.setContent(html);
   await page.addScriptTag({content:readFileSync(new URL('../../auralis-extension/popup.js',import.meta.url),'utf8')});
   await page.waitForSelector('#video-panel-site:not(:disabled)');
+  assert.equal(await page.locator('#app-version').textContent(),'Auralis v0.3.49');
+  assert.doesNotMatch(await page.locator('footer').innerText(),/Engine v0\.5\.2/);
   assert.equal(await page.locator('#video-panel-site').isChecked(),false);
   await page.locator('#video-panel-site').check();
   assert.ok((await page.evaluate(()=>window.calls)).some(m=>m.type==='video-panel-set'&&m.on===true&&m.url.includes('youtube.com')));

@@ -184,9 +184,13 @@ async function readStatus() {
 // changes.
 async function noteStatus(why, app, engine) {
   const now = await readStatus();
-  if (now.why === why && (!app || now.app === app) && (!engine || now.engine === engine)) return;
+  // Undefined means this reply did not supply identity; null explicitly clears
+  // it when a helper no longer reports an Auralis version.
+  const nextApp = app === undefined ? (now.app || null) : app;
+  const nextEngine = engine === undefined ? (now.engine || null) : engine;
+  if (now.why === why && (now.app || null) === nextApp && (now.engine || null) === nextEngine) return;
   const was = !now.why || now.why === "update-app";
-  status = { ...now, why, app: app || null, engine: engine || now.engine || null, at: Date.now() };
+  status = { ...now, why, app: nextApp, engine: nextEngine, at: Date.now() };
   await ext.storage.local.set({ status });
   await showStatus();
   // Unreachable, PDFs and music open in the browser again (and back once connected).
