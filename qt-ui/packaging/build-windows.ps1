@@ -12,6 +12,7 @@ $source = Join-Path $repo 'qt-ui'
 $version = [regex]::Match((Get-Content (Join-Path $source 'CMakeLists.txt') -Raw), 'project\s*\(\s*AuralisQt\s+VERSION\s+(\d+\.\d+\.\d+)\s').Groups[1].Value
 if (!$version) { throw 'AuralisQt project version was not found.' }
 $build = Join-Path $env:AURALIS_QT_WORK 'cmake'
+$builtApp = Join-Path $build 'application'
 $job = Join-Path $env:AURALIS_QT_WORK "run-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
 $stage = Join-Path $job 'payload'
 foreach ($path in @($build, $job, $stage)) { New-Item -ItemType Directory -Force -Path $path | Out-Null }
@@ -25,8 +26,9 @@ try {
     $rust = Join-Path $env:CARGO_TARGET_DIR 'x86_64-pc-windows-msvc/release'
 
     Invoke-Checked 'cmake' @('-S',$source,'-B',$build,'-G','Visual Studio 17 2022','-A','x64',
-        "-DCMAKE_PREFIX_PATH:PATH=$env:AURALIS_QT_ROOT","-DCMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE:PATH=$stage")
+        "-DCMAKE_PREFIX_PATH:PATH=$env:AURALIS_QT_ROOT","-DCMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE:PATH=$builtApp")
     Invoke-Checked 'cmake' @('--build',$build,'--config','Release','--target','auralis-download-manager')
+    Copy-Item -LiteralPath (Join-Path $builtApp 'auralis-download-manager.exe') -Destination $stage
     Copy-Item -LiteralPath (Join-Path $rust 'auralis_engine.dll') -Destination $stage
     Copy-Item -LiteralPath (Join-Path $rust 'misterdownloadmanager-nmhost.exe') -Destination (Join-Path $stage 'auralis-browser-host.exe')
     Copy-Item -LiteralPath (Join-Path $env:AURALIS_QT_DENO 'deno.exe') -Destination $stage
@@ -69,11 +71,17 @@ try {
         ForEach-Object { '    RMDir "$INSTDIR\' + [IO.Path]::GetRelativePath($stage, $_.FullName) + '"' })
     $lines | Set-Content -LiteralPath $uninstall -Encoding utf8
 
-    $icon = Join-Path $source 'assets/auralis.ico'
-    if (!(Test-Path $icon)) { throw 'The Auralis installer icon was not found.' }
+    # MakeNSIS is 32-bit. Its attempt to open System32 checkout paths is redirected by Windows.
+    $icon = Join-Path $job 'auralis.ico'
+    $installerScript = Join-Path $job 'installer.nsi'
+    Copy-Item -LiteralPath (Join-Path $source 'assets/auralis.ico') -Destination $icon
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'installer.nsi') -Destination $installerScript
     $installer = Join-Path $job "Auralis.Download.Manager_$($version)_x64-setup.exe"
-    Invoke-Checked $env:AURALIS_QT_NSIS @('/V3',"/DVERSION=$version","/DOUTPUT=$installer","/DPAYLOAD=$stage",
-        "/DUNINSTALL_FILES=$uninstall","/DICON=$icon",(Join-Path $PSScriptRoot 'installer.nsi'))
+    Push-Location $job
+    try {
+        Invoke-Checked $env:AURALIS_QT_NSIS @('/V3',"/DVERSION=$version","/DOUTPUT=$installer","/DPAYLOAD=$stage",
+            "/DUNINSTALL_FILES=$uninstall","/DICON=$icon",$installerScript)
+    } finally { Pop-Location }
     if (!(Test-Path $installer) -or (Get-Item $installer).Length -gt 268435456) {
         throw 'The finished installer is missing or exceeds the size limit for automatic updates.'
     }
