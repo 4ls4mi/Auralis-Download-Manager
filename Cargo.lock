@@ -633,6 +633,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "auralis-qt-engine"
+version = "0.3.57"
+dependencies = [
+ "mdm-app",
+ "mdm-ipc",
+ "reqwest 0.13.5",
+ "semver",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7000,6 +7012,7 @@ checksum = "16a1cfa75cc186dd73d5818e510e042e40927bccc9c236b061cea97e1eb08029"
 dependencies = [
  "base64 0.23.1",
  "bytes",
+ "futures-channel",
  "futures-core",
  "futures-util",
  "http",

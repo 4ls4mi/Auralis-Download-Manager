@@ -1,0 +1,124 @@
+name: Auralis Qt Windows build on your PC
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        type: boolean
+        description: Publish the verified installer and extensions
+        default: false
+  push:
+    branches: [wip/auralis-qt-shell]
+    paths:
+      - 'qt-ui/**'
+      - 'crates/**'
+      - 'auralis-extension/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rust-toolchain.toml'
+      - '.cargo/**'
+      - '.github/workflows/auralis-qt-windows.yml'
+
+permissions:
+  contents: read
+
+# Share the legacy build lock because both use the same owner-managed caches and runner.
+concurrency:
+  group: auralis-self-hosted-windows
+  cancel-in-progress: false
+
+jobs:
+  windows-x64:
+    name: Build and verify the installed Qt application
+    if: >-
+      github.repository == '4ls4mi/Auralis-Download-Manager' &&
+      github.ref == 'refs/heads/wip/auralis-qt-shell' &&
+      (github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[build-auralis-qt]'))
+    runs-on: [self-hosted, Windows, X64, auralis]
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          clean: false
+
+      - name: Use the cached, verified native toolchain
+        shell: pwsh
+        run: ./qt-ui/packaging/windows-tools.ps1
+
+      - name: Test the Rust engine bridge, recovery, and backup
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          cargo test --locked --target x86_64-pc-windows-msvc -p auralis-qt-engine --lib
+          if ($LASTEXITCODE -ne 0) { throw 'Qt engine bridge tests failed.' }
+          cargo test --locked --target x86_64-pc-windows-msvc -p mdm-app --test embedded_service
+          if ($LASTEXITCODE -ne 0) { throw 'Embedded downloader tests failed.' }
+          cargo test --locked --target x86_64-pc-windows-msvc -p mdm-app --lib -- backup_snapshot:: automatic_torrent_choice_tests
+          if ($LASTEXITCODE -ne 0) { throw 'Backup or automatic torrent recovery tests failed.' }
+          cargo test --locked --target x86_64-pc-windows-msvc -p mdm-app --lib torrent_recovery_handoff_tests
+          if ($LASTEXITCODE -ne 0) { throw 'Torrent recovery handoff tests failed.' }
+
+      - name: Build and bundle the Qt installer
+        shell: pwsh
+        run: ./qt-ui/packaging/build-windows.ps1
+
+      - name: Verify Windows installation and update relaunch
+        shell: pwsh
+        run: ./qt-ui/packaging/test-installed-windows.ps1
+
+      - name: Package the browser extensions
+        shell: pwsh
+        run: ./qt-ui/packaging/pack-extensions.ps1
+
+      - name: Upload the verified installer
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: auralis-download-manager-windows-x64
+          path: ${{ env.AURALIS_QT_INSTALLER }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Upload the browser extension packages
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: auralis-browser-extensions
+          path: ${{ env.AURALIS_QT_EXTENSIONS }}/*.zip
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Remove staging only
+        if: always()
+        shell: pwsh
+        run: |
+          if ($env:AURALIS_QT_JOB -and $env:AURALIS_QT_WORK) {
+            $job = Join-Path $env:AURALIS_QT_WORK "run-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+            if ($env:AURALIS_QT_JOB -ieq $job) {
+              Remove-Item -LiteralPath $job -Recurse -Force -ErrorAction SilentlyContinue
+            }
+          }
+
+  publish:
+    name: Publish verified public release
+    needs: windows-x64
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.publish) ||
+      (github.event_name == 'push' && contains(github.event.head_commit.message, '[prepare-auralis-release]'))
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Verify draft asset hashes and publish
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          AURALIS_ATTACH_ONLY: ${{ github.event_name == 'push' && '1' || '0' }}
+        run: bash qt-ui/packaging/publish-windows.sh

@@ -1051,13 +1051,13 @@ fn deliver(cmd: &mdm_ipc::Command) -> Result<(), Undelivered> {
     let app = match std::fs::read_to_string(dir.join("app-path")) {
         Ok(path) if !path.trim().is_empty() => PathBuf::from(path.trim()),
         _ => {
-            // The Glass package keeps the ORIGINAL native host protocol, but its
-            // visible application has a different name. Prefer that shell when
-            // it is installed beside this host (or above a resources folder).
-            // A stock MDM installation still follows its original path.
-            let glass = [Some(dir.join("mister-hybrid-glass.exe")),
-                dir.parent().map(|p|p.join("mister-hybrid-glass.exe"))]
-                .into_iter().flatten().find(|p|cfg!(windows)&&p.is_file());
+            // Open the Auralis desktop binary when this host is packaged with it.
+            // Older Glass releases also kept their shell beside or above the host.
+            let glass = ["auralis-download-manager.exe", "mister-hybrid-glass.exe"]
+                .into_iter()
+                .flat_map(|name| [Some(dir.join(name)), dir.parent().map(|p| p.join(name))])
+                .flatten()
+                .find(|p| cfg!(windows) && p.is_file());
             glass.unwrap_or_else(|| dir.join(if cfg!(windows) {
                 "misterdownloadmanager.exe"
             } else {

@@ -1,0 +1,107 @@
+//! Private C ABI between the Qt UI and the embedded Rust downloader.
+use serde_json::{Value, json};
+use std::{
+    ffi::{CString, c_char},
+    panic::{AssertUnwindSafe, catch_unwind},
+};
+
+#[cfg(windows)]
+mod updater;
+
+const MAX_COMMAND: usize = 1024 * 1024;
+
+fn response(action: impl FnOnce() -> Result<Value, String>) -> *mut c_char {
+    let response = match catch_unwind(AssertUnwindSafe(action)) {
+        Ok(Ok(result)) => json!({ "result": result }),
+        Ok(Err(error)) => json!({ "error": error }),
+        Err(_) => json!({ "error": "Auralis engine encountered an internal error" }),
+    };
+    CString::new(response.to_string())
+        .expect("serialized JSON escapes interior NUL bytes")
+        .into_raw()
+}
+
+fn ensure_owner() -> Result<(), String> {
+    match mdm_ipc::app_pid() {
+        Some(pid) if pid == std::process::id() => Ok(()),
+        Some(_) => Err("Another instance may be using this profile".into()),
+        None => Err("The Auralis engine is starting or unavailable".into()),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn auralis_engine_run() -> *mut c_char {
+    response(|| mdm_app::run_embedded_downloader().map(|()| json!({ "ok": true })))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn auralis_engine_profile() -> *mut c_char {
+    response(|| {
+        mdm_ipc::data_dir()
+            .map(|path| json!(path))
+            .ok_or_else(|| "The download profile is unavailable".into())
+    })
+}
+
+/// # Safety
+/// `input` must point to `length` readable bytes for the duration of the call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn auralis_engine_request(input: *const u8, length: usize) -> *mut c_char {
+    response(|| {
+        if input.is_null() || length == 0 || length > MAX_COMMAND {
+            return Err("Invalid engine request length".into());
+        }
+        let input = unsafe { std::slice::from_raw_parts(input, length) };
+        let request: Value = serde_json::from_slice(input).map_err(|e| e.to_string())?;
+        if let Some(action) = request.get("shellAction").and_then(Value::as_str) {
+            #[cfg(windows)]
+            if action.starts_with("update-") {
+                return updater::dispatch(action);
+            }
+            if action == "register-interface" {
+                ensure_owner()?;
+                let profile = mdm_ipc::data_dir().ok_or("The download profile is unavailable")?;
+                std::fs::write(
+                    profile.join("auralis-interface-version"),
+                    env!("CARGO_PKG_VERSION"),
+                )
+                .map_err(|e| e.to_string())?;
+                return Ok(json!({ "ok": true }));
+            }
+            return Err("Unsupported shell action".into());
+        }
+
+        ensure_owner()?;
+        let command: mdm_ipc::Command =
+            serde_json::from_value(request).map_err(|e| format!("Invalid engine request: {e}"))?;
+        if command.exit {
+            let status = mdm_ipc::request_checked(&mdm_ipc::Command {
+                query: Some("glass-full-backup-status".into()),
+                ..Default::default()
+            })
+            .map_err(|e| e.to_string())?;
+            let status: Value = serde_json::from_str(&status).map_err(|e| e.to_string())?;
+            if status["pending"] == true {
+                return Err(
+                    "Wait for the download backup or restore to finish before exiting".into(),
+                );
+            }
+        }
+
+        let reply = mdm_ipc::request_checked(&command).map_err(|e| e.to_string())?;
+        match reply.as_str() {
+            "ok" | "" => Ok(json!({ "ok": true })),
+            "timeout" => Err("The engine did not answer in time".into()),
+            text => Ok(serde_json::from_str(text).unwrap_or_else(|_| json!(text))),
+        }
+    })
+}
+
+/// # Safety
+/// `output` must be null or an owned pointer returned by this library, freed once.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn auralis_engine_free(output: *mut c_char) {
+    if !output.is_null() {
+        drop(unsafe { CString::from_raw(output) });
+    }
+}

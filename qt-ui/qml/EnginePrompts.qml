@@ -1,0 +1,335 @@
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import "TransferData.js" as Transfer
+
+QtObject {
+    id: root
+    property Item popupParent
+    property string material: MaterialTheme.current
+    property bool autoProgress: true
+    signal showProgressRequested(var downloadId)
+    signal downloadCompleted(var downloadId)
+    signal quitRequested()
+    readonly property var colors: MaterialTheme.profile(material)
+    property bool polling: false
+    property bool exitSeen: false
+    property var previousStatuses: null
+    property var completed: []
+    property var settings: ({})
+    property int settingRefresh: 0
+
+    function refresh() {
+        if (!popupParent || !engine.ready || polling)
+            return
+        if (settingRefresh++ % 10 === 0)
+            engine.request({query: "glass-settings"}, function (reply, error) {
+                if (!Transfer.problem(reply, error) && reply)
+                    settings = reply
+            })
+        if (question.visible) {
+            if (question.kind === "power" && !question.busy)
+                refreshPower()
+            return
+        }
+        if (video.visible || links.visible)
+            return
+        polling = true
+        engine.request({query: "glass-file-info"}, function (reply, error) {
+            const issue = Transfer.problem(reply, error)
+            if (issue) {
+                polling = false
+                return
+            }
+            if (reply && reply.info) {
+                polling = false
+                if (!fileInfo.busy)
+                    fileInfo.openForRequest(reply)
+                return
+            }
+            if (fileInfo.visible) {
+                if (!fileInfo.busy)
+                    fileInfo.close()
+                polling = false
+                return
+            }
+            pollQuestions()
+        })
+    }
+
+    function refreshPower() {
+        polling = true
+        engine.request({query: "glass-power"}, function (reply, error) {
+            polling = false
+            if (Transfer.problem(reply, error) || !reply)
+                return
+            if (reply.exit && !exitSeen) {
+                exitSeen = true
+                quitRequested()
+            }
+            if (!question.visible || question.kind !== "power" || question.busy)
+                return
+            if (reply.pending && reply.id === question.info.id)
+                question.info = {id: reply.id, data: reply.pending}
+            else
+                question.close()
+        })
+    }
+
+    function pollQuestions() {
+        engine.request({query: "glass-power"}, function (power, error) {
+            if (!Transfer.problem(power, error) && power) {
+                if (power.exit && !exitSeen) {
+                    exitSeen = true
+                    polling = false
+                    quitRequested()
+                    return
+                }
+                if (power.pending) {
+                    polling = false
+                    question.present("power", {id: power.id, data: power.pending})
+                    return
+                }
+            }
+            engine.request({query: "glass-prompts"}, function (reply, error) {
+                if (!Transfer.problem(reply, error) && reply) {
+                    if (reply.duplicate || reply.queue) {
+                        polling = false
+                        question.present(reply.duplicate ? "duplicate" : "queue", reply.duplicate || reply.queue)
+                        return
+                    }
+                }
+                if (completed.length > 0) {
+                    const file = completed[0]
+                    completed = completed.slice(1)
+                    polling = false
+                    question.present("complete", file)
+                    return
+                }
+                pollBrowserPrompts()
+            })
+        })
+    }
+
+    function pollBrowserPrompts() {
+        engine.request({query: "glass-videos"}, function (reply, error) {
+            if (!Transfer.problem(reply, error) && reply && reply.ids && reply.ids.length) {
+                polling = false
+                video.present(reply.ids[0])
+                return
+            }
+            engine.request({query: "glass-grabber-status"}, function (data, issue) {
+                polling = false
+                if (!Transfer.problem(data, issue) && data && data.pending)
+                    links.present()
+            })
+        })
+    }
+
+    function trackDownloads() {
+        const dashboard = engine.dashboard
+        if (!dashboard || !dashboard.downloads || !popupParent)
+            return
+        const next = {}
+        const previous = previousStatuses
+        let pending = completed.slice()
+        for (let file of dashboard.downloads) {
+            const id = String(file.id)
+            next[id] = file.status
+            if (!previous || previous[id] === file.status)
+                continue
+            if (file.status === "Complete") {
+                downloadCompleted(file.id)
+                if (settings.show_complete === true)
+                    pending.push(file)
+            } else if (file.status === "Downloading" && autoProgress && settings.show_progress !== false) {
+                showProgressRequested(file.id)
+            }
+        }
+        previousStatuses = next
+        completed = pending
+    }
+
+    property Connections engineState: Connections {
+        target: engine
+        function onDashboardChanged() { root.trackDownloads() }
+    }
+    property Timer promptTimer: Timer {
+        interval: 850
+        running: !!root.popupParent && engine.ready
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: root.refresh()
+    }
+
+    property AddDownloadDialog fileInfo: AddDownloadDialog {
+        parent: root.popupParent
+        material: root.material
+    }
+
+    property Dialog question: Dialog {
+        id: prompt
+        parent: root.popupParent
+        property string kind: ""
+        property var info: ({})
+        property string failure: ""
+        property bool busy: false
+        property bool replacing: false
+        modal: true
+        anchors.centerIn: parent
+        closePolicy: Popup.NoAutoClose
+        width: Math.min(580, parent ? parent.width - 28 : 580)
+        padding: 18
+        title: kind === "duplicate" ? qsTr("Download already listed") : kind === "queue" ? qsTr("Choose a download queue")
+            : kind === "power" ? qsTr("Download completion action") : qsTr("Download complete")
+
+        function present(type, data) {
+            kind = type
+            info = data
+            failure = ""
+            replacing = false
+            if (type === "queue") {
+                queueName.currentIndex = 0
+                startQueue.checked = false
+            }
+            open()
+        }
+
+        function reply(payload, after) {
+            busy = true
+            failure = ""
+            engine.request(payload, function (result, error) {
+                busy = false
+                failure = Transfer.problem(result, error)
+                if (!failure) {
+                    close()
+                    engine.refresh()
+                    if (after)
+                        after()
+                }
+            })
+        }
+
+        function choose(choice) {
+            let response = {kind, lease: info.lease, cancel: choice < 0}
+            if (kind === "duplicate")
+                response.choice = choice
+            else {
+                response.name = queueName.currentText
+                response.start = startQueue.checked
+            }
+            reply({action: "glass-prompt", queue: JSON.stringify(response)})
+        }
+
+        function power(action) {
+            reply({action: "glass-power", queue: JSON.stringify({id: info.id, action})})
+        }
+
+        function cancel() {
+            if (busy)
+                return
+            if (kind === "duplicate" || kind === "queue")
+                choose(-1)
+            else if (kind === "power")
+                power("cancel")
+            else
+                close()
+        }
+
+        function openSaved(folder) {
+            failure = ""
+            const id = info.id
+            engine.request({query: "glass-move-status", ids: [id]}, function (state, error) {
+                if (prompt.info.id !== id)
+                    return
+                failure = Transfer.problem(state, error)
+                if (!failure && (!state || state.moved_away || !state.path || !(folder ? engine.openFolder(state.path) : engine.openPath(state.path))))
+                    failure = qsTr("The saved file or folder could not be opened.")
+            })
+        }
+
+        background: GlassSurface { material: root.material; role: "modal" }
+        header: Label { text: prompt.title; color: root.colors.text; font.bold: true; font.pixelSize: 20; padding: 17; bottomPadding: 4 }
+        contentItem: ColumnLayout {
+            spacing: 9
+            Label {
+                Layout.fillWidth: true
+                color: root.colors.text
+                wrapMode: Text.WordWrap
+                text: prompt.kind === "duplicate" ? qsTr("%1 is already in your download list.").arg(prompt.info.file || qsTr("This file"))
+                    : prompt.kind === "queue" ? qsTr("%1 download(s) are waiting for a queue.").arg(prompt.info.count || 0)
+                    : prompt.kind === "power" && prompt.info.data ? qsTr("%1 in %2 second(s).").arg(prompt.info.data.mode === "ShutDown"
+                       ? qsTr("Shut down") : prompt.info.data.mode === "Hibernate" ? qsTr("Hibernate") : qsTr("Sleep")).arg(prompt.info.data.seconds)
+                    : prompt.info.file || ""
+            }
+            Label {
+                visible: prompt.kind === "complete"
+                text: Transfer.bytes(prompt.info.size === null ? prompt.info.downloaded : prompt.info.size)
+                color: root.colors.muted
+            }
+            Label {
+                visible: prompt.kind === "complete"
+                Layout.fillWidth: true
+                text: prompt.info.path || ""
+                color: root.colors.muted
+                elide: Text.ElideMiddle
+            }
+            ComboBox {
+                id: queueName
+                visible: prompt.kind === "queue"
+                Layout.fillWidth: true
+                model: prompt.kind === "queue" ? prompt.info.queues || [] : []
+                Accessible.name: qsTr("Download queue")
+            }
+            CheckBox { id: startQueue; visible: prompt.kind === "queue"; text: qsTr("Start the queue now") }
+            Label {
+                visible: prompt.kind === "duplicate" && prompt.replacing
+                Layout.fillWidth: true
+                text: qsTr("The existing download and its file will be replaced.")
+                wrapMode: Text.WordWrap
+                color: root.colors.caution
+            }
+            Label {
+                visible: prompt.failure !== ""
+                Layout.fillWidth: true
+                text: prompt.failure
+                wrapMode: Text.WordWrap
+                color: root.colors.destructive
+            }
+            Flow {
+                Layout.fillWidth: true
+                spacing: 7
+                GlassButton { material: root.material; text: prompt.kind === "complete" ? qsTr("Close") : qsTr("Cancel"); enabled: !prompt.busy; onClicked: prompt.cancel() }
+                GlassButton { material: root.material; text: qsTr("Use existing"); visible: prompt.kind === "duplicate"; enabled: !prompt.busy; onClicked: prompt.choose(3) }
+                GlassButton { material: root.material; text: qsTr("Keep both"); visible: prompt.kind === "duplicate"; enabled: !prompt.busy; onClicked: prompt.choose(1) }
+                GlassButton {
+                    material: root.material
+                    text: prompt.replacing ? qsTr("Confirm replace") : qsTr("Replace existing…")
+                    accent: root.colors.destructive
+                    visible: prompt.kind === "duplicate"
+                    enabled: !prompt.busy
+                    onClicked: {
+                        if (prompt.replacing)
+                            prompt.choose(2)
+                        else
+                            prompt.replacing = true
+                    }
+                }
+                GlassButton { material: root.material; text: qsTr("Add to queue"); visible: prompt.kind === "queue"; enabled: !prompt.busy && queueName.currentIndex >= 0; onClicked: prompt.choose(0) }
+                GlassButton { material: root.material; text: qsTr("Run now"); accent: root.colors.caution; visible: prompt.kind === "power"; enabled: !prompt.busy; onClicked: prompt.power("execute") }
+                GlassButton { material: root.material; text: qsTr("Open file"); accent: root.colors.positive; visible: prompt.kind === "complete"; onClicked: prompt.openSaved(false) }
+                GlassButton { material: root.material; text: qsTr("Open folder"); visible: prompt.kind === "complete"; onClicked: prompt.openSaved(true) }
+            }
+        }
+        Shortcut { sequence: "Escape"; enabled: prompt.visible && !prompt.busy; onActivated: prompt.cancel() }
+    }
+
+    property VideoRequestDialog video: VideoRequestDialog {
+        parent: root.popupParent
+        material: root.material
+    }
+    property BrowserLinksDialog links: BrowserLinksDialog {
+        parent: root.popupParent
+        material: root.material
+    }
+}
