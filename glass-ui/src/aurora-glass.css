@@ -1,13 +1,18 @@
 /* Aurora uses the desktop acrylic as its backing. The rim and individual
    panels tint that backdrop in different places to give each pane its depth. */
 .cg-window.cg-material-builtin-aurora-night {
-  --aurora-shell: 13 25 53;
-  --aurora-pane: 30 48 93;
+  --aurora-shell: 8 16 47;
+  --aurora-shell-opacity: .49;
+  --aurora-pane: 18 32 63;
+  --aurora-pane-opacity: .18;
+  --aurora-panel-light: 177 215 255;
+  --aurora-panel-cast: 4 9 29;
+  --aurora-inner-rim: #b6dcff38;
+  --aurora-lower-rim: #6398df82;
   --aurora-edge: #99c8ff9e;
   --aurora-light: #dceaffdc;
   --aurora-depth: #070c2bae;
   --aurora-top: #85a7ff4d;
-  --aurora-face: #172a554d;
   --aurora-bottom: #08112377;
   --aurora-key-face: #10213e;
   --aurora-key-shadow: #02081ea6;
@@ -16,13 +21,18 @@
 }
 
 .cg-window.cg-material-builtin-aurora-ice {
-  --aurora-shell: 197 232 250;
-  --aurora-pane: 198 235 252;
+  --aurora-shell: 210 239 255;
+  --aurora-shell-opacity: .43;
+  --aurora-pane: 203 239 255;
+  --aurora-pane-opacity: .18;
+  --aurora-panel-light: 248 255 255;
+  --aurora-panel-cast: 31 94 126;
+  --aurora-inner-rim: #f1fdff8a;
+  --aurora-lower-rim: #a4ddf4dc;
   --aurora-edge: #f3feffff;
   --aurora-light: #fff;
   --aurora-depth: #24688b75;
   --aurora-top: #faffffb3;
-  --aurora-face: #ccecff2b;
   --aurora-bottom: #89cde73d;
   --aurora-key-face: #c9ecfa;
   --aurora-key-shadow: #2e63885c;
@@ -42,19 +52,21 @@
 .cg-window.cg-surface-frosted:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-content {
   background:
     linear-gradient(165deg, var(--aurora-top), transparent 26%, transparent 77%, var(--aurora-bottom)),
-    rgb(var(--aurora-shell) / .44) !important;
+    rgb(var(--aurora-shell) / var(--aurora-shell-opacity)) !important;
   border-color: var(--aurora-edge) !important;
-  border-radius: var(--auralis-frame-radius, 20px);
+  border-radius: var(--native-backdrop-radius, 20px);
   box-shadow:
-    inset 0 1px 2px var(--aurora-light),
-    inset 0 0 0 3px #caeaff24,
-    inset 0 -2px 10px var(--aurora-depth) !important;
+    inset 0 1px 1px var(--aurora-light),
+    inset 0 0 0 1px var(--aurora-inner-rim),
+    inset 0 0 0 3px #caeaff19,
+    inset 0 -2px 2px var(--aurora-lower-rim),
+    inset 0 -7px 14px -9px var(--aurora-depth) !important;
 }
 
 .cg-window.cg-surface-frosted.cg-material-builtin-aurora-ice .cg-content {
   background:
     linear-gradient(165deg, var(--aurora-top), transparent 24%, transparent 83%, var(--aurora-bottom)),
-    rgb(var(--aurora-shell) / .58) !important;
+    rgb(var(--aurora-shell) / var(--aurora-shell-opacity)) !important;
 }
 
 .cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-content::before {
@@ -79,48 +91,71 @@
   box-shadow: inset 1px 1px 4px white, inset -1px -2px 5px #9debffb0;
 }
 
-/* Each panel has its own front surface and rim. Reflective shapes inside a pane
-   are clipped to its background and never cover labels, rows or menus. */
+/* The outer desktop blur comes from Windows. CSS blur here would filter the
+   transparent WebView surface a second time before the native composition. */
+.cg-window.cg-native-backdrop:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-content {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* The inner panes soften the reflections slightly, preserving their depth. */
+.cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-fit-content .cg-glass {
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+/* The renderer supplies the optical shapes. These panes add only their own tint
+   and physical edges, which keeps the underlying layer visible through them. */
 .cg-window.cg-surface-frosted:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice):is(.cg-target-main,.cg-target-details) .cg-fit-content :is(.cg-glass,.cg-window-top,.cg-menubar) {
   background:
-    var(--aurora-panel-optics, linear-gradient(145deg, transparent, transparent)),
-    linear-gradient(160deg, var(--aurora-top), var(--aurora-face) 30%, transparent 65%, var(--aurora-bottom)),
-    rgb(var(--aurora-pane) / .22) !important;
-  border: 1px solid var(--aurora-edge) !important;
+    linear-gradient(90deg, rgb(var(--aurora-panel-light) / var(--aurora-side-light, .12)), transparent 8px, transparent calc(100% - 8px), rgb(var(--aurora-panel-light) / .08)),
+    linear-gradient(180deg, rgb(var(--aurora-panel-light) / .18), transparent min(40%, 32px)),
+    rgb(var(--aurora-pane) / var(--aurora-pane-opacity)) !important;
+  border: 1px solid var(--aurora-inner-rim) !important;
+  border-top-color: var(--aurora-edge) !important;
   border-radius: 12px !important;
   box-shadow:
-    inset 0 1px 2px var(--aurora-light),
-    inset 0 -2px 5px var(--aurora-depth),
-    0 2px 8px var(--aurora-depth) !important;
+    inset 0 1px 1px var(--aurora-light),
+    inset 0 0 0 2px rgb(var(--aurora-panel-light) / .09),
+    inset 0 -1px 0 var(--aurora-lower-rim),
+    0 1px 4px rgb(var(--aurora-panel-cast) / .39) !important;
 }
 
-.cg-window.cg-material-builtin-aurora-night .cg-list-panel {
-  --aurora-panel-optics:
-    radial-gradient(ellipse 100% 91% at 80% 106%, transparent 61%, #778aff13 65%, #a58bf044 69%, #bdd2ff72 70%, transparent 72%),
-    radial-gradient(ellipse 85% 119% at 7% 109%, #3757ab18 56%, #70c7fa39 58%, #b8f2ff68 59%, transparent 61%);
+/* The work area is behind the action rail. Its lower bevel is deliberately
+   smaller than the raised rail’s lit edge. */
+.cg-window.cg-surface-frosted:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice):is(.cg-target-main,.cg-target-details) .cg-fit-content :is(.cg-list-panel,.cg-sidebar,.cg-settings-body,.cg-settings-nav) {
+  box-shadow:
+    inset 0 1px 1px var(--aurora-light),
+    inset 0 0 0 1px var(--aurora-inner-rim),
+    inset 0 3px 9px -5px rgb(var(--aurora-panel-cast) / .48),
+    inset 0 -1px 0 var(--aurora-lower-rim),
+    0 1px 2px rgb(var(--aurora-panel-cast) / .28) !important;
 }
 
-.cg-window.cg-material-builtin-aurora-night .cg-sidebar {
-  --aurora-panel-optics: radial-gradient(ellipse 128% 71% at -43% 95%, #c47aff26 69%, #bcb2ff68 70%, transparent 73%);
+.cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-list-panel {
+  --aurora-pane-opacity: .12;
+  --aurora-side-light: .21;
 }
 
-.cg-window.cg-material-builtin-aurora-night .cg-footer {
-  --aurora-panel-optics: radial-gradient(ellipse 82% 100% at 66% -58%, transparent 80%, #76b8ff4f 96%, transparent);
+.cg-window.cg-material-builtin-aurora-night.cg-surface-frosted .cg-fit-content .cg-list-panel.cg-glass {
+  background:
+    radial-gradient(ellipse 100% 48px at 25% 0, rgb(var(--aurora-panel-light) / .21), transparent 100%),
+    linear-gradient(90deg, rgb(var(--aurora-panel-light) / .14), transparent 10px),
+    rgb(var(--aurora-pane) / var(--aurora-pane-opacity)) !important;
 }
 
-.cg-window.cg-material-builtin-aurora-ice .cg-list-panel {
-  --aurora-panel-optics:
-    linear-gradient(137deg, #effbff0f 16%, #f4ffff80 16.4%, #b2e4fa29 17%, transparent 45%),
-    linear-gradient(133deg, transparent 61%, #95d8f943 61.3%, #faffff99 62%, #d5f4ff42 62.6%, transparent 82%, #f8ffff9c 82.3%, #a9e5fc45 83%),
-    linear-gradient(43deg, #92cfef3d, transparent 44%, #fff5 68%, transparent 89%);
-}
-
-.cg-window.cg-material-builtin-aurora-ice .cg-sidebar {
-  --aurora-panel-optics: linear-gradient(142deg, transparent 58%, #ffffff9e 58.6%, #aadff72e 59%, transparent 78%);
-}
-
-.cg-window.cg-material-builtin-aurora-ice .cg-footer {
-  --aurora-panel-optics: linear-gradient(130deg, #ffffff60 16%, transparent 17%, transparent 76%, #a7ddf65c 77%, #fff5);
+.cg-window.cg-surface-frosted:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice):is(.cg-target-main,.cg-target-details) .cg-fit-content :is(.cg-toolbar,.cg-footer).cg-glass {
+  --aurora-pane-opacity: .27;
+  background:
+    linear-gradient(170deg, rgb(var(--aurora-panel-light) / .30), transparent 48%),
+    linear-gradient(0deg, rgb(var(--aurora-panel-light) / .12), transparent 15px),
+    rgb(var(--aurora-pane) / var(--aurora-pane-opacity)) !important;
+  border-color: var(--aurora-edge) !important;
+  box-shadow:
+    inset 0 1px 1px var(--aurora-light),
+    inset 0 0 0 2px var(--aurora-inner-rim),
+    inset 0 -2px 2px var(--aurora-lower-rim),
+    0 3px 7px rgb(var(--aurora-panel-cast) / .50) !important;
 }
 
 .cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-fit-content :is(.cg-title,.cg-sidebar button,.cg-settings-nav button,.cg-menubar button,.cg-row) {
@@ -184,12 +219,12 @@
 }
 
 .cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-fit-content .cg-toolbar > button::after {
-  inset: 2px;
+  inset: 2px 3px 3px;
   background:
-    linear-gradient(140deg, #fff7 0%, #fff0 25%, #0000 68%, rgb(var(--aurora-key-rgb, 74 215 255) / .44)),
+    linear-gradient(140deg, #fffb 0%, #fff0 23%, #0000 66%, rgb(var(--aurora-key-rgb, 74 215 255) / .43)),
     linear-gradient(180deg, rgb(var(--aurora-key-rgb, 74 215 255) / var(--aurora-key-highlight)), transparent),
     var(--aurora-key-face);
-  box-shadow: inset 0 1px #fff7, inset 0 -4px 8px var(--aurora-key-shadow);
+  box-shadow: inset 0 1px #fffa, inset 0 0 0 1px #ffffff31, inset 0 -4px 8px var(--aurora-key-shadow);
   z-index: -1;
 }
 

@@ -31,7 +31,7 @@ test('Aurora shows translucent panes and faceted action colors with desktop acry
   logLevel: 'silent'
  });
  await server.listen();
- const browser = await chromium.launch({headless: true, executablePath, args: ['--no-sandbox']});
+ const browser = await chromium.launch({headless: true, executablePath, args: ['--no-sandbox', '--enable-unsafe-swiftshader', '--use-angle=swiftshader']});
  try {
   for (const material of ['builtin-aurora-night', 'builtin-aurora-ice']) {
    const page = await browser.newPage({viewport: {width: 960, height: 690}});
@@ -39,6 +39,22 @@ test('Aurora shows translucent panes and faceted action colors with desktop acry
     localStorage.setItem('auralis-browser-guide-seen', '1');
     localStorage.setItem('mh-glass-material', material);
     localStorage.setItem('mh-glass-back-main', 'desktop');
+    const draw = WebGLRenderingContext.prototype.drawArrays;
+    WebGLRenderingContext.prototype.drawArrays = function (...args) {
+     draw.apply(this, args);
+     if (!this.canvas.classList.contains('cg-aurora-optics')) return;
+     const width = this.drawingBufferWidth;
+     const height = this.drawingBufferHeight;
+     const pixels = new Uint8Array(width * height * 4);
+     this.readPixels(0, 0, width, height, this.RGBA, this.UNSIGNED_BYTE, pixels);
+     const alphas = pixels.filter((_, index) => index % 4 === 3);
+     window.auroraPixels = {
+      clear: alphas.some(alpha => alpha < 6),
+      face: alphas.some(alpha => alpha > 26 && alpha < 80),
+      rim: alphas.some(alpha => alpha > 120),
+      opaque: alphas.some(alpha => alpha === 255)
+     };
+    };
     window.__TAURI_EVENT_PLUGIN_INTERNALS__ = {unregisterListener: () => {}};
     window.__TAURI_INTERNALS__ = {
      metadata: {currentWindow: {label: 'main'}, currentWebview: {label: 'main'}},
@@ -58,6 +74,15 @@ test('Aurora shows translucent panes and faceted action colors with desktop acry
    await add.waitFor();
    await page.waitForFunction(() => window.auroraEffects?.includes('acrylic'));
    assert.equal(await page.locator('.cg-wallpaper').count(), 0);
+   const variant = material.endsWith('night') ? 'dark' : 'light';
+   await page.locator(`.cg-aurora-optics[data-rendered='${variant}']`).waitFor();
+   assert.deepEqual(await page.evaluate(() => window.auroraPixels), {
+    clear: true, face: true, rim: true, opaque: false
+   });
+   assert.equal(
+    await page.locator('.cg-content').evaluate(element => getComputedStyle(element).backdropFilter),
+    'none'
+   );
    const optics = await page.evaluate(() => {
     const shell = getComputedStyle(document.querySelector('.cg-content'));
     const sidebar = getComputedStyle(document.querySelector('.cg-sidebar'));

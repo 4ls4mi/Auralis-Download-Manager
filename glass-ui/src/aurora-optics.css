@@ -1,0 +1,14 @@
+/* Light reflected by the material sits between the backing and the UI panes. */
+.cg-aurora-optics {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+}
+
+.cg-window:is(.cg-material-builtin-aurora-night, .cg-material-builtin-aurora-ice) .cg-fit-content {
+  z-index: 1;
+}

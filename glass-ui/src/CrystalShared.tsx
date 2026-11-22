@@ -8,6 +8,7 @@ import {loadThemes,paletteForTheme} from "./themeFiles";
 import FrostedRibbon from "./FrostedRibbon";
 import {BubbleProgress} from "./BubbleProgress";
 import FrostedLayers from "./FrostedLayers";
+import {AuroraOptics} from "./AuroraOptics";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { getCurrentWindow, currentMonitor, Effect, EffectState } from "@tauri-apps/api/window";
 type ResizeDirection = Parameters<ReturnType<typeof getCurrentWindow>["startResizeDragging"]>[0];
@@ -491,7 +492,12 @@ export function CrystalWindow({ children, target = "main" }: {
       <span style={{ background: `rgba(3,9,19,${appearance.dim / 100})` }} />
     </div>}
     {mode === "solid" && <div className="cg-solid" />}
-    <div className="cg-content" ref={frame}>{appearance.material === "frosted-water-351" && !maximized && !tiled && <FrostedLayers maskBackdrop={mode!=="desktop"} tintHue={appearance.tintHue} tintRgb={themeTintRgb} tintStrength={appearance.tintStrength} opacity={surfaceOpacity * 100}/>}<div className="cg-fit-content">{children}</div></div>
+    <div className="cg-content" ref={frame}>
+      {appearance.material === "frosted-water-351" && !maximized && !tiled &&
+        <FrostedLayers maskBackdrop={mode !== "desktop"} tintHue={appearance.tintHue} tintRgb={themeTintRgb} tintStrength={appearance.tintStrength} opacity={surfaceOpacity * 100}/>}
+      {(auroraDark || auroraLight) && <AuroraOptics variant={auroraDark ? "dark" : "light"}/>}
+      <div className="cg-fit-content">{children}</div>
+    </div>
     {windowError&&<aside className="cg-window-notice cg-error" role="alert"><span>{windowError}</span><button title="Dismiss" onClick={()=>setWindowError("")}><X size={15}/></button></aside>}
     <ResizeGrips />
   </div>;
