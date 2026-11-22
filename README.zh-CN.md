@@ -6,6 +6,16 @@ Auralis 是适用于 Windows x64 的免费开源下载管理器，提供玻璃�
 
 [下载最新 Windows 版本](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest) · [浏览器扩展](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest) · [版本说明](CHANGELOG.md)
 
+## Windows 上的 Auralis
+
+这些是 Auralis 0.3.49 实际运行时的局部截图；录制时右侧和底部被截断。下方是较早的示例截图。
+
+![下载列表（局部）](docs/images/auralis/current-main-partial.png)
+
+![外观和连接指示器（局部）](docs/images/auralis/current-settings-partial.png)
+
+![录制片段（局部）](docs/images/auralis/current-recording-excerpt.gif)
+
 ## 界面图片
 
 图片展示使用示例下载的 Auralis 界面。外观、材质和颜色均可配置。

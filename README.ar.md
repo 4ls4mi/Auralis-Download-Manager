@@ -6,6 +6,16 @@
 
 [تنزيل أحدث إصدار لنظام Windows](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest) · [حزم إضافة المتصفح](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest) · [ملاحظات الإصدارات](CHANGELOG.md)
 
+## من تطبيق أوراليس على Windows
+
+لقطات جزئية من جلسة فعلية للإصدار 0.3.49؛ اقتص التسجيل الحافتين اليمنى والسفلية. تليها صور نموذجية أقدم.
+
+![قائمة التنزيلات (عرض جزئي)](docs/images/auralis/current-main-partial.png)
+
+![المظهر ومؤشرات الاتصال (عرض جزئي)](docs/images/auralis/current-settings-partial.png)
+
+![مقتطف من التسجيل (عرض جزئي)](docs/images/auralis/current-recording-excerpt.gif)
+
 ## صور التطبيق
 
 تعرض الصور واجهة أوراليس مع تنزيلات نموذجية. يمكن تخصيص المظهر والخامات والألوان والمؤشرات.

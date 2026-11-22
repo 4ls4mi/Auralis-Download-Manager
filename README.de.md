@@ -6,6 +6,16 @@ Auralis ist ein kostenloser Download-Manager für Windows x64 mit glasähnlicher
 
 [Aktuelle Windows-Version herunterladen](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest) · [Browser-Erweiterungen](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest) · [Versionshinweise](CHANGELOG.md)
 
+## Auralis unter Windows
+
+Teilansichten einer echten Auralis-0.3.49-Sitzung; bei der Aufnahme wurden der rechte und untere Rand abgeschnitten. Ältere Beispielbilder folgen.
+
+![Downloadliste (Teilansicht)](docs/images/auralis/current-main-partial.png)
+
+![Darstellung und Verbindungsanzeigen (Teilansicht)](docs/images/auralis/current-settings-partial.png)
+
+![Aufzeichnungsausschnitt (Teilansicht)](docs/images/auralis/current-recording-excerpt.gif)
+
 ## Bilder
 
 Die Bilder zeigen die Oberfläche mit Beispieldownloads. Darstellung, Materialien und Farben sind einstellbar.
