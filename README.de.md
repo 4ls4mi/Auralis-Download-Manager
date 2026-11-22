@@ -12,6 +12,14 @@ Auralis ist ein kostenloser Download-Manager für Windows x64 mit glasähnlicher
 
 ![Downloadmanager](docs/images/auralis/user-picture-1.png)
 
+### Vorführung des Downloadmanagers
+
+![Vorführung des Downloadmanagers](docs/images/auralis/manager-demonstration.gif)
+
+### Vorführung der Browser-Erweiterung
+
+![Vorführung der Browser-Erweiterung](docs/images/auralis/extension-demonstration.gif)
+
 ### Laufender Download
 
 ![Laufender Download](docs/images/auralis/user-picture-2.png)

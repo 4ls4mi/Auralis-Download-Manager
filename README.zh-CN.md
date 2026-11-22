@@ -12,6 +12,14 @@ Auralis 是适用于 Windows x64 的免费开源下载管理器，提供玻璃�
 
 ![下载管理器](docs/images/auralis/user-picture-1.png)
 
+### 下载管理器演示
+
+![下载管理器演示](docs/images/auralis/manager-demonstration.gif)
+
+### 浏览器扩展演示
+
+![浏览器扩展演示](docs/images/auralis/extension-demonstration.gif)
+
 ### 正在下载
 
 ![正在下载](docs/images/auralis/user-picture-2.png)

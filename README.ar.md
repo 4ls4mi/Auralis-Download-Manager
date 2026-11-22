@@ -12,6 +12,14 @@
 
 ![مدير التنزيلات](docs/images/auralis/user-picture-1.png)
 
+### عرض مدير التنزيلات في أوراليس
+
+![عرض مدير التنزيلات في أوراليس](docs/images/auralis/manager-demonstration.gif)
+
+### عرض إضافة المتصفح
+
+![عرض إضافة المتصفح](docs/images/auralis/extension-demonstration.gif)
+
 ### نافذة التنزيل
 
 ![نافذة التنزيل](docs/images/auralis/user-picture-2.png)
