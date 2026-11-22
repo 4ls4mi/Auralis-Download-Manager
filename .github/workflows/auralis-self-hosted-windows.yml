@@ -30,7 +30,7 @@ jobs:
     permissions:
       contents: read
     # Only explicitly named, owner-maintained branches may run on a personal computer.
-    if: github.ref == 'refs/heads/feature/auralis-frosted-candidate' || (github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/feature/auralis-embedded-engine' || github.ref == 'refs/heads/feature/auralis-preferences-ui' || github.ref == 'refs/heads/feature/auralis-recovery-validation'))
+    if: github.ref == 'refs/heads/feature/auralis-frosted-candidate' || (github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/feature/auralis-embedded-engine' || github.ref == 'refs/heads/feature/auralis-preferences-ui' || github.ref == 'refs/heads/feature/auralis-recovery-validation' || github.ref == 'refs/heads/wip/auralis-torrent-recovery'))
     runs-on: [self-hosted, Windows, X64, auralis]
     timeout-minutes: 180
     steps:
@@ -174,6 +174,12 @@ jobs:
           if ($LASTEXITCODE) { throw 'Backup snapshot tests failed.' }
           cargo test -p mdm-torrent --target x86_64-pc-windows-msvc --lib compare_saved_download
           if ($LASTEXITCODE) { throw 'Torrent comparison test failed.' }
+          cargo test -p mdm-app --target x86_64-pc-windows-msvc --lib automatic_torrent_choice_tests
+          if ($LASTEXITCODE) { throw 'Automatic torrent matching tests failed.' }
+          cargo test -p mdm-app --target x86_64-pc-windows-msvc --lib torrent_recovery_handoff_tests
+          if ($LASTEXITCODE) { throw 'Torrent handoff and cancellation tests failed.' }
+          cargo test -p mdm-torrent --target x86_64-pc-windows-msvc --lib staged_direct_download_can_continue
+          if ($LASTEXITCODE) { throw 'Torrent recovery peer-transfer tests failed.' }
 
       - name: Install and test interface
         working-directory: glass-ui
@@ -181,7 +187,14 @@ jobs:
         run: |
           npm install
           if ($LASTEXITCODE) { throw 'npm install failed.' }
-          npm test
+          $browser = Join-Path $env:ProgramFiles 'Google/Chrome/Application/chrome.exe'
+          if (!(Test-Path $browser)) { $browser = Join-Path ${env:ProgramFiles(x86)} 'Microsoft/Edge/Application/msedge.exe' }
+          if (!(Test-Path $browser)) { throw 'Chrome or Edge is required for the interface tests.' }
+          $env:AURALIS_TEST_BROWSER = $browser
+          # Respect the user's request not to capture screenshots during routine builds.
+          $tests = @(Get-ChildItem tests -Filter '*.test.mjs' | Where-Object { $_.Name -ne 'frosted-alpha.test.mjs' } | ForEach-Object { $_.FullName })
+          if (!$tests.Count) { throw 'Interface tests were not found.' }
+          node --experimental-strip-types --test --test-concurrency=2 $tests
           if ($LASTEXITCODE) { throw 'Interface tests failed.' }
           npm run build
           if ($LASTEXITCODE) { throw 'Interface build failed.' }
