@@ -93,17 +93,17 @@ jobs:
           }
           $frames=Join-Path $out 'video-frames'
           New-Item -ItemType Directory -Path $frames -Force | Out-Null
-          for ($i=0; $i -lt 48; $i++) {
+          for ($i=0; $i -lt 240; $i++) {
             Save-AuralisWindow $largest (Join-Path $frames ("frame-{0:D4}.jpg" -f $i)) $true
-            Start-Sleep -Milliseconds 125
+            Start-Sleep -Milliseconds 500
           }
           $ffmpeg=Get-Command ffmpeg.exe -ErrorAction SilentlyContinue | Select-Object -First 1
           if ($ffmpeg) {
-            & $ffmpeg.Source -hide_banner -loglevel error -y -framerate 8 -i (Join-Path $frames 'frame-%04d.jpg') -vf 'pad=ceil(iw/2)*2:ceil(ih/2)*2' -c:v libx264 -pix_fmt yuv420p (Join-Path $out 'auralis-current.mp4')
-            if ($LASTEXITCODE -ne 0) { Write-Warning 'Could not encode MP4; captured frames remain available.' }
+            & $ffmpeg.Source -hide_banner -loglevel error -y -framerate 2 -i (Join-Path $frames 'frame-%04d.jpg') -vf 'pad=ceil(iw/2)*2:ceil(ih/2)*2' -c:v libx264 -pix_fmt yuv420p (Join-Path $out 'auralis-current.mp4')
+            if ($LASTEXITCODE -ne 0) { Write-Warning 'Could not encode MP4; captured frames remain available.' } else { Remove-Item -Recurse -Force $frames }
           } else { Write-Warning 'FFmpeg is not on the runner PATH; captured frames remain available for encoding.' }
           "AURALIS_CAPTURE_DIR=$out" >> $env:GITHUB_ENV
-          Write-Host "Captured $index Auralis window(s) and 48 video frames. Review the images for private information before publishing."
+          Write-Host "Captured $index Auralis window(s) and 240 video frames (approximately two minutes). Review the images for private information before publishing."
       - name: Upload captures for review
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
