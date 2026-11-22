@@ -16,7 +16,7 @@
 
 ![نافذة التنزيل](docs/images/auralis/user-picture-2.png)
 
-[▶ مشاهدة فيديو التنزيل بدون صوت](docs/images/auralis/download-demo-muted.mp4)
+![▶ مشاهدة فيديو التنزيل بدون صوت](docs/images/auralis/download-demo.gif)
 
 ### معلومات ملف التنزيل
 
