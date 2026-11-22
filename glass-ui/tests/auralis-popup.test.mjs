@@ -11,7 +11,9 @@ test('popup restores hidden video controls and reports failed actions',{skip:!ch
    window.calls=[];window.closedByPopup=false;window.close=()=>{window.closedByPopup=true};
    window.chrome={i18n:{getMessage:k=>k,getUILanguage:()=> 'en'},tabs:{query:async()=>[{id:5,url:'https://www.youtube.com/watch?v=abcdef'}]},storage:{local:{get:async v=>v,set:async()=>{}}},runtime:{getManifest:()=>({permissions:[]}),sendMessage:async m=>{window.calls.push(m);if(m.type==='state')return {connected:true};if(m.type==='video-panel-site')return {ok:true,on:false};if(m.type==='site-excluded')return {excluded:false};if(m.type==='media')return {media:[]};if(m.type==='video-panel-set')return {ok:true};if(m.type==='open-options')return {ok:false};return {ok:true}}}};
   });
-  await page.goto('http://localhost.invalid').catch(()=>{});
+  // Start from a settled document. Navigating to an invalid host can finish
+  // on a browser error page after setContent begins, destroying its context.
+  await page.goto('about:blank');
   const html=readFileSync(new URL('../../auralis-extension/popup.html',import.meta.url),'utf8').replace('<script src="popup.js"></script>','');
   await page.setContent(html);
   await page.addScriptTag({content:readFileSync(new URL('../../auralis-extension/popup.js',import.meta.url),'utf8')});
