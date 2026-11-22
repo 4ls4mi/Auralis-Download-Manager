@@ -47,14 +47,91 @@ function Run-Fixture([string]$Process, [string[]]$Arguments, [int]$Timeout = 180
     }
 }
 
+function Test-InstalledIcon {
+    $sourceIcon = Join-Path $PSScriptRoot '../assets/auralis.ico'
+    $expected = (Get-FileHash -LiteralPath $sourceIcon -Algorithm SHA256).Hash
+    $shortcutIcon = Join-Path $fixture ('auralis-taskbar-' + $expected.Substring(0, 12).ToLowerInvariant() + '.ico')
+    if (!(Test-Path -LiteralPath $shortcutIcon) -or
+        (Get-FileHash -LiteralPath $shortcutIcon -Algorithm SHA256).Hash -ne $expected) {
+        throw 'The installed shortcut icon is missing or differs from the Auralis artwork.'
+    }
+    [AuralisSmokeIcon]::Verify($exe, $sourceIcon)
+    Write-Host 'Verified the packaged shortcut icon and every native executable icon frame.'
+}
+
+Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+
+public static class AuralisSmokeIcon {
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr LoadLibraryEx(string path, IntPtr file, uint flags);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr FindResource(IntPtr module, IntPtr id, IntPtr type);
+    [DllImport("kernel32.dll")]
+    private static extern IntPtr LoadResource(IntPtr module, IntPtr resource);
+    [DllImport("kernel32.dll")]
+    private static extern IntPtr LockResource(IntPtr resource);
+    [DllImport("kernel32.dll")]
+    private static extern int SizeofResource(IntPtr module, IntPtr resource);
+    [DllImport("kernel32.dll")]
+    private static extern bool FreeLibrary(IntPtr module);
+
+    private static byte[] ReadResource(IntPtr module, int id, int type) {
+        IntPtr resource = FindResource(module, (IntPtr)id, (IntPtr)type);
+        if (resource == IntPtr.Zero) throw new InvalidDataException("Missing executable icon resource.");
+        int size = SizeofResource(module, resource);
+        IntPtr data = LockResource(LoadResource(module, resource));
+        if (size <= 0 || data == IntPtr.Zero) throw new InvalidDataException("Invalid executable icon resource.");
+        byte[] bytes = new byte[size];
+        Marshal.Copy(data, bytes, 0, size);
+        return bytes;
+    }
+
+    public static void Verify(string executable, string iconPath) {
+        byte[] icon = File.ReadAllBytes(iconPath);
+        int count = BitConverter.ToUInt16(icon, 4);
+        var expected = new List<string>();
+        for (int i = 0; i < count; ++i) {
+            int entry = 6 + 16 * i;
+            int size = BitConverter.ToInt32(icon, entry + 8);
+            int offset = BitConverter.ToInt32(icon, entry + 12);
+            expected.Add(Convert.ToHexString(SHA256.HashData(icon.AsSpan(offset, size))));
+        }
+
+        const uint readResourcesOnly = 0x00000022;
+        IntPtr module = LoadLibraryEx(executable, IntPtr.Zero, readResourcesOnly);
+        if (module == IntPtr.Zero) throw new InvalidDataException("Could not inspect the installed executable's resources.");
+        try {
+            const int groupIcon = 14;
+            const int iconFrame = 3;
+            byte[] group = ReadResource(module, 1, groupIcon);
+            if (BitConverter.ToUInt16(group, 4) != count) throw new InvalidDataException("The embedded icon frame count differs.");
+            for (int i = 0; i < count; ++i) {
+                int frame = BitConverter.ToUInt16(group, 6 + 14 * i + 12);
+                string digest = Convert.ToHexString(SHA256.HashData(ReadResource(module, frame, iconFrame)));
+                if (!expected.Remove(digest)) throw new InvalidDataException("An executable icon frame differs from the Auralis artwork.");
+            }
+        } finally {
+            FreeLibrary(module);
+        }
+    }
+}
+'@
+
 try {
     # NSIS requires the unquoted /D= argument to come last.
     Run-Fixture $env:AURALIS_QT_INSTALLER @('/S', '/NOREG', "/D=$fixture")
     if (!(Test-Path $exe) -or !(Test-Path (Join-Path $fixture 'uninstall.exe'))) {
         throw 'The standalone Qt installation is incomplete.'
     }
+    Test-InstalledIcon
     Run-Fixture $exe @('--engine-smoke') 90000
-    if (!(Test-Path $marker)) { throw 'The installed application did not verify its engine transfer.' }
+    if (!(Test-Path $marker)) { throw 'The installed application did not verify start, pause, resume, and transfer integrity.' }
+    Get-Content -LiteralPath $marker | ForEach-Object { Write-Host $_ }
 
     # Exercise the in-app updater's NSIS arguments and wait for the installed app
     # to verify a loopback transfer again after the installer launches it.
@@ -80,7 +157,7 @@ try {
     if ((Test-Path $exe) -or !(Test-Path $ownedByUser)) {
         throw 'The uninstaller did not remove only the packaged application files.'
     }
-    Write-Host 'Verified silent install, native Qt and engine startup, passive upgrade relaunch, and scoped uninstallation.'
+    Write-Host 'Verified silent install, native icons, rendered start and resume, passive upgrade relaunch, and scoped uninstallation.'
 } finally {
     Get-Process -Name 'auralis-download-manager' -ErrorAction SilentlyContinue |
         Where-Object { $_.Path -ieq $exe } | Stop-Process -Force -ErrorAction SilentlyContinue

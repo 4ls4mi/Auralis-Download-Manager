@@ -130,13 +130,20 @@ Section "Install Auralis"
         WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayVersion" "${VERSION}"
         WriteRegStr HKCU "${UNINSTALL_KEY}" "Publisher" "Auralis"
         WriteRegStr HKCU "${UNINSTALL_KEY}" "InstallLocation" "$\"$INSTDIR$\""
-        WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayIcon" "$\"$INSTDIR\${APP_EXE}$\""
+        WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayIcon" "$\"$INSTDIR\${SHORTCUT_ICON}$\",0"
         WriteRegStr HKCU "${UNINSTALL_KEY}" "MainBinaryName" "${APP_EXE}"
         WriteRegStr HKCU "${UNINSTALL_KEY}" "UninstallString" "$\"$INSTDIR\uninstall.exe$\""
         WriteRegStr HKCU "${UNINSTALL_KEY}" "URLInfoAbout" "https://github.com/4ls4mi/Auralis-Download-Manager"
         WriteRegDWORD HKCU "${UNINSTALL_KEY}" "NoModify" 1
         WriteRegDWORD HKCU "${UNINSTALL_KEY}" "NoRepair" 1
-        CreateShortCut "$SMPROGRAMS\${PRODUCT}.lnk" "$INSTDIR\${APP_EXE}"
+        # Refresh this installer-owned Start menu shortcut without modifying taskbar pins.
+        StrCpy $0 0x0002 # SHCNE_CREATE
+        ${If} ${FileExists} "$SMPROGRAMS\${PRODUCT}.lnk"
+            StrCpy $0 0x2000 # SHCNE_UPDATEITEM
+        ${EndIf}
+        CreateShortCut "$SMPROGRAMS\${PRODUCT}.lnk" "$INSTDIR\${APP_EXE}" "" "$INSTDIR\${SHORTCUT_ICON}" 0
+        # SHCNF_PATHW | SHCNF_FLUSHNOWAIT
+        System::Call 'shell32::SHChangeNotify(i r0, i 0x2005, w "$SMPROGRAMS\${PRODUCT}.lnk", p 0)'
     ${EndIf}
     Goto installed
 
@@ -148,6 +155,10 @@ installed:
 SectionEnd
 
 Function .onInstSuccess
+    ${If} $NoRegistration != 1
+        # Refresh the existing executable icon without changing taskbar grouping.
+        ExecWait '"$INSTDIR\${APP_EXE}" --refresh-taskbar-icon' $0
+    ${EndIf}
     ${If} $Relaunch == 1
         Exec '"$INSTDIR\${APP_EXE}" $LaunchArguments'
     ${EndIf}

@@ -1,1 +1,2 @@
-1 ICON "@CMAKE_CURRENT_SOURCE_DIR@/assets/auralis.ico"
+// Auralis icon SHA-256: @AURALIS_ICON_SHA256@
+1 ICON "@auralis_icon@"

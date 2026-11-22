@@ -5,6 +5,7 @@
 #include <QActionGroup>
 #include <QApplication>
 #include <QClipboard>
+#include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QCursor>
 #include <QDir>
@@ -31,7 +32,28 @@
 #include <memory>
 #include <optional>
 
+#ifdef Q_OS_WIN
+#include <qt_windows.h>
+#include <shellapi.h>
+#include <shlobj.h>
+#endif
+
 namespace {
+#ifdef Q_OS_WIN
+void refreshTaskbarIcon()
+{
+    const auto executable = QDir::toNativeSeparators(QCoreApplication::applicationFilePath()).toStdWString();
+    const HRESULT initialized = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    if (SUCCEEDED(initialized)) {
+        SHFILEINFOW fileInfo{};
+        if (SHGetFileInfoW(executable.c_str(), 0, &fileInfo, sizeof(fileInfo), SHGFI_SYSICONINDEX))
+            SHUpdateImageW(executable.c_str(), 0, 0, fileInfo.iIcon);
+        CoUninitialize();
+    }
+    SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATHW | SHCNF_FLUSHNOWAIT, executable.c_str(), nullptr);
+}
+#endif
+
 void writeSmokeLog(QtMsgType, const QMessageLogContext &, const QString &message)
 {
     static QMutex mutex;
@@ -64,6 +86,13 @@ void addBundledTools()
 
 int main(int argc, char **argv)
 {
+#ifdef Q_OS_WIN
+    if (argc == 2 && std::strcmp(argv[1], "--refresh-taskbar-icon") == 0) {
+        QCoreApplication app(argc, argv);
+        refreshTaskbarIcon();
+        return 0;
+    }
+#endif
     for (int index = 1; index < argc; ++index) {
         if (std::strcmp(argv[index], "--engine-smoke") == 0) {
             qInstallMessageHandler(writeSmokeLog);
@@ -144,6 +173,7 @@ int main(int argc, char **argv)
     auto *window = qobject_cast<QWindow *>(root);
     if (!window)
         return 1;
+    window->setIcon(appIcon);
 
     const auto activate = [window] {
         if (!window->isVisible() || window->visibility() == QWindow::Minimized)

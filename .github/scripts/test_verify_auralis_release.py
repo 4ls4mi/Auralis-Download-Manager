@@ -53,6 +53,28 @@ class VerifyReleaseTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "draft"):
             self.check()
 
+    def test_published_verification_requires_the_exact_assets(self):
+        self.release["draft"] = False
+        module.verify(self.release, "1.2.3", "abc123", self.files, draft=False)
+        self.release["assets"][0]["digest"] = "sha256:wrong"
+        with self.assertRaisesRegex(ValueError, "digest"):
+            module.verify(self.release, "1.2.3", "abc123", self.files, draft=False)
+
+    def test_partial_draft_allows_only_missing_or_zero_byte_starter_assets(self):
+        missing = self.release["assets"].pop()
+        module.verify(self.release, "1.2.3", "abc123", self.files, partial=True)
+        partial = dict(missing, state="starter", size=0, digest=None)
+        self.release["assets"].append(partial)
+        module.verify(self.release, "1.2.3", "abc123", self.files, partial=True)
+        partial["size"] = 1
+        with self.assertRaisesRegex(ValueError, "complete"):
+            module.verify(self.release, "1.2.3", "abc123", self.files, partial=True)
+
+    def test_partial_draft_does_not_allow_mismatched_bytes(self):
+        self.release["assets"] = [dict(self.release["assets"][0], digest="sha256:wrong")]
+        with self.assertRaisesRegex(ValueError, "digest"):
+            module.verify(self.release, "1.2.3", "abc123", self.files, partial=True)
+
 
 if __name__ == "__main__":
     unittest.main()

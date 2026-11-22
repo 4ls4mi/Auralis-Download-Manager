@@ -17,7 +17,9 @@ on:
       - 'Cargo.lock'
       - 'rust-toolchain.toml'
       - '.cargo/**'
+      - '.github/scripts/**'
       - '.github/workflows/auralis-qt-windows.yml'
+      - 'docs/glass-releases/**'
 
 permissions:
   contents: read
@@ -36,6 +38,11 @@ jobs:
       (github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[build-auralis-qt]'))
     runs-on: [self-hosted, Windows, X64, auralis]
     timeout-minutes: 180
+    outputs:
+      installer-id: ${{ steps.installer.outputs.artifact-id }}
+      installer-digest: ${{ steps.installer.outputs.artifact-digest }}
+      extensions-id: ${{ steps.extensions.outputs.artifact-id }}
+      extensions-digest: ${{ steps.extensions.outputs.artifact-digest }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -84,18 +91,20 @@ jobs:
         run: ./qt-ui/packaging/pack-extensions.ps1
 
       - name: Upload the verified installer
+        id: installer
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: auralis-download-manager-windows-x64
+          name: auralis-download-manager-windows-x64${{ github.run_attempt > 1 && format('-attempt-{0}', github.run_attempt) || '' }}
           path: ${{ env.AURALIS_QT_INSTALLER }}
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
 
       - name: Upload the browser extension packages
+        id: extensions
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: auralis-browser-extensions
+          name: auralis-browser-extensions${{ github.run_attempt > 1 && format('-attempt-{0}', github.run_attempt) || '' }}
           path: ${{ env.AURALIS_QT_EXTENSIONS }}/*.zip
           if-no-files-found: error
           compression-level: 0
@@ -116,20 +125,30 @@ jobs:
     name: Publish verified public release
     needs: windows-x64
     if: >-
-      (github.event_name == 'workflow_dispatch' && inputs.publish) ||
-      (github.event_name == 'push' && contains(github.event.head_commit.message, '[prepare-auralis-release]'))
+      needs.windows-x64.result == 'success' &&
+      github.repository == '4ls4mi/Auralis-Download-Manager' &&
+      github.ref == 'refs/heads/wip/auralis-qt-shell' &&
+      ((github.event_name == 'workflow_dispatch' && inputs.publish) ||
+       (github.event_name == 'push' &&
+        contains(github.event.head_commit.message, '[build-auralis-qt]') &&
+        contains(github.event.head_commit.message, '[prepare-auralis-release]')))
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       actions: read
       contents: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
+          ref: ${{ github.sha }}
           persist-credentials: false
-      - name: Verify draft asset hashes and publish
+      - name: Stage and publish the verified Windows build
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          AURALIS_ATTACH_ONLY: ${{ github.event_name == 'push' && '1' || '0' }}
+          AURALIS_INSTALLER_ARTIFACT_ID: ${{ needs.windows-x64.outputs.installer-id }}
+          AURALIS_INSTALLER_ARTIFACT_DIGEST: ${{ needs.windows-x64.outputs.installer-digest }}
+          AURALIS_EXTENSIONS_ARTIFACT_ID: ${{ needs.windows-x64.outputs.extensions-id }}
+          AURALIS_EXTENSIONS_ARTIFACT_DIGEST: ${{ needs.windows-x64.outputs.extensions-digest }}
         run: bash qt-ui/packaging/publish-windows.sh

@@ -1,6 +1,7 @@
 #include "FrameResize.h"
 
 #include <QMouseEvent>
+#include <QPointer>
 #include <QWindow>
 
 #ifdef Q_OS_WIN
@@ -67,7 +68,7 @@ public:
     {
         setObjectName(QStringLiteral("auralisInteractiveResize"));
 #ifdef Q_OS_WIN
-        attachNative();
+        queueNativeAttach();
 #endif
     }
 
@@ -85,12 +86,13 @@ private:
 #ifdef Q_OS_WIN
         case QEvent::PlatformSurface:
             if (static_cast<QPlatformSurfaceEvent *>(event)->surfaceEventType() == QPlatformSurfaceEvent::SurfaceCreated)
-                attachNative();
+                queueNativeAttach();
             else
                 detachNative();
             return false;
         case QEvent::Show:
-            attachNative();
+        case QEvent::Expose:
+            queueNativeAttach();
             return false;
 #endif
         case QEvent::MouseButtonPress:
@@ -142,6 +144,11 @@ private:
             return false;
         case QEvent::Hide:
         case QEvent::Close:
+#ifdef Q_OS_WIN
+            detachNative();
+#endif
+            finish();
+            return false;
         case QEvent::WindowDeactivate:
         case QEvent::WindowStateChange:
             finish();
@@ -224,8 +231,11 @@ private:
         case WM_LBUTTONUP:
         case WM_NCLBUTTONUP:
             if (self->m_nativeEdges) {
+                // SetWindowPos can synchronously deliver a resize that closes this window.
+                const QPointer<ResizeFilter> alive(self);
                 self->resizeNative();
-                self->finishNative();
+                if (alive)
+                    alive->finishNative();
                 return 0;
             }
             break;
@@ -250,22 +260,38 @@ private:
         return DefSubclassProc(hwnd, message, wParam, lParam);
     }
 
-    void attachNative()
+    void queueNativeAttach()
     {
-        if (m_hwnd || !m_window->handle())
+        if (m_hwnd || m_attachQueued)
             return;
-        const auto hwnd = reinterpret_cast<HWND>(m_window->winId());
-        if (hwnd && SetWindowSubclass(hwnd, nativeProcedure, 1, reinterpret_cast<DWORD_PTR>(this)))
+        m_attachQueued = true;
+        QMetaObject::invokeMethod(this, [this] {
+            m_attachQueued = false;
+            // Win32 subclass registration belongs after Qt finishes creating
+            // and exposing the native window, not in its platform-surface callback.
+            if (m_hwnd || !m_window->isExposed() || !m_window->handle())
+                return;
+            const auto hwnd = reinterpret_cast<HWND>(m_window->winId());
+            if (!hwnd)
+                return;
             m_hwnd = hwnd;
+            if (!SetWindowSubclass(hwnd, nativeProcedure, 1, reinterpret_cast<DWORD_PTR>(this)))
+                m_hwnd = nullptr;
+        }, Qt::QueuedConnection);
     }
 
     void detachNative()
     {
         if (!m_hwnd)
             return;
-        finishNative();
-        RemoveWindowSubclass(m_hwnd, nativeProcedure, 1);
+        const auto hwnd = m_hwnd;
+        const bool release = m_nativeEdges && GetCapture() == hwnd;
         m_hwnd = nullptr;
+        m_nativeEdges = {};
+        // ReleaseCapture delivers another native message synchronously.
+        RemoveWindowSubclass(hwnd, nativeProcedure, 1);
+        if (release)
+            ReleaseCapture();
     }
 
     Qt::Edges hitWindowsFrame(LPARAM position) const
@@ -286,8 +312,10 @@ private:
         if (!GetCursorPos(&position) || !GetWindowRect(m_hwnd, &bounds))
             return false;
 
-        SetCapture(m_hwnd);
-        if (GetCapture() != m_hwnd)
+        const auto hwnd = m_hwnd;
+        const QPointer<ResizeFilter> alive(this);
+        SetCapture(hwnd);
+        if (!alive || alive->m_hwnd != hwnd || GetCapture() != hwnd)
             return false;
 
         m_nativeEdges = edges;
@@ -321,6 +349,7 @@ private:
     }
 
     HWND m_hwnd = nullptr;
+    bool m_attachQueued = false;
     Qt::Edges m_nativeEdges;
     qreal m_nativeScale = 1;
     QPoint m_nativeOrigin;

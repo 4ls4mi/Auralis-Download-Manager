@@ -36,6 +36,10 @@ try {
     Copy-Item -LiteralPath (Join-Path $repo 'auralis-extension') -Destination $stage -Recurse
     Copy-Item -LiteralPath (Join-Path $repo 'LICENSE') -Destination (Join-Path $stage 'LICENSE.txt')
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'THIRD-PARTY.txt') -Destination $stage
+    $brandIcon = Join-Path $source 'assets/auralis.ico'
+    $iconHash = (Get-FileHash -LiteralPath $brandIcon -Algorithm SHA256).Hash.Substring(0, 12).ToLowerInvariant()
+    $shortcutIcon = "auralis-taskbar-$iconHash.ico"
+    Copy-Item -LiteralPath $brandIcon -Destination (Join-Path $stage $shortcutIcon)
 
     $exe = Join-Path $stage 'auralis-download-manager.exe'
     Invoke-Checked (Join-Path $env:AURALIS_QT_ROOT 'bin/windeployqt.exe') @('--release','--no-translations',
@@ -55,7 +59,7 @@ try {
     foreach ($file in @('auralis-download-manager.exe','auralis_engine.dll','auralis-browser-host.exe','deno.exe',
         'Qt6Core.dll','Qt6Quick3D.dll','Qt6Multimedia.dll','platforms/qwindows.dll','qml/QtQuick3D/qmldir',
         'qml/QtQuick/Controls/qmldir','qml/QtMultimedia/qmldir','multimedia/ffmpegmediaplugin.dll',
-        'msvcp140.dll','vcruntime140.dll','auralis-extension/manifest.json')) {
+        'msvcp140.dll','vcruntime140.dll','auralis-extension/manifest.json',$shortcutIcon)) {
         if (!(Test-Path (Join-Path $stage $file))) { throw "Missing deployed Qt package file: $file" }
     }
     Get-ChildItem -LiteralPath $stage -Recurse -File -Filter '*.pdb' | Remove-Item -Force
@@ -74,13 +78,13 @@ try {
     # MakeNSIS is 32-bit. Its attempt to open System32 checkout paths is redirected by Windows.
     $icon = Join-Path $job 'auralis.ico'
     $installerScript = Join-Path $job 'installer.nsi'
-    Copy-Item -LiteralPath (Join-Path $source 'assets/auralis.ico') -Destination $icon
+    Copy-Item -LiteralPath $brandIcon -Destination $icon
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'installer.nsi') -Destination $installerScript
     $installer = Join-Path $job "Auralis.Download.Manager_$($version)_x64-setup.exe"
     Push-Location $job
     try {
         Invoke-Checked $env:AURALIS_QT_NSIS @('/V3',"/DVERSION=$version","/DOUTPUT=$installer","/DPAYLOAD=$stage",
-            "/DUNINSTALL_FILES=$uninstall","/DICON=$icon",$installerScript)
+            "/DUNINSTALL_FILES=$uninstall","/DICON=$icon","/DSHORTCUT_ICON=$shortcutIcon",$installerScript)
     } finally { Pop-Location }
     if (!(Test-Path $installer) -or (Get-Item $installer).Length -gt 268435456) {
         throw 'The finished installer is missing or exceeds the size limit for automatic updates.'

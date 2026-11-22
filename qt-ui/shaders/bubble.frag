@@ -94,8 +94,10 @@ void main()
                     mix(0.35, 0.21, state.polish) + 0.35 * shoulder);
     vec3 luminous = clamp(emitter * 1.10, 0.0, 1.0);
     vec3 reflection = mix(emitter, vec3(0.92, 0.98, 1.0), 0.28);
-    float upperRidge = exp(-pow((curvedY + 0.73) * 5.7, 2.0));
-    float lowerRidge = exp(-pow((curvedY - 0.80) * 6.2, 2.0));
+    float upperDistance = (curvedY + 0.73) * 5.7;
+    float lowerDistance = (curvedY - 0.80) * 6.2;
+    float upperRidge = exp(-(upperDistance * upperDistance));
+    float lowerRidge = exp(-(lowerDistance * lowerDistance));
     vec4 liquid = layer(glass, body, 0.96);
     liquid = layer(liquid, luminous, 0.19 + 0.42 * shoulder + 0.33 * bounce);
     liquid = layer(liquid, spectral, 0.16 * rim);

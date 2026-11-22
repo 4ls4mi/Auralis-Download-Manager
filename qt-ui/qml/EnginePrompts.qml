@@ -16,6 +16,7 @@ QtObject {
     property bool polling: false
     property bool exitSeen: false
     property var previousStatuses: null
+    property var queuedProgressIds: []
     property var completed: []
     property var settings: ({})
     property int settingRefresh: 0
@@ -127,6 +128,19 @@ QtObject {
         })
     }
 
+    function showQueuedProgress() {
+        const ids = queuedProgressIds
+        queuedProgressIds = []
+        if (!popupParent || !engine.ready || !autoProgress || settings.show_progress === false)
+            return
+        const active = new Set((engine.dashboard.downloads || [])
+            .filter(item => item.status === "Downloading").map(item => String(item.id)))
+        for (const id of ids) {
+            if (active.has(String(id)))
+                showProgressRequested(id)
+        }
+    }
+
     function trackDownloads() {
         const dashboard = engine.dashboard
         if (!dashboard || !dashboard.downloads || !popupParent)
@@ -134,6 +148,7 @@ QtObject {
         const next = {}
         const previous = previousStatuses
         let pending = completed.slice()
+        const started = []
         for (let file of dashboard.downloads) {
             const id = String(file.id)
             next[id] = file.status
@@ -144,11 +159,17 @@ QtObject {
                 if (settings.show_complete === true)
                     pending.push(file)
             } else if (file.status === "Downloading" && autoProgress && settings.show_progress !== false) {
-                showProgressRequested(file.id)
+                started.push(file.id)
             }
         }
         previousStatuses = next
         completed = pending
+        if (started.length) {
+            queuedProgressIds = Array.from(new Set(queuedProgressIds.concat(started)))
+            // Engine snapshots update dashboard and visual state together.
+            // Open a native progress window after those notifications finish.
+            Qt.callLater(root.showQueuedProgress)
+        }
     }
 
     property Connections engineState: Connections {
