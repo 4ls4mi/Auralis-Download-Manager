@@ -6,6 +6,7 @@ import {receivingTubeSlots} from "./tubeNetwork";
 import {loadMaterials,materialId,extraMaterials,materialPresets,materialBackdrop} from "./customMaterials";
 import {loadThemes,paletteForTheme} from "./themeFiles";
 import FrostedRibbon from "./FrostedRibbon";
+import {BubbleProgress} from "./BubbleProgress";
 import FrostedLayers from "./FrostedLayers";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { getCurrentWindow, currentMonitor, Effect, EffectState } from "@tauri-apps/api/window";
@@ -204,7 +205,7 @@ export function GradientBar({percent,showLabel=false,size,active=true}:{percent:
   const fill=Math.max(0,Math.min(100,percent));
   return <div className="cg-percent-wrap" aria-label={`Download ${fill.toFixed(1)} percent completed`}>
     <div className={`cg-percent-track cg-track-${appearance.trackFinish} cg-track-color-${appearance.trackColor} ${backdropPalette(appearance.trackColor)?"cg-palette-track":""}`} style={{...backdropStyle(appearance.trackColor),"--indicator-glow":colors[1]} as CSSProperties}>
-      {isLiquidMaterial(appearance.progressMaterial) ? <LiquidProgress percent={fill} colors={colors} material={appearance.progressMaterial} size={size} active={active}/> : appearance.progressMaterial === "frosted-ribbon" ? <FrostedRibbon shape={appearance.progressShape} percent={fill} colors={colors} finish={appearance.trackFinish} tint={appearance.trackColor} tintColors={backdropPalette(appearance.trackColor)} fallback={`linear-gradient(90deg,${colors.join(",")})`}/> : fill>0&&<span className="cg-percent-fill" style={{
+      {appearance.progressShape === "bubble" ? <BubbleProgress percent={fill} colors={colors} backdrop={backdropPalette(appearance.trackColor)} active={active}/> : isLiquidMaterial(appearance.progressMaterial) ? <LiquidProgress percent={fill} colors={colors} material={appearance.progressMaterial} size={size} active={active}/> : appearance.progressMaterial === "frosted-ribbon" ? <FrostedRibbon shape={appearance.progressShape} percent={fill} colors={colors} finish={appearance.trackFinish} tint={appearance.trackColor} tintColors={backdropPalette(appearance.trackColor)} fallback={`linear-gradient(90deg,${colors.join(",")})`}/> : fill>0&&<span className="cg-percent-fill" style={{
         width:`${fill}%`,
         backgroundImage:`linear-gradient(90deg,${colors.join(",")})`,
         backgroundSize:`${10000/fill}% 100%`,
