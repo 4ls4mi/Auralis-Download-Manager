@@ -48,6 +48,7 @@ private:
     Step m_step = Step::WaitingForConfirmation;
     bool m_started = false;
     bool m_framePresented = false;
+    bool m_frameReadbackQueued = false;
     bool m_resizeVerified = false;
     bool m_transferVerified = false;
 };

@@ -5,6 +5,7 @@
 #include <QDir>
 #include <QFile>
 #include <QGuiApplication>
+#include <QImage>
 #include <QMouseEvent>
 #include <QQuickWindow>
 #include <QRegularExpression>
@@ -44,6 +45,20 @@ bool isIndependent(QWindow &window)
     return true;
 #endif
 }
+
+bool hasRenderedContent(const QImage &frame)
+{
+    if (frame.isNull())
+        return false;
+    const auto background = frame.pixel(0, 0);
+    for (int y = 8; y < frame.height(); y += 16) {
+        for (int x = 8; x < frame.width(); x += 16) {
+            if (frame.pixel(x, y) != background)
+                return true;
+        }
+    }
+    return false;
+}
 }
 
 EngineSmoke::EngineSmoke(Engine &engine, TrayCheck checkTray)
@@ -69,6 +84,10 @@ EngineSmoke::EngineSmoke(Engine &engine, TrayCheck checkTray)
         }
         qInfo() << "Smoke: progress window/frame/resize at timeout" << bool(m_window) << m_framePresented
                 << m_expectedProgressSize;
+        if (m_window)
+            qInfo() << "Smoke: progress exposure and scene state" << m_window->isExposed()
+                    << m_window->geometry() << m_window->isSceneGraphInitialized()
+                    << m_window->property("runningTransfer");
         fail(QStringLiteral("The Qt transfer test timed out at step %1.").arg(static_cast<int>(m_step)));
     });
 }
@@ -157,6 +176,7 @@ void EngineSmoke::inspectTransfers()
             }
             m_window->close();
             m_framePresented = false;
+            m_frameReadbackQueued = false;
             m_step = Step::WaitingForResume;
             qInfo("Smoke: transfer paused. Resuming with the progress window closed.");
             m_engine.request({{QStringLiteral("action"), QStringLiteral("start")},
@@ -230,13 +250,30 @@ void EngineSmoke::observeTransferWindow(qulonglong id)
             disconnect(m_frameConnection);
             m_window = progress;
             m_framePresented = false;
+            m_frameReadbackQueued = false;
             qInfo("Smoke: found the independent progress window.");
-            m_frameConnection = connect(progress, &QQuickWindow::frameSwapped, this, [this] {
-                if (m_window && m_window->isVisible() && m_window->property("runningTransfer").toBool())
+            const QPointer<QQuickWindow> observed(progress);
+            m_frameConnection = connect(progress, &QQuickWindow::afterFrameEnd, this, [this, observed] {
+                if (observed && m_window == observed && observed->isVisible() &&
+                    observed->property("runningTransfer").toBool())
                     m_framePresented = true;
             }, Qt::QueuedConnection);
         }
         progress->update();
+        if (!m_framePresented && !m_frameReadbackQueued && progress->isSceneGraphInitialized()) {
+            m_frameReadbackQueued = true;
+            const QPointer<QQuickWindow> observed(progress);
+            QTimer::singleShot(350, this, [this, observed] {
+                if (m_framePresented || !observed || m_window != observed || !observed->isVisible() ||
+                    !observed->property("runningTransfer").toBool())
+                    return;
+                // An overlapping top-level window can suppress desktop presentation.
+                const QImage image = observed->grabWindow();
+                m_framePresented = hasRenderedContent(image);
+                qInfo() << "Smoke: progress render readback" << image.size() << m_framePresented
+                        << "exposed" << observed->isExposed();
+            });
+        }
         break;
     }
 }
