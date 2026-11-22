@@ -1,0 +1,91 @@
+name: Recover the verified Auralis 0.3.59 upload
+
+on:
+  push:
+    branches: [release/auralis-0.3.59-handoff]
+    paths: [.github/workflows/auralis-release-handoff.yml]
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  upload:
+    name: Attach the existing tested Windows installer
+    if: github.repository == '4ls4mi/Auralis-Download-Manager'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 5b067b345f7805fd5ac75a3f4f41217de62b7089
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Recover checked artifacts and verify the draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          release_commit=5b067b345f7805fd5ac75a3f4f41217de62b7089
+          prior_commit=46bb59f8bdcc55ff645110fcd19d3225ad900c4b
+          source_run=45035011198
+          source_job=137246700831
+          artifact_id=14759329978
+          artifact_digest=50496845116b57344e19af23db2f02796f7503e9d9befa16e69a7b100a2da152
+          asset=Auralis.Download.Manager_0.3.59_x64-setup.exe
+          test "$(git rev-parse HEAD)" = "$release_commit"
+          git diff --quiet "$prior_commit" "$release_commit" -- auralis-extension qt-ui/packaging/pack-extensions.ps1
+
+          gh api "repos/$GH_REPO/actions/runs/$source_run" |
+            jq -e --arg sha "$release_commit" '.status == "completed" and .head_sha == $sha' >/dev/null
+          gh api "repos/$GH_REPO/actions/jobs/$source_job" |
+            jq -e --argjson run "$source_run" '
+              .run_id == $run and (.labels | index("self-hosted") != null) and
+              ([.steps[] | select(.conclusion == "success") | .name] | contains([
+                "Build and bundle the Qt installer", "Verify Windows installation and update relaunch",
+                "Test the Rust engine bridge, recovery, and backup", "Package the browser extensions",
+                "Upload the verified installer"
+              ])) and
+              any(.steps[]; .name == "Upload the browser extension packages" and .conclusion == "failure")
+            ' >/dev/null
+          gh api "repos/$GH_REPO/actions/artifacts/$artifact_id" |
+            jq -e --arg sha "$release_commit" --arg digest "sha256:$artifact_digest" --argjson run "$source_run" '
+              .expired == false and .name == "auralis-download-manager-windows-x64" and
+              .digest == $digest and .workflow_run.id == $run and .workflow_run.head_sha == $sha
+            ' >/dev/null
+
+          mkdir installer extensions
+          gh api "repos/$GH_REPO/actions/artifacts/$artifact_id/zip" > windows-artifact.zip
+          printf '%s  %s\n' "$artifact_digest" windows-artifact.zip | sha256sum --check
+          python3 - "$asset" <<'PY'
+          import sys
+          import zipfile
+          name = sys.argv[1]
+          with zipfile.ZipFile("windows-artifact.zip") as archive:
+              if archive.namelist() != [name] or not 0 < archive.getinfo(name).file_size < 256 * 1024 * 1024:
+                  raise SystemExit("The verified artifact has unexpected contents.")
+              archive.extract(name, "installer")
+          PY
+
+          test "$(gh api "repos/$GH_REPO/git/ref/tags/v0.3.58" --jq .object.sha)" = "$prior_commit"
+          gh api "repos/$GH_REPO/releases/tags/v0.3.58" > previous-release.json
+          gh release download v0.3.58 --dir extensions \
+            --pattern auralis-chromium.zip --pattern auralis-edge-store.zip --pattern auralis-firefox.zip
+          for package in auralis-chromium.zip auralis-edge-store.zip auralis-firefox.zip; do
+            previous_digest="$(jq -er --arg name "$package" '.assets[] | select(.name == $name and .state == "uploaded") | .digest' previous-release.json)"
+            test "$previous_digest" = "sha256:$(sha256sum "extensions/$package" | cut -d ' ' -f 1)"
+          done
+
+          release_id="$(gh api --paginate "repos/$GH_REPO/releases?per_page=100" \
+            --jq '.[] | select(.draft and .tag_name == "v0.3.59") | .id')"
+          [[ "$release_id" =~ ^[0-9]+$ ]]
+          gh api "repos/$GH_REPO/releases/$release_id" > release.json
+          jq -e --arg sha "$release_commit" '.draft and .target_commitish == $sha and (.assets | length == 0)' release.json >/dev/null
+          gh release upload v0.3.59 "installer/$asset" extensions/*.zip
+          gh api "repos/$GH_REPO/releases/$release_id" > release.json
+          python3 .github/scripts/verify-auralis-release.py \
+            release.json 0.3.59 "$release_commit" "installer/$asset" extensions/*.zip
+          sha256sum "installer/$asset" extensions/*.zip
+          printf 'All assets verified on draft release %s.\n' "$release_id"
