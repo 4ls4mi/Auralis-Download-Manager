@@ -6,6 +6,29 @@
 
 [تنزيل أحدث إصدار لنظام Windows](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest) · [حزم إضافة المتصفح](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest) · [ملاحظات الإصدارات](CHANGELOG.md)
 
+## صور التطبيق
+
+### مدير التنزيلات
+
+![مدير التنزيلات](docs/images/auralis/user-picture-1.png)
+
+### نافذة التنزيل
+
+![نافذة التنزيل](docs/images/auralis/user-picture-2.png)
+
+### معلومات ملف التنزيل
+
+![معلومات ملف التنزيل](docs/images/auralis/user-picture-3.png)
+
+### اكتمال التنزيل
+
+![اكتمال التنزيل](docs/images/auralis/user-picture-4.png)
+
+### إعدادات المظهر
+
+![إعدادات المظهر](docs/images/auralis/user-picture-5.png)
+
+
 ## المزايا
 
 - تنزيل متعدد الاتصالات مع الإيقاف والاستئناف وقوائم الانتظار والتحكم في السرعة ومخطط مباشر للنقل.
