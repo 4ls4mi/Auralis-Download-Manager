@@ -53,26 +53,7 @@ try {
     if (!(Test-Path $exe) -or !(Test-Path (Join-Path $fixture 'uninstall.exe'))) {
         throw 'The standalone Qt installation is incomplete.'
     }
-    try {
-        Run-Fixture $exe @('--engine-smoke') 90000
-    } catch {
-        $defaultRendererFailure = $_
-        $env:QSG_RHI_BACKEND = 'd3d11'
-        $env:MDM_DATA_DIR = Join-Path $data 'diagnostic-d3d11'
-        $env:MDM_DOWNLOADS = Join-Path $env:MDM_DATA_DIR 'downloads'
-        New-Item -ItemType Directory -Force -Path $env:MDM_DOWNLOADS | Out-Null
-        try {
-            Run-Fixture $exe @('--engine-smoke') 90000
-            Write-Host 'The installed application completed the fixture when forced to use Direct3D 11.'
-        } catch {
-            Write-Host "The Direct3D 11 comparison also failed: $_"
-        } finally {
-            $env:MDM_DATA_DIR = $data
-            $env:MDM_DOWNLOADS = Join-Path $data 'downloads'
-            Remove-Item Env:QSG_RHI_BACKEND -ErrorAction SilentlyContinue
-        }
-        throw $defaultRendererFailure
-    }
+    Run-Fixture $exe @('--engine-smoke') 90000
     if (!(Test-Path $marker)) { throw 'The installed application did not verify its engine transfer.' }
 
     # Exercise the in-app updater's NSIS arguments and wait for the installed app

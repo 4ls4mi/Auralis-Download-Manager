@@ -29,7 +29,7 @@ if(WIN32)
     enable_language(RC)
     configure_file(src/WindowsIcon.rc.in "${CMAKE_CURRENT_BINARY_DIR}/WindowsIcon.rc" @ONLY)
     target_sources(auralis-download-manager PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/WindowsIcon.rc")
-    target_link_libraries(auralis-download-manager PRIVATE d3d12 dwmapi)
+    target_link_libraries(auralis-download-manager PRIVATE dwmapi)
 endif()
 
 qt_add_shaders(auralis-download-manager "glass_effects"

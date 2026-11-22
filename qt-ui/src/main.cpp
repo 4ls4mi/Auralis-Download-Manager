@@ -26,10 +26,6 @@
 #include <memory>
 #include <optional>
 
-#ifdef Q_OS_WIN
-#include <d3d12.h>
-#endif
-
 namespace {
 void writeSmokeLog(QtMsgType, const QMessageLogContext &, const QString &message)
 {
@@ -51,17 +47,6 @@ bool forwardToInstance(const QString &serverName, const QByteArray &message)
         return false;
     socket.write(message);
     return socket.waitForBytesWritten(800);
-}
-
-void chooseRenderer()
-{
-#ifdef Q_OS_WIN
-    if (qEnvironmentVariableIsSet("QSG_RHI_BACKEND"))
-        return;
-    const HRESULT detected = D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_11_0, __uuidof(ID3D12Device), nullptr);
-    QQuickWindow::setGraphicsApi(SUCCEEDED(detected) ? QSGRendererInterface::Direct3D12
-                                                    : QSGRendererInterface::Direct3D11);
-#endif
 }
 
 void addBundledTools()
@@ -105,7 +90,8 @@ int main(int argc, char **argv)
     const bool startHidden = arguments.contains(QStringLiteral("--auralis-startup-minimized"));
 
     addBundledTools();
-    chooseRenderer();
+    // Qt's Direct3D 11 backend keeps transparent Windows swapchains stable.
+    // Qt still accepts QSG_RHI_BACKEND=d3d12 for explicitly selected devices.
     QQuickStyle::setStyle(QStringLiteral("Basic"));
     QQuickWindow::setDefaultAlphaBuffer(true);
 
