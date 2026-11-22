@@ -181,8 +181,11 @@ jobs:
       - name: Test download engine
         shell: pwsh
         run: |
-          cargo test -p mdm-engine --target x86_64-pc-windows-msvc --lib --test e2e --test ftp -- --test-threads=1
-          if ($LASTEXITCODE) { throw 'Download engine tests failed.' }
+          cargo test -p mdm-engine --target x86_64-pc-windows-msvc --lib --test ftp -- --test-threads=2
+          if ($LASTEXITCODE) { throw 'Download engine unit or FTP tests failed.' }
+          # The HTTP integration tests have timing-sensitive recovery cases.
+          cargo test -p mdm-engine --target x86_64-pc-windows-msvc --test e2e -- --test-threads=1
+          if ($LASTEXITCODE) { throw 'Download engine HTTP integration tests failed.' }
 
       - name: Test embedded downloader service
         shell: pwsh
@@ -193,22 +196,19 @@ jobs:
       - name: Test backup snapshot and torrent comparison
         shell: pwsh
         run: |
-          cargo test -p mdm-app --target x86_64-pc-windows-msvc --lib backup_snapshot::
-          if ($LASTEXITCODE) { throw 'Backup snapshot tests failed.' }
-          cargo test -p mdm-torrent --target x86_64-pc-windows-msvc --lib compare_saved_download
-          if ($LASTEXITCODE) { throw 'Torrent comparison test failed.' }
-          cargo test -p mdm-app --target x86_64-pc-windows-msvc --lib automatic_torrent_choice_tests
-          if ($LASTEXITCODE) { throw 'Automatic torrent matching tests failed.' }
+          cargo test -p mdm-app --target x86_64-pc-windows-msvc --lib -- backup_snapshot:: automatic_torrent_choice_tests
+          if ($LASTEXITCODE) { throw 'Backup snapshot or automatic torrent matching tests failed.' }
+          # The handoff test sets the process-wide app data directory.
           cargo test -p mdm-app --target x86_64-pc-windows-msvc --lib torrent_recovery_handoff_tests
           if ($LASTEXITCODE) { throw 'Torrent handoff and cancellation tests failed.' }
-          cargo test -p mdm-torrent --target x86_64-pc-windows-msvc --lib staged_direct_download_can_continue
-          if ($LASTEXITCODE) { throw 'Torrent recovery peer-transfer tests failed.' }
+          cargo test -p mdm-torrent --target x86_64-pc-windows-msvc --lib -- compare_saved_download staged_direct_download_can_continue
+          if ($LASTEXITCODE) { throw 'Torrent comparison or peer-transfer tests failed.' }
 
       - name: Install and test interface
         working-directory: glass-ui
         shell: pwsh
         run: |
-          npm install
+          npm install --prefer-offline --no-audit --no-fund
           if ($LASTEXITCODE) { throw 'npm install failed.' }
           $browser = Join-Path $env:ProgramFiles 'Google/Chrome/Application/chrome.exe'
           if (!(Test-Path $browser)) { $browser = Join-Path ${env:ProgramFiles(x86)} 'Microsoft/Edge/Application/msedge.exe' }
@@ -246,6 +246,8 @@ jobs:
           $original = [IO.File]::ReadAllText($configPath)
           try {
             $config = $original | ConvertFrom-Json -AsHashtable
+            # The interface step already built dist and generated the icons.
+            $config.build.Remove('beforeBuildCommand')
             $resources = [ordered]@{}
             foreach ($file in $resourceFiles) {
               $destination = if ($file -eq 'misterdownloadmanager-nmhost.exe') { 'auralis-browser-host.exe' } else { $file }
@@ -274,6 +276,7 @@ jobs:
         with:
           name: auralis-download-manager-windows-x64
           path: ${{ env.CARGO_TARGET_DIR }}/release/bundle/nsis/*.exe
+          compression-level: 0
           if-no-files-found: error
           retention-days: 14
 
@@ -303,6 +306,7 @@ jobs:
         with:
           name: auralis-browser-extensions
           path: extension-packages/*.zip
+          compression-level: 0
           if-no-files-found: error
           retention-days: 14
 

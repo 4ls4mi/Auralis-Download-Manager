@@ -1,15 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync} from 'node:fs';
-import {fileURLToPath} from 'node:url';
-import {chromium} from 'playwright-core';
-import {createServer} from 'vite';
+import {browserFixture} from './browser-fixture.mjs';
 const browserPath=process.env.AURALIS_TEST_BROWSER||(process.platform==='linux'?'/usr/bin/chromium':'');
-test('torrent recovery is opt-in and its search and peer disclosure is visible',{skip:!browserPath||!existsSync(browserPath)},async()=>{
- const server=await createServer({configFile:false,root:fileURLToPath(new URL('..',import.meta.url)),server:{host:'127.0.0.1',port:0},logLevel:'silent'});await server.listen();
- const browser=await chromium.launch({headless:true,executablePath:browserPath,args:['--no-sandbox']});
- try{
-  const page=await browser.newPage();await page.addInitScript(()=>{
+const fixture=browserFixture(browserPath);
+test('torrent recovery is opt-in and its search and peer disclosure is visible',{skip:!browserPath||!existsSync(browserPath)},async t=>{
+  const {page,baseUrl}=await fixture.openPage(t);
+  await page.addInitScript(()=>{
    window.calls=[];window.config={torrent_recovery_mode:'off'};
    window.__TAURI_EVENT_PLUGIN_INTERNALS__={unregisterListener:()=>{}};
    window.__TAURI_INTERNALS__={metadata:{currentWindow:{label:'settings'},currentWebview:{label:'settings'}},transformCallback:()=>1,unregisterCallback:()=>{},invoke:async(cmd,args)=>{
@@ -19,20 +16,17 @@ test('torrent recovery is opt-in and its search and peer disclosure is visible',
     return null;
    }};
   });
-  await page.goto(server.resolvedUrls.local[0]+'?settings=1&tab=Torrents');
+  await page.goto(baseUrl+'?settings=1&tab=Torrents');
   const recovery=page.getByLabel('Torrent recovery after a direct download fails');await recovery.waitFor();
   assert.equal(await recovery.inputValue(),'off');
   assert.match(await recovery.locator('..').innerText(),/filename.*Internet Archive.*peers/is);
   await recovery.selectOption('ask');await page.waitForFunction(()=>window.calls.some(c=>c.cmd==='update_glass_setting'&&c.args.key==='torrent_recovery_mode'&&c.args.value==='ask'));
   await recovery.selectOption('auto');await page.waitForFunction(()=>window.calls.some(c=>c.cmd==='update_glass_setting'&&c.args.value==='auto'));
- }finally{await browser.close();await server.close()}
 });
 
-test('an automatic recovery search displays its results in the download window',{skip:!browserPath||!existsSync(browserPath)},async()=>{
- const server=await createServer({configFile:false,root:fileURLToPath(new URL('..',import.meta.url)),server:{host:'127.0.0.1',port:0},logLevel:'silent'});await server.listen();
- const browser=await chromium.launch({headless:true,executablePath:browserPath,args:['--no-sandbox']});
- try{
-  const page=await browser.newPage();await page.addInitScript(()=>{
+test('an automatic recovery search displays its results in the download window',{skip:!browserPath||!existsSync(browserPath)},async t=>{
+  const {page,baseUrl}=await fixture.openPage(t);
+  await page.addInitScript(()=>{
    window.__TAURI_EVENT_PLUGIN_INTERNALS__={unregisterListener:()=>{}};
    window.__TAURI_INTERNALS__={metadata:{currentWindow:{label:'download-7'},currentWebview:{label:'download-7'}},transformCallback:()=>1,unregisterCallback:()=>{},invoke:async(cmd,args)=>{
     if(cmd==='dashboard_snapshot')return {downloads:[{id:7,file:'file.zip',url:'https://example.com/file',path:'C:/file.zip',status:'Error',size:100,downloaded:60,speed:0,category:'General'}],queues:[],categories:[],speed:0};
@@ -42,18 +36,15 @@ test('an automatic recovery search displays its results in the download window',
     return null;
    }};
   });
-  await page.goto(server.resolvedUrls.local[0]+'?detail=7');
+  await page.goto(baseUrl+'?detail=7');
   await page.getByText('Matching candidate', {exact:false}).waitFor({state:'visible'});
   await page.getByText('A possible torrent match is ready for review below.').waitFor({state:'visible'});
   assert.equal(await page.getByRole('button',{name:'Continue with this torrent'}).isDisabled(),true);
- }finally{await browser.close();await server.close()}
 });
 
-test('cancel during automatic search asks the backend to prevent handoff',{skip:!browserPath||!existsSync(browserPath)},async()=>{
- const server=await createServer({configFile:false,root:fileURLToPath(new URL('..',import.meta.url)),server:{host:'127.0.0.1',port:0},logLevel:'silent'});await server.listen();
- const browser=await chromium.launch({headless:true,executablePath:browserPath,args:['--no-sandbox']});
- try{
-  const page=await browser.newPage();await page.addInitScript(()=>{
+test('cancel during automatic search asks the backend to prevent handoff',{skip:!browserPath||!existsSync(browserPath)},async t=>{
+  const {page,baseUrl}=await fixture.openPage(t);
+  await page.addInitScript(()=>{
    window.calls=[];window.__TAURI_EVENT_PLUGIN_INTERNALS__={unregisterListener:()=>{}};
    window.__TAURI_INTERNALS__={metadata:{currentWindow:{label:'download-7'},currentWebview:{label:'download-7'}},transformCallback:()=>1,unregisterCallback:()=>{},invoke:async(cmd,args)=>{
     window.calls.push({cmd,args});
@@ -65,19 +56,14 @@ test('cancel during automatic search asks the backend to prevent handoff',{skip:
     return null;
    }};
   });
-  await page.goto(server.resolvedUrls.local[0]+'?detail=7');
+  await page.goto(baseUrl+'?detail=7');
   await page.getByText(/The direct download failed. Searching/).waitFor();
   await page.getByRole('button',{name:'Cancel',exact:true}).click();
   assert.equal(await page.evaluate(()=>window.calls.some(c=>c.args?.operation==='cancel-recovery-torrent')),true);
- }finally{await browser.close();await server.close()}
 });
 
-test('manual recovery checks torrent URLs, magnets, and local torrent files after a failed search',{skip:!browserPath||!existsSync(browserPath)},async()=>{
- const server=await createServer({configFile:false,root:fileURLToPath(new URL('..',import.meta.url)),server:{host:'127.0.0.1',port:0},logLevel:'silent'});
- await server.listen();
- const browser=await chromium.launch({headless:true,executablePath:browserPath,args:['--no-sandbox']});
- try{
-  const page=await browser.newPage();
+test('manual recovery checks torrent URLs, magnets, and local torrent files after a failed search',{skip:!browserPath||!existsSync(browserPath)},async t=>{
+  const {page,baseUrl}=await fixture.openPage(t);
   await page.addInitScript(()=>{
    window.calls=[];
    window.__TAURI_EVENT_PLUGIN_INTERNALS__={unregisterListener:()=>{}};
@@ -91,7 +77,7 @@ test('manual recovery checks torrent URLs, magnets, and local torrent files afte
     return null;
    }};
   });
-  await page.goto(server.resolvedUrls.local[0]+'?detail=7');
+  await page.goto(baseUrl+'?detail=7');
   await page.getByText('A matching torrent could not be verified.',{exact:false}).waitFor();
   const field=page.getByLabel('Magnet or torrent URL');
   for(const [value,operation] of [
@@ -104,15 +90,10 @@ test('manual recovery checks torrent URLs, magnets, and local torrent files afte
   }
   await page.getByRole('button',{name:'Choose torrent file…'}).click();
   await page.waitForFunction(()=>window.calls.some(c=>c.cmd==='choose_recovery_torrent'&&c.args.id===7));
- }finally{await browser.close();await server.close()}
 });
 
-test('a reopened mixed download shows BitTorrent swarm data and its preserved direct partial',{skip:!browserPath||!existsSync(browserPath)},async()=>{
- const server=await createServer({configFile:false,root:fileURLToPath(new URL('..',import.meta.url)),server:{host:'127.0.0.1',port:0},logLevel:'silent'});
- await server.listen();
- const browser=await chromium.launch({headless:true,executablePath:browserPath,args:['--no-sandbox']});
- try{
-  const page=await browser.newPage();
+test('a reopened mixed download shows BitTorrent swarm data and its preserved direct partial',{skip:!browserPath||!existsSync(browserPath)},async t=>{
+  const {page,baseUrl}=await fixture.openPage(t);
   await page.addInitScript(()=>{
    window.__TAURI_EVENT_PLUGIN_INTERNALS__={unregisterListener:()=>{}};
    window.__TAURI_INTERNALS__={metadata:{currentWindow:{label:'download-7'},currentWebview:{label:'download-7'}},transformCallback:()=>1,unregisterCallback:()=>{},invoke:async(cmd,args)=>{
@@ -122,7 +103,7 @@ test('a reopened mixed download shows BitTorrent swarm data and its preserved di
     return null;
    }};
   });
-  await page.goto(server.resolvedUrls.local[0]+'?detail=7');
+  await page.goto(baseUrl+'?detail=7');
   await page.getByRole('heading',{name:'Downloading via BitTorrent'}).waitFor();
   await page.getByText('Direct download → BitTorrent',{exact:true}).waitFor();
   await page.getByText('The original partial was preserved at C:/file.zip.part.',{exact:false}).waitFor();
@@ -132,15 +113,10 @@ test('a reopened mixed download shows BitTorrent swarm data and its preserved di
   assert.match(await swarm.innerText(),/Connected peers\s+4/);
   assert.match(await swarm.innerText(),/Upload speed\s+8 B\/s/);
   assert.equal(await page.getByText('Server',{exact:true}).count(),0);
- }finally{await browser.close();await server.close()}
 });
 
-test('the main list alerts when recovery finds a match and when the download switches to peers',{skip:!browserPath||!existsSync(browserPath)},async()=>{
- const server=await createServer({configFile:false,root:fileURLToPath(new URL('..',import.meta.url)),server:{host:'127.0.0.1',port:0},logLevel:'silent'});
- await server.listen();
- const browser=await chromium.launch({headless:true,executablePath:browserPath,args:['--no-sandbox']});
- try{
-  const page=await browser.newPage();
+test('the main list alerts when recovery finds a match and when the download switches to peers',{skip:!browserPath||!existsSync(browserPath)},async t=>{
+  const {page,baseUrl}=await fixture.openPage(t);
   await page.addInitScript(()=>{
    window.recoveryStage='matched';
    localStorage.setItem('auralis-browser-guide-seen','1');
@@ -153,7 +129,7 @@ test('the main list alerts when recovery finds a match and when the download swi
     return null;
    }};
   });
-  await page.goto(server.resolvedUrls.local[0]);
+  await page.goto(baseUrl);
   const notice=page.getByRole('status').filter({hasText:'Torrent match found'});
   await notice.waitFor();
   await notice.getByRole('button',{name:'Dismiss torrent recovery notice'}).click();
@@ -162,5 +138,4 @@ test('the main list alerts when recovery finds a match and when the download swi
   await page.evaluate(()=>{window.recoveryStage='handed-off'});
   await page.getByRole('status').filter({hasText:'Downloading via BitTorrent'}).waitFor();
   await page.getByLabel('Direct download continued as torrent').waitFor();
- }finally{await browser.close();await server.close()}
 });
