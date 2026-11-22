@@ -292,10 +292,10 @@ export function WindowTop({ title, children, noMax = false }: {
   title: string; children?: ReactNode; noMax?: boolean
 }) {
   return <header className="cg-window-top">
-    <div className="cg-title" data-tauri-drag-region
+    <div className="cg-title"
       onMouseDown={e => { if (e.button !== 0) return; if (e.detail === 2 && !noMax) { e.preventDefault(); void getCurrentWindow().toggleMaximize(); } else if (e.detail === 1) void getCurrentWindow().startDragging(); }}>
-      <span className="cg-logo" data-tauri-drag-region><img src="/auralis.svg" alt="" width="22" height="22" draggable="false" /></span>
-      <span data-tauri-drag-region>{title}</span>
+      <span className="cg-logo"><img src="/auralis.svg" alt="" width="22" height="22" draggable="false" /></span>
+      <span>{title}</span>
     </div>{children}<WindowButtons noMax={noMax} />
   </header>;
 }
@@ -343,7 +343,7 @@ export function CrystalWindow({ children, target = "main" }: {
   },[appearance.uiScale,appearance.fontSize,appearance.fontFamily,target]);
   useEffect(()=>{
     let disposed=false, pending=false, running=false, timer=0, outline:number[][]|null=null;
-    const apply=async()=>{if(disposed)return;if(running){pending=true;return}running=true;try{await invoke("set_material_window_shape",{material:appearance.material,outline,flat:maximized||tiled})}catch(e){if(!disposed)setWindowError(`Material outline unavailable: ${String(e)}`)}finally{running=false;if(pending&&!disposed){pending=false;void apply()}}};
+    const apply=async()=>{if(disposed)return;if(running){pending=true;return}running=true;try{await invoke("set_material_window_shape",{material:appearance.material,outline,flat:maximized||tiled});if(!disposed)window.dispatchEvent(new Event("auralis-material-shape-applied"))}catch(e){if(!disposed)setWindowError(`Material outline unavailable: ${String(e)}`)}finally{running=false;if(pending&&!disposed){pending=false;void apply()}}};
     const resize=()=>{if(!timer)timer=window.setTimeout(()=>{timer=0;void apply()},50)};
     const onOutline=(event:Event)=>{outline=(event as CustomEvent<number[][]>).detail;void apply()};
     window.addEventListener("resize",resize);window.addEventListener("glass-frost-outline",onOutline);void apply();
@@ -364,13 +364,19 @@ export function CrystalWindow({ children, target = "main" }: {
     const selected=nativeBackdrop(mode,appearance.material,surfaceStyle,maximized||tiled);
     // Serialize native requests so an old material cannot restore a rectangular
     // backdrop after the user has switched to the shaped frosted window.
-    effectQueue.current=effectQueue.current.catch(()=>undefined).then(async()=>{
-      if(!active)return;
-      if(selected===null){await w.clearEffects().catch(()=>undefined);return}
-      try{await w.setEffects({effects:[selected==='blur'?Effect.Blur:Effect.Acrylic],state:EffectState.Active})}
-      catch{if(active){setWindowError("Windows backdrop blur is unavailable; transparent glass is being used.");await w.clearEffects().catch(()=>undefined)}}
-    });
-    return()=>{active=false};
+    const applyBackdrop=()=>{
+      effectQueue.current=effectQueue.current.catch(()=>undefined).then(async()=>{
+        if(!active)return;
+        if(selected===null){await w.clearEffects().catch(()=>undefined);return}
+        try{await w.setEffects({effects:[selected==='blur'?Effect.Blur:Effect.Acrylic],state:EffectState.Active})}
+        catch{if(active){setWindowError("Windows backdrop blur is unavailable; transparent glass is being used.");await w.clearEffects().catch(()=>undefined)}}
+      });
+    };
+    // Applying a native window region can reset its composition attributes.
+    // Reapply the current material after the region completes, including resize.
+    window.addEventListener("auralis-material-shape-applied",applyBackdrop);
+    applyBackdrop();
+    return()=>{active=false;window.removeEventListener("auralis-material-shape-applied",applyBackdrop)};
   }, [mode, appearance.material, surfaceStyle,maximized,tiled]);
   // White palettes need light surfaces and dark foregrounds in every material.
   const blackGlass = appearance.material === "builtin-black-glass";
