@@ -77,5 +77,6 @@ Item {
         solidColor: root.selection.mode === "solid" && root.selection.color ?
             root.selection.color : MaterialTheme.palette.background
         backdropAvailable: root.backdropAvailable
+        mediaOverlay: MaterialTheme.palette.opaque && (root.pictureReady || root.movieReady) ? .78 : -1
     }
 }

@@ -146,7 +146,7 @@ Dialog {
         RowLayout {
             visible: root.packages.length > 0
             Layout.fillWidth: true
-            ComboBox {
+            GlassComboBox {
                 id: packageMenu
                 Layout.fillWidth: true
                 model: root.packages

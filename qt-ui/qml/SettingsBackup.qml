@@ -200,7 +200,7 @@ ColumnLayout {
                 onToggled: root.saveStartup(checked, root.startup.mode)
             }
 
-            ComboBox {
+            GlassComboBox {
                 Layout.fillWidth: true
                 enabled: !root.busy && root.startup.enabled
                 textRole: "label"

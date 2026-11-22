@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Window
 import "TransferData.js" as Transfer
 
 QtObject {
@@ -49,7 +50,7 @@ QtObject {
             }
             if (fileInfo.visible) {
                 if (!fileInfo.busy)
-                    fileInfo.close()
+                    fileInfo.hide()
                 polling = false
                 return
             }
@@ -72,7 +73,7 @@ QtObject {
             if (reply.pending && reply.id === question.info.id)
                 question.info = {id: reply.id, data: reply.pending}
             else
-                question.close()
+                question.hide()
         })
     }
 
@@ -162,24 +163,24 @@ QtObject {
         onTriggered: root.refresh()
     }
 
+    readonly property Window hostWindow: popupParent ? popupParent.Window.window : null
+
     property AddDownloadDialog fileInfo: AddDownloadDialog {
-        parent: root.popupParent
+        hostWindow: root.hostWindow
         material: root.material
     }
 
-    property Dialog question: Dialog {
+    property DetachedDialogWindow question: DetachedDialogWindow {
         id: prompt
-        parent: root.popupParent
+        hostWindow: root.hostWindow
+        material: root.material
         property string kind: ""
         property var info: ({})
         property string failure: ""
-        property bool busy: false
         property bool replacing: false
-        modal: true
-        anchors.centerIn: parent
-        closePolicy: Popup.NoAutoClose
-        width: Math.min(580, parent ? parent.width - 28 : 580)
-        padding: 18
+        width: 576
+        modality: kind === "complete" ? Qt.NonModal : Qt.WindowModal
+        onDismissRequested: cancel()
         title: kind === "duplicate" ? qsTr("Download already listed") : kind === "queue" ? qsTr("Choose a download queue")
             : kind === "power" ? qsTr("Download completion action") : qsTr("Download complete")
 
@@ -202,7 +203,7 @@ QtObject {
                 busy = false
                 failure = Transfer.problem(result, error)
                 if (!failure) {
-                    close()
+                    hide()
                     engine.refresh()
                     if (after)
                         after()
@@ -233,7 +234,7 @@ QtObject {
             else if (kind === "power")
                 power("cancel")
             else
-                close()
+                hide()
         }
 
         function openSaved(folder) {
@@ -248,47 +249,46 @@ QtObject {
             })
         }
 
-        background: GlassSurface { material: root.material; role: "modal" }
-        header: Label { text: prompt.title; color: root.colors.text; font.bold: true; font.pixelSize: 20; padding: 17; bottomPadding: 4 }
-        contentItem: ColumnLayout {
-            spacing: 9
+        bodyContent: [
             Label {
                 Layout.fillWidth: true
                 color: root.colors.text
-                wrapMode: Text.WordWrap
+                wrapMode: Text.Wrap
+                textFormat: Text.PlainText
                 text: prompt.kind === "duplicate" ? qsTr("%1 is already in your download list.").arg(prompt.info.file || qsTr("This file"))
                     : prompt.kind === "queue" ? qsTr("%1 download(s) are waiting for a queue.").arg(prompt.info.count || 0)
                     : prompt.kind === "power" && prompt.info.data ? qsTr("%1 in %2 second(s).").arg(prompt.info.data.mode === "ShutDown"
                        ? qsTr("Shut down") : prompt.info.data.mode === "Hibernate" ? qsTr("Hibernate") : qsTr("Sleep")).arg(prompt.info.data.seconds)
                     : prompt.info.file || ""
-            }
+            },
             Label {
                 visible: prompt.kind === "complete"
                 text: Transfer.bytes(prompt.info.size === null ? prompt.info.downloaded : prompt.info.size)
                 color: root.colors.muted
-            }
+            },
             Label {
                 visible: prompt.kind === "complete"
                 Layout.fillWidth: true
                 text: prompt.info.path || ""
+                textFormat: Text.PlainText
                 color: root.colors.muted
                 elide: Text.ElideMiddle
-            }
-            ComboBox {
+            },
+            GlassComboBox {
                 id: queueName
                 visible: prompt.kind === "queue"
                 Layout.fillWidth: true
                 model: prompt.kind === "queue" ? prompt.info.queues || [] : []
                 Accessible.name: qsTr("Download queue")
-            }
-            CheckBox { id: startQueue; visible: prompt.kind === "queue"; text: qsTr("Start the queue now") }
+            },
+            CheckBox { id: startQueue; visible: prompt.kind === "queue"; text: qsTr("Start the queue now") },
             Label {
                 visible: prompt.kind === "duplicate" && prompt.replacing
                 Layout.fillWidth: true
                 text: qsTr("The existing download and its file will be replaced.")
                 wrapMode: Text.WordWrap
                 color: root.colors.caution
-            }
+            },
             Label {
                 visible: prompt.failure !== ""
                 Layout.fillWidth: true
@@ -296,8 +296,14 @@ QtObject {
                 wrapMode: Text.WordWrap
                 color: root.colors.destructive
             }
+        ]
+        footer: Item {
+            implicitHeight: promptActions.implicitHeight + 20
+            GlassSurface { anchors.fill: parent; material: root.material; role: "footer" }
             Flow {
-                Layout.fillWidth: true
+                id: promptActions
+                anchors.fill: parent
+                anchors.margins: 10
                 spacing: 7
                 GlassButton { material: root.material; text: prompt.kind === "complete" ? qsTr("Close") : qsTr("Cancel"); enabled: !prompt.busy; onClicked: prompt.cancel() }
                 GlassButton { material: root.material; text: qsTr("Use existing"); visible: prompt.kind === "duplicate"; enabled: !prompt.busy; onClicked: prompt.choose(3) }
@@ -321,7 +327,6 @@ QtObject {
                 GlassButton { material: root.material; text: qsTr("Open folder"); visible: prompt.kind === "complete"; onClicked: prompt.openSaved(true) }
             }
         }
-        Shortcut { sequence: "Escape"; enabled: prompt.visible && !prompt.busy; onActivated: prompt.cancel() }
     }
 
     property VideoRequestDialog video: VideoRequestDialog {

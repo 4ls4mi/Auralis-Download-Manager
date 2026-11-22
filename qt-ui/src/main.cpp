@@ -4,9 +4,11 @@
 #include <QAction>
 #include <QApplication>
 #include <QCryptographicHash>
+#include <QCursor>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QHash>
 #include <QIcon>
 #include <QLocalServer>
 #include <QLocalSocket>
@@ -18,6 +20,7 @@
 #include <QQmlContext>
 #include <QQuickStyle>
 #include <QQuickWindow>
+#include <QSet>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QSystemTrayIcon>
@@ -175,6 +178,8 @@ int main(int argc, char **argv)
 
     QMenu trayMenu;
     QSystemTrayIcon tray(app.windowIcon());
+    QSystemTrayIcon progressTray(QIcon::fromTheme(QStringLiteral("folder-download"), app.windowIcon()));
+    QHash<qulonglong, QAction *> progressActions;
     if (engine.trayAvailable()) {
         tray.setToolTip(app.applicationName());
         QObject::connect(trayMenu.addAction(QObject::tr("Open Auralis")), &QAction::triggered, &app, activate);
@@ -182,6 +187,69 @@ int main(int argc, char **argv)
             [root, activate] { activate(); QMetaObject::invokeMethod(root, "addDownload"); });
         QObject::connect(trayMenu.addAction(QObject::tr("Settings")), &QAction::triggered, root,
             [root] { QMetaObject::invokeMethod(root, "showSettings"); });
+        auto *progressMenu = trayMenu.addMenu(QObject::tr("Hidden download windows"));
+        progressMenu->menuAction()->setVisible(false);
+        progressMenu->setToolTipsVisible(true);
+        progressTray.setContextMenu(progressMenu);
+        QObject::connect(&engine, &Engine::progressTrayItemsChanged, progressMenu,
+            [root, progressMenu, &progressTray, &progressActions](const QVariantList &items) {
+                QSet<qulonglong> currentIds;
+                for (const auto &value : items) {
+                    const auto item = value.toMap();
+                    bool valid = false;
+                    const auto id = item.value(QStringLiteral("id")).toULongLong(&valid);
+                    if (!valid || !id || currentIds.contains(id))
+                        continue;
+                    currentIds.insert(id);
+                    auto *action = progressActions.value(id);
+                    if (!action) {
+                        action = progressMenu->addAction(QString());
+                        QObject::connect(action, &QAction::triggered, root, [root, id] {
+                            QMetaObject::invokeMethod(root, "showDownload", Q_ARG(QVariant, QVariant::fromValue(id)));
+                        });
+                        progressActions.insert(id, action);
+                    }
+                    auto file = item.value(QStringLiteral("name")).toString();
+                    const QString fullName = file;
+                    if (file.size() > 70)
+                        file = file.left(68) + QStringLiteral("…");
+                    file.replace(QLatin1Char('&'), QStringLiteral("&&"));
+                    const QString summary = item.value(QStringLiteral("summary")).toString();
+                    action->setText(QObject::tr("%1 — %2").arg(file, summary));
+                    action->setToolTip(QObject::tr("%1\n%2").arg(fullName, item.value(QStringLiteral("details")).toString()));
+                }
+                for (auto entry = progressActions.begin(); entry != progressActions.end();) {
+                    if (currentIds.contains(entry.key())) {
+                        ++entry;
+                        continue;
+                    }
+                    auto *action = entry.value();
+                    progressMenu->removeAction(action);
+                    action->deleteLater();
+                    entry = progressActions.erase(entry);
+                }
+                progressMenu->menuAction()->setVisible(!currentIds.isEmpty());
+                if (currentIds.size() == 1) {
+                    progressTray.setToolTip(progressActions.constBegin().value()->toolTip().left(127));
+                } else {
+                    progressTray.setToolTip(QObject::tr("Auralis — %1 hidden download windows").arg(currentIds.size()));
+                }
+                progressTray.setVisible(!currentIds.isEmpty());
+            });
+        QObject::connect(&progressTray, &QSystemTrayIcon::activated, progressMenu,
+            [progressMenu](QSystemTrayIcon::ActivationReason reason) {
+                if (reason == QSystemTrayIcon::Trigger || reason == QSystemTrayIcon::DoubleClick)
+                    progressMenu->popup(QCursor::pos());
+            });
+        QObject::connect(&engine, &Engine::updateNotificationRequested, &tray, [&tray](const QString &version) {
+            tray.showMessage(QObject::tr("Auralis update available"),
+                             QObject::tr("Version %1 is ready to review in Auralis.").arg(version),
+                             QSystemTrayIcon::Information);
+        });
+        QObject::connect(&tray, &QSystemTrayIcon::messageClicked, root, [root, activate] {
+            activate();
+            QMetaObject::invokeMethod(root, "showUpdates");
+        });
         trayMenu.addSeparator();
         QObject::connect(trayMenu.addAction(QObject::tr("Exit")), &QAction::triggered, &engine,
             [&engine] { engine.requestQuit(); });

@@ -28,6 +28,10 @@ QtObject {
         function onReducedMotionChanged() { root.store() }
         function onUserMaterialsChanged() { root.store() }
         function onColorThemeChanged() { root.store() }
+        function onForcedAccentChanged() { root.store() }
+        function onProgressPaletteChanged() { root.store() }
+        function onConnectionPaletteChanged() { root.store() }
+        function onGraphPaletteChanged() { root.store() }
     }
 
     onPreferencesChanged: store()
@@ -42,7 +46,7 @@ QtObject {
     function defaults() {
         return {
             mainMode: "desktop", detailsMode: "desktop", mainMedia: "", detailsMedia: "",
-            mainColor: "", detailsColor: "", progressShape: "material", progressFill: "sculpted",
+            mainColor: "", detailsColor: "", progressShape: "bubble", progressFill: "sculpted",
             connectionShape: "material", connectionFill: "sculpted", graphShape: "area"
         }
     }
@@ -104,6 +108,12 @@ QtObject {
         return validChoice(decoded[value] || value, ["material", "round", "square", "bubble", "prism", "ice"], fallback)
     }
 
+    function paletteFor(value, fallback) {
+        if (value === "neon") return "aurora"
+        return typeof value === "string" && Object.prototype.hasOwnProperty.call(MaterialTheme.indicatorPalettes, value)
+            ? value : fallback
+    }
+
     function store() {
         if (loaded) persistence.saved = JSON.stringify(snapshot())
     }
@@ -120,6 +130,9 @@ QtObject {
             "mh-glass-solid-details": preferences.detailsColor,
             "mh-glass-wall-main": preferences.mainMedia ? engine.localPath(fileUrl(preferences.mainMedia)) : "",
             "mh-glass-wall-detail": preferences.detailsMedia ? engine.localPath(fileUrl(preferences.detailsMedia)) : "",
+            "mh-glass-indicator": MaterialTheme.progressPalette,
+            "mh-glass-connection-indicator": MaterialTheme.connectionPalette,
+            "mh-glass-graph-indicator": MaterialTheme.graphPalette,
             "mh-glass-progress-shape": shape(progressShape),
             "mh-glass-progress-material": progressFill === "default" ? "gradient" : "liquid-glass",
             "mh-glass-connection-shape": shape(connectionShape),
@@ -128,6 +141,7 @@ QtObject {
             "mh-glass-qt-appearance": JSON.stringify(Object.assign({}, preferences, {
                 tint: colorText(MaterialTheme.tintColor),
                 colorTheme: MaterialTheme.colorTheme,
+                forcedAccent: MaterialTheme.forcedAccent,
                 reducedMotion: MaterialTheme.reducedMotion
             }))
         }
@@ -151,7 +165,7 @@ QtObject {
         if (typeof value === "string" && (MaterialTheme.builtins[value] || MaterialTheme.userMaterials[value]))
             MaterialTheme.current = value
         else if (complete)
-            MaterialTheme.current = "builtin-aurora-night"
+            MaterialTheme.current = MaterialTheme.defaultMaterial
         const translucency = Number(data["mh-glass-glass-translucency"])
         if (Number.isFinite(translucency) && translucency >= 0 && translucency <= 100)
             MaterialTheme.translucency = translucency / 100
@@ -166,6 +180,10 @@ QtObject {
         else if (complete) MaterialTheme.reducedMotion = false
         if (validPalette(saved.colorTheme)) MaterialTheme.colorTheme = saved.colorTheme
         else if (complete) MaterialTheme.colorTheme = null
+        MaterialTheme.forcedAccent = optionalColor(saved.forcedAccent, complete ? "" : MaterialTheme.forcedAccent)
+        MaterialTheme.progressPalette = paletteFor(data["mh-glass-indicator"], complete ? "blue-purple" : MaterialTheme.progressPalette)
+        MaterialTheme.connectionPalette = paletteFor(data["mh-glass-connection-indicator"], complete ? "ocean" : MaterialTheme.connectionPalette)
+        MaterialTheme.graphPalette = paletteFor(data["mh-glass-graph-indicator"], complete ? "blue-purple" : MaterialTheme.graphPalette)
 
         const original = complete ? defaults() : preferences
         const modes = ["desktop", "solid", "wallpaper"]
@@ -203,15 +221,15 @@ QtObject {
             settings: {
                 glassTranslucency: MaterialTheme.translucency < 0 ? null : Math.round(MaterialTheme.translucency * 100),
                 tintStrength: Math.round(MaterialTheme.tintStrength * 65), fontFamily: "Segoe UI", fontSize: 14,
-                highContrast: true, uiScale: 100, dim: 26, blur: 6, indicator: "aurora",
-                connectionIndicator: "aurora", graphIndicator: "aurora", progressMaterial: legacy["mh-glass-progress-material"],
+                highContrast: true, uiScale: 100, dim: 26, blur: 6, indicator: MaterialTheme.progressPalette,
+                connectionIndicator: MaterialTheme.connectionPalette, graphIndicator: MaterialTheme.graphPalette, progressMaterial: legacy["mh-glass-progress-material"],
                 connectionMaterial: legacy["mh-glass-connection-material"], graphMaterial: "gradient",
                 progressShape: legacy["mh-glass-progress-shape"], connectionShape: legacy["mh-glass-connection-shape"],
                 graphShape: graphShape, trackFinish: "recessed", trackColor: "ice",
                 connectionTrackFinish: "recessed", connectionTrackColor: "ice"
             },
             qt: {material: material, tint: colorText(MaterialTheme.tintColor), progressShape: progressShape,
-                connectionShape: connectionShape, reducedMotion: MaterialTheme.reducedMotion}
+                connectionShape: connectionShape, reducedMotion: MaterialTheme.reducedMotion, forcedAccent: MaterialTheme.forcedAccent}
         }
     }
 
@@ -238,6 +256,10 @@ QtObject {
         MaterialTheme.tintStrength = options.tintStrength / 65
         if (colorValid(tint)) MaterialTheme.tintColor = tint
         if (value.qt && typeof value.qt.reducedMotion === "boolean") MaterialTheme.reducedMotion = value.qt.reducedMotion
+        MaterialTheme.forcedAccent = optionalColor(value.qt?.forcedAccent, "")
+        MaterialTheme.progressPalette = paletteFor(options.indicator, MaterialTheme.progressPalette)
+        MaterialTheme.connectionPalette = paletteFor(options.connectionIndicator, MaterialTheme.connectionPalette)
+        MaterialTheme.graphPalette = paletteFor(options.graphIndicator, MaterialTheme.graphPalette)
         set("progressShape", indicatorShape(value.qt?.progressShape || options.progressShape, progressShape))
         set("connectionShape", indicatorShape(value.qt?.connectionShape || options.connectionShape, connectionShape))
         set("progressFill", options.progressMaterial === "gradient" ? "default" : "sculpted")

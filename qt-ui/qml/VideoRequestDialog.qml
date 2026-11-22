@@ -189,13 +189,13 @@ Dialog {
             visible: root.manual
             Layout.fillWidth: true
             Label { text: qsTr("Cookies"); color: root.colors.ink }
-            ComboBox {
+            GlassComboBox {
                 id: cookieMode
                 Layout.fillWidth: true
                 Accessible.name: qsTr("Cookies")
                 model: [qsTr("Use app settings"), qsTr("Read browser cookies"), qsTr("Paste cookies")]
             }
-            ComboBox {
+            GlassComboBox {
                 id: browser
                 visible: cookieMode.currentIndex === 1
                 Accessible.name: qsTr("Browser")
@@ -234,7 +234,7 @@ Dialog {
             visible: root.subtitles.length > 1
             Layout.fillWidth: true
             Label { text: qsTr("Subtitle language"); color: root.colors.ink }
-            ComboBox {
+            GlassComboBox {
                 id: language
                 Layout.fillWidth: true
                 model: root.subtitles
@@ -248,7 +248,7 @@ Dialog {
             enabled: language.currentIndex > 0
             text: qsTr("Embed a selectable subtitle track")
         }
-        ComboBox {
+        GlassComboBox {
             id: quality
             objectName: "videoQuality"
             Layout.fillWidth: true

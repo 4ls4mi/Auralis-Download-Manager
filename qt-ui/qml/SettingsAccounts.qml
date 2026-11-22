@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Window
 
 ColumnLayout {
     id: root
@@ -177,20 +178,17 @@ ColumnLayout {
         }
     }
 
-    Dialog {
+    DetachedConfirmation {
         id: confirmRemoval
+        objectName: "accountRemovalWindow"
+        hostWindow: root.Window.window
         property var accountId
         property string accountName
         title: qsTr("Remove service account")
-        modal: true
-        standardButtons: Dialog.Ok | Dialog.Cancel
-        onAccepted: root.request({operation: "remove", id: accountId})
-
-        Label {
-            width: 320
-            wrapMode: Text.WordWrap
-            text: qsTr("Remove the saved %1 account from Auralis?").arg(confirmRemoval.accountName)
-        }
+        message: qsTr("Remove the saved %1 account from Auralis?").arg(accountName)
+        confirmText: qsTr("Remove account")
+        destructive: true
+        onConfirmed: root.request({operation: "remove", id: accountId})
     }
 
     ColumnLayout {
@@ -198,7 +196,7 @@ ColumnLayout {
         visible: root.adding
         spacing: 8
 
-        ComboBox {
+        GlassComboBox {
             Layout.fillWidth: true
             Accessible.name: qsTr("Service")
             model: root.services
@@ -213,7 +211,7 @@ ColumnLayout {
             }
         }
 
-        ComboBox {
+        GlassComboBox {
             id: methods
             Layout.fillWidth: true
             Accessible.name: qsTr("Sign-in method")

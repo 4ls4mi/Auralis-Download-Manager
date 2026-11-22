@@ -14,6 +14,15 @@ ColumnLayout {
     property string status
     property bool failed: false
     property bool busy: false
+    property real previewPhase: 0
+
+    NumberAnimation on previewPhase {
+        from: 0
+        to: 1
+        duration: 1350
+        loops: Animation.Infinite
+        running: root.visible && tabs.currentIndex === 2 && !MaterialTheme.reducedMotion
+    }
     readonly property var shapeChoices: [
         {label: qsTr("Material default"), value: "material"}, {label: qsTr("Rounded"), value: "round"},
         {label: qsTr("Square"), value: "square"}, {label: qsTr("Bubble"), value: "bubble"},
@@ -69,7 +78,7 @@ ColumnLayout {
         wrapMode: Text.WordWrap
     }
 
-    component Choice: ComboBox {
+    component Choice: GlassComboBox {
         Layout.fillWidth: true
         textRole: "label"
         valueRole: "value"
@@ -127,19 +136,19 @@ ColumnLayout {
                     from: 0
                     to: 100
                     stepSize: 1
-                    value: MaterialTheme.translucency >= 0 ? MaterialTheme.translucency * 100 :
-                        (1 - MaterialTheme.opacityFor(MaterialTheme.current)) * 100
+                    enabled: !root.colors.opaque
+                    value: (1 - MaterialTheme.opacityFor(MaterialTheme.current)) * 100
                     onMoved: MaterialTheme.translucency = value / 100
                     Accessible.name: qsTr("Translucency")
                 }
                 Label {
-                    text: qsTr("%1%").arg(Math.round(MaterialTheme.translucency >= 0 ?
-                        MaterialTheme.translucency * 100 : (1 - MaterialTheme.opacityFor(MaterialTheme.current)) * 100))
+                    text: root.colors.opaque ? qsTr("Opaque") :
+                        qsTr("%1%").arg(Math.round((1 - MaterialTheme.opacityFor(MaterialTheme.current)) * 100))
                     color: root.colors.text
                 }
                 GlassButton {
                     text: qsTr("Use material default")
-                    enabled: MaterialTheme.translucency >= 0
+                    enabled: !root.colors.opaque && MaterialTheme.translucency >= 0
                     onClicked: MaterialTheme.translucency = -1
                 }
             }
@@ -167,6 +176,27 @@ ColumnLayout {
                     Accessible.name: qsTr("Tint strength")
                 }
                 Label { text: qsTr("%1%").arg(Math.round(MaterialTheme.tintStrength * 100)); color: root.colors.text }
+            }
+
+            Heading { text: qsTr("Accent override") }
+
+            RowLayout {
+                Layout.fillWidth: true
+                GlassButton {
+                    text: qsTr("Choose accent color…")
+                    accent: MaterialTheme.forcedAccent || root.colors.accent
+                    onClicked: {
+                        colorPicker.targetKey = "forcedAccent"
+                        colorPicker.selectedColor = MaterialTheme.forcedAccent || root.colors.accent
+                        colorPicker.open()
+                    }
+                }
+                GlassButton {
+                    text: qsTr("Use material accents")
+                    enabled: Boolean(MaterialTheme.forcedAccent)
+                    onClicked: MaterialTheme.forcedAccent = ""
+                }
+                Item { Layout.fillWidth: true }
             }
 
             Label {
@@ -260,6 +290,12 @@ ColumnLayout {
                     Accessible.name: qsTr("Progress fill")
                 }
             }
+            Choice {
+                model: MaterialTheme.indicatorChoices
+                selection: MaterialTheme.progressPalette
+                onActivated: MaterialTheme.progressPalette = currentValue
+                Accessible.name: qsTr("Progress color")
+            }
             GlassProgress {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 32
@@ -267,6 +303,8 @@ ColumnLayout {
                 shape: WindowAppearance.progressShape === "material" ?
                     (["bubble", "prism", "ice"].includes(profile.shape) ? profile.shape : "round") : WindowAppearance.progressShape
                 fillStyle: WindowAppearance.progressFill
+                startColor: MaterialTheme.progressColors[0]
+                endColor: MaterialTheme.progressColors[1]
                 showLabel: true
                 animated: visible
             }
@@ -286,19 +324,27 @@ ColumnLayout {
                     Accessible.name: qsTr("Connection fill")
                 }
             }
+            Choice {
+                model: MaterialTheme.indicatorChoices
+                selection: MaterialTheme.connectionPalette
+                onActivated: MaterialTheme.connectionPalette = currentValue
+                Accessible.name: qsTr("Connection color")
+            }
             RowLayout {
                 Layout.fillWidth: true
                 Repeater {
                     model: [.32, .68, .80, .49, .98, .82]
-                    delegate: GlassProgress {
+                    delegate: ConnectionWater {
                         required property real modelData
                         Layout.fillWidth: true
                         value: modelData
+                        receiving: visible
+                        phase: root.previewPhase
                         shape: WindowAppearance.connectionShape === "material" ?
                             (["bubble", "prism", "ice"].includes(profile.shape) ? profile.shape : "round") : WindowAppearance.connectionShape
                         fillStyle: WindowAppearance.connectionFill
-                        showLabel: false
-                        animated: visible
+                        startColor: MaterialTheme.connectionColors[0]
+                        endColor: MaterialTheme.connectionColors[1]
                     }
                 }
             }
@@ -309,12 +355,18 @@ ColumnLayout {
                 onActivated: WindowAppearance.set("graphShape", currentValue)
                 Accessible.name: qsTr("Graph style")
             }
+            Choice {
+                model: MaterialTheme.indicatorChoices
+                selection: MaterialTheme.graphPalette
+                onActivated: MaterialTheme.graphPalette = currentValue
+                Accessible.name: qsTr("Graph color")
+            }
             TransferGraph {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 68
                 samples: [2, 3, 6, 6, 4, 8, 12, 9, 13, 12, 14, 13, 11, 14, 17, 16]
-                lineColor: root.colors.accent
-                endpointColor: root.colors.secondary
+                lineColor: MaterialTheme.graphColors[0]
+                endpointColor: MaterialTheme.graphColors[1]
                 gridColor: root.colors.divider
             }
         }
@@ -342,23 +394,16 @@ ColumnLayout {
         wrapMode: Text.WordWrap
     }
 
-    Dialog {
+    DetachedConfirmation {
         id: resetDialog
-        anchors.centerIn: parent
-        modal: true
+        hostWindow: root.Window.window
         title: qsTr("Reset appearance?")
-        standardButtons: Dialog.Reset | Dialog.Cancel
-        Label {
-            text: qsTr("Restore the default material, tint, indicator styles, and backgrounds. Imported materials remain available.")
-            color: root.colors.text
-            wrapMode: Text.WordWrap
-            width: 350
-        }
-        onReset: {
+        message: qsTr("Restore the default material, tint, indicator styles, and backgrounds. Imported materials remain available.")
+        confirmText: qsTr("Reset appearance")
+        onConfirmed: {
             const imported = MaterialTheme.userMaterials
             WindowAppearance.applyBackup({}, true)
             MaterialTheme.userMaterials = imported
-            close()
         }
     }
 
@@ -366,7 +411,8 @@ ColumnLayout {
         id: colorPicker
         property string targetKey
         onAccepted: {
-            if (targetKey) WindowAppearance.set(targetKey, WindowAppearance.colorText(selectedColor))
+            if (targetKey === "forcedAccent") MaterialTheme.forcedAccent = WindowAppearance.colorText(selectedColor)
+            else if (targetKey) WindowAppearance.set(targetKey, WindowAppearance.colorText(selectedColor))
             else MaterialTheme.tintColor = selectedColor
         }
     }

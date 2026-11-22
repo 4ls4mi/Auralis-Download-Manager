@@ -345,6 +345,12 @@ bool Engine::openFolder(const QString &path) const
     return openPath(entry.isDir() ? entry.absoluteFilePath() : entry.absolutePath());
 }
 
+void Engine::notifyUpdate(const QString &version)
+{
+    if (!m_smoke && !version.isEmpty())
+        emit updateNotificationRequested(version);
+}
+
 bool Engine::applyBackdrop(QWindow *window, bool enabled, bool dark) const
 {
 #ifdef Q_OS_WIN

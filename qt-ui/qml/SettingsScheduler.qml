@@ -115,7 +115,7 @@ ColumnLayout {
         font.weight: Font.DemiBold
     }
 
-    ComboBox {
+    GlassComboBox {
         id: choice
         Layout.fillWidth: true
         model: root.queues
@@ -213,7 +213,7 @@ ColumnLayout {
         }
 
         Label { text: qsTr("Computer action"); color: root.colors.text }
-        ComboBox {
+        GlassComboBox {
             id: powerAction
             Layout.fillWidth: true
             readonly property var values: [null, "ShutDown", "Sleep", "Hibernate"]

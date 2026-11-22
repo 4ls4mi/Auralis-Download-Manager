@@ -13,7 +13,7 @@ ApplicationWindow {
     height: 735
     minimumWidth: 740
     minimumHeight: 524
-    visible: !engine.startHidden
+    visible: !engine.startHidden || !engine.trayAvailable
     color: "transparent"
     flags: Qt.Window | Qt.FramelessWindowHint
 
@@ -81,10 +81,48 @@ ApplicationWindow {
     property bool showSidebar: true
     property var chosenIds: []
     property string selectionAnchor: ""
-    readonly property var chosenItems: downloads.filter(item => chosenIds.includes(String(item.id)))
-    readonly property var currentItem: chosenItems.find(item => String(item.id) === selectionAnchor) || chosenItems[0] || null
+    property string focusedTransferId: ""
+    readonly property var chosenItems: {
+        return downloads.filter(item => chosenSet.has(String(item.id)))
+    }
+    readonly property var currentItem: chosenItems.find(item => String(item.id) === focusedTransferId) || chosenItems[0] || null
+    readonly property var chosenSet: new Set(chosenIds)
+    readonly property int indicatorColumnWidth: compact ? 193 : 275
+    readonly property int timeColumnWidth: compact ? 57 : 72
+    readonly property int listGutter: list.contentHeight > list.height ? 8 : 0
     property var detailWindows: ({})
+    property var hiddenProgressIds: []
+    readonly property bool minimizeToTray: enginePrompts.settings.minimize_to_tray !== false
+    readonly property bool closeToTray: enginePrompts.settings.close_to_tray !== false
+    readonly property bool progressMinimizeToTray: enginePrompts.settings.progress_minimize_to_tray === undefined
+        ? minimizeToTray : enginePrompts.settings.progress_minimize_to_tray !== false
+    readonly property var hiddenProgressItems: {
+        const entries = []
+        for (const item of downloads) {
+            if (!hiddenProgressIds.includes(String(item.id)) || item.status === "Complete")
+                continue
+            const visual = visualById[item.id] || {}
+            const percentage = item.size > 0 ? (100 * TransferData.fraction(item)).toFixed(1) + "%" : qsTr("Size unknown")
+            const summary = item.status === "Downloading"
+                ? qsTr("%1 · %2 · %3").arg(percentage).arg(TransferData.rate(item.speed)).arg(TransferData.timeLeft(item))
+                : qsTr("%1 · %2").arg(statusText(item.status)).arg(percentage)
+            const transport = visual.torrent ? qsTr("%1 peers").arg(visual.torrent.peers)
+                : visual.active_connections === undefined ? "" : qsTr("%1 connections").arg(visual.active_connections)
+            const resume = visual.resumable === true ? qsTr("Can resume")
+                : visual.resumable === false ? qsTr("Resume unavailable") : ""
+            const details = [summary, transport, resume].filter(Boolean).join(" · ")
+            entries.push({id: item.id, name: item.file, summary: summary, details: details})
+        }
+        return entries
+    }
+
+    onHiddenProgressItemsChanged: {
+        if (engine.trayAvailable)
+            engine.setProgressTrayItems(hiddenProgressItems)
+    }
+
     property var graphValues: []
+    property var transferSpeedHistory: ({})
     property var recoveryDismissed: ({})
     property bool busy: false
     property string actionError: ""
@@ -169,13 +207,19 @@ ApplicationWindow {
             rows.remove(shown.length, rows.count - shown.length)
         const existing = new Set(downloads.map(item => String(item.id)))
         const visibleIds = new Set(shown.map(item => String(item.id)))
-        chosenIds = chosenIds.filter(id => visibleIds.has(id))
+        const remaining = chosenIds.filter(id => visibleIds.has(id))
+        if (remaining.length !== chosenIds.length)
+            chosenIds = remaining
         if (!visibleIds.has(selectionAnchor))
             selectionAnchor = ""
+        if (!visibleIds.has(focusedTransferId))
+            focusedTransferId = ""
+        list.currentIndex = rowIndex(focusedTransferId)
         for (const id in detailWindows) {
             if (!existing.has(id)) {
                 detailWindows[id].destroy()
                 delete detailWindows[id]
+                forgetHiddenProgress(id)
             }
         }
     }
@@ -183,36 +227,54 @@ ApplicationWindow {
     function chooseFilter(type, key) {
         filterType = type
         filterKey = key
-        chosenIds = []
-        selectionAnchor = ""
-        list.currentIndex = -1
+        clearSelection()
+        focusedTransferId = ""
         synchronizeRows()
         list.positionViewAtBeginning()
+    }
+
+    function rowIndex(id) {
+        if (id) {
+            for (let index = 0; index < rows.count; ++index) {
+                if (rows.get(index).transferId === id)
+                    return index
+            }
+        }
+        return -1
+    }
+
+    function focusRow(index) {
+        focusedTransferId = rows.get(index).transferId
+        list.currentIndex = index
+        list.forceActiveFocus()
     }
 
     function selectRow(index, modifiers) {
         if (index < 0 || index >= rows.count)
             return
-        const key = rows.get(index).transferId
-        list.currentIndex = index
-        list.forceActiveFocus()
-        if ((modifiers & Qt.ShiftModifier) && selectionAnchor) {
-            let start = 0
-            while (start < rows.count && rows.get(start).transferId !== selectionAnchor)
-                ++start
-            if (start < rows.count) {
+        const previousFocus = focusedTransferId
+        focusRow(index)
+        const key = focusedTransferId
+        const extend = (modifiers & Qt.ControlModifier) !== 0
+        if (modifiers & Qt.ShiftModifier) {
+            const start = rowIndex(selectionAnchor || previousFocus)
+            if (start >= 0) {
+                if (!selectionAnchor)
+                    selectionAnchor = rows.get(start).transferId
                 const range = []
                 for (let i = Math.min(start, index); i <= Math.max(start, index); ++i)
                     range.push(rows.get(i).transferId)
-                chosenIds = range
+                chosenIds = extend ? Array.from(new Set(chosenIds.concat(range))) : range
                 return
             }
         }
-        if (modifiers & Qt.ControlModifier)
-            chosenIds = chosenIds.includes(key) ? chosenIds.filter(id => id !== key) : chosenIds.concat([key])
-        else
-            chosenIds = [key]
+        chosenIds = extend ? (chosenSet.has(key) ? chosenIds.filter(id => id !== key) : chosenIds.concat(key)) : [key]
         selectionAnchor = key
+    }
+
+    function clearSelection() {
+        chosenIds = []
+        selectionAnchor = ""
     }
 
     function selectEveryRow() {
@@ -220,8 +282,23 @@ ApplicationWindow {
         for (let index = 0; index < rows.count; ++index)
             ids.push(rows.get(index).transferId)
         chosenIds = ids
-        if (ids.length)
-            selectionAnchor = ids[0]
+        if (ids.length) {
+            focusRow(Math.max(0, list.currentIndex))
+            selectionAnchor = focusedTransferId
+        }
+    }
+
+    function recordTransferSpeeds() {
+        const histories = {}
+        for (const item of downloads) {
+            const id = String(item.id)
+            const previous = transferSpeedHistory[id]
+            if (item.status === "Downloading")
+                histories[id] = (previous || []).slice(-29).concat([Math.max(0, Number(item.speed) || 0)])
+            else if (previous)
+                histories[id] = previous
+        }
+        transferSpeedHistory = histories
     }
 
     function request(command, refresh, callback) {
@@ -266,8 +343,23 @@ ApplicationWindow {
         if (!eligibleItems.length)
             return
         removeDialog.entries = eligibleItems
-        deleteFiles.checked = alsoDelete
+        removeDialog.runningCount = items.length - eligibleItems.length
+        removeDialog.optionChecked = alsoDelete
         removeDialog.open()
+    }
+
+    function removeDownloads(items, alsoDelete) {
+        const ids = items.map(item => Number(item.id))
+        if (!ids.length)
+            return
+        request({action: alsoDelete ? "delete" : "remove", ids: ids}, true, response => {
+            if (!response || !response.done || !response.done.length)
+                return
+            const removed = new Set(response.done.map(String))
+            chosenIds = chosenIds.filter(id => !removed.has(id))
+            if (removed.has(selectionAnchor))
+                selectionAnchor = ""
+        })
     }
 
     function chooseAdd(torrent) {
@@ -288,7 +380,10 @@ ApplicationWindow {
     }
 
     function showSettings() {
-        settingsWindow.show()
+        if (settingsWindow.visibility === Window.Minimized)
+            settingsWindow.showNormal()
+        else
+            settingsWindow.show()
         settingsWindow.raise()
         settingsWindow.requestActivate()
     }
@@ -297,8 +392,43 @@ ApplicationWindow {
         settingsWindow.showCategory("Browser Integration")
     }
 
+    function hideMainToTray() {
+        if (engine.trayAvailable)
+            hide()
+        else
+            showMinimized()
+    }
+
+    function minimizeMain() {
+        if (minimizeToTray && engine.trayAvailable)
+            hideMainToTray()
+        else
+            showMinimized()
+    }
+
+    function hideProgressToTray(id) {
+        const key = String(id)
+        const details = detailWindows[key]
+        if (!details)
+            return
+        if (!engine.trayAvailable) {
+            details.showMinimized()
+            return
+        }
+        if (!hiddenProgressIds.includes(key))
+            hiddenProgressIds = hiddenProgressIds.concat([key])
+        details.hide()
+    }
+
+    function forgetHiddenProgress(id) {
+        const key = String(id)
+        if (hiddenProgressIds.includes(key))
+            hiddenProgressIds = hiddenProgressIds.filter(hidden => hidden !== key)
+    }
+
     function showDownload(id) {
         const key = String(id)
+        const wasHidden = hiddenProgressIds.includes(key)
         let details = detailWindows[key]
         if (!details) {
             details = detailsFactory.createObject(root, {downloadId: Number(id)})
@@ -308,7 +438,11 @@ ApplicationWindow {
             }
             detailWindows[key] = details
         }
-        details.show()
+        forgetHiddenProgress(id)
+        if (wasHidden || details.visibility === Window.Minimized)
+            details.showNormal()
+        else
+            details.show()
         details.raise()
         details.requestActivate()
     }
@@ -321,9 +455,18 @@ ApplicationWindow {
     }
 
     onClosing: function(event) {
-        if (!engine.trayAvailable) {
-            event.accepted = false
+        event.accepted = false
+        if (closeToTray)
+            hideMainToTray()
+        else
             engine.requestQuit()
+    }
+    onVisibilityChanged: {
+        if (root.visibility === Window.Minimized && root.minimizeToTray && engine.trayAvailable) {
+            Qt.callLater(() => {
+                if (root.visibility === Window.Minimized)
+                    root.hideMainToTray()
+            })
         }
     }
     onSearchTermChanged: synchronizeRows()
@@ -331,6 +474,8 @@ ApplicationWindow {
     Component.onCompleted: {
         synchronizeRows()
         engine.refresh()
+        if (engine.startHidden && !engine.trayAvailable)
+            showMinimized()
     }
 
     Connections {
@@ -340,6 +485,7 @@ ApplicationWindow {
         }
         function onDashboardChanged() {
             root.graphValues = root.graphValues.slice(-64).concat([Number(engine.dashboard.speed || 0)])
+            root.recordTransferSpeeds()
             if (root.filterType === "queue" && !root.currentQueue)
                 root.chooseFilter("status", "all")
             else if (root.filterType === "category" && !root.categories.some(c => c.key === root.filterKey))
@@ -350,14 +496,34 @@ ApplicationWindow {
     }
 
     ListModel { id: rows }
-    SettingsWindow { id: settingsWindow }
+    function showUpdates() {
+        settingsWindow.showUpdate(settingsWindow.availableUpdate)
+    }
+
+    SettingsWindow {
+        id: settingsWindow
+        objectName: "settingsWindow"
+        transientParent: null
+        onConfigChanged: if (config) enginePrompts.settings = config
+    }
     UpdateNotice {
+        id: updateNotice
         backend: engine
         anchorWindow: root
+        automaticChecks: settingsWindow.automaticUpdateChecks
+        presentation: settingsWindow.updatePresentation
+        onAvailableUpdateChanged: settingsWindow.availableUpdate = updateNotice.availableUpdate
         onDetailsRequested: update => settingsWindow.showUpdate(update)
     }
-    AddDownloadDialog { id: addDialog; parent: root.contentItem }
-    Component { id: detailsFactory; DownloadWindow {} }
+    AddDownloadDialog { id: addDialog; hostWindow: root }
+    Component {
+        id: detailsFactory
+        DownloadWindow {
+            trayEnabled: Boolean(engine.trayAvailable)
+            minimizeToTray: root.progressMinimizeToTray
+            onHideToTrayRequested: id => root.hideProgressToTray(id)
+        }
+    }
     GalleryDownloadDialog {
         id: galleryDialog
         parent: root.contentItem
@@ -367,7 +533,11 @@ ApplicationWindow {
     EnginePrompts {
         id: enginePrompts
         popupParent: root.contentItem
-        onShowProgressRequested: downloadId => root.showDownload(downloadId)
+        onShowProgressRequested: downloadId => {
+            if (!root.hiddenProgressIds.includes(String(downloadId)))
+                root.showDownload(downloadId)
+        }
+        onDownloadCompleted: downloadId => root.forgetHiddenProgress(downloadId)
         onQuitRequested: engine.requestQuit()
     }
 
@@ -488,56 +658,100 @@ ApplicationWindow {
         onTriggered: engine.refresh()
     }
 
-    Dialog {
+    DetachedConfirmation {
         id: removeDialog
+        hostWindow: root
         title: qsTr("Remove downloads")
-        parent: root.contentItem
-        anchors.centerIn: parent
-        width: Math.min(440, root.width - 40)
-        modal: true
-        standardButtons: Dialog.Ok | Dialog.Cancel
         property var entries: []
-        onAccepted: root.transferAction(deleteFiles.checked ? "delete" : "remove", entries)
-        ColumnLayout {
-            anchors.fill: parent
-            Label {
-                Layout.fillWidth: true
-                wrapMode: Text.WordWrap
-                text: removeDialog.entries.length === 1
-                    ? qsTr("Remove %1 from the download list?").arg(removeDialog.entries[0].file)
-                    : qsTr("Remove %1 downloads from the list?").arg(removeDialog.entries.length)
-            }
-            CheckBox { id: deleteFiles; text: qsTr("Also delete the downloaded files") }
-        }
+        property int runningCount: 0
+        message: (entries.length === 1
+            ? qsTr("Remove %1 from the download list?").arg(entries[0].file)
+            : qsTr("Remove %1 downloads from the list?").arg(entries.length))
+            + (runningCount === 0 ? "" : "\n\n" + (runningCount === 1
+                ? qsTr("Pause the running download before removing it.")
+                : qsTr("Pause %1 running downloads before removing them.").arg(runningCount)))
+        showOption: true
+        optionText: qsTr("Also delete the downloaded files")
+        confirmText: optionChecked ? qsTr("Delete files") : qsTr("Remove")
+        destructive: optionChecked
+        onConfirmed: root.removeDownloads(entries, optionChecked)
     }
 
-    Dialog {
+    DetachedConfirmation {
         id: restartDialog
+        hostWindow: root
         property var entry: null
         title: qsTr("Redownload from the start")
-        parent: root.contentItem
-        anchors.centerIn: parent
-        width: Math.min(458, root.width - 40)
-        modal: true
-        standardButtons: Dialog.Ok | Dialog.Cancel
-        onAccepted: if (entry) root.itemAction("redownload", entry)
-        Label {
-            width: parent.width
-            wrapMode: Text.WordWrap
-            text: restartDialog.entry ? qsTr("Download %1 again? Saved progress will be discarded. A finished file is replaced after the new download completes.").arg(restartDialog.entry.file) : ""
-        }
+        message: entry ? qsTr("Download %1 again? Saved progress will be discarded. A finished file is replaced after the new download completes.").arg(entry.file) : ""
+        confirmText: qsTr("Redownload")
+        destructive: true
+        onConfirmed: if (entry) root.itemAction("redownload", entry)
     }
 
-    Dialog {
+    DetachedDialogWindow {
         id: shortcutsDialog
+        objectName: "shortcutsWindow"
+        hostWindow: root
+        width: 455
         title: qsTr("Keyboard shortcuts")
-        parent: root.contentItem
-        anchors.centerIn: parent
-        modal: true
-        standardButtons: Dialog.Close
-        Label {
-            text: qsTr("Ctrl+N   Add URL\nCtrl+O   Add torrent\nCtrl+F   Search downloads\nCtrl+,   Open Settings\nF5          Refresh\nEnter    Show selected download\nDelete  Remove selected downloads")
-            lineHeight: 1.25
+        onDismissRequested: hide()
+        onOpened: closeShortcuts.forceActiveFocus()
+
+        bodyContent: [
+            Repeater {
+                model: [
+                    {key: qsTr("Ctrl+N"), label: qsTr("Add URL")},
+                    {key: qsTr("Ctrl+O"), label: qsTr("Add torrent")},
+                    {key: qsTr("Ctrl+F"), label: qsTr("Search downloads")},
+                    {key: qsTr("Ctrl+,"), label: qsTr("Open Settings")},
+                    {key: qsTr("F5"), label: qsTr("Refresh downloads")},
+                    {key: qsTr("Enter"), label: qsTr("Show selected download")},
+                    {key: qsTr("Ctrl+A"), label: qsTr("Select all downloads in this view")},
+                    {key: qsTr("Delete"), label: qsTr("Remove selected downloads")},
+                    {key: qsTr("Shift+Delete"), label: qsTr("Remove selected downloads and their files")},
+                    {key: qsTr("Ctrl+M"), label: qsTr("Move or rename the selected download")}
+                ]
+
+                delegate: RowLayout {
+                    id: shortcutRow
+                    required property var modelData
+                    Layout.fillWidth: true
+                    spacing: 12
+
+                    Label {
+                        Layout.preferredWidth: 118
+                        leftPadding: 8
+                        rightPadding: 8
+                        topPadding: 4
+                        bottomPadding: 4
+                        text: shortcutRow.modelData.key
+                        color: shortcutsDialog.colors.ink
+                        font.weight: Font.DemiBold
+                        horizontalAlignment: Text.AlignHCenter
+                        background: GlassSurface { material: shortcutsDialog.material; role: "field" }
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        text: shortcutRow.modelData.label
+                        wrapMode: Text.WordWrap
+                        color: shortcutsDialog.colors.ink
+                    }
+                }
+            }
+        ]
+
+        footer: Item {
+            implicitHeight: closeShortcuts.implicitHeight + 20
+            GlassSurface { anchors.fill: parent; material: shortcutsDialog.material; role: "footer" }
+            GlassButton {
+                id: closeShortcuts
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.right: parent.right
+                anchors.rightMargin: 10
+                material: shortcutsDialog.material
+                text: qsTr("Close")
+                onClicked: shortcutsDialog.hide()
+            }
         }
     }
 
@@ -689,28 +903,13 @@ ApplicationWindow {
             Layout.fillWidth: true
             Layout.preferredHeight: 43
             GlassSurface { anchors.fill: parent; role: "title" }
-            MouseArea {
+            CaptionMoveArea {
                 objectName: "titleDragArea"
-                anchors.left: parent.left
-                anchors.top: parent.top
-                anchors.bottom: parent.bottom
-                anchors.right: parent.right
+                hostWindow: root
+                anchors.fill: parent
                 anchors.rightMargin: captionActions.width + 6
                 z: 1
-                acceptedButtons: Qt.LeftButton
-                property point origin
-                property bool moving: false
-                onPressed: mouse => {
-                    origin = Qt.point(mouse.x, mouse.y)
-                    moving = false
-                }
-                onPositionChanged: mouse => {
-                    if (pressed && !moving && Math.abs(mouse.x - origin.x) + Math.abs(mouse.y - origin.y) >= 6) {
-                        moving = true
-                        root.startSystemMove()
-                    }
-                }
-                onDoubleClicked: root.toggleMaximized()
+                onDoubleClickRequested: root.toggleMaximized()
             }
             RowLayout {
                 anchors.fill: parent
@@ -742,30 +941,16 @@ ApplicationWindow {
                     color: root.colors.muted
                     font.pixelSize: 12
                 }
-                RowLayout {
+                CaptionControls {
                     id: captionActions
-                    spacing: 4
-                    Repeater {
-                        model: [
-                            {symbol: "minimize", label: qsTr("Minimize"), accent: root.colors.caution, click: () => root.showMinimized()},
-                            {symbol: root.visibility === Window.Maximized ? "restore" : "maximize",
-                             label: root.visibility === Window.Maximized ? qsTr("Restore") : qsTr("Maximize"),
-                             accent: root.colors.secondary, click: () => root.toggleMaximized()},
-                            {symbol: "close", label: qsTr("Close"), accent: root.colors.destructive, click: () => root.close()}
-                        ]
-                        delegate: GlassButton {
-                            id: captionButton
-                            required property var modelData
-                            Layout.preferredWidth: 32
-                            Layout.preferredHeight: 29
-                            text: modelData.label
-                            accent: modelData.accent
-                            contentItem: DashboardIcon { symbol: captionButton.modelData.symbol; ink: captionButton.accent }
-                            ToolTip.text: text
-                            ToolTip.visible: hovered
-                            onClicked: modelData.click()
-                        }
-                    }
+                    trayEnabled: Boolean(engine.trayAvailable)
+                    maximized: root.visibility === Window.Maximized
+                    minimizeLabel: root.minimizeToTray && engine.trayAvailable ? qsTr("Minimize to system tray") : qsTr("Minimize")
+                    closeLabel: root.closeToTray ? qsTr("Keep Auralis running") : qsTr("Exit Auralis")
+                    onHideRequested: root.hideMainToTray()
+                    onMinimizeRequested: root.minimizeMain()
+                    onMaximizeRequested: root.toggleMaximized()
+                    onCloseRequested: root.close()
                 }
             }
         }
@@ -793,7 +978,7 @@ ApplicationWindow {
                         MenuItem { text: qsTr("Batch download…"); enabled: root.online; onTriggered: batchDialog.present() }
                         MenuItem { text: qsTr("Link grabber…"); enabled: root.online; onTriggered: enginePrompts.links.present() }
                         MenuSeparator {}
-                        MenuItem { text: qsTr("Hide in system tray"); enabled: Boolean(engine.trayAvailable); onTriggered: root.hide() }
+                        MenuItem { text: qsTr("Hide in system tray"); enabled: Boolean(engine.trayAvailable); onTriggered: root.hideMainToTray() }
                         MenuItem { text: qsTr("Exit"); onTriggered: engine.requestQuit() }
                     }
                 }
@@ -854,10 +1039,18 @@ ApplicationWindow {
                         y: helpMenuButton.height
                         MenuItem { text: qsTr("Keyboard shortcuts"); onTriggered: shortcutsDialog.open() }
                         MenuItem { text: qsTr("Browser integration"); onTriggered: settingsWindow.showCategory("Browser Integration") }
+                        MenuItem { text: qsTr("Check for updates"); onTriggered: root.showUpdates() }
                         MenuItem { text: qsTr("Project guide"); onTriggered: Qt.openUrlExternally("https://github.com/4ls4mi/Auralis-Download-Manager#guides-and-recovery") }
                     }
                 }
                 Item { Layout.fillWidth: true }
+                GlassButton {
+                    visible: Boolean(settingsWindow.availableUpdate)
+                    text: qsTr("Update available")
+                    Accessible.description: settingsWindow.availableUpdate
+                        ? qsTr("Auralis %1").arg(settingsWindow.availableUpdate.version) : ""
+                    onClicked: root.showUpdates()
+                }
             }
         }
 
@@ -872,17 +1065,17 @@ ApplicationWindow {
                 spacing: root.compact ? 4 : 7
                 Repeater {
                     model: [
-                        {command: addUrl, icon: "add", color: root.colors.positive},
-                        {command: addTorrent, icon: "torrent", color: Qt.tint(root.colors.positive, Qt.alpha(root.colors.caution, .55))},
-                        {command: resumeTransfers, icon: "start", color: root.colors.accent},
-                        {command: pauseTransfers, icon: "stop", color: root.colors.caution},
-                        {command: stopAll, icon: "pause", color: Qt.tint(root.colors.caution, Qt.alpha(root.colors.destructive, .30))},
-                        {command: removeSelection, icon: "remove", color: root.colors.destructive},
-                        {command: removeCompleted, icon: "check", color: Qt.tint(root.colors.destructive, Qt.alpha(root.colors.secondary, .35))},
-                        {command: settingsAction, icon: "settings", color: root.colors.secondary},
-                        {command: schedulerAction, icon: "clock", color: Qt.tint(root.colors.accent, Qt.alpha(root.colors.positive, .35))},
-                        {command: startQueue, icon: "start", color: Qt.tint(root.colors.accent, Qt.alpha(root.colors.secondary, .50))},
-                        {command: stopQueue, icon: "pause", color: Qt.tint(root.colors.caution, Qt.alpha(root.colors.secondary, .37))}
+                        {command: addUrl, icon: "add"},
+                        {command: addTorrent, icon: "torrent"},
+                        {command: resumeTransfers, icon: "start"},
+                        {command: pauseTransfers, icon: "pause"},
+                        {command: stopAll, icon: "stop"},
+                        {command: removeSelection, icon: "remove"},
+                        {command: removeCompleted, icon: "check"},
+                        {command: settingsAction, icon: "settings"},
+                        {command: schedulerAction, icon: "clock"},
+                        {command: startQueue, icon: "start", accentKey: "queueStart"},
+                        {command: stopQueue, icon: "pause", accentKey: "queueStop"}
                     ]
                     delegate: GlassButton {
                         id: actionButton
@@ -890,10 +1083,10 @@ ApplicationWindow {
                         Layout.preferredWidth: root.compact ? 41 : 54
                         Layout.preferredHeight: 36
                         action: modelData.command
-                        accent: modelData.color
+                        accent: MaterialTheme.actionColor(modelData.accentKey || modelData.icon, root.colors.light)
                         contentItem: DashboardIcon {
                             symbol: actionButton.modelData.icon
-                            ink: actionButton.accent
+                            ink: actionButton.displayAccent
                         }
                         ToolTip.visible: hovered
                         ToolTip.text: text
@@ -1052,7 +1245,7 @@ ApplicationWindow {
                                 font.pixelSize: 11
                             }
                         }
-                        ComboBox {
+                        GlassComboBox {
                             id: sortSelector
                             Layout.preferredWidth: root.compact ? 115 : 132
                             model: [qsTr("Newest first"), qsTr("Oldest first"), qsTr("Name"), qsTr("Size"), qsTr("Status")]
@@ -1077,7 +1270,7 @@ ApplicationWindow {
                     }
                     RowLayout {
                         Layout.fillWidth: true
-                        visible: root.chosenItems.length > 1
+                        visible: root.chosenIds.length > 0
                         Label {
                             text: qsTr("%1 selected").arg(root.chosenItems.length)
                             color: root.colors.ink
@@ -1085,7 +1278,7 @@ ApplicationWindow {
                         GlassButton { action: resumeTransfers; accent: root.colors.positive }
                         GlassButton { action: pauseTransfers; accent: root.colors.caution }
                         GlassButton { action: removeSelection; accent: root.colors.destructive }
-                        GlassButton { text: qsTr("Clear"); onClicked: { root.chosenIds = []; root.selectionAnchor = "" } }
+                        GlassButton { text: qsTr("Clear"); onClicked: root.clearSelection() }
                         Item { Layout.fillWidth: true }
                     }
                     Item {
@@ -1095,13 +1288,29 @@ ApplicationWindow {
                         RowLayout {
                             anchors.fill: parent
                             anchors.leftMargin: 11
-                            anchors.rightMargin: 11
-                            spacing: 11
-                            Label { Layout.fillWidth: true; Layout.minimumWidth: 117; text: qsTr("File name"); color: root.colors.muted; font.weight: Font.DemiBold }
-                            Label { Layout.preferredWidth: root.compact ? 74 : 92; text: qsTr("Status"); color: root.colors.muted; font.weight: Font.DemiBold }
-                            Label { Layout.preferredWidth: root.compact ? 117 : 158; text: qsTr("Progress"); color: root.colors.muted; font.weight: Font.DemiBold }
-                            Label { Layout.preferredWidth: root.compact ? 62 : 83; horizontalAlignment: Text.AlignRight; text: qsTr("Speed"); color: root.colors.muted; font.weight: Font.DemiBold }
-                            Label { Layout.preferredWidth: root.compact ? 58 : 71; horizontalAlignment: Text.AlignRight; text: qsTr("Time left"); color: root.colors.muted; font.weight: Font.DemiBold }
+                            anchors.rightMargin: 11 + root.listGutter
+                            spacing: 9
+                            CheckBox {
+                                objectName: "selectVisibleDownloads"
+                                focusPolicy: Qt.TabFocus
+                                Layout.preferredWidth: 24
+                                Layout.preferredHeight: 26
+                                padding: 2
+                                enabled: rows.count > 0
+                                tristate: true
+                                checkState: root.chosenIds.length === 0 ? Qt.Unchecked
+                                    : root.chosenIds.length === rows.count ? Qt.Checked : Qt.PartiallyChecked
+                                nextCheckState: function () { return checkState === Qt.Checked ? Qt.Unchecked : Qt.Checked }
+                                onClicked: checkState === Qt.Checked ? root.selectEveryRow() : root.clearSelection()
+                                Accessible.name: qsTr("Select all visible downloads")
+                                ToolTip.visible: hovered
+                                ToolTip.delay: 650
+                                ToolTip.text: Accessible.name
+                            }
+                            Item { Layout.preferredWidth: 21 }
+                            Label { Layout.fillWidth: true; Layout.minimumWidth: 85; text: qsTr("File name"); color: root.colors.muted; font.weight: Font.DemiBold }
+                            Label { Layout.preferredWidth: root.indicatorColumnWidth; text: qsTr("Progress"); color: root.colors.muted; font.weight: Font.DemiBold }
+                            Label { Layout.preferredWidth: root.timeColumnWidth; horizontalAlignment: Text.AlignRight; text: qsTr("Time left"); color: root.colors.muted; font.weight: Font.DemiBold }
                         }
                     }
                     ListView {
@@ -1129,26 +1338,31 @@ ApplicationWindow {
                             required property real length
                             required property real transferSpeed
                             readonly property var visual: root.visualById[transferId] || ({})
-                            width: ListView.view.width - (list.contentHeight > list.height ? 8 : 0)
+                            width: ListView.view.width - root.listGutter
                             height: implicitHeight
                             colors: root.colors
-                            compact: root.compact
+                            indicatorWidth: root.indicatorColumnWidth
+                            timeWidth: root.timeColumnWidth
                             fileName: file
                             sizeLabel: TransferData.bytes(bytes) + (length >= 0 ? " / " + TransferData.bytes(length) : "")
                             statusLabel: root.statusText(status)
                             statusInk: root.statusColor(status)
-                            speedLabel: status === "Downloading" ? TransferData.rate(transferSpeed) : "—"
+                            speedLabel: status === "Downloading" ? TransferData.rate(transferSpeed) : ""
                             timeLabel: TransferData.timeLeft({status: status, size: length, downloaded: bytes, speed: transferSpeed})
-                            progress: length > 0 ? Math.min(1, bytes / length) : status === "Complete" ? 1 : 0
-                            activeTransfer: status === "Downloading"
+                            progress: status === "Complete" ? 1 : length > 0 ? Math.max(0, Math.min(1, bytes / length)) : 0
                             torrent: visual.is_torrent === true
                             mixed: visual.direct_recovery === true
-                            chosen: root.chosenIds.includes(transferId)
+                            chosen: root.chosenSet.has(transferId)
+                            cursorFocused: list.activeFocus && root.focusedTransferId === transferId
                             recoveryLabel: root.recoveryLabels[visual.recovery_stage] || ""
+                            telemetry: visual
+                            speedSamples: root.transferSpeedHistory[transferId] || []
                             onSelected: modifiers => root.selectRow(index, modifiers)
                             onOpened: root.showDownload(transferId)
                             onOptionsRequested: {
-                                if (!root.chosenIds.includes(transferId))
+                                if (root.chosenSet.has(transferId))
+                                    root.focusRow(index)
+                                else
                                     root.selectRow(index, Qt.NoModifier)
                                 contextMenu.popup()
                             }
@@ -1157,9 +1371,16 @@ ApplicationWindow {
                             if (event.key === Qt.Key_Up || event.key === Qt.Key_Down) {
                                 const direction = event.key === Qt.Key_Up ? -1 : 1
                                 const next = Math.min(rows.count - 1, Math.max(0, currentIndex + direction))
-                                root.selectRow(next, event.modifiers)
-                                if (next >= 0)
+                                if (next >= 0) {
+                                    if ((event.modifiers & Qt.ControlModifier) && !(event.modifiers & Qt.ShiftModifier))
+                                        root.focusRow(next)
+                                    else
+                                        root.selectRow(next, event.modifiers)
                                     positionViewAtIndex(next, ListView.Contain)
+                                }
+                                event.accepted = true
+                            } else if (event.key === Qt.Key_Space && currentIndex >= 0) {
+                                root.selectRow(currentIndex, Qt.ControlModifier | event.modifiers)
                                 event.accepted = true
                             } else if (event.matches(StandardKey.SelectAll)) {
                                 root.selectEveryRow()
@@ -1175,8 +1396,7 @@ ApplicationWindow {
                                 contextMenu.popup()
                                 event.accepted = true
                             } else if (event.key === Qt.Key_Escape) {
-                                root.chosenIds = []
-                                root.selectionAnchor = ""
+                                root.clearSelection()
                                 event.accepted = true
                             }
                         }
@@ -1230,8 +1450,8 @@ ApplicationWindow {
                     Layout.minimumWidth: 85
                     Layout.preferredHeight: 35
                     samples: root.graphValues
-                    lineColor: root.colors.accent
-                    endpointColor: root.colors.secondary
+                    lineColor: MaterialTheme.graphColors[0]
+                    endpointColor: MaterialTheme.graphColors[1]
                     gridColor: root.colors.divider
                     Accessible.name: qsTr("Recent total transfer speed")
                 }

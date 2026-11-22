@@ -10,7 +10,11 @@ Basic.Button {
     property bool danger: false
     property color accent: danger ? materialPalette.destructive : materialPalette.accent
     readonly property var materialPalette: MaterialTheme.profile(material)
-    readonly property real prominence: down ? .80 : hovered ? .47 : checked || highlighted ? .32 : .10
+    readonly property real prominence: down ? .96 : hovered ? .76 : checked || highlighted ? .54 : .12
+    readonly property color activeAccent: MaterialTheme.safeAccent(MaterialTheme.forcedAccent || accent, materialPalette.light)
+    readonly property color displayAccent: hovered || down
+        ? MaterialTheme.mix(activeAccent, materialPalette.light ? "#2d124c" : "#ffffff", .24, 1)
+        : activeAccent
 
     hoverEnabled: true
     font.pixelSize: 13
@@ -22,7 +26,7 @@ Basic.Button {
     implicitHeight: Math.max(32, implicitContentHeight + topPadding + bottomPadding)
     palette.buttonText: materialPalette.text
     palette.highlightedText: materialPalette.text
-    icon.color: accent
+    icon.color: displayAccent
 
     background: Item {
         GlassSurface {
@@ -30,9 +34,9 @@ Basic.Button {
             material: control.material
             role: "button"
             radius: Math.min(10, control.materialPalette.radius)
-            accent: control.accent
+            accent: control.displayAccent
             emphasis: control.prominence
-            opacity: control.enabled ? 1 : .52
+            opacity: control.enabled ? 1 : .59
         }
         Rectangle {
             anchors.fill: parent

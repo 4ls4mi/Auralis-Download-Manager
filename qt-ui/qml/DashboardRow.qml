@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "TransferData.js" as TransferData
 
 Item {
     id: row
@@ -12,19 +13,28 @@ Item {
     required property string recoveryLabel
     required property color statusInk
     required property real progress
-    required property bool activeTransfer
     required property bool torrent
     required property bool mixed
     required property bool chosen
     required property var colors
-    property bool compact: false
+    required property var telemetry
+    required property var speedSamples
+    required property real indicatorWidth
+    required property real timeWidth
+    property bool cursorFocused: false
+    readonly property int connectionCount: torrent ? Number(telemetry.torrent?.peers || 0) : Number(telemetry.active_connections || 0)
+    readonly property string connectionLabel: torrent
+        ? (connectionCount === 1 ? qsTr("1 peer") : qsTr("%1 peers").arg(connectionCount))
+        : (connectionCount === 1 ? qsTr("1 connection") : qsTr("%1 connections").arg(connectionCount))
+    readonly property var workers: torrent ? [] : (telemetry.connections || [])
+        .filter(connection => connection.state === "Receiving" || connection.state === "Connecting").slice(0, 4)
     signal selected(int modifiers)
     signal opened()
     signal optionsRequested()
 
-    implicitHeight: recoveryLabel.length ? 78 : 60
+    implicitHeight: recoveryLabel.length ? 78 : 64
     Accessible.role: Accessible.ListItem
-    Accessible.name: fileName + ", " + statusLabel + ", " + sizeLabel
+    Accessible.name: [fileName, sizeLabel, statusLabel, speedLabel, connectionLabel].filter(Boolean).join(", ")
     Accessible.selected: chosen
     Accessible.onPressAction: row.opened()
 
@@ -33,16 +43,46 @@ Item {
         radius: 8
         color: row.chosen ? Qt.alpha(row.colors.accent, row.colors.light ? .22 : .20)
              : pointer.containsMouse ? Qt.alpha(row.colors.accent, .11) : "transparent"
-        border.width: row.chosen ? 1 : 0
-        border.color: Qt.alpha(row.colors.accent, .66)
+        border.width: row.chosen || row.cursorFocused ? 1 : 0
+        border.color: Qt.alpha(row.colors.accent, row.cursorFocused ? .9 : .66)
+    }
+
+    MouseArea {
+        id: pointer
+        anchors.fill: parent
+        hoverEnabled: true
+        acceptedButtons: Qt.LeftButton | Qt.RightButton
+        onClicked: mouse => {
+            if (mouse.button === Qt.RightButton)
+                row.optionsRequested()
+            else
+                row.selected(mouse.modifiers)
+        }
+        onDoubleClicked: mouse => {
+            if (mouse.button === Qt.LeftButton)
+                row.opened()
+        }
     }
 
     RowLayout {
         anchors.fill: parent
         anchors.leftMargin: 11
         anchors.rightMargin: 11
-        spacing: 11
+        spacing: 9
 
+        CheckBox {
+            objectName: "downloadRowCheckBox"
+            Layout.preferredWidth: 24
+            Layout.preferredHeight: 27
+            padding: 2
+            checked: row.chosen
+            Accessible.name: qsTr("Select %1").arg(row.fileName)
+            onClicked: row.selected(Qt.ControlModifier)
+            MouseArea {
+                anchors.fill: parent
+                onClicked: mouse => row.selected(Qt.ControlModifier | mouse.modifiers)
+            }
+        }
         DashboardIcon {
             symbol: row.mixed ? "mixed" : row.torrent ? "peers" : "file"
             ink: row.mixed ? row.colors.secondary : row.colors.accent
@@ -67,6 +107,33 @@ Item {
                 color: row.colors.muted
                 font.pixelSize: 11
             }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 5
+                Rectangle {
+                    Layout.preferredWidth: 6
+                    Layout.preferredHeight: 6
+                    radius: 3
+                    color: row.statusInk
+                }
+                Label {
+                    Layout.minimumWidth: 0
+                    text: row.statusLabel
+                    color: row.statusInk
+                    elide: Text.ElideRight
+                    font.pixelSize: 11
+                }
+                Label {
+                    visible: row.speedLabel.length > 0
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    text: "·  " + row.speedLabel
+                    color: row.colors.ink
+                    elide: Text.ElideRight
+                    font.pixelSize: 11
+                }
+                Item { visible: !row.speedLabel.length; Layout.fillWidth: true }
+            }
             Label {
                 visible: row.recoveryLabel.length > 0
                 Layout.fillWidth: true
@@ -76,43 +143,88 @@ Item {
                 font.pixelSize: 11
             }
         }
-        Label {
-            Layout.preferredWidth: row.compact ? 74 : 92
-            text: row.statusLabel
-            color: row.statusInk
-            elide: Text.ElideRight
-            font.pixelSize: 12
-        }
-        RowLayout {
-            Layout.preferredWidth: row.compact ? 117 : 158
-            spacing: 6
-            GlassProgress {
+        ColumnLayout {
+            Layout.preferredWidth: row.indicatorWidth
+            spacing: 3
+            RowLayout {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 15
-                value: row.progress
-                animated: row.activeTransfer
-                shape: WindowAppearance.progressShape !== "material" ? WindowAppearance.progressShape :
-                    ["bubble", "prism", "ice"].includes(profile.shape) ? profile.shape : "round"
-                fillStyle: WindowAppearance.progressFill
+                spacing: 5
+                GlassProgress {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 11
+                    value: row.progress
+                    shape: WindowAppearance.progressShape === "material"
+                        ? (["bubble", "prism", "ice"].includes(profile.shape) ? profile.shape : "round") : WindowAppearance.progressShape
+                    fillStyle: WindowAppearance.progressFill
+                    startColor: MaterialTheme.progressColors[0]
+                    endColor: MaterialTheme.progressColors[1]
+                }
+                Label {
+                    Layout.preferredWidth: 33
+                    text: Math.floor(row.progress * 100) + "%"
+                    horizontalAlignment: Text.AlignRight
+                    color: row.colors.ink
+                    font.pixelSize: 11
+                }
             }
-            Label {
-                Layout.preferredWidth: 33
-                text: Math.floor(row.progress * 100) + "%"
-                horizontalAlignment: Text.AlignRight
-                color: row.colors.ink
-                font.pixelSize: 11
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 27
+                spacing: 7
+                ColumnLayout {
+                    Layout.preferredWidth: Math.ceil(row.indicatorWidth * .49)
+                    spacing: 2
+                    Label {
+                        Layout.fillWidth: true
+                        color: row.colors.muted
+                        text: row.connectionLabel
+                        elide: Text.ElideRight
+                        font.pixelSize: 11
+                    }
+                    RowLayout {
+                        visible: row.workers.length > 0
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 9
+                        spacing: 2
+                        Repeater {
+                            model: row.workers.length
+                            delegate: GlassProgress {
+                                required property int index
+                                readonly property var worker: row.workers[index] || ({})
+                                readonly property var fraction: TransferData.assigned(worker.id, row.telemetry.segments)
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 9
+                                value: fraction === null ? 0 : fraction
+                                opacity: worker.state === "Receiving" ? 1 : .66
+                                shape: WindowAppearance.connectionShape === "material"
+                                    ? (["bubble", "prism", "ice"].includes(profile.shape) ? profile.shape : "round") : WindowAppearance.connectionShape
+                                fillStyle: WindowAppearance.connectionFill
+                                startColor: MaterialTheme.connectionColors[0]
+                                endColor: MaterialTheme.connectionColors[1]
+                                Accessible.name: qsTr("Connection %1").arg(Number(worker.id) + 1)
+                            }
+                        }
+                    }
+                }
+                Loader {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 27
+                    active: row.speedSamples.length > 1 && row.speedSamples.some(sample => sample > 0)
+                    sourceComponent: TransferGraph {
+                        samples: row.speedSamples
+                        lineColor: MaterialTheme.graphColors[0]
+                        endpointColor: MaterialTheme.graphColors[1]
+                        gridColor: row.colors.divider
+                        Accessible.name: qsTr("Recent transfer speed")
+                    }
+                }
             }
         }
         Label {
-            Layout.preferredWidth: row.compact ? 62 : 83
-            text: row.speedLabel
-            color: row.colors.ink
-            horizontalAlignment: Text.AlignRight
-            font.pixelSize: 12
-        }
-        Label {
-            Layout.preferredWidth: row.compact ? 58 : 71
+            Layout.preferredWidth: row.timeWidth
+            Layout.minimumWidth: 0
             text: row.timeLabel
+            elide: Text.ElideLeft
             color: row.colors.muted
             horizontalAlignment: Text.AlignRight
             font.pixelSize: 12
@@ -127,22 +239,7 @@ Item {
         height: 1
         color: row.colors.divider
     }
-    MouseArea {
-        id: pointer
-        anchors.fill: parent
-        hoverEnabled: true
-        acceptedButtons: Qt.LeftButton | Qt.RightButton
-        onClicked: mouse => {
-            if (mouse.button === Qt.RightButton)
-                row.optionsRequested()
-            else
-                row.selected(mouse.modifiers)
-        }
-        onDoubleClicked: mouse => {
-            if (mouse.button === Qt.LeftButton)
-                row.opened()
-        }
-    }
+
     ToolTip.visible: pointer.containsMouse && (torrent || recoveryLabel.length > 0)
     ToolTip.delay: 650
     ToolTip.text: fileName + (mixed ? "\n" + qsTr("Started directly and continued via BitTorrent") : torrent ? "\n" + qsTr("BitTorrent download") : "")

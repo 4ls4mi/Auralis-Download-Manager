@@ -19,9 +19,10 @@ Item {
 
     readonly property var profile: MaterialTheme.profile(material)
     readonly property bool sculpted: fillStyle === "sculpted"
-    readonly property bool renderWithShader: shape === "bubble" && sculpted && width >= 120 && height >= 20
+    readonly property bool renderWithShader: shape === "bubble" && width >= 40 && height >= 9
         && GraphicsInfo.api !== GraphicsInfo.Software && GraphicsInfo.api !== GraphicsInfo.Unknown
-    readonly property bool canAnimate: animated && visible && width >= 120 && height >= 20 && !MaterialTheme.reducedMotion
+    readonly property bool canAnimate: animated && visible && width >= 40 && height >= 9 && !MaterialTheme.reducedMotion
+    readonly property bool liquidMoving: canAnimate && amount > 0 && amount < 1
     readonly property real amount: Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0
     property real shownAmount: amount
     property real wavePhase
@@ -42,8 +43,7 @@ Item {
         to: Math.PI * 2
         duration: 1850
         loops: Animation.Infinite
-        running: progress.canAnimate && progress.shape === "bubble" && progress.sculpted
-            && progress.amount > 0 && progress.amount < 1
+        running: progress.liquidMoving
     }
 
     ShaderEffect {
@@ -55,6 +55,8 @@ Item {
         property color glassTint: progress.trackColor
         property real amount: progress.shownAmount
         property real phase: progress.wavePhase
+        property real polish: progress.sculpted ? 1 : 0.7
+        property real flow: progress.liquidMoving ? 1 : 0
         fragmentShader: "qrc:/auralis/shaders/bubble.frag.qsb"
     }
 
@@ -66,7 +68,7 @@ Item {
 
         readonly property string trackPath: Geometry.barContour(width, height, progress.shape, 1, 0)
         readonly property string fillPath: Geometry.barContour(width, height, progress.shape, progress.shownAmount,
-                                                               progress.sculpted ? progress.wavePhase : 0)
+                                                               progress.shape === "bubble" ? progress.wavePhase : 0)
 
         Shape {
             anchors.fill: parent
@@ -75,7 +77,7 @@ Item {
             // The color field is transparent. Reflections live on the rim.
             ShapePath {
                 strokeWidth: progress.shape === "bubble" ? 2.5 : 1.35
-                strokeColor: MaterialTheme.rgba(progress.profile.secondary, .22)
+                strokeColor: MaterialTheme.rgba(progress.endColor, .34)
                 fillColor: MaterialTheme.rgba(progress.trackColor, .09)
                 PathSvg { path: vessel.trackPath }
             }
@@ -96,7 +98,7 @@ Item {
 
             ShapePath {
                 strokeWidth: .7
-                strokeColor: MaterialTheme.rgba(progress.profile.edge, .41)
+                strokeColor: MaterialTheme.rgba(progress.endColor, .67)
                 fillGradient: LinearGradient {
                     x1: 0; y1: vessel.height * .65; x2: vessel.width; y2: vessel.height * .12
                     GradientStop { position: 0; color: MaterialTheme.rgba(progress.startColor, .88) }
@@ -113,11 +115,27 @@ Item {
                     GradientStop { position: 0; color: MaterialTheme.rgba(progress.profile.upper, .79) }
                     GradientStop { position: .20; color: MaterialTheme.rgba(progress.startColor, .22) }
                     GradientStop { position: .42; color: "transparent" }
-                    GradientStop { position: .60; color: MaterialTheme.rgba(progress.profile.shade, .25) }
+                    GradientStop { position: .60; color: MaterialTheme.rgba(progress.profile.shade, progress.sculpted ? .25 : .10) }
                     GradientStop { position: .80; color: MaterialTheme.rgba(progress.endColor, .10) }
                     GradientStop { position: 1; color: MaterialTheme.rgba(progress.profile.upper, .51) }
                 }
-                PathSvg { path: progress.sculpted ? vessel.fillPath : "" }
+                PathSvg { path: vessel.fillPath }
+            }
+
+            ShapePath {
+                strokeWidth: -1
+                fillGradient: LinearGradient {
+                    readonly property real sweep: 0.5 - 0.5 * Math.cos(progress.wavePhase)
+                    x1: vessel.width * progress.shownAmount * (sweep - .36)
+                    x2: vessel.width * progress.shownAmount * (sweep + .36)
+                    y1: vessel.height
+                    y2: 0
+                    GradientStop { position: 0; color: "transparent" }
+                    GradientStop { position: .37; color: MaterialTheme.rgba(progress.startColor, .11) }
+                    GradientStop { position: .58; color: MaterialTheme.rgba(progress.profile.upper, .42) }
+                    GradientStop { position: 1; color: "transparent" }
+                }
+                PathSvg { path: progress.liquidMoving ? vessel.fillPath : "" }
             }
 
             ShapePath {
@@ -147,26 +165,6 @@ Item {
                 strokeColor: MaterialTheme.rgba(progress.profile.edge, .67)
                 fillColor: "transparent"
                 PathSvg { path: vessel.trackPath }
-            }
-        }
-
-        Loader {
-            // A small 3D reflection at the animated liquid front. The many
-            // compact rows use the same path shader without opening 3D scenes.
-            active: progress.canAnimate && progress.sculpted && progress.shape === "bubble"
-                && progress.height >= 25 && progress.shownAmount > .10 && progress.shownAmount < 1
-                && GraphicsInfo.api !== GraphicsInfo.Software
-            x: Math.max(0, vessel.width * progress.shownAmount - width * 1.35)
-            y: (vessel.height - height) * .52
-            width: Math.min(32, vessel.height * 1.16)
-            height: vessel.height * .49
-            sourceComponent: Component {
-                GlassReflection {
-                    tint: progress.endColor
-                    spectral: progress.startColor
-                    polish: .94
-                    angle: -12 + 5 * Math.sin(progress.wavePhase)
-                }
             }
         }
     }

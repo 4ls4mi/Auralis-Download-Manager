@@ -1,5 +1,6 @@
 pragma ComponentBehavior: Bound
 
+import QtCore
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -31,10 +32,16 @@ ApplicationWindow {
     property bool reading: false
     property string problem: ""
     property string notice: ""
+    property var availableUpdate: null
+    property bool showUpdateAfterLoad: false
+    readonly property string updatePresentation: updatePrefs.presentation
+    readonly property bool automaticUpdateChecks: updatePrefs.automaticChecks
+    readonly property string cookieBrowser: String(advancedFields.find(field => field.key === "video_cookies")?.value ?? "")
     readonly property string term: search.text.trim().toLowerCase()
     readonly property var sections: [
         {id: "General", name: qsTr("General"), detail: qsTr("Startup, notifications, and backups"), terms: qsTr("start backup restore preferences notification window popup"),
-            keys: ["start_immediately", "only_add_to_queue", "confirm_delete", "show_progress", "show_complete", "double_click_open"]},
+            keys: ["start_immediately", "only_add_to_queue", "confirm_delete", "show_progress", "show_complete", "double_click_open",
+                "minimize_to_tray", "close_to_tray", "progress_minimize_to_tray"]},
         {id: "Downloads", name: qsTr("Downloads"), detail: qsTr("File rules, folders, and archive extraction"), terms: qsTr("file folder category archive duplicates extract"), keys: []},
         {id: "Connection", name: qsTr("Connection"), detail: qsTr("Speed limits, proxy, and DNS"), terms: qsTr("speed throttle proxy dns network adapter login authentication"),
             keys: ["max_connections", "speed_limit_on", "speed_limit_kb", "global_limit_on", "global_limit_kb", "net_adapter"]},
@@ -59,6 +66,9 @@ ApplicationWindow {
         show_progress: {label: qsTr("Open the download progress window automatically"), kind: "boolean"},
         show_complete: {label: qsTr("Show the download completion window"), kind: "boolean"},
         double_click_open: {label: qsTr("Open completed files on double-click"), kind: "boolean"},
+        minimize_to_tray: {label: qsTr("Minimize the main window to the tray"), kind: "boolean"},
+        close_to_tray: {label: qsTr("Keep Auralis in the tray when closing the main window"), kind: "boolean"},
+        progress_minimize_to_tray: {label: qsTr("Minimize transfer windows to the tray"), kind: "boolean"},
         max_connections: {label: qsTr("Maximum connections per file"), kind: "number", minimum: 1, maximum: 128},
         speed_limit_on: {label: qsTr("Enable the speed limiter"), kind: "boolean"},
         speed_limit_kb: {label: qsTr("Speed limit (KB/s)"), kind: "number", maximum: 10000000},
@@ -74,11 +84,39 @@ ApplicationWindow {
         torrent_recovery_mode: {label: qsTr("Torrent recovery after a direct download fails"), kind: "select", options: recoveryChoices,
             description: qsTr("Search sends filename words to Internet Archive. Automatic continuation uses BitTorrent peers only after one candidate passes the required piece checks. Auralis keeps the original partial for manual recovery.")}
     })
+    readonly property var browserChoices: [
+        {label: qsTr("None"), value: ""},
+        {label: "Chrome", value: "chrome"},
+        {label: "Edge", value: "edge"},
+        {label: "Firefox", value: "firefox"},
+        {label: "Brave", value: "brave"},
+        {label: "Chromium", value: "chromium"},
+        {label: "Opera", value: "opera"},
+        {label: "Vivaldi", value: "vivaldi"},
+        {label: "Whale", value: "whale"}
+    ].concat(Qt.platform.os === "osx" ? [{label: "Safari", value: "safari"}] : [])
+    readonly property var extraDetails: ({
+        sounds: {description: qsTr("Choose a WAV file for each download or queue event.")},
+        video_cookies: {kind: "select", description: qsTr("Choose the browser where you signed in. Auralis uses the local browser session for media requests when the extension did not send cookies.")},
+        video_cookies_file: {description: qsTr("A Netscape cookies.txt file takes precedence over the browser session. Treat the file like a password.")},
+        video_cookies_profile: {description: qsTr("Use the browser’s default profile, enter its profile name, or choose its directory. In Chrome or Edge, open chrome://version or edge://version and look for Profile Path. In Firefox, open about:profiles and use the Root Directory.")}
+    })
     readonly property var chosen: sections.find(section => section.id === category) || sections[0]
     readonly property var hiddenEngineFields: ["update_check", "speed_limit_on"]
     readonly property var visibleFields: matchingFields()
     readonly property var destinationSections: term ? sections.filter(section => matchesText(section.name + " " + section.terms) ||
         visibleFields.some(field => field.section === section.id)) : sections
+
+    Settings {
+        id: updatePrefs
+        category: "UpdateNotices"
+        property bool automaticChecks: true
+        property string presentation: "toast"
+    }
+
+    onAvailableUpdateChanged: {
+        if (availableUpdate && !tools.updateStage) tools.release = availableUpdate
+    }
 
     function load() {
         if (reading || !engine.ready) return
@@ -90,6 +128,10 @@ ApplicationWindow {
                 if (data) advancedFields = data.fields || []
                 if (legacyError) problem = legacyError
                 reading = false
+                if (showUpdateAfterLoad) {
+                    showUpdateAfterLoad = false
+                    Qt.callLater(positionUpdateHeading)
+                }
             })
         })
     }
@@ -116,8 +158,16 @@ ApplicationWindow {
         for (const field of advancedFields) {
             if (hiddenEngineFields.includes(field.key)) continue
             if (!term && field.section !== category) continue
-            if (matchesText(field.key + " " + field.label + " " + (field.description || "")))
-                entries.push(field)
+            const details = extraDetails[field.key]
+            const entry = details ? Object.assign({}, field, details) : field
+            if (field.key === "video_cookies") {
+                const stored = String(entry.value || "").trim().toLowerCase()
+                entry.value = stored
+                entry.options = stored && !browserChoices.some(browser => browser.value === stored)
+                    ? browserChoices.concat([{label: stored, value: stored}]) : browserChoices
+            }
+            if (matchesText(entry.key + " " + entry.label + " " + (entry.description || "")))
+                entries.push(entry)
         }
         return entries
     }
@@ -147,9 +197,19 @@ ApplicationWindow {
         requestActivate()
     }
 
+    function positionUpdateHeading() {
+        if (category !== "Advanced" || term)
+            return
+        const headingY = tools.updatesAnchor.mapToItem(scrollViewport.contentItem, 0, 0).y
+        scrollViewport.contentY = Math.max(0, Math.min(headingY - 8,
+            scrollViewport.contentHeight - scrollViewport.height))
+    }
+
     function showUpdate(release) {
         if (release) tools.release = release
         showCategory("Advanced")
+        showUpdateAfterLoad = reading
+        Qt.callLater(positionUpdateHeading)
     }
 
     function toggleMaximize() {
@@ -217,16 +277,20 @@ ApplicationWindow {
                     font.weight: Font.DemiBold
                     color: root.colors.text
                 }
-                DragHandler { target: null; onActiveChanged: if (active) root.startSystemMove() }
-                TapHandler { onDoubleTapped: root.toggleMaximize() }
+                CaptionMoveArea {
+                    objectName: "settingsTitleDragArea"
+                    hostWindow: root
+                    anchors.fill: parent
+                    onDoubleClickRequested: root.toggleMaximize()
+                }
             }
-            GlassButton { text: "−"; Accessible.name: qsTr("Minimize"); onClicked: root.showMinimized() }
-            GlassButton {
-                text: root.visibility === Window.Maximized ? "❐" : "□"
-                Accessible.name: root.visibility === Window.Maximized ? qsTr("Restore window") : qsTr("Maximize")
-                onClicked: root.toggleMaximize()
+            CaptionControls {
+                maximized: root.visibility === Window.Maximized
+                closeLabel: qsTr("Close settings")
+                onMinimizeRequested: root.showMinimized()
+                onMaximizeRequested: root.toggleMaximize()
+                onCloseRequested: root.close()
             }
-            GlassButton { text: "×"; danger: true; Accessible.name: qsTr("Close settings"); onClicked: root.close() }
             Item { Layout.preferredWidth: 4 }
         }
     }
@@ -334,6 +398,7 @@ ApplicationWindow {
                                             required property var modelData
                                             Layout.fillWidth: true
                                             field: modelData
+                                            cookieBrowser: root.cookieBrowser
                                             busy: root.saving || !engine.ready || backups.busy
                                             onCommit: (value, options) => root.save(field, value, options)
                                         }
@@ -368,9 +433,15 @@ ApplicationWindow {
 
                             SettingsTools {
                                 id: tools
+                                hostWindow: root
                                 Layout.fillWidth: true
                                 visible: !root.term && (root.category === "Advanced" || root.category === "Browser Integration")
                                 section: root.category
+                                updatePresentation: root.updatePresentation
+                                automaticChecks: root.automaticUpdateChecks
+                                onUpdatePresentationRequested: value => updatePrefs.presentation = value
+                                onAutomaticChecksRequested: value => updatePrefs.automaticChecks = value
+                                onReleaseChecked: value => root.availableUpdate = value.state === "available" ? value : null
                             }
 
                             PaneCopy {
@@ -383,6 +454,13 @@ ApplicationWindow {
                 }
             }
         }
+    }
+
+    WindowResizeHandles {
+        parent: root.contentItem
+        anchors.fill: parent
+        hostWindow: root
+        z: 20
     }
 
     footer: ToolBar {

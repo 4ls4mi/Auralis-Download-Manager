@@ -166,6 +166,9 @@ pub struct Settings {
     /// notification area, as closing the main window does (#63). On by default (the
     /// maintainer's choice), for existing lists too. Only where a tray shows MDM's icon.
     pub minimize_to_tray: bool,
+    /// Override where progress windows minimize. An older profile follows its main-window setting.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub progress_minimize_to_tray: Option<bool>,
     /// General: closing the main window keeps MDM running, hidden in the notification area (else
     /// closing quits). On by default, for existing lists too, in every copy. Only where a tray
     /// shows MDM's icon.
@@ -451,6 +454,7 @@ impl Default for Settings {
             clipboard_autostart: false,
             glass_clipboard_auto_download: false,
             minimize_to_tray: true,
+            progress_minimize_to_tray: None,
             close_to_tray: true,
             show_hide_hotkey: String::new(),
             mv2_extensions: true,

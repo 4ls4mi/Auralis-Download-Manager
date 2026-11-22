@@ -1,11 +1,27 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Window
 
 ColumnLayout {
     id: root
 
+    required property Window hostWindow
     property string section: "Advanced"
+    readonly property alias updatesAnchor: updateHeader
+    property string updatePresentation: "toast"
+    property bool automaticChecks: true
+    signal updatePresentationRequested(string value)
+    signal automaticChecksRequested(bool value)
+    signal releaseChecked(var value)
+    readonly property var presentationOptions: [
+        {label: qsTr("Show in Auralis only"), value: "quiet"},
+        {label: qsTr("Auralis corner popup"), value: "toast"},
+        {label: qsTr("Windows notification and Auralis corner popup"), value: "notify"},
+        {label: qsTr("Open update details immediately"), value: "dialog"}
+    ]
     property var helpers: null
     property bool loadingHelpers: false
     property bool helperRequest: false
@@ -79,6 +95,7 @@ ColumnLayout {
                 return
             }
             release = result
+            releaseChecked(result)
         })
     }
 
@@ -235,12 +252,42 @@ ColumnLayout {
         }
 
         Label {
+            id: updateHeader
             Layout.fillWidth: true
             Layout.topMargin: 12
             text: qsTr("Auralis updates")
             color: root.colors.text
             font.pixelSize: 17
             font.weight: Font.DemiBold
+        }
+
+        Switch {
+            visible: root.hasWindowsIntegration
+            text: qsTr("Check for Auralis updates automatically")
+            checked: root.automaticChecks
+            onToggled: root.automaticChecksRequested(checked)
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            visible: root.hasWindowsIntegration
+            Label {
+                Layout.fillWidth: true
+                text: qsTr("Update notification")
+                color: root.colors.text
+                wrapMode: Text.WordWrap
+            }
+            GlassComboBox {
+                Layout.fillWidth: true
+                Layout.preferredWidth: 275
+                model: root.presentationOptions
+                textRole: "label"
+                valueRole: "value"
+                currentIndex: Math.max(0, root.presentationOptions.findIndex(choice => choice.value === root.updatePresentation))
+                enabled: root.automaticChecks
+                Accessible.name: qsTr("Update notification")
+                onActivated: root.updatePresentationRequested(currentValue)
+            }
         }
 
         Label {
@@ -293,22 +340,36 @@ ColumnLayout {
             }
         }
 
-        Dialog {
+        DetachedDialogWindow {
             id: releaseNotes
-            title: qsTr("Release notes")
-            modal: true
-            standardButtons: Dialog.Close
+            hostWindow: root.hostWindow
+            title: root.release && root.release.version
+                ? qsTr("Auralis %1 release notes").arg(root.release.version) : qsTr("Auralis release notes")
+            width: 590
+            minimumHeight: 265
+            onDismissRequested: hide()
 
-            ScrollView {
-                implicitWidth: 440
-                implicitHeight: 290
-                clip: true
-                TextArea {
-                    text: root.release && root.release.notes ? root.release.notes : ""
-                    readOnly: true
-                    selectByMouse: true
-                    wrapMode: TextEdit.Wrap
-                    textFormat: TextEdit.PlainText
+            bodyContent: TextArea {
+                Layout.fillWidth: true
+                text: root.release && root.release.notes ? root.release.notes : ""
+                color: root.colors.text
+                readOnly: true
+                selectByMouse: true
+                wrapMode: TextEdit.Wrap
+                textFormat: TextEdit.PlainText
+                background: Item {}
+            }
+
+            footer: Item {
+                implicitHeight: closeNotes.implicitHeight + 16
+                GlassSurface { anchors.fill: parent; role: "footer" }
+                GlassButton {
+                    id: closeNotes
+                    anchors.right: parent.right
+                    anchors.rightMargin: 12
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: qsTr("Close")
+                    onClicked: releaseNotes.hide()
                 }
             }
         }

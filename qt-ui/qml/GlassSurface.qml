@@ -14,10 +14,12 @@ Item {
     property color accent: profile.accent
     property real emphasis: 0
     property color solidColor: profile.background
+    property real mediaOverlay: -1
     property real radius: profile.radius
     property bool showReflection: role === "toolbar" && ["prism", "aero"].includes(profile.shape)
 
     readonly property var profile: MaterialTheme.profile(material)
+    readonly property bool button: role === "button"
     readonly property bool shell: role === "window" || role === "modal"
     readonly property bool recess: role === "content" || role === "field" || role === "sidebar"
     readonly property bool sculpted: ["bubble", "aero"].includes(profile.shape)
@@ -30,15 +32,20 @@ Item {
     readonly property real backingAlpha: {
         const amount = MaterialTheme.opacityFor(material);
         if (shell)
-            return backdropAvailable ? amount : 1;
+            return mediaOverlay >= 0 ? mediaOverlay : backdropAvailable ? amount : 1;
         if (role === "field")
             return Math.min(.82, .18 + amount * .72);
-        if (role === "button")
-            return .05 + amount * .42 + Math.min(.3, emphasis * .42);
+        if (button)
+            return profile.opaque ? 1 : Math.min(.97, .41 + amount * .33 + emphasis * .30);
         return amount * (recess ? .32 : role === "toolbar" || role === "footer" ? .65 : .45);
     }
     readonly property color backing: shell && !backdropAvailable
-        ? solidColor : MaterialTheme.tint(profile.background, backingAlpha)
+        ? solidColor : button
+            ? MaterialTheme.mix(profile.buttonFace || profile.background, accent, .07 + emphasis * .38, backingAlpha)
+            : MaterialTheme.tint(profile.background, backingAlpha)
+    readonly property color rim: button
+        ? MaterialTheme.mix(profile.edge, accent, .35 + emphasis * .45, .43 + emphasis * .52)
+        : MaterialTheme.rgba(profile.edge, .33 + .32 * reflectivity)
     readonly property string framePath: Geometry.frame(.6, .6, width - 1.2, height - 1.2, radius, outline)
 
     Shape {
@@ -47,7 +54,7 @@ Item {
 
         ShapePath {
             strokeWidth: surface.shell ? 1 : 1.15
-            strokeColor: MaterialTheme.rgba(surface.profile.edge, .33 + .32 * surface.reflectivity)
+            strokeColor: surface.rim
             fillColor: surface.backing
             PathSvg { path: surface.framePath }
         }
@@ -59,7 +66,11 @@ Item {
             fillGradient: LinearGradient {
                 x1: 0; y1: 0
                 x2: surface.width * .08; y2: surface.height
-                GradientStop { position: 0; color: MaterialTheme.rgba(surface.recess ? surface.profile.shade : surface.profile.upper, surface.recess ? .24 : .12 + .27 * surface.reflectivity) }
+                GradientStop {
+                    position: 0
+                    color: MaterialTheme.rgba(surface.recess ? surface.profile.shade : surface.profile.upper,
+                        surface.recess ? .24 : .12 + .27 * surface.reflectivity + (surface.button ? .20 * surface.emphasis : 0))
+                }
                 GradientStop { position: .21; color: "transparent" }
                 GradientStop { position: .70; color: "transparent" }
                 GradientStop { position: 1; color: MaterialTheme.rgba(surface.profile.shade, surface.recess ? .24 : .36 * surface.reflectivity) }
@@ -130,7 +141,7 @@ Item {
                 GradientStop { position: .67; color: MaterialTheme.rgba(surface.profile.secondary, .31 * surface.reflectivity) }
                 GradientStop { position: 1; color: "transparent" }
             }
-            PathSvg { path: surface.faceted && !surface.shell ? Geometry.facet(surface.width, surface.height, surface.radius, surface.outline, true) : "" }
+            PathSvg { path: (surface.faceted && !surface.shell) || (surface.shell && surface.profile.shape === "prism") ? Geometry.facet(surface.width, surface.height, surface.radius, surface.outline, true) : "" }
         }
 
         ShapePath {
@@ -143,7 +154,7 @@ Item {
                 GradientStop { position: .36; color: MaterialTheme.rgba(surface.profile.accent, .16 * surface.reflectivity) }
                 GradientStop { position: 1; color: "transparent" }
             }
-            PathSvg { path: surface.faceted && !surface.shell ? Geometry.facet(surface.width, surface.height, surface.radius, surface.outline, false) : "" }
+            PathSvg { path: (surface.faceted && !surface.shell) || (surface.shell && surface.profile.shape === "prism") ? Geometry.facet(surface.width, surface.height, surface.radius, surface.outline, false) : "" }
         }
 
         ShapePath {
@@ -169,8 +180,8 @@ Item {
             fillGradient: LinearGradient {
                 x1: 0; y1: 0
                 x2: surface.width; y2: surface.height
-                GradientStop { position: 0; color: MaterialTheme.rgba(surface.accent, surface.emphasis * .39) }
-                GradientStop { position: 1; color: MaterialTheme.rgba(surface.accent, surface.emphasis * .08) }
+                GradientStop { position: 0; color: MaterialTheme.rgba(surface.accent, surface.emphasis * (surface.button ? .34 : .39)) }
+                GradientStop { position: 1; color: MaterialTheme.rgba(surface.accent, surface.emphasis * .07) }
             }
             PathSvg { path: surface.emphasis > 0 ? surface.framePath : "" }
         }

@@ -12,6 +12,8 @@ layout(std140, binding = 0) uniform BubbleUniforms {
     vec4 glassTint;
     float amount;
     float phase;
+    float polish;
+    float flow;
 } state;
 
 const float tau = 6.28318530718;
@@ -59,19 +61,24 @@ void main()
     glass = layer(glass, vec3(0.92, 0.98, 1.0), specular * glint * 0.74);
 
     float fillEdge = clamp(state.amount, 0.0, 1.0);
-    float curvature = cap * (0.28 * depth + 0.05 * sin(state.phase + curvedY * 2.5));
+    float curvature = cap * (0.30 * (depth - 0.62)
+                      + state.flow * 0.12 * sin(state.phase + curvedY * 2.6));
     float filled = 1.0 - smoothstep(-0.8, 0.8, (x - fillEdge) * width - curvature);
     filled *= step(0.001, fillEdge);
     filled = max(filled, step(0.999, fillEdge));
 
     vec3 pigment = mix(state.liquidStart.rgb, state.liquidEnd.rgb,
                        clamp(x / max(fillEdge, 0.28), 0.0, 1.0));
-    float shadow = 0.38 + 0.48 * pow(abs(curvedY), 1.5);
+    float shadow = mix(0.75, 0.36, state.polish) + 0.45 * pow(abs(curvedY), 1.5);
     vec3 body = pigment * shadow + vec3(0.014, 0.03, 0.094);
-    vec4 liquid = layer(glass, body, 0.94);
-    liquid = layer(liquid, pigment * 1.2, 0.54 * bounce + 0.36 * rim);
+    vec4 liquid = layer(glass, body, 0.89);
+    liquid = layer(liquid, pigment * 1.17, 0.55 * bounce + 0.40 * rim);
     liquid = layer(liquid, spectral, 0.33 * rim + 0.22 * bounce);
     liquid = layer(liquid, vec3(0.96, 0.98, 1.0), 0.88 * specular * glint);
+    float ripple = x * 3.0 - state.phase / tau;
+    float lightWave = pow(0.5 + 0.5 * sin(tau * ripple + curvedY * 2.2), 12.0);
+    float movingLight = state.flow * lightWave * depth * (0.14 + 0.25 * bounce);
+    liquid = layer(liquid, mix(pigment, vec3(0.9, 0.97, 1.0), 0.48), movingLight);
     float meniscus = exp(-abs((x - fillEdge) * width - curvature) / max(1.2, height * 0.17));
     liquid = layer(liquid, mix(pigment, spectral, 0.30), meniscus * 0.52 * depth);
 

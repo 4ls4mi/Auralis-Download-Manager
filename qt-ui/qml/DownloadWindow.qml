@@ -4,11 +4,15 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs
 import QtQuick.Layouts
+import QtQuick.Window
 import "TransferData.js" as Transfer
 
 ApplicationWindow {
     id: root
     property var downloadId: null
+    property bool trayEnabled: false
+    property bool minimizeToTray: false
+    signal hideToTrayRequested(var downloadId)
     property string material: MaterialTheme.current
     readonly property var colors: MaterialTheme.profile(material)
     readonly property string progressShape: selectedShape(WindowAppearance.progressShape)
@@ -20,6 +24,10 @@ ApplicationWindow {
     readonly property bool mixed: !!(telemetry && telemetry.direct_recovery)
     readonly property bool ordinary: !!(telemetry && !telemetry.is_torrent && !telemetry.is_video && !telemetry.is_gallery && !telemetry.is_remote)
     readonly property bool runningTransfer: !!(item && item.status === "Downloading")
+    readonly property bool displayFlow: activeTab === 0 && !!item && !!item.url
+    readonly property bool showWaterFlow: visible && displayFlow && runningTransfer
+    readonly property var progressColors: MaterialTheme.progressColors
+    readonly property var connectionColors: MaterialTheme.connectionColors
     readonly property bool finished: !!(item && item.status === "Complete")
     readonly property string recoveryStage: telemetry && telemetry.recovery_stage || ""
     readonly property bool recoveryBusy: !!pendingResult || recoveryStage === "searching" || recoveryStage === "preparing"
@@ -41,12 +49,44 @@ ApplicationWindow {
     minimumWidth: 485
     minimumHeight: 400
     color: "transparent"
+    flags: Qt.Window | Qt.FramelessWindowHint
+    transientParent: null
     palette.windowText: colors.text
     palette.text: colors.text
     palette.buttonText: colors.text
     palette.base: colors.background
     palette.highlight: colors.accent
     title: item ? Math.round(Transfer.fraction(item) * 100) + "%  " + item.file : qsTr("Download details")
+
+    function hideToTray() {
+        if (trayEnabled && downloadId !== null && !finished)
+            hideToTrayRequested(downloadId)
+        else
+            showMinimized()
+    }
+
+    function minimizeWindow() {
+        if (minimizeToTray && trayEnabled && downloadId !== null && !finished)
+            hideToTray()
+        else
+            showMinimized()
+    }
+
+    function toggleMaximized() {
+        if (visibility === Window.Maximized)
+            showNormal()
+        else
+            showMaximized()
+    }
+
+    onVisibilityChanged: {
+        if (root.visibility === Window.Minimized && root.minimizeToTray && root.trayEnabled && root.downloadId !== null && !root.finished) {
+            Qt.callLater(() => {
+                if (root.visibility === Window.Minimized)
+                    root.hideToTray()
+            })
+        }
+    }
 
     function selectedShape(choice) {
         if (choice !== "material")
@@ -280,25 +320,86 @@ ApplicationWindow {
         target: "details"
     }
 
-    header: ToolBar {
-        padding: 10
-        background: GlassSurface { material: root.material; role: "toolbar"; backdropAvailable: root.backdropAvailable }
-        contentItem: RowLayout {
-            spacing: 7
-            Repeater {
-                model: [qsTr("Download status"), qsTr("Speed limiter"), qsTr("Options on completion")]
-                delegate: GlassButton {
-                    required property int index
-                    required property string modelData
-                    material: root.material
-                    text: modelData
-                    checkable: true
-                    checked: root.activeTab === index
-                    onClicked: root.activeTab = index
+    header: ColumnLayout {
+        spacing: 0
+        ToolBar {
+            Layout.fillWidth: true
+            padding: 0
+            background: GlassSurface { material: root.material; role: "title"; backdropAvailable: root.backdropAvailable }
+            contentItem: RowLayout {
+                spacing: 7
+                Item {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 43
+                    Label {
+                        anchors.fill: parent
+                        anchors.leftMargin: 14
+                        verticalAlignment: Text.AlignVCenter
+                        text: root.title
+                        textFormat: Text.PlainText
+                        elide: Text.ElideMiddle
+                        font.weight: Font.DemiBold
+                        color: root.colors.ink
+                    }
+                    CaptionMoveArea {
+                        objectName: "downloadTitleDragArea"
+                        hostWindow: root
+                        anchors.fill: parent
+                        onDoubleClickRequested: root.toggleMaximized()
+                    }
                 }
+                CaptionControls {
+                    material: root.material
+                    trayEnabled: root.trayEnabled && root.downloadId !== null && !root.finished
+                    maximized: root.visibility === Window.Maximized
+                    minimizeLabel: root.trayEnabled && root.minimizeToTray && !root.finished
+                        ? qsTr("Minimize to system tray") : qsTr("Minimize")
+                    closeLabel: qsTr("Close download window")
+                    onHideRequested: root.hideToTray()
+                    onMinimizeRequested: root.minimizeWindow()
+                    onMaximizeRequested: root.toggleMaximized()
+                    onCloseRequested: root.close()
+                }
+                Item { Layout.preferredWidth: 5 }
             }
-            Item { Layout.fillWidth: true }
         }
+        ToolBar {
+            Layout.fillWidth: true
+            padding: 8
+            background: GlassSurface { material: root.material; role: "toolbar"; backdropAvailable: root.backdropAvailable }
+            contentItem: RowLayout {
+                spacing: 7
+                Repeater {
+                    model: [qsTr("Download status"), qsTr("Speed limiter"), qsTr("Options on completion")]
+                    delegate: GlassButton {
+                        required property int index
+                        required property string modelData
+                        material: root.material
+                        text: modelData
+                        checkable: true
+                        checked: root.activeTab === index
+                        onClicked: root.activeTab = index
+                    }
+                }
+                Item { Layout.fillWidth: true }
+            }
+        }
+    }
+
+    WindowResizeHandles {
+        parent: root.contentItem
+        anchors.fill: parent
+        hostWindow: root
+        z: 20
+    }
+
+    Timer {
+        id: water
+        property real phase: 0
+        interval: 32
+        repeat: true
+        running: root.showWaterFlow && !MaterialTheme.reducedMotion
+        onTriggered: phase = (phase + Math.PI * 2 / 29) % (Math.PI * 2)
     }
 
     ScrollView {
@@ -308,394 +409,416 @@ ApplicationWindow {
         padding: 12
         contentWidth: availableWidth
         ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-        ColumnLayout {
+        Item {
             width: view.availableWidth
-            spacing: 10
+            implicitHeight: sections.implicitHeight
 
-            Label {
-                visible: !root.item
-                text: qsTr("Waiting for download information…")
-                color: root.colors.muted
-            }
+            ColumnLayout {
+                id: sections
+                anchors.fill: parent
+                spacing: 10
 
-            Pane {
-                visible: !!root.item && root.activeTab === 0
-                Layout.fillWidth: true
-                padding: 15
-                background: GlassSurface { material: root.material; role: "card"; backdropAvailable: root.backdropAvailable }
-                contentItem: ColumnLayout {
-                    spacing: 10
-                    Label {
-                        Layout.fillWidth: true
-                        text: root.item ? root.item.file : ""
-                        elide: Text.ElideMiddle
-                        color: root.colors.text
-                        font.pixelSize: 19
-                        font.bold: true
-                    }
-                    Label {
-                        Layout.fillWidth: true
-                        text: root.item ? root.item.url : ""
-                        elide: Text.ElideMiddle
-                        color: root.colors.muted
-                    }
-                    GridLayout {
-                        Layout.fillWidth: true
-                        columns: width >= 560 ? 2 : 1
-                        rowSpacing: 6
-                        columnSpacing: 16
-                        Repeater {
-                            id: measurements
-                            property var cells: {
-                                const d = root.item || {}
-                                const t = root.telemetry || {}
-                                const server = t.server || {}
-                                return [
-                                    {label: qsTr("Status"), value: d.status || "—"},
-                                    {label: qsTr("Transfer method"), value: root.mixed ? qsTr("Direct → BitTorrent") : t.is_torrent ? qsTr("BitTorrent") : t.is_video ? qsTr("Video") : qsTr("Direct download")},
-                                    {label: qsTr("Downloaded"), value: Transfer.bytes(d.downloaded) + " / " + Transfer.bytes(d.size)},
-                                    {label: qsTr("Transfer rate"), value: Transfer.rate(d.speed)},
-                                    {label: qsTr("Time left"), value: Transfer.timeLeft(d)},
-                                    {label: qsTr("Resume capability"), value: t.resumable === true ? qsTr("Yes") : t.resumable === false ? qsTr("No") : qsTr("Unknown")},
-                                    {label: root.torrent ? qsTr("Connected peers") : qsTr("Server"), value: root.torrent ? String(root.torrent.peers || 0)
-                                        : (server.place && server.place.name || server.country_code || server.hostname || "—") + (server.rtt_ms != null ? " · " + server.rtt_ms + " ms" : "")}
-                                ]
-                            }
-                            model: cells.length
-                            delegate: RowLayout {
-                                id: measurement
-                                required property int index
-                                readonly property var cell: measurements.cells[index]
-                                Layout.fillWidth: true
-                                Label { text: measurement.cell.label; color: root.colors.muted; Layout.preferredWidth: 116; elide: Text.ElideRight }
-                                Label { text: measurement.cell.value; color: root.colors.text; elide: Text.ElideRight; Layout.fillWidth: true }
-                            }
-                        }
-                    }
-                    RowLayout {
-                        id: progressLine
-                        Layout.fillWidth: true
-                        GlassProgress {
-                            Layout.fillWidth: root.progressShape !== "bubble"
-                            Layout.preferredWidth: root.progressShape === "bubble" ? progressLine.width * .53 : 100
-                            Layout.preferredHeight: root.progressShape === "bubble" ? 38 : 27
-                            value: Transfer.fraction(root.item)
-                            animated: root.runningTransfer
-                            shape: root.progressShape
-                            fillStyle: WindowAppearance.progressFill
-                            material: root.material
-                            Accessible.name: qsTr("Download progress")
-                        }
-                        Label {
-                            text: Math.round(Transfer.fraction(root.item) * 100) + "%"
-                            color: root.colors.text
-                            font.bold: true
-                        }
-                        Item { Layout.fillWidth: root.progressShape === "bubble"; visible: root.progressShape === "bubble" }
-                    }
-                    Label {
-                        visible: root.mixed
-                        Layout.fillWidth: true
-                        color: root.colors.positive
-                        wrapMode: Text.WordWrap
-                        text: root.mixed && root.telemetry.original_partial
-                              ? qsTr("Original direct partial kept at %1").arg(root.telemetry.original_partial) : ""
-                    }
-                    Label {
-                        visible: !!(root.item && root.item.error)
-                        Layout.fillWidth: true
-                        text: root.item && root.item.error || ""
-                        color: root.colors.destructive
-                        wrapMode: Text.WordWrap
-                    }
+                Label {
+                    visible: !root.item
+                    text: qsTr("Waiting for download information…")
+                    color: root.colors.muted
                 }
-            }
 
-            GridLayout {
-                visible: !!root.item && root.activeTab === 0
-                Layout.fillWidth: true
-                columns: width >= 630 ? 2 : 1
-                columnSpacing: 10
-                rowSpacing: 10
                 Pane {
+                    visible: !!root.item && root.activeTab === 0
                     Layout.fillWidth: true
-                    Layout.preferredWidth: 355
-                    padding: 12
+                    padding: 15
+                    leftPadding: root.displayFlow ? 27 : padding
                     background: GlassSurface { material: root.material; role: "card"; backdropAvailable: root.backdropAvailable }
                     contentItem: ColumnLayout {
-                        spacing: 8
-                        Label { text: root.torrent ? qsTr("BitTorrent swarm") : qsTr("Connections"); color: root.colors.text; font.bold: true }
+                        spacing: 10
                         Label {
-                            visible: !!root.torrent
                             Layout.fillWidth: true
-                            color: root.colors.muted
-                            wrapMode: Text.WordWrap
-                            text: root.torrent ? qsTr("Upload %1  ·  Sent %2\nInfo hash %3").arg(Transfer.rate(root.torrent.upload_speed)).arg(Transfer.bytes(root.torrent.uploaded)).arg(root.torrent.info_hash || "—") : ""
+                            text: root.item ? root.item.file : ""
+                            elide: Text.ElideMiddle
+                            color: root.colors.text
+                            font.pixelSize: 19
+                            font.bold: true
                         }
                         Label {
-                            visible: !root.torrent && !(root.telemetry && root.telemetry.connections && root.telemetry.connections.length)
-                            text: qsTr("No active connection data")
+                            id: transferSource
+                            Layout.fillWidth: true
+                            text: root.item ? root.item.url : ""
+                            elide: Text.ElideMiddle
                             color: root.colors.muted
                         }
                         GridLayout {
                             Layout.fillWidth: true
-                            columns: 8
-                            rowSpacing: 5
-                            columnSpacing: 5
+                            columns: width >= 560 ? 2 : 1
+                            rowSpacing: 6
+                            columnSpacing: 16
                             Repeater {
-                                model: root.workerRows.length
-                                delegate: Item {
-                                    id: worker
+                                id: measurements
+                                property var cells: {
+                                    const d = root.item || {}
+                                    const t = root.telemetry || {}
+                                    const server = t.server || {}
+                                    return [
+                                        {label: qsTr("Status"), value: d.status || "—"},
+                                        {label: qsTr("Transfer method"), value: root.mixed ? qsTr("Direct → BitTorrent") : t.is_torrent ? qsTr("BitTorrent") : t.is_video ? qsTr("Video") : qsTr("Direct download")},
+                                        {label: qsTr("Downloaded"), value: Transfer.bytes(d.downloaded) + " / " + Transfer.bytes(d.size)},
+                                        {label: qsTr("Transfer rate"), value: Transfer.rate(d.speed)},
+                                        {label: qsTr("Time left"), value: Transfer.timeLeft(d)},
+                                        {label: qsTr("Resume capability"), value: t.resumable === true ? qsTr("Yes") : t.resumable === false ? qsTr("No") : qsTr("Unknown")},
+                                        {label: root.torrent ? qsTr("Connected peers") : qsTr("Server"), value: root.torrent ? String(root.torrent.peers || 0)
+                                            : (server.place && server.place.name || server.country_code || server.hostname || "—") + (server.rtt_ms != null ? " · " + server.rtt_ms + " ms" : "")}
+                                    ]
+                                }
+                                model: cells.length
+                                delegate: RowLayout {
+                                    id: measurement
                                     required property int index
-                                    readonly property var connection: root.workerRows[index] || {}
-                                    readonly property var saved: Transfer.assigned(connection.id, root.telemetry && root.telemetry.segments)
+                                    readonly property var cell: measurements.cells[index]
                                     Layout.fillWidth: true
-                                    Layout.preferredWidth: 31
-                                    Layout.preferredHeight: 31
-                                    GlassSurface { anchors.fill: parent; material: root.material; role: "field" }
-                                    GlassProgress {
-                                        visible: worker.saved !== null
-                                        anchors.bottom: parent.bottom
-                                        width: parent.width
-                                        height: 9
-                                        material: root.material
-                                        shape: root.connectionShape
-                                        fillStyle: WindowAppearance.connectionFill
-                                        value: worker.saved === null ? 0 : worker.saved
-                                        animated: worker.connection.state === "Receiving"
-                                    }
-                                    Label {
-                                        anchors.horizontalCenter: parent.horizontalCenter
-                                        anchors.top: parent.top
-                                        anchors.topMargin: 3
-                                        color: worker.connection.state === "Receiving" ? root.colors.positive
-                                             : worker.connection.state === "Failed" || worker.connection.state === "Retrying" ? root.colors.caution : root.colors.muted
-                                        text: Number(worker.connection.id) + 1
-                                        font.pixelSize: 11
-                                    }
-                                    Rectangle {
-                                        id: droplet
-                                        anchors.horizontalCenter: parent.horizontalCenter
-                                        width: 4
-                                        height: 4
-                                        radius: width / 2
-                                        color: root.colors.accent
-                                        border.color: root.colors.secondary
-                                        visible: worker.connection.state === "Receiving" && !MaterialTheme.reducedMotion
-                                        NumberAnimation on y {
-                                            from: 10; to: 24; duration: 800
-                                            running: droplet.visible && root.visible
-                                            loops: Animation.Infinite
-                                            easing.type: Easing.InQuad
+                                    Label { text: measurement.cell.label; color: root.colors.muted; Layout.preferredWidth: 116; elide: Text.ElideRight }
+                                    Label { text: measurement.cell.value; color: root.colors.text; elide: Text.ElideRight; Layout.fillWidth: true }
+                                }
+                            }
+                        }
+                        RowLayout {
+                            id: progressLine
+                            Layout.fillWidth: true
+                            GlassProgress {
+                                id: downloadProgress
+                                Layout.fillWidth: root.progressShape !== "bubble"
+                                Layout.preferredWidth: root.progressShape === "bubble" ? progressLine.width * .53 : 100
+                                Layout.preferredHeight: root.progressShape === "bubble" ? 38 : 27
+                                value: Transfer.fraction(root.item)
+                                animated: root.runningTransfer
+                                shape: root.progressShape
+                                fillStyle: WindowAppearance.progressFill
+                                startColor: root.progressColors[0]
+                                endColor: root.progressColors[1]
+                                trackColor: root.colors.background
+                                material: root.material
+                                Accessible.name: qsTr("Download progress")
+                            }
+                            Label {
+                                text: Math.round(Transfer.fraction(root.item) * 100) + "%"
+                                color: root.colors.text
+                                font.bold: true
+                            }
+                            Item { Layout.fillWidth: root.progressShape === "bubble"; visible: root.progressShape === "bubble" }
+                        }
+                        Label {
+                            visible: root.mixed
+                            Layout.fillWidth: true
+                            color: root.colors.positive
+                            wrapMode: Text.WordWrap
+                            text: root.mixed && root.telemetry.original_partial
+                                  ? qsTr("Original direct partial kept at %1").arg(root.telemetry.original_partial) : ""
+                        }
+                        Label {
+                            visible: !!(root.item && root.item.error)
+                            Layout.fillWidth: true
+                            text: root.item && root.item.error || ""
+                            color: root.colors.destructive
+                            wrapMode: Text.WordWrap
+                        }
+                    }
+                }
+
+                GridLayout {
+                    visible: !!root.item && root.activeTab === 0
+                    Layout.fillWidth: true
+                    columns: width >= 630 ? 2 : 1
+                    columnSpacing: 10
+                    rowSpacing: 10
+                    Pane {
+                        Layout.fillWidth: true
+                        Layout.preferredWidth: 355
+                        padding: 12
+                        leftPadding: root.displayFlow ? 27 : padding
+                        background: GlassSurface { material: root.material; role: "card"; backdropAvailable: root.backdropAvailable }
+                        contentItem: ColumnLayout {
+                            spacing: 8
+                            Label { text: root.torrent ? qsTr("BitTorrent swarm") : qsTr("Connections"); color: root.colors.text; font.bold: true }
+                            Label {
+                                visible: !!root.torrent
+                                Layout.fillWidth: true
+                                color: root.colors.muted
+                                wrapMode: Text.WordWrap
+                                text: root.torrent ? qsTr("Upload %1  ·  Sent %2\nInfo hash %3").arg(Transfer.rate(root.torrent.upload_speed)).arg(Transfer.bytes(root.torrent.uploaded)).arg(root.torrent.info_hash || "—") : ""
+                            }
+                            Label {
+                                visible: !root.torrent && !(root.telemetry && root.telemetry.connections && root.telemetry.connections.length)
+                                text: qsTr("No active connection data")
+                                color: root.colors.muted
+                            }
+                            GridLayout {
+                                id: waterGrid
+                                Layout.fillWidth: true
+                                Layout.topMargin: root.displayFlow ? 10 : 0
+                                columns: 8
+                                rowSpacing: root.displayFlow ? 16 : 5
+                                columnSpacing: 5
+                                Repeater {
+                                    id: waterWorkers
+                                    model: root.workerRows.length
+                                    delegate: Item {
+                                        id: worker
+                                        required property int index
+                                        readonly property var connection: root.workerRows[index] || {}
+                                        readonly property var saved: Transfer.assigned(connection.id, root.telemetry && root.telemetry.segments)
+                                        readonly property bool receiving: root.runningTransfer && connection.state === "Receiving"
+                                        Layout.fillWidth: true
+                                        Layout.preferredWidth: 31
+                                        Layout.preferredHeight: 39
+                                        ConnectionWater {
+                                            anchors.fill: parent
+                                            material: root.material
+                                            shape: root.connectionShape
+                                            fillStyle: WindowAppearance.connectionFill
+                                            value: worker.saved
+                                            receiving: worker.receiving
+                                            phase: worker.receiving ? water.phase : 0
+                                            startColor: root.connectionColors[0]
+                                            endColor: root.connectionColors[1]
+                                            trackColor: root.colors.background
                                         }
+                                        Label {
+                                            anchors.horizontalCenter: parent.horizontalCenter
+                                            anchors.top: parent.top
+                                            anchors.topMargin: 4
+                                            color: root.colors.text
+                                            style: Text.Outline
+                                            styleColor: root.colors.shade
+                                            text: Number(worker.connection.id) + 1
+                                            font.pixelSize: 11
+                                        }
+                                        HoverHandler { id: workerHover }
+                                        ToolTip.visible: workerHover.hovered
+                                        ToolTip.text: saved === null
+                                            ? qsTr("Connection %1 · %2 · %3").arg(Number(connection.id) + 1)
+                                                .arg(connection.state).arg(Transfer.rate(connection.speed))
+                                            : qsTr("Connection %1 · %2 · %3 · %4%").arg(Number(connection.id) + 1)
+                                                .arg(connection.state).arg(Transfer.rate(connection.speed)).arg(Math.round(saved * 100))
+                                        Accessible.name: ToolTip.text
                                     }
-                                    HoverHandler { id: workerHover }
-                                    ToolTip.visible: workerHover.hovered
-                                    ToolTip.text: qsTr("Connection %1 · %2 · %3").arg(Number(worker.connection.id) + 1).arg(worker.connection.state).arg(Transfer.rate(worker.connection.speed))
-                                    Accessible.name: ToolTip.text
                                 }
                             }
                         }
                     }
+                    Pane {
+                        Layout.fillWidth: true
+                        Layout.preferredWidth: 325
+                        padding: 12
+                        background: GlassSurface { material: root.material; role: "card"; backdropAvailable: root.backdropAvailable }
+                        contentItem: ColumnLayout {
+                            spacing: 8
+                            RowLayout {
+                                Label { text: qsTr("Transfer speed"); color: root.colors.text; font.bold: true }
+                                Item { Layout.fillWidth: true }
+                                Label { text: root.item ? Transfer.rate(root.item.speed) : "—"; color: root.colors.muted }
+                            }
+                            TransferGraph {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 106
+                                samples: root.speedSamples
+                                lineColor: MaterialTheme.graphColors[0]
+                                endpointColor: MaterialTheme.graphColors[1]
+                                gridColor: root.colors.divider
+                                Accessible.name: qsTr("Measured transfer speed history")
+                            }
+                        }
+                    }
                 }
+
                 Pane {
+                    visible: root.activeTab === 0 && root.ordinary && !root.runningTransfer && !root.finished
                     Layout.fillWidth: true
-                    Layout.preferredWidth: 325
-                    padding: 12
+                    padding: 14
                     background: GlassSurface { material: root.material; role: "card"; backdropAvailable: root.backdropAvailable }
                     contentItem: ColumnLayout {
                         spacing: 8
-                        RowLayout {
-                            Label { text: qsTr("Transfer speed"); color: root.colors.text; font.bold: true }
-                            Item { Layout.fillWidth: true }
-                            Label { text: root.item ? Transfer.rate(root.item.speed) : "—"; color: root.colors.muted }
-                        }
-                        TransferGraph {
+                        Label { text: qsTr("Download recovery"); color: root.colors.text; font.bold: true }
+                        Flow {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: 106
-                            samples: root.speedSamples
-                            lineColor: root.colors.accent
-                            endpointColor: root.colors.secondary
-                            gridColor: root.colors.divider
-                            Accessible.name: qsTr("Measured transfer speed history")
-                        }
-                    }
-                }
-            }
-
-            Pane {
-                visible: root.activeTab === 0 && root.ordinary && !root.runningTransfer && !root.finished
-                Layout.fillWidth: true
-                padding: 14
-                background: GlassSurface { material: root.material; role: "card"; backdropAvailable: root.backdropAvailable }
-                contentItem: ColumnLayout {
-                    spacing: 8
-                    Label { text: qsTr("Download recovery"); color: root.colors.text; font.bold: true }
-                    Flow {
-                        Layout.fillWidth: true
-                        spacing: 6
-                        GlassButton {
-                            text: qsTr("Check saved data")
-                            enabled: !root.busy && !root.recoveryBusy
-                            material: root.material
-                            onClicked: root.beginCheck("check-saved", null, qsTr("Checking saved blocks…"))
-                        }
-                        GlassButton {
-                            text: qsTr("Check source and repair")
-                            enabled: !root.busy && !root.recoveryBusy
-                            material: root.material
-                            onClicked: root.beginCheck("repair-saved", null, qsTr("Checking the direct source…"))
-                        }
-                        GlassButton {
-                            text: qsTr("Search Internet Archive")
-                            enabled: root.torrentRecoveryAllowed && !root.busy && !root.recoveryBusy
-                            material: root.material
-                            onClicked: searchConsent.open()
-                        }
-                        GlassButton {
-                            text: qsTr("Download again…")
-                            enabled: !root.busy && !root.recoveryBusy
-                            material: root.material
-                            accent: root.colors.caution
-                            onClicked: restartConsent.open()
-                        }
-                        GlassButton {
-                            text: qsTr("Update address…")
-                            enabled: !root.busy && !root.recoveryBusy
-                            material: root.material
-                            onClicked: {
-                                updatedAddress.text = root.item.url
-                                addressPrompt.open()
+                            spacing: 6
+                            GlassButton {
+                                text: qsTr("Check saved data")
+                                enabled: !root.busy && !root.recoveryBusy
+                                material: root.material
+                                onClicked: root.beginCheck("check-saved", null, qsTr("Checking saved blocks…"))
                             }
-                        }
-                        GlassButton {
-                            text: qsTr("Cancel torrent recovery")
-                            material: root.material
-                            visible: root.recoveryStage === "searching" || root.recoveryStage === "preparing"
-                                     || root.pendingResult === "find-recovery-torrents-result" || root.pendingResult === "start-recovery-torrent-result"
-                            onClicked: root.cancelRecovery()
-                        }
-                    }
-                    Label {
-                        visible: !root.torrentRecoveryAllowed
-                        Layout.fillWidth: true
-                        color: root.colors.muted
-                        wrapMode: Text.WordWrap
-                        text: qsTr("Torrent recovery is unavailable when a whole-file checksum is required.")
-                    }
-                    RowLayout {
-                        Layout.fillWidth: true
-                        enabled: root.torrentRecoveryAllowed
-                        TextField {
-                            id: link
-                            Layout.fillWidth: true
-                            color: root.colors.text
-                            placeholderText: qsTr("Magnet or torrent URL")
-                            background: GlassSurface { material: root.material; role: "field" }
-                            Accessible.name: placeholderText
-                        }
-                        GlassButton {
-                            material: root.material
-                            text: qsTr("Check link")
-                            enabled: !root.busy && !root.recoveryBusy && /^(magnet:\?|https?:\/\/)/i.test(link.text.trim())
-                            onClicked: linkConsent.open()
-                        }
-                        GlassButton {
-                            material: root.material
-                            text: qsTr("Torrent file…")
-                            enabled: !root.busy && !root.recoveryBusy
-                            onClicked: recoveryFile.open()
-                        }
-                    }
-                    Repeater {
-                        model: root.candidates
-                        delegate: RowLayout {
-                            id: candidate
-                            required property var modelData
-                            Layout.fillWidth: true
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                Label { text: candidate.modelData.title || candidate.modelData.path; color: root.colors.text; Layout.fillWidth: true; elide: Text.ElideRight }
-                                Label {
-                                    text: qsTr("%1 matching pieces · %2 unchecked").arg(candidate.modelData.matching_pieces).arg(candidate.modelData.unavailable_pieces)
-                                    color: root.colors.muted
+                            GlassButton {
+                                text: qsTr("Check source and repair")
+                                enabled: !root.busy && !root.recoveryBusy
+                                material: root.material
+                                onClicked: root.beginCheck("repair-saved", null, qsTr("Checking the direct source…"))
+                            }
+                            GlassButton {
+                                text: qsTr("Search Internet Archive")
+                                enabled: root.torrentRecoveryAllowed && !root.busy && !root.recoveryBusy
+                                material: root.material
+                                onClicked: searchConsent.open()
+                            }
+                            GlassButton {
+                                text: qsTr("Download again…")
+                                enabled: !root.busy && !root.recoveryBusy
+                                material: root.material
+                                accent: root.colors.caution
+                                onClicked: restartConsent.open()
+                            }
+                            GlassButton {
+                                text: qsTr("Update address…")
+                                enabled: !root.busy && !root.recoveryBusy
+                                material: root.material
+                                onClicked: {
+                                    updatedAddress.text = root.item.url
+                                    addressPrompt.open()
                                 }
                             }
                             GlassButton {
+                                text: qsTr("Cancel torrent recovery")
                                 material: root.material
-                                text: qsTr("Continue with torrent")
-                                enabled: root.torrentRecoveryAllowed && risk.checked && !root.busy && !root.recoveryBusy
-                                onClicked: root.beginCheck("start-recovery-torrent",
-                                    JSON.stringify({candidate: candidate.modelData.candidate, file_index: candidate.modelData.file_index,
-                                        info_hash: candidate.modelData.info_hash, accept_partial_match: true}),
-                                    qsTr("Rechecking compatible pieces…"))
+                                visible: root.recoveryStage === "searching" || root.recoveryStage === "preparing"
+                                         || root.pendingResult === "find-recovery-torrents-result" || root.pendingResult === "start-recovery-torrent-result"
+                                onClicked: root.cancelRecovery()
                             }
                         }
-                    }
-                    CheckBox {
-                        id: risk
-                        visible: root.candidates.length > 0
-                        text: qsTr("I understand that the rest of the torrent may differ.")
-                    }
-                }
-            }
-
-            Pane {
-                visible: root.activeTab === 1
-                Layout.fillWidth: true
-                padding: 14
-                background: GlassSurface { material: root.material; role: "card"; backdropAvailable: root.backdropAvailable }
-                contentItem: ColumnLayout {
-                    spacing: 10
-                    CheckBox { id: limitEnabled; text: qsTr("Limit this download's speed") }
-                    RowLayout {
-                        TextField {
-                            id: limitField
-                            enabled: limitEnabled.checked
-                            validator: IntValidator { bottom: 1; top: 10000000 }
-                            inputMethodHints: Qt.ImhDigitsOnly
-                            placeholderText: qsTr("Enter a limit")
-                            Accessible.name: qsTr("Maximum KB per second")
+                        Label {
+                            visible: !root.torrentRecoveryAllowed
+                            Layout.fillWidth: true
+                            color: root.colors.muted
+                            wrapMode: Text.WordWrap
+                            text: qsTr("Torrent recovery is unavailable when a whole-file checksum is required.")
                         }
-                        Label { text: qsTr("KB/s"); color: root.colors.muted }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            enabled: root.torrentRecoveryAllowed
+                            TextField {
+                                id: link
+                                Layout.fillWidth: true
+                                color: root.colors.text
+                                placeholderText: qsTr("Magnet or torrent URL")
+                                background: GlassSurface { material: root.material; role: "field" }
+                                Accessible.name: placeholderText
+                            }
+                            GlassButton {
+                                material: root.material
+                                text: qsTr("Check link")
+                                enabled: !root.busy && !root.recoveryBusy && /^(magnet:\?|https?:\/\/)/i.test(link.text.trim())
+                                onClicked: linkConsent.open()
+                            }
+                            GlassButton {
+                                material: root.material
+                                text: qsTr("Torrent file…")
+                                enabled: !root.busy && !root.recoveryBusy
+                                onClicked: recoveryFile.open()
+                            }
+                        }
+                        Repeater {
+                            model: root.candidates
+                            delegate: RowLayout {
+                                id: candidate
+                                required property var modelData
+                                Layout.fillWidth: true
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    Label { text: candidate.modelData.title || candidate.modelData.path; color: root.colors.text; Layout.fillWidth: true; elide: Text.ElideRight }
+                                    Label {
+                                        text: qsTr("%1 matching pieces · %2 unchecked").arg(candidate.modelData.matching_pieces).arg(candidate.modelData.unavailable_pieces)
+                                        color: root.colors.muted
+                                    }
+                                }
+                                GlassButton {
+                                    material: root.material
+                                    text: qsTr("Continue with torrent")
+                                    enabled: root.torrentRecoveryAllowed && risk.checked && !root.busy && !root.recoveryBusy
+                                    onClicked: root.beginCheck("start-recovery-torrent",
+                                        JSON.stringify({candidate: candidate.modelData.candidate, file_index: candidate.modelData.file_index,
+                                            info_hash: candidate.modelData.info_hash, accept_partial_match: true}),
+                                        qsTr("Rechecking compatible pieces…"))
+                                }
+                            }
+                        }
+                        CheckBox {
+                            id: risk
+                            visible: root.candidates.length > 0
+                            text: qsTr("I understand that the rest of the torrent may differ.")
+                        }
                     }
-                    GlassButton {
-                        material: root.material
-                        text: qsTr("Save speed limit")
-                        enabled: !!root.item && !root.busy && (!limitEnabled.checked || limitField.acceptableInput)
-                        onClicked: root.saveOptions("speed-limit", limitEnabled.checked ? limitField.text : "off", qsTr("Speed limit saved."))
+                }
+
+                Pane {
+                    visible: root.activeTab === 1
+                    Layout.fillWidth: true
+                    padding: 14
+                    background: GlassSurface { material: root.material; role: "card"; backdropAvailable: root.backdropAvailable }
+                    contentItem: ColumnLayout {
+                        spacing: 10
+                        CheckBox { id: limitEnabled; text: qsTr("Limit this download's speed") }
+                        RowLayout {
+                            TextField {
+                                id: limitField
+                                enabled: limitEnabled.checked
+                                validator: IntValidator { bottom: 1; top: 10000000 }
+                                inputMethodHints: Qt.ImhDigitsOnly
+                                placeholderText: qsTr("Enter a limit")
+                                Accessible.name: qsTr("Maximum KB per second")
+                            }
+                            Label { text: qsTr("KB/s"); color: root.colors.muted }
+                        }
+                        GlassButton {
+                            material: root.material
+                            text: qsTr("Save speed limit")
+                            enabled: !!root.item && !root.busy && (!limitEnabled.checked || limitField.acceptableInput)
+                            onClicked: root.saveOptions("speed-limit", limitEnabled.checked ? limitField.text : "off", qsTr("Speed limit saved."))
+                        }
                     }
+                }
+
+                Pane {
+                    visible: root.activeTab === 2
+                    Layout.fillWidth: true
+                    padding: 14
+                    background: GlassSurface { material: root.material; role: "card"; backdropAvailable: root.backdropAvailable }
+                    contentItem: ColumnLayout {
+                        spacing: 8
+                        CheckBox { id: hangUp; text: qsTr("Disconnect on completion") }
+                        CheckBox { id: closeApp; text: qsTr("Exit Auralis on completion") }
+                        GlassComboBox { id: powerAction; model: [qsTr("Keep computer on"), qsTr("Shut down"), qsTr("Sleep"), qsTr("Hibernate")] }
+                        CheckBox { id: forceAction; enabled: powerAction.currentIndex > 0; text: qsTr("Force the power action") }
+                        GlassButton {
+                            material: root.material
+                            text: qsTr("Save completion action")
+                            enabled: !!root.item && !root.busy
+                            onClicked: root.saveOptions("completion-options", JSON.stringify({hang_up: hangUp.checked,
+                                exit: closeApp.checked, turn_off: [null, "ShutDown", "Sleep", "Hibernate"][powerAction.currentIndex],
+                                force: powerAction.currentIndex > 0 && forceAction.checked}), qsTr("Completion action saved."))
+                        }
+                    }
+                }
+
+                Label {
+                    visible: root.message !== ""
+                    Layout.fillWidth: true
+                    text: root.message
+                    color: root.error ? root.colors.destructive : root.colors.text
+                    wrapMode: Text.WordWrap
                 }
             }
 
-            Pane {
-                visible: root.activeTab === 2
-                Layout.fillWidth: true
-                padding: 14
-                background: GlassSurface { material: root.material; role: "card"; backdropAvailable: root.backdropAvailable }
-                contentItem: ColumnLayout {
-                    spacing: 8
-                    CheckBox { id: hangUp; text: qsTr("Disconnect on completion") }
-                    CheckBox { id: closeApp; text: qsTr("Exit Auralis on completion") }
-                    ComboBox { id: powerAction; model: [qsTr("Keep computer on"), qsTr("Shut down"), qsTr("Sleep"), qsTr("Hibernate")] }
-                    CheckBox { id: forceAction; enabled: powerAction.currentIndex > 0; text: qsTr("Force the power action") }
-                    GlassButton {
-                        material: root.material
-                        text: qsTr("Save completion action")
-                        enabled: !!root.item && !root.busy
-                        onClicked: root.saveOptions("completion-options", JSON.stringify({hang_up: hangUp.checked,
-                            exit: closeApp.checked, turn_off: [null, "ShutDown", "Sleep", "Hibernate"][powerAction.currentIndex],
-                            force: powerAction.currentIndex > 0 && forceAction.checked}), qsTr("Completion action saved."))
-                    }
-                }
-            }
-
-            Label {
-                visible: root.message !== ""
-                Layout.fillWidth: true
-                text: root.message
-                color: root.error ? root.colors.destructive : root.colors.text
-                wrapMode: Text.WordWrap
+            TransferTubes {
+                width: Math.min(parent.width, waterWorkers.count > 0 ? waterGrid.width + 52 : 34)
+                height: parent.height
+                visible: root.displayFlow
+                sourceItem: transferSource
+                progressItem: downloadProgress
+                gridItem: waterGrid
+                workers: waterWorkers
+                phase: water.phase
+                flowing: root.showWaterFlow
+                progressStart: root.progressColors[0]
+                progressEnd: root.progressColors[1]
+                connectionStart: root.connectionColors[0]
+                connectionEnd: root.connectionColors[1]
             }
         }
     }
@@ -750,69 +873,102 @@ ApplicationWindow {
         }
     }
 
-    Dialog {
+    DetachedConfirmation {
         id: stopConsent
-        anchors.centerIn: parent
-        modal: true
+        hostWindow: root
+        material: root.material
         title: qsTr("Stop this download?")
-        standardButtons: Dialog.Yes | Dialog.No
-        Label { text: qsTr("Saved data will be kept so the download can resume."); width: 320; wrapMode: Text.WordWrap }
-        onAccepted: root.perform("pause", true)
+        message: qsTr("Saved data will be kept so the download can resume.")
+        confirmText: qsTr("Stop download")
+        onConfirmed: root.perform("pause", true)
     }
-    Dialog {
+    DetachedConfirmation {
         id: restartConsent
-        anchors.centerIn: parent
-        modal: true
+        hostWindow: root
+        material: root.material
         title: qsTr("Download from the beginning?")
-        standardButtons: Dialog.Yes | Dialog.No
-        Label { text: qsTr("This discards the saved partial and starts a new download."); width: 330; wrapMode: Text.WordWrap }
-        onAccepted: root.saveOptions("redownload", null, qsTr("Restarting the download…"))
+        message: qsTr("This discards the saved partial and starts a new download.")
+        confirmText: qsTr("Redownload")
+        destructive: true
+        onConfirmed: root.saveOptions("redownload", null, qsTr("Restarting the download…"))
     }
-    Dialog {
+    DetachedConfirmation {
         id: searchConsent
-        anchors.centerIn: parent
-        modal: true
+        hostWindow: root
+        material: root.material
         title: qsTr("Search for a matching torrent?")
-        standardButtons: Dialog.Yes | Dialog.No
-        Label { text: qsTr("Searching sends filename terms to Internet Archive. A piece match only verifies the compared bytes."); width: 340; wrapMode: Text.WordWrap }
-        onAccepted: root.beginCheck("find-recovery-torrents", null, qsTr("Searching Internet Archive…"))
+        message: qsTr("Searching sends filename terms to Internet Archive. A piece match only verifies the compared bytes.")
+        confirmText: qsTr("Search")
+        onConfirmed: root.beginCheck("find-recovery-torrents", null, qsTr("Searching Internet Archive…"))
     }
-    Dialog {
+    DetachedConfirmation {
         id: linkConsent
-        anchors.centerIn: parent
-        modal: true
+        hostWindow: root
+        material: root.material
         title: qsTr("Check this torrent source?")
-        standardButtons: Dialog.Yes | Dialog.No
-        Label { text: qsTr("Checking a magnet contacts BitTorrent peers. A matching piece cannot verify the rest of the file."); width: 340; wrapMode: Text.WordWrap }
-        onAccepted: root.beginCheck(/^magnet:/i.test(link.text.trim()) ? "check-recovery-magnet" : "check-recovery-torrent-url",
+        message: /^magnet:/i.test(link.text.trim())
+            ? qsTr("Checking the magnet contacts BitTorrent peers. A match verifies only the pieces compared.")
+            : qsTr("Checking the torrent URL contacts its host. A match verifies only the pieces compared.")
+        confirmText: qsTr("Check source")
+        onConfirmed: root.beginCheck(/^magnet:/i.test(link.text.trim()) ? "check-recovery-magnet" : "check-recovery-torrent-url",
             link.text.trim(), qsTr("Checking the supplied torrent metadata…"))
     }
-    Dialog {
+    DetachedDialogWindow {
         id: addressPrompt
-        anchors.centerIn: parent
-        modal: true
+        hostWindow: root
+        material: root.material
         title: qsTr("Update download address")
-        width: Math.min(480, root.width - 24)
-        standardButtons: Dialog.Save | Dialog.Cancel
-        contentItem: ColumnLayout {
+        width: 485
+        onDismissRequested: hide()
+        onOpened: updatedAddress.forceActiveFocus()
+        onDismissed: updatedAddress.clear()
+        function saveAddress() {
+            const address = updatedAddress.text.trim()
+            if (!/^(https?|ftp):\/\//i.test(address)) {
+                addressError.text = qsTr("Enter a valid download address.")
+                return
+            }
+            hide()
+            root.saveOptions("refresh-address", address, qsTr("Download address updated. Saved bytes were kept."))
+        }
+        bodyContent: [
             Label {
                 Layout.fillWidth: true
                 text: qsTr("Saved bytes are kept. Use an address for the same file.")
+                color: root.colors.ink
                 wrapMode: Text.WordWrap
-            }
+            },
             TextField {
                 id: updatedAddress
                 Layout.fillWidth: true
                 selectByMouse: true
                 Accessible.name: qsTr("New download address")
+                placeholderText: qsTr("New download address")
+                maximumLength: 8192
+                color: root.colors.ink
+                background: GlassSurface { material: root.material; role: "field" }
+                onAccepted: addressPrompt.saveAddress()
+                onTextChanged: addressError.text = ""
+            },
+            Label {
+                id: addressError
+                Layout.fillWidth: true
+                visible: text.length > 0
+                color: root.colors.destructive
+                wrapMode: Text.Wrap
             }
-        }
-        onAccepted: {
-            const address = updatedAddress.text.trim()
-            if (!/^(https?|ftp):\/\//i.test(address))
-                root.say(qsTr("Enter a valid download address."), true)
-            else
-                root.saveOptions("refresh-address", address, qsTr("Download address updated. Saved bytes were kept."))
+        ]
+        footer: Item {
+            implicitHeight: addressActions.implicitHeight + 20
+            GlassSurface { anchors.fill: parent; material: root.material; role: "footer" }
+            RowLayout {
+                id: addressActions
+                anchors.fill: parent
+                anchors.margins: 10
+                Item { Layout.fillWidth: true }
+                GlassButton { material: root.material; text: qsTr("Cancel"); onClicked: addressPrompt.hide() }
+                GlassButton { material: root.material; accent: root.colors.positive; text: qsTr("Update address"); onClicked: addressPrompt.saveAddress() }
+            }
         }
     }
     FileDialog {

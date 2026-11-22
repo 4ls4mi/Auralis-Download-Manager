@@ -2,26 +2,22 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs
 import QtQuick.Layouts
+import QtQuick.Window
 import "TransferData.js" as Transfer
 
-Dialog {
+DetachedDialogWindow {
     id: root
+    objectName: "addDownloadWindow"
     property bool torrentMode: false
     property var requestInfo: null
     readonly property bool confirming: requestInfo !== null
-    property string material: MaterialTheme.current
-    readonly property var colors: MaterialTheme.profile(material)
-    property bool busy: false
     property string errorMessage: ""
     property bool destinationEdited: false
     property var categoryOptions: []
     signal downloadAdded(var id, bool later)
 
-    modal: true
-    closePolicy: Popup.NoAutoClose
-    anchors.centerIn: parent
-    width: Math.min(620, parent ? Math.max(280, parent.width - 28) : 620)
-    padding: 20
+    width: 595
+    modality: confirming ? Qt.WindowModal : Qt.NonModal
     title: confirming ? (requestInfo.info.video ? qsTr("Confirm video download") : qsTr("Download File Info"))
                       : torrentMode ? qsTr("Add torrent") : qsTr("Add URL")
 
@@ -58,7 +54,7 @@ Dialog {
                 return
             if (reply && reply.id !== undefined && reply.id !== null)
                 downloadAdded(reply.id, later)
-            close()
+            hide()
             engine.refresh()
         })
     }
@@ -95,7 +91,7 @@ Dialog {
         if (confirming)
             send({action: "glass-file-info", category: "cancel", ids: [requestInfo.id]}, true)
         else
-            close()
+            hide()
     }
 
     onOpened: {
@@ -103,7 +99,8 @@ Dialog {
             address.forceActiveFocus()
         }
     }
-    onClosed: {
+    onDismissRequested: cancel()
+    onDismissed: {
         requestInfo = null
         address.clear()
         destination.clear()
@@ -113,27 +110,15 @@ Dialog {
         destinationEdited = false
     }
 
-    background: GlassSurface { material: root.material; role: "modal" }
-
-    header: Label {
-        text: root.title
-        color: root.colors.text
-        font.bold: true
-        font.pixelSize: 20
-        padding: 20
-        bottomPadding: 4
-        leftPadding: 20
-    }
-
-    contentItem: ColumnLayout {
-        spacing: 9
+    bodyContent: [
         Label {
             Layout.fillWidth: true
             text: root.confirming ? root.requestInfo.info.url
                                   : root.torrentMode ? qsTr("Magnet link") : qsTr("Download address")
             color: root.colors.muted
+            textFormat: Text.PlainText
             elide: Text.ElideMiddle
-        }
+        },
         TextField {
             id: address
             Layout.fillWidth: true
@@ -144,14 +129,14 @@ Dialog {
             selectByMouse: true
             onAccepted: root.submit(false)
             Accessible.name: qsTr("Download address")
-        }
+        },
         Label {
             visible: !root.confirming && root.torrentMode
             color: root.colors.muted
             wrapMode: Text.WordWrap
             Layout.fillWidth: true
             text: qsTr("Starting a torrent contacts BitTorrent peers.")
-        }
+        },
         Label {
             visible: root.confirming
             color: root.colors.muted
@@ -159,16 +144,16 @@ Dialog {
             Layout.fillWidth: true
             text: root.confirming ? root.requestInfo.info.probing
                   ? qsTr("Checking the source…") : qsTr("Size %1").arg(Transfer.bytes(root.requestInfo.info.size)) : ""
-        }
+        },
         Label {
             visible: root.confirming && !!root.requestInfo.info.error
             Layout.fillWidth: true
             text: root.confirming ? String(root.requestInfo.info.error || "") : ""
             color: root.colors.caution
             wrapMode: Text.WordWrap
-        }
-        Label { visible: root.confirming; text: qsTr("Category"); color: root.colors.muted }
-        ComboBox {
+        },
+        Label { visible: root.confirming; text: qsTr("Category"); color: root.colors.muted },
+        GlassComboBox {
             id: category
             visible: root.confirming
             Layout.fillWidth: true
@@ -185,12 +170,12 @@ Dialog {
                         root.errorMessage = Transfer.problem(reply, error)
                 })
             }
-        }
+        },
         Label {
             visible: root.confirming
             text: qsTr("Save as")
             color: root.colors.muted
-        }
+        },
         RowLayout {
             visible: root.confirming
             Layout.fillWidth: true
@@ -209,7 +194,7 @@ Dialog {
                 text: qsTr("Browse…")
                 onClicked: savePicker.open()
             }
-        }
+        },
         TextField {
             id: description
             visible: root.confirming
@@ -218,8 +203,8 @@ Dialog {
             color: root.colors.text
             background: GlassSurface { material: root.material; role: "field" }
             Accessible.name: qsTr("Description")
-        }
-        CheckBox { id: remember; visible: root.confirming; text: qsTr("Remember the folder for this category") }
+        },
+        CheckBox { id: remember; visible: root.confirming; text: qsTr("Remember the folder for this category") },
         RowLayout {
             visible: root.confirming
             Label { text: qsTr("Connections"); color: root.colors.muted }
@@ -231,7 +216,7 @@ Dialog {
                 Accessible.name: qsTr("Connections")
             }
             Label { text: qsTr("0 uses the default"); color: root.colors.muted }
-        }
+        },
         Label {
             visible: root.errorMessage !== ""
             Layout.fillWidth: true
@@ -240,10 +225,11 @@ Dialog {
             color: root.colors.destructive
             Accessible.name: text
         }
-    }
+    ]
 
     footer: Item {
-        implicitHeight: actions.implicitHeight + 30
+        implicitHeight: actions.implicitHeight + 26
+        GlassSurface { anchors.fill: parent; material: root.material; role: "footer" }
         RowLayout {
             id: actions
             anchors.fill: parent
@@ -287,5 +273,4 @@ Dialog {
         nameFilters: [qsTr("Torrent files (*.torrent)")]
         onAccepted: root.send({action: "glass-torrent-file", dir: engine.localPath(selectedFile)}, false)
     }
-    Shortcut { sequence: "Escape"; enabled: root.visible && !root.busy; onActivated: root.cancel() }
 }

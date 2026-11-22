@@ -6316,6 +6316,9 @@ impl App {
                 "proxy_from_browser": self.settings.proxy_from_browser,
                 "capture_opened": self.settings.capture_opened,
                 "show_progress": self.settings.show_progress,
+                "minimize_to_tray": self.settings.minimize_to_tray,
+                "close_to_tray": self.settings.close_to_tray,
+                "progress_minimize_to_tray": self.settings.progress_minimize_to_tray.unwrap_or(self.settings.minimize_to_tray),
                 "show_complete": self.settings.show_complete,
                 "advanced_integration": self.settings.advanced_integration,
                 "double_click_open": self.settings.double_click_open,
@@ -6360,6 +6363,13 @@ impl App {
                 "capture_opened" => bool_value.map(|n| { self.settings.capture_opened = n; }),
                 "show_complete" => bool_value.map(|n| { self.settings.show_complete = n; for p in &mut self.progress {p.glass_set_show_complete(n);} }),
                 "show_progress" => bool_value.map(|n| { self.settings.show_progress = n; }),
+                "minimize_to_tray" => bool_value.map(|n| {
+                    // Changing the main-window setting in Qt leaves the progress preference alone.
+                    self.settings.progress_minimize_to_tray.get_or_insert(self.settings.minimize_to_tray);
+                    self.settings.minimize_to_tray = n;
+                }),
+                "close_to_tray" => bool_value.map(|n| { self.settings.close_to_tray = n; }),
+                "progress_minimize_to_tray" => bool_value.map(|n| { self.settings.progress_minimize_to_tray = Some(n); }),
                 "advanced_integration" => bool_value.map(|n| { self.settings.advanced_integration = n; }),
                 "double_click_open" => bool_value.map(|n| { self.settings.double_click_open = n; }),
                 "net_adapter" if value.len() <= 256 => {
@@ -11589,7 +11599,7 @@ impl App {
                 p.host = Some(self.torrent_host.clone());
             }
             p.tray = tray;
-            p.minimize_to_tray = self.settings.minimize_to_tray;
+            p.minimize_to_tray = self.settings.progress_minimize_to_tray.unwrap_or(self.settings.minimize_to_tray);
             p.main_shown = !self.hidden;
             // Hidden: not shown (its window is gone) until the tray or the list brings it back.
             if p.hidden && tray {

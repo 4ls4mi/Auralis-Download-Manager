@@ -12,6 +12,8 @@ Window {
     required property var backend
     required property Window anchorWindow
     property bool automaticChecks: true
+    property string presentation: "toast"
+    property var availableUpdate: null
 
     readonly property bool canCheck: automaticChecks && Qt.platform.os === "windows" && Boolean(backend && backend.ready)
     readonly property var colors: MaterialTheme.palette
@@ -47,6 +49,7 @@ Window {
     function offer(update, reminder) {
         if (!update || update.state !== "available" || !update.version)
             return;
+        availableUpdate = update;
         const version = String(update.version);
         if (preferences.dismissedVersion === version)
             return;
@@ -61,8 +64,18 @@ Window {
         release = update;
         offeredVersion = version;
         problem = "";
-        visible = true;
+        if (presentation === "dialog") {
+            visible = false;
+            detailsRequested(release);
+        } else {
+            visible = presentation === "toast" || presentation === "notify";
+            if (presentation === "notify")
+                backend.notifyUpdate(version);
+        }
     }
+
+    onAutomaticChecksChanged: if (!automaticChecks && !working) visible = false
+    onPresentationChanged: if (presentation === "quiet" && !working) visible = false
 
     function checkForUpdate(reminder) {
         if (!canCheck || working)
@@ -75,6 +88,7 @@ Window {
             if (result.state === "latest") {
                 popup.visible = false;
                 popup.release = null;
+                popup.availableUpdate = null;
                 preferences.reminderVersion = "";
                 preferences.remindAfter = 0;
                 return;

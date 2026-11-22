@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(AuralisQt VERSION 0.3.57 LANGUAGES CXX)
+project(AuralisQt VERSION 0.3.58 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -40,7 +40,12 @@ qt_add_shaders(auralis-download-manager "glass_effects"
 qt_add_resources(auralis-download-manager "branding"
     PREFIX "/auralis"
     BASE "assets"
-    FILES assets/auralis.png
+    FILES
+        assets/auralis.png
+        assets/sounds/auralis-download-complete.wav
+        assets/sounds/auralis-download-failed.wav
+        assets/sounds/auralis-queue-started.wav
+        assets/sounds/auralis-queue-stopped.wav
 )
 
 # Keep the components adjacent in the module so relative JavaScript imports

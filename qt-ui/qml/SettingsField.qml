@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtMultimedia
 import QtQuick.Controls
 import QtQuick.Dialogs
 import QtQuick.Layouts
@@ -13,6 +14,15 @@ ColumnLayout {
     property var cells: []
     property var regional: ({})
     property bool expanded: false
+    property string cookieBrowser: ""
+    readonly property bool browserProfile: field.key === "video_cookies_profile"
+    readonly property bool sounds: field.key === "sounds"
+    readonly property var soundEvents: [
+        qsTr("Download complete"),
+        qsTr("Download failed"),
+        qsTr("Queue started"),
+        qsTr("Queue stopped or finished")
+    ]
     readonly property var colors: MaterialTheme.palette
     readonly property string kind: field.kind || "text"
     readonly property bool complex: kind === "table" || kind === "lines" || kind === "regional"
@@ -34,6 +44,17 @@ ColumnLayout {
         if (column.kind === "boolean") return false
         if (column.kind === "number") return 1
         return ""
+    }
+
+    function changeSound(index, checked, path) {
+        const rows = cells.slice()
+        rows[index] = [checked, path]
+        cells = rows
+    }
+
+    function choiceIndex(model, value, fallback = -1) {
+        const index = model.findIndex(entry => entry.value === value || String(entry.value) === String(value))
+        return index === -1 ? fallback : index
     }
 
     function saveLine(value) {
@@ -86,10 +107,16 @@ ColumnLayout {
         Loader {
             Layout.preferredWidth: root.kind === "boolean" ? 56 : Math.min(root.width * 0.48, 300)
             Layout.minimumWidth: root.kind === "boolean" ? 48 : 125
-            active: !root.unavailable
+            active: !root.unavailable && !root.browserProfile
             sourceComponent: root.complex ? expandButton : root.kind === "boolean" ? boolControl
                 : root.kind === "select" ? selectControl : root.field.key === "video_cookies_file" ? cookieControl : inputControl
         }
+    }
+
+    Loader {
+        Layout.fillWidth: true
+        active: root.browserProfile
+        sourceComponent: profileControl
     }
 
     Rectangle {
@@ -109,11 +136,12 @@ ColumnLayout {
 
     Component {
         id: selectControl
-        ComboBox {
+        GlassComboBox {
             model: root.choices
             textRole: "label"
             valueRole: "value"
-            currentIndex: root.choices.findIndex(choice => choice.value === root.field.value)
+            currentIndex: root.choiceIndex(root.choices, root.field.value)
+            displayText: currentIndex < 0 ? qsTr("Choose an option") : currentText
             Accessible.name: root.field.label
             palette.text: root.colors.text
             palette.buttonText: root.colors.text
@@ -181,6 +209,96 @@ ColumnLayout {
     }
 
     Component {
+        id: profileControl
+        ColumnLayout {
+            id: profileEditor
+            property var foundProfiles: []
+            property string problem: ""
+            property string detectedBrowser: ""
+            property bool finding: false
+
+            function discover() {
+                const browser = root.cookieBrowser
+                finding = true
+                problem = ""
+                foundProfiles = []
+                detectedBrowser = browser
+                engine.request({local: "browserProfiles", browser: browser}, function(result, error) {
+                    profileEditor.finding = false
+                    if (root.cookieBrowser !== browser)
+                        return
+                    profileEditor.foundProfiles = result || []
+                    profileEditor.problem = error || (!profileEditor.foundProfiles.length
+                        ? qsTr("No profiles were found in the standard locations. Browse to a profile folder below.")
+                        : "")
+                })
+            }
+
+            Flow {
+                Layout.fillWidth: true
+                spacing: 6
+                FieldBox {
+                    id: browserProfileName
+                    width: Math.min(profileEditor.width, 310)
+                    text: String(root.field.value ?? "")
+                    placeholderText: qsTr("Default browser profile")
+                    Accessible.name: root.field.label
+                    onAccepted: root.saveLine(text.trim())
+                }
+                GlassButton {
+                    text: qsTr("Apply")
+                    enabled: browserProfileName.text.trim() !== String(root.field.value ?? "")
+                    onClicked: root.saveLine(browserProfileName.text.trim())
+                }
+                GlassButton {
+                    text: profileEditor.finding ? qsTr("Finding profiles…") : qsTr("Find profiles")
+                    enabled: Boolean(root.cookieBrowser) && root.cookieBrowser !== "safari" && !profileEditor.finding
+                    onClicked: profileEditor.discover()
+                }
+                GlassButton {
+                    text: qsTr("Browse…")
+                    Accessible.name: qsTr("Browse for the browser profile folder")
+                    onClicked: profileFolder.open()
+                }
+                GlassButton {
+                    visible: Boolean(root.field.value)
+                    text: qsTr("Use default")
+                    onClicked: root.commit("", {})
+                }
+            }
+
+            GlassComboBox {
+                Layout.fillWidth: true
+                visible: profileEditor.detectedBrowser === root.cookieBrowser && count > 0
+                model: profileEditor.foundProfiles
+                textRole: "label"
+                valueRole: "value"
+                currentIndex: root.choiceIndex(profileEditor.foundProfiles, root.field.value, -1)
+                displayText: currentIndex < 0 ? qsTr("Choose a detected profile") : currentText
+                Accessible.name: qsTr("Detected browser profiles")
+                onActivated: root.commit(currentValue, {})
+            }
+
+            Label {
+                Layout.fillWidth: true
+                visible: profileEditor.detectedBrowser === root.cookieBrowser && text.length > 0
+                text: profileEditor.problem
+                color: root.colors.muted
+                wrapMode: Text.WordWrap
+            }
+
+            FolderDialog {
+                id: profileFolder
+                title: qsTr("Choose the browser profile folder")
+                onAccepted: {
+                    const path = engine.localPath(selectedFolder)
+                    if (path) root.commit(path, {})
+                }
+            }
+        }
+    }
+
+    Component {
         id: expandButton
         GlassButton {
             text: root.expanded ? qsTr("Close editor") : qsTr("Edit…")
@@ -193,7 +311,7 @@ ColumnLayout {
     Loader {
         Layout.fillWidth: true
         active: root.expanded && root.complex && !root.unavailable
-        sourceComponent: root.kind === "table" ? tableControl : root.kind === "lines" ? linesControl : regionalControl
+        sourceComponent: root.sounds ? soundControl : root.kind === "table" ? tableControl : root.kind === "lines" ? linesControl : regionalControl
     }
 
     Component {
@@ -217,6 +335,152 @@ ColumnLayout {
                 text: qsTr("Save list")
                 enabled: lines.text !== (root.field.value || []).join("\n")
                 onClicked: root.commit(lines.text.split(/\r?\n/).map(line => line.trim()).filter(Boolean), {})
+            }
+        }
+    }
+
+    Component {
+        id: soundControl
+        ColumnLayout {
+            id: soundEditor
+            property int selectedEvent: 0
+            property string previewError: ""
+            property bool previewPending: false
+            property bool loadingCue: false
+            readonly property var cues: [
+                {id: "download-complete", label: qsTr("Completion chime")},
+                {id: "download-failed", label: qsTr("Failure tone")},
+                {id: "queue-started", label: qsTr("Queue start chime")},
+                {id: "queue-stopped", label: qsTr("Queue stop chime")}
+            ]
+            enabled: !loadingCue
+
+            function useBuiltIn(index) {
+                loadingCue = true
+                previewError = ""
+                engine.request({local: "installNotificationCue", cue: cues[index].id}, function(path, error) {
+                    soundEditor.loadingCue = false
+                    if (error || !path) {
+                        soundEditor.previewError = error || qsTr("Could not load the built-in sound.")
+                        return
+                    }
+                    root.changeSound(index, true, path)
+                })
+            }
+
+            function playWhenReady() {
+                if (!previewPending)
+                    return
+                if (soundPlayer.status === SoundEffect.Ready) {
+                    previewPending = false
+                    soundPlayer.play()
+                } else if (soundPlayer.status === SoundEffect.Error) {
+                    previewPending = false
+                    previewError = qsTr("The sound could not be played. Choose an existing WAV file.")
+                }
+            }
+
+            function preview(path) {
+                const url = WindowAppearance.fileUrl(path)
+                previewError = ""
+                if (!url || !/\.wav$/i.test(path)) {
+                    previewError = qsTr("Choose an existing WAV sound file.")
+                    return
+                }
+                soundPlayer.stop()
+                previewPending = true
+                soundPlayer.source = url
+                playWhenReady()
+            }
+
+            SoundEffect {
+                id: soundPlayer
+                onStatusChanged: soundEditor.playWhenReady()
+            }
+
+            Repeater {
+                model: root.soundEvents
+                delegate: ColumnLayout {
+                    id: soundRow
+                    required property int index
+                    required property string modelData
+                    readonly property var entry: root.cells[index] || [false, ""]
+                    readonly property string path: String(entry[1] ?? "")
+                    readonly property var cue: soundEditor.cues[index]
+                    readonly property bool builtIn: path.replace(/\\/g, "/")
+                        .endsWith("/notification-sounds/auralis-" + cue.id + ".wav")
+                    Layout.fillWidth: true
+                    spacing: 3
+
+                    Switch {
+                        text: soundRow.modelData
+                        checked: Boolean(soundRow.entry[0])
+                        onToggled: root.changeSound(soundRow.index, checked, soundRow.path)
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Label {
+                            Layout.fillWidth: true
+                            text: soundRow.builtIn ? soundRow.cue.label
+                                : soundRow.path ? soundRow.path.split(/[\\/]/).pop() : qsTr("No sound selected")
+                            color: root.colors.muted
+                            elide: Text.ElideMiddle
+                            ToolTip.visible: soundPathHover.hovered && Boolean(soundRow.path)
+                            ToolTip.text: soundRow.path
+                            HoverHandler { id: soundPathHover }
+                        }
+                        GlassButton {
+                            text: qsTr("Use built-in")
+                            Accessible.name: qsTr("Use built-in sound for %1").arg(soundRow.modelData)
+                            onClicked: soundEditor.useBuiltIn(soundRow.index)
+                        }
+                        GlassButton {
+                            text: qsTr("Browse…")
+                            Accessible.name: qsTr("Choose sound for %1").arg(soundRow.modelData)
+                            onClicked: {
+                                soundEditor.selectedEvent = soundRow.index
+                                chooseSound.open()
+                            }
+                        }
+                        GlassButton {
+                            text: qsTr("Preview")
+                            Accessible.name: qsTr("Preview sound for %1").arg(soundRow.modelData)
+                            enabled: Boolean(soundRow.path) && !soundEditor.previewPending
+                            onClicked: soundEditor.preview(soundRow.path)
+                        }
+                        GlassButton {
+                            text: qsTr("Clear")
+                            Accessible.name: qsTr("Clear sound for %1").arg(soundRow.modelData)
+                            enabled: Boolean(soundRow.path)
+                            onClicked: root.changeSound(soundRow.index, false, "")
+                        }
+                    }
+                }
+            }
+
+            Label {
+                Layout.fillWidth: true
+                visible: text.length > 0
+                text: soundEditor.previewError
+                color: root.colors.destructive
+                wrapMode: Text.WordWrap
+            }
+
+            GlassButton {
+                Layout.alignment: Qt.AlignRight
+                text: qsTr("Save sounds")
+                enabled: JSON.stringify(root.cells) !== JSON.stringify(root.field.value)
+                onClicked: root.commit(root.cells, {})
+            }
+
+            FileDialog {
+                id: chooseSound
+                title: qsTr("Choose a notification sound")
+                nameFilters: [qsTr("WAV sound files (*.wav)")]
+                onAccepted: {
+                    const path = engine.localPath(selectedFile)
+                    if (path) root.changeSound(soundEditor.selectedEvent, true, path)
+                }
             }
         }
     }
@@ -251,8 +515,7 @@ ColumnLayout {
                             }
 
                             sourceComponent: modelData.kind === "boolean" ? rowCheck : modelData.options ? rowChoice
-                                : (root.field.key === "category_dirs" || root.field.key === "sounds") && index === 1
-                                    ? rowPath : rowValue
+                                : root.field.key === "category_dirs" && index === 1 ? rowPath : rowValue
 
                             Component {
                                 id: rowCheck
@@ -266,11 +529,11 @@ ColumnLayout {
 
                             Component {
                                 id: rowChoice
-                                ComboBox {
+                                GlassComboBox {
                                     model: cell.modelData.options
                                     textRole: "label"
                                     valueRole: "value"
-                                    currentIndex: model.findIndex(option => option.value === cell.entry)
+                                    currentIndex: root.choiceIndex(cell.modelData.options, cell.entry, -1)
                                     Accessible.name: cell.modelData.label
                                     onActivated: cell.update(currentValue)
                                 }
@@ -289,22 +552,13 @@ ColumnLayout {
                                     }
                                     GlassButton {
                                         text: qsTr("Browse…")
-                                        onClicked: root.field.key === "category_dirs" ? chooseFolder.open() : chooseSound.open()
+                                        onClicked: chooseFolder.open()
                                     }
                                     FolderDialog {
                                         id: chooseFolder
                                         title: qsTr("Choose a category folder")
                                         onAccepted: {
                                             location.text = engine.localPath(selectedFolder)
-                                            cell.update(location.text)
-                                        }
-                                    }
-                                    FileDialog {
-                                        id: chooseSound
-                                        title: qsTr("Choose a notification sound")
-                                        nameFilters: [qsTr("Audio files (*.wav *.mp3 *.ogg)")]
-                                        onAccepted: {
-                                            location.text = engine.localPath(selectedFile)
                                             cell.update(location.text)
                                         }
                                     }
@@ -353,7 +607,7 @@ ColumnLayout {
                 GlassButton {
                     visible: !root.field.fixed
                     text: qsTr("Add row")
-                    onClicked: root.cells = root.cells.concat([columns.map(root.defaultCell)])
+                    onClicked: root.cells = root.cells.concat([tableEditor.columns.map(root.defaultCell)])
                 }
                 Item { Layout.fillWidth: true }
                 GlassButton {
@@ -372,13 +626,13 @@ ColumnLayout {
                 checked: Boolean(root.regional.custom)
                 onToggled: root.regional = Object.assign({}, root.regional, {custom: checked})
             }
-            ComboBox {
+            GlassComboBox {
                 Layout.fillWidth: true
                 enabled: root.regional.custom
                 model: [qsTr("Day / Month / Year"), qsTr("Month / Day / Year"), qsTr("Year / Month / Day")]
                 currentIndex: ["dmy", "mdy", "ymd"].indexOf(root.regional.order)
                 Accessible.name: qsTr("Date order")
-                onActivated: root.regional = Object.assign({}, root.regional, {order: ["dmy", "mdy", "ymd"][index]})
+                onActivated: index => root.regional = Object.assign({}, root.regional, {order: ["dmy", "mdy", "ymd"][index]})
             }
             CheckBox {
                 text: qsTr("24-hour clock")
@@ -386,13 +640,13 @@ ColumnLayout {
                 checked: Boolean(root.regional.clock24)
                 onToggled: root.regional = Object.assign({}, root.regional, {clock24: checked})
             }
-            ComboBox {
+            GlassComboBox {
                 Layout.fillWidth: true
                 enabled: root.regional.custom
                 model: [qsTr("Sunday"), qsTr("Monday"), qsTr("Tuesday"), qsTr("Wednesday"), qsTr("Thursday"), qsTr("Friday"), qsTr("Saturday")]
                 currentIndex: root.regional.week_start ?? 0
                 Accessible.name: qsTr("First day of the week")
-                onActivated: root.regional = Object.assign({}, root.regional, {week_start: index})
+                onActivated: index => root.regional = Object.assign({}, root.regional, {week_start: index})
             }
             GlassButton {
                 Layout.alignment: Qt.AlignRight

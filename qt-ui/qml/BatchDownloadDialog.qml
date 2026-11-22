@@ -77,7 +77,7 @@ Dialog {
             Label { text: qsTr("From"); color: root.colors.ink }
             Label { text: qsTr("To"); color: root.colors.ink }
             Label { text: qsTr("Number width"); color: root.colors.ink }
-            ComboBox {
+            GlassComboBox {
                 id: ranges
                 model: [qsTr("Numbers"), qsTr("Letters")]
                 Accessible.name: qsTr("Range")
