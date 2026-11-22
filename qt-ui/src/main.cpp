@@ -13,6 +13,7 @@
 #include <QLockFile>
 #include <QMenu>
 #include <QMessageBox>
+#include <QMutex>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickStyle>
@@ -21,6 +22,7 @@
 #include <QStandardPaths>
 #include <QSystemTrayIcon>
 
+#include <cstring>
 #include <memory>
 #include <optional>
 
@@ -29,6 +31,18 @@
 #endif
 
 namespace {
+void writeSmokeLog(QtMsgType, const QMessageLogContext &, const QString &message)
+{
+    static QMutex mutex;
+    QMutexLocker lock(&mutex);
+    const auto profile = qEnvironmentVariable("MDM_DATA_DIR");
+    if (!profile.isEmpty() && QDir::isAbsolutePath(profile)) {
+        QFile log(QDir(profile).filePath(QStringLiteral("qt-smoke-console.log")));
+        if (log.open(QIODevice::WriteOnly | QIODevice::Append))
+            log.write(message.toUtf8() + '\n');
+    }
+}
+
 bool forwardToInstance(const QString &serverName, const QByteArray &message)
 {
     QLocalSocket socket;
@@ -60,6 +74,13 @@ void addBundledTools()
 
 int main(int argc, char **argv)
 {
+    for (int index = 1; index < argc; ++index) {
+        if (std::strcmp(argv[index], "--engine-smoke") == 0) {
+            qInstallMessageHandler(writeSmokeLog);
+            qInfo("Smoke: constructing the Qt application.");
+            break;
+        }
+    }
     QApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("Auralis Download Manager"));
     app.setOrganizationName(QStringLiteral("Auralis"));
@@ -70,6 +91,7 @@ int main(int argc, char **argv)
     const QStringList arguments = app.arguments();
     const bool smoke = arguments.contains(QStringLiteral("--engine-smoke"));
     if (smoke) {
+        qInfo("Smoke: Qt platform initialized.");
         const QString profile = qEnvironmentVariable("MDM_DATA_DIR");
         if (profile.isEmpty() || !QDir::isAbsolutePath(profile)) {
             qCritical("Set an isolated, absolute MDM_DATA_DIR before running the engine smoke test.");
@@ -119,9 +141,11 @@ int main(int argc, char **argv)
         return 1;
 
     qml.rootContext()->setContextProperty(QStringLiteral("engine"), &engine);
+    if (smoke) qInfo("Smoke: loading the Qt interface.");
     qml.loadFromModule(QStringLiteral("Auralis"), QStringLiteral("Main"));
     if (qml.rootObjects().isEmpty())
         return 1;
+    if (smoke) qInfo("Smoke: Qt interface loaded.");
     auto *root = qml.rootObjects().first();
     auto *window = qobject_cast<QWindow *>(root);
     if (!window)
@@ -189,5 +213,8 @@ int main(int argc, char **argv)
         test = std::make_unique<EngineSmoke>(engine);
     }
     QTimer::singleShot(0, &engine, &Engine::start);
-    return app.exec();
+    if (smoke) qInfo("Smoke: starting the Qt event loop and Rust service.");
+    const int code = app.exec();
+    if (smoke) qInfo("Smoke: event loop finished with exit code %d.", code);
+    return code;
 }

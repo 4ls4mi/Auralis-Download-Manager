@@ -37,6 +37,7 @@ void EngineSmoke::startDownload()
     if (m_started || !m_engine.ready())
         return;
     m_started = true;
+    qInfo("Smoke: Rust service connected. Starting the local download.");
     if (!m_server.listen(QHostAddress::LocalHost, 0)) {
         qCritical().noquote() << m_server.errorString();
         m_engine.requestQuit(1);
@@ -64,6 +65,7 @@ void EngineSmoke::inspectTransfers()
         m_transferVerified = file.open(QIODevice::ReadOnly) && file.readAll() == Payload;
         if (!m_transferVerified)
             qCritical("The downloaded smoke-test file differs from the local server payload.");
+        if (m_transferVerified) qInfo("Smoke: downloaded bytes verified. Stopping the service.");
         m_engine.requestQuit(m_transferVerified ? 0 : 1);
         break;
     }
@@ -75,6 +77,7 @@ void EngineSmoke::verifyShutdown(bool clean)
         QCoreApplication::exit(1);
         return;
     }
+    qInfo("Smoke: Rust service stopped cleanly.");
     QSaveFile marker(QDir(m_engine.dataDirectory()).filePath(QStringLiteral("qt-engine-smoke.ok")));
     const QByteArray confirmation("Qt application, Rust downloader, and file integrity verified.\n");
     if (!marker.open(QIODevice::WriteOnly) || marker.write(confirmation) != confirmation.size() || !marker.commit())

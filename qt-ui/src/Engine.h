@@ -27,6 +27,8 @@ class Engine final : public QObject
 public:
     Engine(QJSEngine *scriptEngine, bool startHidden, bool smoke, QObject *parent = nullptr);
 
+    ~Engine() override;
+
     QVariantMap dashboard() const { return m_dashboard; }
     QVariantMap visuals() const { return m_visuals; }
     bool ready() const { return m_ready; }

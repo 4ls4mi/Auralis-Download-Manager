@@ -96,6 +96,14 @@ Engine::Engine(QJSEngine *scriptEngine, bool startHidden, bool smoke, QObject *p
     connect(&m_timer, &QTimer::timeout, this, &Engine::refresh);
 }
 
+Engine::~Engine()
+{
+    // Worker lambdas borrow the engine and profile. Wait while they still exist.
+    m_commands.waitForDone();
+    m_localJobs.waitForDone();
+    m_serviceThread.waitForDone();
+}
+
 QString Engine::version() const { return QStringLiteral(AURALIS_VERSION); }
 
 bool Engine::trayAvailable() const
