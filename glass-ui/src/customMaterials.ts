@@ -27,12 +27,13 @@ export const materialPresets:Record<string,MaterialFile>={
 export const extraMaterials:Record<string,MaterialFile>={
  'builtin-obsidian-matte':{format:'auralis-material',version:1,name:'Matte Obsidian',finish:'matte',controls:'angular',translucency:8,shading:75},
  'builtin-smoked-glass':{format:'auralis-material',version:1,name:'Smoked Glass',finish:'clear',controls:'soft',translucency:65,shading:65},
+ 'builtin-black-glass':{format:'auralis-material',version:1,name:'Black Blur Glass',finish:'clear',controls:'soft',translucency:72,shading:20},
  'builtin-pearl-frost':{format:'auralis-material',version:1,name:'Pearl Frost',finish:'frosted',controls:'rounded',translucency:35,shading:60}
 };
 
 /** Backdrop behavior belongs to the chosen material, not a separate toggle. */
 export function materialBackdrop(id:string, material:MaterialFile): 'material'|'clear'|'soft'|'frosted'|'tinted' {
- if(id==='builtin-smoked-glass')return 'tinted';
+ if(id==='builtin-smoked-glass'||id==='builtin-black-glass')return 'tinted';
  switch(material.finish){
   case 'frosted': return 'frosted';
   case 'satin': case 'gloss': return 'soft';

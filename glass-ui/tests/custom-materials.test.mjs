@@ -21,3 +21,12 @@ test('material finish selects its backdrop without a separate setting',async()=>
  assert.equal(materialBackdrop('window-glass',materialPresets['window-glass']),'clear');
  assert.equal(materialBackdrop('builtin-smoked-glass',extraMaterials['builtin-smoked-glass']),'tinted');
 });
+
+test('black blur glass uses the Windows acrylic backdrop', async()=>{
+ const {materialBackdrop}=await import('../src/customMaterials.ts');
+ const {nativeBackdrop}=await import('../src/nativeBackdrop.ts');
+ const material=extraMaterials['builtin-black-glass'];
+ assert.equal(materialBackdrop('builtin-black-glass',material),'tinted');
+ assert.equal(nativeBackdrop('desktop','builtin-black-glass',materialBackdrop('builtin-black-glass',material),false),'acrylic');
+ assert.equal(nativeBackdrop('wallpaper','builtin-black-glass','tinted',false),null);
+});

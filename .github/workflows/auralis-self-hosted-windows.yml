@@ -212,7 +212,8 @@ jobs:
             $config = $original | ConvertFrom-Json -AsHashtable
             $resources = [ordered]@{}
             foreach ($file in $resourceFiles) {
-              $resources[(Join-Path $staging $file).Replace('\','/')] = $file
+              $destination = if ($file -eq 'misterdownloadmanager-nmhost.exe') { 'auralis-browser-host.exe' } else { $file }
+              $resources[(Join-Path $staging $file).Replace('\','/')] = $destination
             }
             $resources[$extension.Replace('\','/') + '/'] = 'auralis-extension/'
             $config.bundle.resources = $resources

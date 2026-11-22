@@ -58,7 +58,9 @@ test('thumbnail control targets its own video and sends selected subtitle', {ski
     assert.equal(await panel.locator('.sign-in').count(),0);
     assert.equal(sent[0].url,'https://www.youtube.com/watch?v=abcdef12345');
     assert.deepEqual(sent.find(m=>m.type==='video-pick').subs.langs,['en']);
-    await panel.evaluate(e=>{const root=e.shadowRoot;const select=root.querySelector('select[aria-label="Cookies"]');select.value='file';select.dispatchEvent(new Event('change'))});
+    await panel.getByRole('combobox',{name:'Cookies'}).click();
+    await panel.getByRole('option',{name:'Choose cookies file'}).click();
+    assert.equal(await panel.getByLabel('Cookies file').isVisible(),true);
     await panel.locator('input[type="file"]').setInputFiles({name:'cookies.txt',mimeType:'text/plain',buffer:Buffer.from('# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t0\tSID\ttest-value\n')});
     assert.equal(await panel.evaluate(e=>e.shadowRoot.querySelector('input[type="file"]').files.length),1);
     await panel.evaluate(e=>e.shadowRoot.querySelector('.fetch').click());

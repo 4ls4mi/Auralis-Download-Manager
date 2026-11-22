@@ -371,7 +371,8 @@ export function CrystalWindow({ children, target = "main" }: {
     return()=>{active=false};
   }, [mode, appearance.material, surfaceStyle,maximized,tiled]);
   // White palettes need light surfaces and dark foregrounds in every material.
-  const effectiveLight = theme.light === true || theme.id === "white-frost" || theme.id === "white-pearl";
+  const blackGlass = appearance.material === "builtin-black-glass";
+  const effectiveLight = !blackGlass && (theme.light === true || theme.id === "white-frost" || theme.id === "white-pearl");
   const lightAccentRgb = theme.light ? theme.rgb.split(",").map(v=>Math.round(Number(v)*.36)).join(",") : theme.id === "white-pearl" ? "101,86,67" : "64,91,112";
   const lightAccent = `rgb(${lightAccentRgb})`;
   const style = {
@@ -384,11 +385,11 @@ export function CrystalWindow({ children, target = "main" }: {
     "--theme-danger-rgb": effectiveLight ? lightAccentRgb : mixColor(theme.rgb.split(",").map(Number),secondaryRgb(theme),.80),
     "--theme-tool-rgb": effectiveLight ? lightAccentRgb : mixColor(secondaryRgb(theme),[255,255,255],.18),
     "--accent-rgb": effectiveLight ? lightAccentRgb : theme.rgb,
-    "--glass": effectiveLight ? themeTintRgb.join(",") : themeTintRgb.map(n=>Math.round(n*(theme.neutralTint ? .65 : .20))).join(","),
-    "--glass-tint": `rgba(${(theme.neutralTint??theme.rgb.split(",").map(Number)).join(",")},${Math.max(0,Math.min(65,appearance.tintStrength))/100})`,
-    "--surface": effectiveLight ? `rgba(${themeTintRgb.join(",")},.75)` : `rgba(${themeTintRgb.join(",")},.13)`,
-    "--field": effectiveLight ? `rgba(${themeTintRgb.join(",")},.92)` : `rgba(${themeTintRgb.map(n=>Math.round(n*.12)).join(",")},.82)`,
-    "--popover": effectiveLight ? `rgb(${themeTintRgb.join(",")})` : `rgb(${themeTintRgb.map(n=>Math.round(n*(theme.neutralTint ? .65 : .18))).join(",")})`,
+    "--glass": blackGlass ? "8,10,14" : effectiveLight ? themeTintRgb.join(",") : themeTintRgb.map(n=>Math.round(n*(theme.neutralTint ? .65 : .20))).join(","),
+    "--glass-tint": blackGlass ? "rgba(0,0,0,0)" : `rgba(${(theme.neutralTint??theme.rgb.split(",").map(Number)).join(",")},${Math.max(0,Math.min(65,appearance.tintStrength))/100})`,
+    "--surface": blackGlass ? "rgba(12,14,18,.46)" : effectiveLight ? `rgba(${themeTintRgb.join(",")},.75)` : `rgba(${themeTintRgb.join(",")},.13)`,
+    "--field": blackGlass ? "rgba(6,8,12,.78)" : effectiveLight ? `rgba(${themeTintRgb.join(",")},.92)` : `rgba(${themeTintRgb.map(n=>Math.round(n*.12)).join(",")},.82)`,
+    "--popover": blackGlass ? "rgb(20,23,29)" : effectiveLight ? `rgb(${themeTintRgb.join(",")})` : `rgb(${themeTintRgb.map(n=>Math.round(n*(theme.neutralTint ? .65 : .18))).join(",")})`,
     "--panel-opacity": surfaceOpacity,
     "--backdrop-opacity": surfaceOpacity,
     "--material-opacity": customMaterial ? Math.max(.12,(1-customMaterial.translucency/125)) : undefined,
@@ -402,7 +403,7 @@ export function CrystalWindow({ children, target = "main" }: {
     "--min-window-button": (30/Math.min(1,Math.max(.4,fit)))+"px",
     "--font-size": Math.max(Math.min(20,Math.max(12,appearance.fontSize)),12/Math.max(.4,fit))+"px"
   } as CSSProperties;
-  return <div className={`cg-window cg-mode-${mode} cg-material-${appearance.material} cg-surface-${surfaceStyle} cg-theme-${theme.id} ${theme.light?"cg-custom-light":""} ${customMaterial?`cg-custom-material cg-finish-${customMaterial.finish} cg-controls-${customMaterial.controls} cg-layout-${customMaterial.layout??'standard'} cg-text-${customMaterial.text??'crisp'}`:""} cg-progress-shape-${appearance.progressShape} cg-connection-shape-${appearance.connectionShape} ${maximized?"cg-maximized":""} ${tiled?"cg-tiled":""} ${effectiveLight?"cg-light":"cg-dark"} ${appearance.highContrast?"cg-high-contrast":""}`} style={style}>
+  return <div className={`cg-window cg-mode-${mode} cg-material-${appearance.material} cg-surface-${surfaceStyle} cg-theme-${theme.id} ${theme.light&&!blackGlass?"cg-custom-light":""} ${customMaterial?`cg-custom-material cg-finish-${customMaterial.finish} cg-controls-${customMaterial.controls} cg-layout-${customMaterial.layout??'standard'} cg-text-${customMaterial.text??'crisp'}`:""} cg-progress-shape-${appearance.progressShape} cg-connection-shape-${appearance.connectionShape} ${maximized?"cg-maximized":""} ${tiled?"cg-tiled":""} ${effectiveLight?"cg-light":"cg-dark"} ${appearance.highContrast?"cg-high-contrast":""}`} style={style}>
     {mode === "wallpaper" && <div className="cg-wallpaper">
       {video ? <video key={src} autoPlay loop muted playsInline src={src} /> :
         <div style={{ backgroundImage: `url("${src}")` }} />}

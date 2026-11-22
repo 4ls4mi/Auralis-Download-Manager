@@ -1120,7 +1120,7 @@ button:focus-visible { outline: none; }
   <div class="mh"><img alt="" draggable="false"><div><span class="t"></span><span class="s"></span></div></div>
   <div class="hr"></div>
   <div class="note" role="status" hidden></div>
-  <div class="cookie-controls"><label>Cookies <select class="cookie-mode"><option value="browser">Browser session</option><option value="file">Choose cookies file</option></select></label><input class="cookie-header" type="file" accept=".txt,text/plain" aria-label="Cookies file" hidden><button type="button" class="cookie-fetch">Fetch qualities</button></div>
+  <div class="cookie-controls"><span>Cookies</span><div class="subtitle-combo cookie-combo"><select class="cookie-mode" hidden tabindex="-1" aria-hidden="true"><option value="browser">Browser session</option><option value="file">Choose cookies file</option></select><button type="button" class="subtitle-trigger cookie-trigger" role="combobox" aria-label="Cookies" aria-haspopup="listbox" aria-controls="cookie-options" aria-expanded="false"><span class="subtitle-value">Browser session</span><span class="subtitle-chevron" aria-hidden="true">▾</span></button><div class="subtitle-list cookie-options" id="cookie-options" role="listbox" aria-label="Cookie sources" hidden><button type="button" role="option" data-value="browser" aria-selected="true">Browser session</button><button type="button" role="option" data-value="file" aria-selected="false">Choose cookies file</button></div></div><input class="cookie-header" type="file" accept=".txt,text/plain" aria-label="Cookies file" hidden><button type="button" class="cookie-fetch">Fetch qualities</button></div>
   <div class="rows" role="group"></div>
   <div class="hr"></div>
   <button role="menuitem" data-act="window"><span class="mi"><svg viewBox="0 0 16 16" ${ICON} stroke-width="1.4"><path d="M2.5 4h11M2.5 8h11M2.5 12h7"/></svg></span><span></span></button>
@@ -1143,7 +1143,13 @@ button:focus-visible { outline: none; }
   const menu = $(".menu");
   const note = $(".note");
   const cookieMode = $(".cookie-mode"), cookieHeader = $(".cookie-header"), cookieFetch = $(".cookie-fetch");
-  cookieMode.addEventListener("change", () => { cookieHeader.hidden = cookieMode.value !== "file"; });
+  const cookieTrigger=$(".cookie-trigger"), cookieOptions=$(".cookie-options"), cookieChoices=[...cookieOptions.querySelectorAll('[role="option"]')];
+  const closeCookieOptions=()=>{cookieOptions.hidden=true;cookieTrigger.setAttribute("aria-expanded","false")};
+  const syncCookieMode=()=>{cookieHeader.hidden=cookieMode.value!=="file";cookieTrigger.querySelector(".subtitle-value").textContent=cookieMode.selectedOptions[0].textContent;for(const choice of cookieChoices)choice.setAttribute("aria-selected",String(choice.dataset.value===cookieMode.value))};
+  cookieMode.addEventListener("change",syncCookieMode);
+  cookieTrigger.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();cookieOptions.hidden=!cookieOptions.hidden;cookieTrigger.setAttribute("aria-expanded",String(!cookieOptions.hidden))});
+  for(const choice of cookieChoices)choice.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();cookieMode.value=choice.dataset.value;syncCookieMode();closeCookieOptions();cookieTrigger.focus()});
+  $(".cookie-combo").addEventListener("keydown",e=>{if(e.key==="Escape"&&!cookieOptions.hidden){e.preventDefault();e.stopPropagation();closeCookieOptions();cookieTrigger.focus()}else if(e.key==="ArrowDown"||e.key==="ArrowUp"){e.preventDefault();e.stopPropagation();cookieOptions.hidden=false;cookieTrigger.setAttribute("aria-expanded","true");const index=cookieChoices.indexOf(shadow.activeElement);cookieChoices[(index+(e.key==="ArrowDown"?1:cookieChoices.length-1))%cookieChoices.length].focus()}else if((e.key==="Enter"||e.key===" ")&&shadow.activeElement===cookieTrigger){e.preventDefault();e.stopPropagation();cookieTrigger.click()}});
   cookieFetch.addEventListener("click", async e => {
     e.stopPropagation();
     const file=cookieHeader.files?.[0];
@@ -1697,7 +1703,7 @@ button:focus-visible { outline: none; }
     if (!ext.runtime?.id) return teardown();
     if (video !== v) {
       looks.clear();
-      cookieHeader.value = ""; cookieHeader.hidden = true; cookieMode.value = "browser"; subtitleChoice = "none"; subtitleEmbed = false;
+      cookieHeader.value = ""; cookieMode.value = "browser"; syncCookieMode(); closeCookieOptions(); subtitleChoice = "none"; subtitleEmbed = false;
       video = v;
       held = null;
       closeMenu();
@@ -2085,7 +2091,7 @@ button:focus-visible { outline: none; }
         combo.append(trigger,list);heading.append(combo);section.append(heading);
         const modes=document.createElement("div");modes.className="subtitle-modes";modes.setAttribute("role","group");modes.setAttribute("aria-label","Subtitle output");
         for(const [value,text] of [[false,"Separate file"],[true,"Selectable track"]]){const item=document.createElement("label");const radio=document.createElement("input");radio.type="radio";radio.name="subtitle-output";radio.checked=subtitleEmbed===value;radio.addEventListener("change",()=>{if(radio.checked)subtitleEmbed=value});item.append(radio,document.createTextNode(text));modes.append(item)}
-        const burn=document.createElement("label"),burnRadio=document.createElement("input");burnRadio.type="radio";burnRadio.name="subtitle-output";burnRadio.disabled=true;burn.append(burnRadio,document.createTextNode("Burn into picture (not available yet)"));modes.append(burn);const note=document.createElement("small");note.textContent="Selectable tracks need FFmpeg and MP4/MKV/MOV; otherwise saved separately.";modes.append(note);section.append(modes);rows.append(section);
+        const note=document.createElement("small");note.textContent="Selectable tracks need FFmpeg and MP4/MKV/MOV; otherwise saved separately.";modes.append(note);section.append(modes);rows.append(section);
       }
       {
         if(qualityTab==="video")rows.append(topRow(best, { choice: look.choices.indexOf(best) }));
@@ -2224,6 +2230,7 @@ button:focus-visible { outline: none; }
     if (!menuOpen) return;
     const back = menu.contains(shadow.activeElement);
     menuOpen = false;
+    closeCookieOptions();
     menu.classList.remove("open");
     more.setAttribute("aria-expanded", "false");
     // The keyboard's focus back on its button, not lost with the menu.

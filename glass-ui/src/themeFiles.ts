@@ -22,7 +22,7 @@ const choice:Record<string,string[]>={
   trackColor:['ice','violet','teal','amber',...indicators.map(id=>`palette:${id}`)],connectionTrackColor:['ice','violet','teal','amber',...indicators.map(id=>`palette:${id}`)],
   fontFamily:['Segoe UI','Inter','Arial','Consolas','Trebuchet MS','Verdana','Georgia','Candara','Century Gothic','Palatino Linotype','Tahoma']
 };
-const builtinMaterials=['brushed-glass','frosted-water-351','rose-pine','window-glass','oversimplified','builtin-obsidian-matte','builtin-smoked-glass','builtin-pearl-frost'];
+const builtinMaterials=['brushed-glass','frosted-water-351','rose-pine','window-glass','oversimplified','builtin-obsidian-matte','builtin-smoked-glass','builtin-black-glass','builtin-pearl-frost'];
 const object=(v:unknown):Record<string,unknown>=>{if(!v||typeof v!=='object'||Array.isArray(v))throw Error('Expected a JSON object.');return v as Record<string,unknown>};
 export function parseTheme(input:unknown):ThemeFile {
  const v=object(input);if(v.format!=='auralis-theme'||v.version!==1)throw Error('Expected an Auralis theme file (version 1).');

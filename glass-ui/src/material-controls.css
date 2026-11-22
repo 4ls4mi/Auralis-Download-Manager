@@ -125,3 +125,8 @@
 .cg-window.cg-light .cg-fit-content .cg-row .cg-status.error{color:#a12239!important}
 .cg-window.cg-light .cg-fit-content .cg-row .cg-status.downloading{color:#075b88!important}
 .cg-window.cg-light .cg-fit-content .cg-row .cg-status.stopped{color:#785000!important}
+
+/* A simple black glass surface: no decorative gradients or layered shapes. */
+.cg-window.cg-material-builtin-black-glass.cg-surface-tinted .cg-content{background:rgba(0,0,0,.48)!important;backdrop-filter:blur(18px) saturate(115%)!important;box-shadow:inset 0 1px rgba(255,255,255,.18),0 8px 32px #0005!important}
+.cg-window.cg-material-builtin-black-glass .cg-content::before,.cg-window.cg-material-builtin-black-glass .cg-content::after{display:none!important}
+.cg-window.cg-material-builtin-black-glass.cg-surface-tinted .cg-fit-content .cg-glass{background:rgba(8,10,14,.48)!important;border-color:rgba(255,255,255,.16)!important}

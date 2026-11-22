@@ -414,11 +414,15 @@ fn suffix(path: &Path) -> Option<String> {
 fn native_host_candidates(app: &AppHandle) -> Vec<PathBuf> {
     let mut paths = Vec::new();
     if let Ok(dir) = app.path().resource_dir() {
+        paths.push(dir.join("auralis-browser-host.exe"));
+        paths.push(dir.join("resources/auralis-browser-host.exe"));
         paths.push(dir.join("misterdownloadmanager-nmhost.exe"));
         paths.push(dir.join("resources/misterdownloadmanager-nmhost.exe"));
     }
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
+            paths.push(dir.join("auralis-browser-host.exe"));
+            paths.push(dir.join("resources/auralis-browser-host.exe"));
             paths.push(dir.join("misterdownloadmanager-nmhost.exe"));
             paths.push(dir.join("resources/misterdownloadmanager-nmhost.exe"));
         }

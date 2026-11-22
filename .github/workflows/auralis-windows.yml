@@ -127,7 +127,14 @@ jobs:
 
       - name: Frontend tests
         working-directory: glass-ui
-        run: npm test
+        shell: pwsh
+        run: |
+          $browser = Join-Path $env:ProgramFiles 'Google/Chrome/Application/chrome.exe'
+          if (!(Test-Path $browser)) { $browser = Join-Path ${env:ProgramFiles(x86)} 'Microsoft/Edge/Application/msedge.exe' }
+          if (!(Test-Path $browser)) { throw 'A Windows browser for interface tests was not found.' }
+          $env:AURALIS_TEST_BROWSER = $browser
+          npm test
+          if ($LASTEXITCODE) { throw 'Frontend tests failed.' }
 
       - name: Build frontend and generate Auralis icons
         working-directory: glass-ui

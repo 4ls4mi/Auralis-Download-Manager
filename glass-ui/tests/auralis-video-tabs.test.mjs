@@ -15,7 +15,13 @@ test('in-player panel tabs preserve subtitle selection and stay anchored',{skip:
   const more=host.locator('.more');await more.waitFor({state:'visible'});await more.click();
   const tabs=host.locator('[role="tab"]');await tabs.first().waitFor();
   assert.equal(await tabs.count(),2);
-  const cookie=await host.locator('.cookie-controls label').boundingBox(),fetch=await host.locator('.cookie-fetch').boundingBox();assert.ok(fetch.y>=cookie.y+cookie.height-1,'Fetch qualities appears below cookies');
+  const cookies=host.getByRole('combobox',{name:'Cookies'});await cookies.click();
+  const sources=host.getByRole('listbox',{name:'Cookie sources'});await sources.getByRole('option',{name:'Choose cookies file'}).click();
+  assert.equal(await host.getByLabel('Cookies file').isVisible(),true);assert.match(await cookies.innerText(),/Choose cookies file/);
+  await cookies.focus();await page.keyboard.press('ArrowDown');assert.equal(await cookies.getAttribute('aria-expanded'),'true');await page.keyboard.press('Escape');assert.equal(await cookies.getAttribute('aria-expanded'),'false');
+  await cookies.click();await sources.getByRole('option',{name:'Browser session'}).click();assert.equal(await host.getByLabel('Cookies file').isVisible(),false);
+  assert.equal(await host.getByText('Burn into picture (not available yet)').count(),0);
+  const cookie=await host.locator('.cookie-combo').boundingBox(),fetch=await host.locator('.cookie-fetch').boundingBox();assert.ok(fetch.y>=cookie.y+cookie.height-1,'Fetch qualities appears below cookies');
   assert.equal(await host.locator('.menu').evaluate(e=>e.scrollWidth<=e.clientWidth),true);
   assert.equal(await host.locator('.mh .t').evaluate(e=>getComputedStyle(e).textOverflow),'ellipsis');
   assert.equal(await host.locator('.rows').evaluate(e=>getComputedStyle(e).overflowY),'auto');
