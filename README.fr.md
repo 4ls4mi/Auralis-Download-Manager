@@ -16,6 +16,8 @@ Auralis est un gestionnaire de téléchargement gratuit pour Windows x64, doté 
 
 ![Téléchargement en cours](docs/images/auralis/user-picture-2.png)
 
+[▶ Voir la vidéo du téléchargement (sans son)](docs/images/auralis/download-demo-muted.mp4)
+
 ### Informations du fichier
 
 ![Informations du fichier](docs/images/auralis/user-picture-3.png)
