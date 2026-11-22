@@ -43,6 +43,15 @@ jobs:
           fetch-depth: 0
           clean: false
 
+      - name: Validate Windows packaging scripts
+        shell: pwsh
+        run: |
+          Get-ChildItem -LiteralPath qt-ui/packaging -Filter '*.ps1' -File | ForEach-Object {
+            $parseErrors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$null, [ref]$parseErrors) | Out-Null
+            if ($parseErrors) { throw ($parseErrors | Out-String) }
+          }
+
       - name: Use the cached, verified native toolchain
         shell: pwsh
         run: ./qt-ui/packaging/windows-tools.ps1

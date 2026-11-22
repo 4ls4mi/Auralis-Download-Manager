@@ -75,7 +75,7 @@ try {
     Invoke-Checked $env:AURALIS_QT_NSIS @('/V3',"/DVERSION=$version","/DOUTPUT=$installer","/DPAYLOAD=$stage",
         "/DUNINSTALL_FILES=$uninstall","/DICON=$icon",(Join-Path $PSScriptRoot 'installer.nsi'))
     if (!(Test-Path $installer) -or (Get-Item $installer).Length -gt 268435456) {
-        throw 'The finished installer is missing or exceeds the installed updater’s size limit.'
+        throw 'The finished installer is missing or exceeds the size limit for automatic updates.'
     }
     "AURALIS_QT_INSTALLER=$installer" >> $env:GITHUB_ENV
     "AURALIS_QT_VERSION=$version" >> $env:GITHUB_ENV
