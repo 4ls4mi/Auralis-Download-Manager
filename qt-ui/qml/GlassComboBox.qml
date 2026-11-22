@@ -38,6 +38,16 @@ Basic.ComboBox {
         font: control.font
     }
 
+    indicator: DashboardIcon {
+        x: control.mirrored ? 8 : control.width - width - 8
+        y: (control.height - height) / 2
+        width: 16
+        height: 16
+        symbol: "chevron"
+        ink: control.colors.accent
+        bold: true
+    }
+
     delegate: Basic.ItemDelegate {
         id: option
         required property int index

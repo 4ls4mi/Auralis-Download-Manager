@@ -16,7 +16,7 @@ Item {
     property color solidColor: profile.background
     property real mediaOverlay: -1
     property real radius: profile.radius
-    property bool showReflection: role === "toolbar" && ["prism", "aero"].includes(profile.shape)
+    property bool showReflection: role === "toolbar" && profile.shape === "aero"
 
     readonly property var profile: MaterialTheme.profile(material)
     readonly property bool button: role === "button"
@@ -25,7 +25,9 @@ Item {
     readonly property bool sculpted: ["bubble", "aero"].includes(profile.shape)
     readonly property bool stacked: ["smoke", "frost"].includes(profile.shape)
     readonly property bool faceted: ["prism", "ice", "chamfer"].includes(profile.shape)
-    readonly property string outline: shell ? "square" : profile.shape
+    readonly property bool cleanChrome: profile.opaque || profile.softChrome === true
+    readonly property bool reflectionPlane: faceted && (!cleanChrome || shell || role === "toolbar")
+    readonly property string outline: shell ? "square" : profile.softChrome ? "round" : profile.shape
     readonly property real bevel: Math.max(1, Math.min(profile.bevel, height * .14, width * .10))
     readonly property real depth: Math.min(height / 3, 28 + profile.bevel)
     readonly property real reflectivity: profile.gloss * (role === "field" ? .54 : role === "button" ? .82 : 1)
@@ -83,8 +85,9 @@ Item {
             strokeColor: MaterialTheme.rgba(surface.profile.shade, surface.recess ? .27 : .34)
             fillColor: "transparent"
             PathSvg {
-                path: Geometry.frame(surface.bevel, surface.bevel, surface.width - 2 * surface.bevel,
-                                     surface.height - 2 * surface.bevel, Math.max(0, surface.radius - surface.bevel), surface.outline)
+                path: surface.cleanChrome && !surface.shell && !surface.button ? "" :
+                    Geometry.frame(surface.bevel, surface.bevel, surface.width - 2 * surface.bevel,
+                                   surface.height - 2 * surface.bevel, Math.max(0, surface.radius - surface.bevel), surface.outline)
             }
         }
 
@@ -93,7 +96,7 @@ Item {
             strokeColor: MaterialTheme.rgba(surface.profile.secondary, .15 + surface.reflectivity * .22)
             fillColor: "transparent"
             PathSvg {
-                path: Geometry.frame(surface.bevel + 1.7, surface.bevel + 1.7,
+                path: surface.cleanChrome ? "" : Geometry.frame(surface.bevel + 1.7, surface.bevel + 1.7,
                                      surface.width - 2 * surface.bevel - 3.4, surface.height - 2 * surface.bevel - 3.4,
                                      Math.max(0, surface.radius - surface.bevel - 1), surface.outline)
             }
@@ -141,7 +144,7 @@ Item {
                 GradientStop { position: .67; color: MaterialTheme.rgba(surface.profile.secondary, .31 * surface.reflectivity) }
                 GradientStop { position: 1; color: "transparent" }
             }
-            PathSvg { path: (surface.faceted && !surface.shell) || (surface.shell && surface.profile.shape === "prism") ? Geometry.facet(surface.width, surface.height, surface.radius, surface.outline, true) : "" }
+            PathSvg { path: surface.reflectionPlane ? Geometry.facet(surface.width, surface.height, surface.radius, surface.outline, true) : "" }
         }
 
         ShapePath {
@@ -154,7 +157,7 @@ Item {
                 GradientStop { position: .36; color: MaterialTheme.rgba(surface.profile.accent, .16 * surface.reflectivity) }
                 GradientStop { position: 1; color: "transparent" }
             }
-            PathSvg { path: (surface.faceted && !surface.shell) || (surface.shell && surface.profile.shape === "prism") ? Geometry.facet(surface.width, surface.height, surface.radius, surface.outline, false) : "" }
+            PathSvg { path: surface.reflectionPlane ? Geometry.facet(surface.width, surface.height, surface.radius, surface.outline, false) : "" }
         }
 
         ShapePath {

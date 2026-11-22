@@ -56,7 +56,7 @@ QtObject {
             buttonFace: "#fafbff", positive: "#087c4f", caution: "#995307", destructive: "#c03758"
         }),
         "prismatic-glass": preset({
-            name: qsTr("Prism Glass"), finish: "gloss", shape: "prism",
+            name: qsTr("Prism Glass"), finish: "gloss", shape: "prism", softChrome: true,
             background: "#173562", edge: "#76caff", accent: "#56e1ff", secondary: "#c18cff",
             shade: "#0a173c", upper: "#e9f8ff", translucency: .68, gloss: .96, radius: 9, bevel: 4,
             buttonFace: "#254a7b", positive: "#55f0ad", caution: "#ffcf64", destructive: "#ff7799"

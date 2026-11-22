@@ -22,12 +22,23 @@ Item {
     required property real indicatorWidth
     required property real timeWidth
     property bool cursorFocused: false
+    property bool transferring: false
+    property real waterPhase: 0
     readonly property int connectionCount: torrent ? Number(telemetry.torrent?.peers || 0) : Number(telemetry.active_connections || 0)
     readonly property string connectionLabel: torrent
         ? (connectionCount === 1 ? qsTr("1 peer") : qsTr("%1 peers").arg(connectionCount))
         : (connectionCount === 1 ? qsTr("1 connection") : qsTr("%1 connections").arg(connectionCount))
     readonly property var workers: torrent ? [] : (telemetry.connections || [])
         .filter(connection => connection.state === "Receiving" || connection.state === "Connecting").slice(0, 4)
+    NumberAnimation on waterPhase {
+        from: 0
+        to: 1
+        duration: 1350
+        loops: Animation.Infinite
+        running: row.visible && row.transferring && row.workers.some(worker => worker.state === "Receiving")
+            && !MaterialTheme.reducedMotion
+    }
+
     signal selected(int modifiers)
     signal opened()
     signal optionsRequested()
@@ -94,6 +105,7 @@ Item {
             Layout.minimumWidth: 85
             spacing: 2
             Label {
+                id: fileNameLabel
                 Layout.fillWidth: true
                 text: row.fileName
                 elide: Text.ElideMiddle
@@ -143,16 +155,19 @@ Item {
                 font.pixelSize: 11
             }
         }
-        ColumnLayout {
+        RowLayout {
             Layout.preferredWidth: row.indicatorWidth
-            spacing: 3
+            spacing: 7
+
             RowLayout {
-                Layout.fillWidth: true
-                spacing: 5
+                Layout.preferredWidth: Math.floor(row.indicatorWidth * .49)
+                Layout.minimumWidth: 71
+                spacing: 4
                 GlassProgress {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 11
+                    Layout.preferredHeight: 22
                     value: row.progress
+                    animated: row.transferring
                     shape: WindowAppearance.progressShape === "material"
                         ? (["bubble", "prism", "ice"].includes(profile.shape) ? profile.shape : "round") : WindowAppearance.progressShape
                     fillStyle: WindowAppearance.progressFill
@@ -160,63 +175,62 @@ Item {
                     endColor: MaterialTheme.progressColors[1]
                 }
                 Label {
-                    Layout.preferredWidth: 33
+                    Layout.preferredWidth: 30
                     text: Math.floor(row.progress * 100) + "%"
                     horizontalAlignment: Text.AlignRight
                     color: row.colors.ink
                     font.pixelSize: 11
                 }
             }
-            RowLayout {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 27
-                spacing: 7
-                ColumnLayout {
-                    Layout.preferredWidth: Math.ceil(row.indicatorWidth * .49)
-                    spacing: 2
-                    Label {
-                        Layout.fillWidth: true
-                        color: row.colors.muted
-                        text: row.connectionLabel
-                        elide: Text.ElideRight
-                        font.pixelSize: 11
-                    }
-                    RowLayout {
-                        visible: row.workers.length > 0
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 9
-                        spacing: 2
-                        Repeater {
-                            model: row.workers.length
-                            delegate: GlassProgress {
-                                required property int index
-                                readonly property var worker: row.workers[index] || ({})
-                                readonly property var fraction: TransferData.assigned(worker.id, row.telemetry.segments)
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 9
-                                value: fraction === null ? 0 : fraction
-                                opacity: worker.state === "Receiving" ? 1 : .66
-                                shape: WindowAppearance.connectionShape === "material"
-                                    ? (["bubble", "prism", "ice"].includes(profile.shape) ? profile.shape : "round") : WindowAppearance.connectionShape
-                                fillStyle: WindowAppearance.connectionFill
-                                startColor: MaterialTheme.connectionColors[0]
-                                endColor: MaterialTheme.connectionColors[1]
-                                Accessible.name: qsTr("Connection %1").arg(Number(worker.id) + 1)
-                            }
+
+            ColumnLayout {
+                Layout.preferredWidth: Math.floor(row.indicatorWidth * .24)
+                Layout.minimumWidth: 46
+                spacing: 1
+                RowLayout {
+                    visible: row.workers.length > 0
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 19
+                    spacing: 1
+                    Repeater {
+                        model: row.workers.length
+                        delegate: ConnectionWater {
+                            required property int index
+                            readonly property var worker: row.workers[index] || ({})
+                            Layout.fillWidth: true
+                            Layout.preferredWidth: 16
+                            Layout.preferredHeight: 18
+                            value: TransferData.assigned(worker.id, row.telemetry.segments)
+                            receiving: row.transferring && worker.state === "Receiving"
+                            phase: row.waterPhase
+                            shape: WindowAppearance.connectionShape === "material"
+                                ? (["bubble", "prism", "ice"].includes(profile.shape) ? profile.shape : "round") : WindowAppearance.connectionShape
+                            fillStyle: WindowAppearance.connectionFill
+                            startColor: MaterialTheme.connectionColors[0]
+                            endColor: MaterialTheme.connectionColors[1]
                         }
                     }
                 }
-                Loader {
+                Label {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 27
-                    active: row.speedSamples.length > 1 && row.speedSamples.some(sample => sample > 0)
-                    sourceComponent: TransferGraph {
-                        samples: row.speedSamples
-                        lineColor: MaterialTheme.graphColors[0]
-                        endpointColor: MaterialTheme.graphColors[1]
-                        gridColor: row.colors.divider
-                        Accessible.name: qsTr("Recent transfer speed")
-                    }
+                    color: row.colors.muted
+                    text: row.connectionLabel
+                    elide: Text.ElideRight
+                    font.pixelSize: 10
+                }
+            }
+
+            Loader {
+                Layout.fillWidth: true
+                Layout.preferredWidth: Math.max(25, row.indicatorWidth * .23)
+                Layout.preferredHeight: 31
+                active: row.speedSamples.length > 1 && row.speedSamples.some(sample => sample > 0)
+                sourceComponent: TransferGraph {
+                    samples: row.speedSamples
+                    lineColor: MaterialTheme.graphColors[0]
+                    endpointColor: MaterialTheme.graphColors[1]
+                    gridColor: row.colors.divider
+                    Accessible.name: qsTr("Recent transfer speed")
                 }
             }
         }
@@ -240,7 +254,7 @@ Item {
         color: row.colors.divider
     }
 
-    ToolTip.visible: pointer.containsMouse && (torrent || recoveryLabel.length > 0)
+    ToolTip.visible: pointer.containsMouse && (fileNameLabel.truncated || torrent || recoveryLabel.length > 0)
     ToolTip.delay: 650
     ToolTip.text: fileName + (mixed ? "\n" + qsTr("Started directly and continued via BitTorrent") : torrent ? "\n" + qsTr("BitTorrent download") : "")
         + (recoveryLabel.length ? "\n" + recoveryLabel : "")

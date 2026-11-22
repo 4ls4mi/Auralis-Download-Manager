@@ -87,7 +87,7 @@ ApplicationWindow {
     }
     readonly property var currentItem: chosenItems.find(item => String(item.id) === focusedTransferId) || chosenItems[0] || null
     readonly property var chosenSet: new Set(chosenIds)
-    readonly property int indicatorColumnWidth: compact ? 193 : 275
+    readonly property int indicatorColumnWidth: compact ? 207 : 330
     readonly property int timeColumnWidth: compact ? 57 : 72
     readonly property int listGutter: list.contentHeight > list.height ? 8 : 0
     property var detailWindows: ({})
@@ -1086,6 +1086,8 @@ ApplicationWindow {
                         accent: MaterialTheme.actionColor(modelData.accentKey || modelData.icon, root.colors.light)
                         contentItem: DashboardIcon {
                             symbol: actionButton.modelData.icon
+                            bold: true
+                            solid: symbol === "start" || symbol === "stop"
                             ink: actionButton.displayAccent
                         }
                         ToolTip.visible: hovered
@@ -1309,7 +1311,28 @@ ApplicationWindow {
                             }
                             Item { Layout.preferredWidth: 21 }
                             Label { Layout.fillWidth: true; Layout.minimumWidth: 85; text: qsTr("File name"); color: root.colors.muted; font.weight: Font.DemiBold }
-                            Label { Layout.preferredWidth: root.indicatorColumnWidth; text: qsTr("Progress"); color: root.colors.muted; font.weight: Font.DemiBold }
+                            RowLayout {
+                                Layout.preferredWidth: root.indicatorColumnWidth
+                                spacing: 7
+                                Label {
+                                    Layout.preferredWidth: Math.floor(root.indicatorColumnWidth * .49)
+                                    text: qsTr("Progress")
+                                    color: root.colors.muted
+                                    font.weight: Font.DemiBold
+                                }
+                                Label {
+                                    Layout.preferredWidth: Math.floor(root.indicatorColumnWidth * .24)
+                                    text: root.compact ? qsTr("Links") : qsTr("Connections")
+                                    elide: Text.ElideRight
+                                    color: root.colors.muted
+                                }
+                                Label {
+                                    Layout.fillWidth: true
+                                    text: qsTr("Activity")
+                                    elide: Text.ElideRight
+                                    color: root.colors.muted
+                                }
+                            }
                             Label { Layout.preferredWidth: root.timeColumnWidth; horizontalAlignment: Text.AlignRight; text: qsTr("Time left"); color: root.colors.muted; font.weight: Font.DemiBold }
                         }
                     }
@@ -1347,7 +1370,8 @@ ApplicationWindow {
                             sizeLabel: TransferData.bytes(bytes) + (length >= 0 ? " / " + TransferData.bytes(length) : "")
                             statusLabel: root.statusText(status)
                             statusInk: root.statusColor(status)
-                            speedLabel: status === "Downloading" ? TransferData.rate(transferSpeed) : ""
+                            transferring: status === "Downloading"
+                            speedLabel: transferring ? TransferData.rate(transferSpeed) : ""
                             timeLabel: TransferData.timeLeft({status: status, size: length, downloaded: bytes, speed: transferSpeed})
                             progress: status === "Complete" ? 1 : length > 0 ? Math.max(0, Math.min(1, bytes / length)) : 0
                             torrent: visual.is_torrent === true

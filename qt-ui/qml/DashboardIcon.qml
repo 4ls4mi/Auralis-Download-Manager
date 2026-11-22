@@ -4,6 +4,8 @@ import QtQuick.Shapes
 Item {
     id: icon
     property string symbol: ""
+    property bool bold: false
+    property bool solid: false
     property color ink: "#ffffff"
     implicitWidth: 22
     implicitHeight: 22
@@ -43,8 +45,8 @@ Item {
         scale: Math.min(icon.width, icon.height) / 24
         ShapePath {
             strokeColor: icon.ink
-            fillColor: "transparent"
-            strokeWidth: 1.65
+            fillColor: icon.solid ? icon.ink : "transparent"
+            strokeWidth: icon.bold ? 2.15 : 1.65
             capStyle: ShapePath.RoundCap
             joinStyle: ShapePath.RoundJoin
             PathSvg { path: icon.paths[icon.symbol] || "" }
