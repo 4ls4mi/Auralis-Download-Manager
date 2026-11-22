@@ -791,3 +791,5 @@
 .cg-window .cg-bubble-active .cg-bubble-wave {animation:cg-bubble-light 2.8s ease-in-out infinite alternate}
 @keyframes cg-bubble-light {from {opacity:.45} to {opacity:1}}
 @media(prefers-reduced-motion:reduce){.cg-window .cg-bubble-active .cg-bubble-wave {animation:none}}
+
+.cg-bubble-liquid-host{position:relative;width:100%;height:100%;overflow:hidden}

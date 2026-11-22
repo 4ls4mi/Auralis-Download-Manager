@@ -156,3 +156,27 @@
 .cg-window.cg-window.cg-material-builtin-aurora-ice .cg-fit-content :is(h1,h2,h3,h4,strong,p,small,label,.cg-row,.cg-title,.cg-sidebar button,.cg-settings-nav button,.cg-menubar button) {color:#112f4b!important;text-shadow:none!important}
 .cg-window.cg-window.cg-material-builtin-aurora-night .cg-fit-content :is(h1,h2,h3,h4,strong,p,small,label,.cg-row,.cg-title,.cg-sidebar button,.cg-settings-nav button,.cg-menubar button) {color:#e9f5ff!important;text-shadow:0 1px 2px #00122e}
 .cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-sidebar button.selected {color:#df8a00!important;background:linear-gradient(130deg,#ffe88b75,transparent)!important;box-shadow:inset 0 1px #fff9!important}
+
+/* Main-window panels must not stack near-opaque layers over the desktop. */
+.cg-window.cg-target-main.cg-mode-desktop:is(.cg-surface-soft,.cg-surface-frosted,.cg-surface-tinted):not(.cg-material-frosted-water-351) .cg-fit-content :is(.cg-list-panel,.cg-sidebar,.cg-toolbar,.cg-footer) {background:rgba(var(--glass),.25)!important;backdrop-filter:blur(12px) saturate(120%)}
+.cg-window.cg-target-main.cg-mode-desktop.cg-material-builtin-black-glass .cg-content {background:rgba(0,0,0,.30)!important}
+.cg-window.cg-window.cg-target-main.cg-mode-desktop.cg-material-builtin-black-glass .cg-fit-content :is(.cg-list-panel,.cg-sidebar,.cg-toolbar,.cg-footer) {background:rgba(8,10,14,.22)!important}
+
+/* Glass highlights belong behind the interface, not on top of text. */
+.cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-content::before {content:"";position:absolute;inset:0;z-index:0;pointer-events:none;border-radius:inherit;opacity:1!important}
+.cg-window.cg-material-builtin-aurora-night .cg-content::before {background:radial-gradient(ellipse at 22% 96%,transparent 18%,#719fff45 19%,#9bbaff28 20%,transparent 22%),radial-gradient(ellipse at 75% 100%,transparent 21%,#e58aff55 22%,#6ab8ff40 23%,transparent 25%),radial-gradient(ellipse at 56% -4%,#97d8ff50,transparent 35%);box-shadow:inset 0 2px 7px #e9f7ff88,inset 0 -3px 10px #6188ff66}
+.cg-window.cg-material-builtin-aurora-ice .cg-content::before {background:linear-gradient(135deg,transparent 14%,#ffffff66 14.2%,transparent 14.6%,transparent 38%,#ffffff55 38.3%,transparent 39%),linear-gradient(35deg,transparent 36%,#9fdcff55 36.4%,transparent 37.5%),radial-gradient(ellipse at 75% 3%,#ffffffa6,transparent 44%);box-shadow:inset 0 2px 7px #fff,inset 0 -3px 12px #7fcfff77}
+.cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-fit-content {z-index:1}
+.cg-window.cg-material-builtin-aurora-night .cg-toolbar>button:not(:disabled) {background:linear-gradient(155deg,#ffffff66,rgba(var(--tone-rgb),.31) 32%,#0614309c)!important;box-shadow:inset 0 2px 3px #ffffff9c,inset 0 -3px 7px #06132e77,0 0 10px rgba(var(--tone-rgb),.55)!important}
+.cg-window.cg-material-builtin-aurora-ice .cg-toolbar>button:not(:disabled) {background:linear-gradient(150deg,#fffffff2,rgba(var(--tone-rgb),.28) 50%,#d5f4ffb0)!important;box-shadow:inset 0 2px 3px #fff,inset 0 -3px 7px #5eaacb55,0 0 8px rgba(var(--tone-rgb),.28)!important}
+
+/* Aurora uses a fixed jewel palette, independent of the selected theme palette. */
+.cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-toolbar>button:is([data-action=add],[data-action=torrent]) {--tone:#08e979!important;--tone-rgb:8,233,121!important}
+.cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-toolbar>button:is([data-action=start],[data-action=queue-start]) {--tone:#00c7ff!important;--tone-rgb:0,199,255!important}
+.cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-toolbar>button:is([data-action=stop],[data-action=stop-all]) {--tone:#ffa800!important;--tone-rgb:255,168,0!important}
+.cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-toolbar>button:is([data-action=delete],[data-action=delete-completed]) {--tone:#ff398b!important;--tone-rgb:255,57,139!important}
+.cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-toolbar>button[data-action=settings] {--tone:#b840ff!important;--tone-rgb:184,64,255!important}
+.cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-toolbar>button:is([data-action=scheduler],[data-action=queue-stop]) {--tone:#00d7e9!important;--tone-rgb:0,215,233!important}
+.cg-window.cg-window.cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-fit-content .cg-toolbar>button svg {color:var(--tone)!important;stroke:currentColor;filter:drop-shadow(0 1px 2px #05244fbb)!important}
+.cg-window.cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-toolbar>button:not(:disabled) {border-color:rgba(var(--tone-rgb),.68)!important}
+.cg-window.cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-toolbar>button:hover:not(:disabled) {border-color:var(--tone)!important;background:linear-gradient(155deg,#ffffffbb,rgba(var(--tone-rgb),.8) 40%,rgba(var(--tone-rgb),.36))!important;box-shadow:inset 0 2px #fff,0 0 18px rgba(var(--tone-rgb),.8)!important}

@@ -1,7 +1,8 @@
 import {useId} from 'react';
+import {LiquidProgress} from './LiquidIndicators';
 
 /** A lobed glass vessel. The same outline clips both the liquid and the empty track. */
-export function BubbleProgress({percent,colors,backdrop,active}:{percent:number;colors:string[];backdrop?:readonly string[];active:boolean}) {
+export function BubbleProgress({percent,colors,backdrop,active,material="gradient",size}:{percent:number;colors:string[];backdrop?:readonly string[];active:boolean;material?:string;size?:number|null}) {
  const id=useId().replace(/:/g,'');
  const amount=Math.max(0,Math.min(100,Number.isFinite(percent)?percent:0));
  const a=colors[0]||'#06cfff',b=colors[1]||'#315bff',c=colors[2]||'#b94dff';
@@ -11,17 +12,21 @@ export function BubbleProgress({percent,colors,backdrop,active}:{percent:number;
   <defs>
    <clipPath id={id+'outline'}><path d={outline}/></clipPath>
    <clipPath id={id+'fill'}><rect x="0" y="0" width={amount*10} height="100"/></clipPath>
-   <linearGradient id={id+'empty'} x1="0" y1="0" x2="0" y2="1"><stop stopColor="#e7f7ff" stopOpacity=".72"/><stop offset=".17" stopColor={glass} stopOpacity=".54"/><stop offset=".54" stopColor="#10203e" stopOpacity=".88"/><stop offset=".84" stopColor={glass} stopOpacity=".50"/><stop offset="1" stopColor="#e4faff" stopOpacity=".66"/></linearGradient>
+   <linearGradient id={id+'empty'} x1="0" y1="0" x2="0" y2="1"><stop stopColor="#e7f7ff" stopOpacity=".72"/><stop offset=".17" stopColor={glass} stopOpacity=".36"/><stop offset=".54" stopColor="#10203e" stopOpacity=".38"/><stop offset=".84" stopColor={glass} stopOpacity=".32"/><stop offset="1" stopColor="#e4faff" stopOpacity=".66"/></linearGradient>
    <linearGradient id={id+'color'} x1="0" y1="0" x2="1" y2="0"><stop stopColor={a}/><stop offset=".5" stopColor={b}/><stop offset="1" stopColor={c}/></linearGradient>
    <linearGradient id={id+'light'} x1="0" y1="0" x2="0" y2="1"><stop stopColor="#fff" stopOpacity=".72"/><stop offset=".24" stopColor="#fff" stopOpacity=".05"/><stop offset=".62" stopColor="#001343" stopOpacity=".18"/><stop offset=".87" stopColor="#c9ffff" stopOpacity=".32"/><stop offset="1" stopColor="#e7ffff" stopOpacity=".62"/></linearGradient>
    <radialGradient id={id+'bubble'} cx=".3" cy=".2" r=".8"><stop stopColor="#fff" stopOpacity=".88"/><stop offset=".2" stopColor={a} stopOpacity=".34"/><stop offset=".8" stopColor={b} stopOpacity=".18"/><stop offset="1" stopColor="#fff" stopOpacity=".75"/></radialGradient>
   </defs>
   <path d={outline} fill={`url(#${id}empty)`} stroke="#cceeff" strokeOpacity=".65" strokeWidth="3" vectorEffect="non-scaling-stroke"/>
-  <g clipPath={`url(#${id}outline)`}><g clipPath={`url(#${id}fill)`}>
-   <rect width="1000" height="100" fill={`url(#${id}color)`}/><rect width="1000" height="100" fill={`url(#${id}light)`}/>
+  <g clipPath={`url(#${id}outline)`}>
+   {material==='liquid-glass' ? <foreignObject x="0" y="0" width="1000" height="100"><div className="cg-bubble-liquid-host"><LiquidProgress percent={amount} colors={colors} material={material} size={size} active={active}/></div></foreignObject> : <g clipPath={`url(#${id}fill)`}><rect width="1000" height="100" fill={`url(#${id}color)`}/></g>}
+   <g clipPath={`url(#${id}fill)`}><rect width="1000" height="100" fill={`url(#${id}light)`}/>
+   <path d="M0 72 C75 51 111 85 185 72 S300 57 372 72 S484 88 557 70 S668 56 740 73 S860 87 940 67 L1000 78 L1000 100 L0 100 Z" fill="#021c70" fillOpacity=".23"/>
+   <path d="M0 17 C75 31 105 6 180 21 S300 35 372 19 S490 8 560 22 S665 34 740 20 S860 7 940 24 L1000 14 L1000 0 L0 0 Z" fill="#fff" fillOpacity=".16"/>
    <path className="cg-bubble-wave" d="M0 61 C90 36 130 79 215 59 S350 40 425 60 S560 77 640 55 S765 39 850 61 S960 75 1000 57" fill="none" stroke="#e6ffff" strokeOpacity=".44" strokeWidth="3" vectorEffect="non-scaling-stroke"/>
    <circle cx="240" cy="50" r="12" fill={`url(#${id}bubble)`} stroke="#e8ffff" strokeOpacity=".68" strokeWidth="1.3" vectorEffect="non-scaling-stroke"/><circle cx="520" cy="57" r="9" fill={`url(#${id}bubble)`} stroke="#e8ffff" strokeOpacity=".68" strokeWidth="1.1" vectorEffect="non-scaling-stroke"/>
   </g></g>
+  <path d={outline} transform="translate(0 2) scale(1 .96)" fill="none" stroke="#173d79" strokeOpacity=".5" strokeWidth="6" vectorEffect="non-scaling-stroke"/>
   <path d={outline} fill="none" stroke="#e9ffff" strokeOpacity=".64" strokeWidth="2" vectorEffect="non-scaling-stroke"/>
   <path d="M23 31 C32 12 55 14 73 21 M179 32 C195 20 219 20 235 26 M366 29 C381 15 408 14 425 23 M904 30 C919 16 944 16 961 25" fill="none" stroke="#fff" strokeOpacity=".8" strokeWidth="3" strokeLinecap="round" vectorEffect="non-scaling-stroke"/>
  </svg>;
