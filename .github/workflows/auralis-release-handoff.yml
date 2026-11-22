@@ -56,7 +56,7 @@ jobs:
             local id="$1" name="$2" digest="$3" directory="$4"
             shift 4
             gh api "repos/$GH_REPO/actions/artifacts/$id" |
-              jq -e --arg name "$name" --arg sha "$release_commit" --arg digest "sha256:$digest" +                --argjson run "$source_run" '
+              jq -e --arg name "$name" --arg sha "$release_commit" --arg digest "sha256:$digest" --argjson run "$source_run" '
                 .expired == false and .name == $name and .digest == $digest and
                 .workflow_run.id == $run and .workflow_run.head_sha == $sha
               ' >/dev/null
@@ -74,13 +74,16 @@ jobs:
               archive.extractall(directory)
           PY
           }
-          download_verified_archive 14762662235 auralis-download-manager-windows-x64 +            1fd4851b993391259ae6132b4fd51767969d081c12722801e88e3f3d2030857e installer "$installer"
-          download_verified_archive 14762512528 auralis-browser-extensions +            dab3703551dc2bc428ea9c8c2e77becb46b1efb7cd471ad63ad723a723831cf4 extensions "${extensions[@]}"
+          windows_digest=1fd4851b993391259ae6132b4fd51767969d081c12722801e88e3f3d2030857e
+          extensions_digest=dab3703551dc2bc428ea9c8c2e77becb46b1efb7cd471ad63ad723a723831cf4
+          download_verified_archive 14762662235 auralis-download-manager-windows-x64 "$windows_digest" installer "$installer"
+          download_verified_archive 14762512528 auralis-browser-extensions "$extensions_digest" extensions "${extensions[@]}"
 
-          release_id="$(gh api --paginate "repos/$GH_REPO/releases?per_page=100" --jq +            ".[] | select(.draft and .tag_name == \"$tag\") | .id")"
+          release_filter=".[] | select(.draft and .tag_name == \"$tag\") | .id"
+          release_id="$(gh api --paginate "repos/$GH_REPO/releases?per_page=100" --jq "$release_filter")"
           [[ "$release_id" =~ ^[0-9]+$ ]]
           gh api "repos/$GH_REPO/releases/$release_id" > release.json
-          jq -e --arg sha "$release_commit" '.draft and .target_commitish == $sha and (.prerelease | not)' +            release.json >/dev/null
+          jq -e --arg sha "$release_commit" '.draft and .target_commitish == $sha and (.prerelease | not)' release.json >/dev/null
           missing=()
           for path in "${assets[@]}"; do
             name="${path##*/}"
