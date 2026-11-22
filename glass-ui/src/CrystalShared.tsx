@@ -28,11 +28,13 @@ export type Segment = { start: number; cursor: number; end: number; worker?:numb
 export type Connection = { id: number; downloaded: number; speed: number; state: string; recent_disconnect?:boolean; reconnecting_after_loss?:boolean };
 export type ServerPlace={name:string|null;flag_cell:[number,number]|null;reach:string|null};
 export function CountryFlag({place}:{place?:ServerPlace|null}){return place?.flag_cell?<span className="cg-country-flag" aria-label="Country flag" style={{backgroundPosition:`-${place.flag_cell[0]/2}px -${place.flag_cell[1]/2}px`}}/>:null;}
+export type TorrentRecoveryStage = "searching" | "matched" | "no-match" | "search-failed" | "preparing" | "handoff-failed" | "handed-off";
+export type TorrentVisual = {peers:number; uploaded:number; upload_speed:number; info_hash:string; selected_files:number|null};
 export type DownloadVisual = {
   id: number; chunk_count: number; active_connections:number; segments: Segment[]; connections: Connection[]; resumable: boolean | null;
   server: {hostname:string|null;ip:string|null;country_code:string|null;place?:ServerPlace|null;rtt_ms:number|null;cdn:string|null;proxied:boolean};
   last_try:string|null;added:string|null;referer:string|null;page:string|null;
-  description:string;category:string;is_torrent:boolean;direct_recovery?:boolean;original_partial?:string|null;recovery_search_available?:boolean;recovery_auto_search?:boolean;recovery_handoff_available?:boolean;is_video?:boolean;is_gallery?:boolean;is_remote?:boolean;recovery_damaged?:boolean
+  description:string;category:string;is_torrent:boolean;direct_recovery?:boolean;original_partial?:string|null;recovery_verified_bytes?:number|null;recovery_direct_error?:string|null;recovery_search_available?:boolean;recovery_auto_search?:boolean;recovery_handoff_available?:boolean;recovery_stage?:TorrentRecoveryStage;torrent?:TorrentVisual|null;is_video?:boolean;is_gallery?:boolean;is_remote?:boolean;recovery_damaged?:boolean
 };
 export type VisualDashboard = {downloads:DownloadVisual[]};
 

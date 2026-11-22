@@ -450,6 +450,10 @@ pub struct DirectRecoveryOrigin {
     pub downloaded: u64,
     #[serde(default)]
     pub damaged: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verified_bytes: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub direct_error: Option<String>,
 }
 
 /// One row of the download list. The persisted part is everything but `live`.
@@ -582,12 +586,11 @@ pub struct Item {
     /// (taken then); memory only, never written (its links are signed).
     #[serde(skip)]
     pub preloaded: Option<mdm_tools::video::Preloaded>,
-    /// A finished video's subtitles saved beside it (#68): a rename on completion takes them
-    /// along (#655). Memory only.
-    #[serde(skip)]
+    /// A finished video's separate subtitle files, kept across restarts for backup and moves.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) side_files: Vec<PathBuf>,
-    /// Files known to belong to a finished gallery or debrid folder download, kept across
-    /// restarts so a requeued or resumed folder rename still checks for untracked files.
+    /// Files known to belong to a gallery or completed debrid folder download. Kept across
+    /// restarts for backup and so a resumed folder rename still checks for untracked files.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) written_files: Option<Vec<PathBuf>>,
 }
@@ -971,6 +974,7 @@ impl Item {
         c.gallery.clone_from(&self.gallery);
         c.remote.clone_from(&self.remote);
         c.preexisting_folder = self.preexisting_folder;
+        c.side_files.clone_from(&self.side_files);
         c.written_files.clone_from(&self.written_files);
         c
     }
@@ -1167,11 +1171,10 @@ impl Item {
                     self.side_files = done.side_files;
                 }
                 // A gallery's files (#58), already marked by its job as the video's are.
-                if status == Status::Complete
-                    && let Some(Live {
-                        dl: Job::Gallery { job, .. },
-                        ..
-                    }) = &self.live
+                if let Some(Live {
+                    dl: Job::Gallery { job, .. },
+                    ..
+                }) = &self.live
                 {
                     let known = job.known_files();
                     add_written(self.written_files.get_or_insert_with(Vec::new), known);
@@ -1792,10 +1795,17 @@ mod tests {
     #[test]
     fn direct_recovery_origin_survives_restart_and_old_records_remain_valid() {
         let mut item=Item::new(1,"https://example.org/file".parse().unwrap(),PathBuf::from("recovery/file.bin"),Category::General);
-        item.direct_recovery=Some(DirectRecoveryOrigin{dest:PathBuf::from("original.bin"),downloaded:42,damaged:true});
+        item.direct_recovery=Some(DirectRecoveryOrigin{dest:PathBuf::from("original.bin"),downloaded:42,damaged:true,verified_bytes:Some(21),direct_error:Some("Source expired".into())});
         let value=serde_json::to_value(&item).unwrap();
         let restored:Item=serde_json::from_value(value.clone()).unwrap();
         assert_eq!(restored.direct_recovery,item.direct_recovery);
+        let mut previous=value.clone();
+        let origin=previous["direct_recovery"].as_object_mut().unwrap();
+        origin.remove("verified_bytes");
+        origin.remove("direct_error");
+        let origin=serde_json::from_value::<Item>(previous).unwrap().direct_recovery.unwrap();
+        assert_eq!(origin.verified_bytes,None);
+        assert_eq!(origin.direct_error,None);
         let mut old=value;old.as_object_mut().unwrap().remove("direct_recovery");
         let restored:Item=serde_json::from_value(old).unwrap();
         assert!(restored.direct_recovery.is_none());

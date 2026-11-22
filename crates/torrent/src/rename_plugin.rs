@@ -37,19 +37,83 @@ fn load_disk_map(session_dir: &Path) -> HashMap<String, String> {
         .unwrap_or_default()
 }
 
-fn save_disk_map(session_dir: &Path, map: &HashMap<String, String>) {
+fn save_disk_map(session_dir: &Path, map: &HashMap<String, String>) -> std::io::Result<()> {
+    use std::io::Write;
     let path = session_dir.join(RENAMES_FILE);
     if map.is_empty() {
-        let _ = std::fs::remove_file(&path);
-        return;
+        return match std::fs::remove_file(&path) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            result => result,
+        };
     }
-    let _ = std::fs::create_dir_all(session_dir);
-    let tmp = session_dir.join("renames.json.tmp");
-    if let Ok(json) = serde_json::to_string_pretty(map)
-        && std::fs::write(&tmp, json).is_ok()
-    {
-        let _ = std::fs::rename(&tmp, &path);
+    std::fs::create_dir_all(session_dir)?;
+    let tmp = path.with_extension("json.tmp");
+    let result = (|| {
+        let mut output = std::fs::File::create(&tmp)?;
+        serde_json::to_writer_pretty(&mut output, map)?;
+        output.flush()?;
+        output.sync_all()?;
+        drop(output);
+        std::fs::rename(&tmp, &path)
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&tmp);
     }
+    result
+}
+
+/// Install portable names before the corresponding restored download rows are
+/// committed. Return the previous names so the caller can roll back a failed save.
+pub fn restore_renamed_files(
+    session_dir: &Path,
+    names: &[(String, Option<PathBuf>)],
+) -> std::io::Result<Vec<(String, Option<PathBuf>)>> {
+    if names.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut memory = memory_map().lock().unwrap();
+    let mut disk: HashMap<String, String> = match std::fs::read(session_dir.join(RENAMES_FILE)) {
+        Ok(bytes) => serde_json::from_slice(&bytes)?,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => HashMap::new(),
+        Err(error) => return Err(error),
+    };
+    let mut previous = Vec::with_capacity(names.len());
+    let mut changed = false;
+    for (hash, relative) in names {
+        let name = relative
+            .as_ref()
+            .map(|path| {
+                crate::check_relative_path(path)
+                    .map_err(|_| std::io::Error::other("Invalid torrent name"))?;
+                path.to_str()
+                    .map(str::to_owned)
+                    .ok_or_else(|| std::io::Error::other("Invalid torrent name"))
+            })
+            .transpose()?;
+        let old = match name {
+            Some(name) => {
+                changed |= disk.get(hash) != Some(&name);
+                disk.insert(hash.clone(), name)
+            }
+            None => {
+                let old = disk.remove(hash);
+                changed |= old.is_some();
+                old
+            }
+        };
+        previous.push((hash.clone(), old.map(PathBuf::from)));
+    }
+    if changed {
+        save_disk_map(session_dir, &disk)?;
+    }
+    for (hash, _) in names {
+        if let Some(name) = disk.get(hash) {
+            memory.insert(hash.clone(), name.clone());
+        } else {
+            memory.remove(hash);
+        }
+    }
+    Ok(previous)
 }
 
 /// Extract the original single-file relative path from bencoded `.torrent` bytes.
@@ -90,13 +154,11 @@ pub fn set_renamed_file(session_dir: &Path, hash: &str, relative_path: &str) {
     if key.is_empty() || crate::check_relative_path(Path::new(&val)).is_err() {
         return;
     }
-    memory_map()
-        .lock()
-        .unwrap()
-        .insert(key.clone(), val.clone());
+    let mut memory = memory_map().lock().unwrap();
+    memory.insert(key.clone(), val.clone());
     let mut map = load_disk_map(session_dir);
     map.insert(key, val);
-    save_disk_map(session_dir, &map);
+    let _ = save_disk_map(session_dir, &map);
 }
 
 /// Record a rename only when `current_path` differs from the torrent's original file name;
@@ -114,10 +176,11 @@ pub fn sync_renamed_file(session_dir: &Path, hash: &str, torrent: &[u8], current
 /// Remove a custom file name mapping when a torrent is forgotten.
 pub fn remove_renamed_file(session_dir: &Path, hash: &str) {
     let key = hash.trim().to_ascii_lowercase();
-    memory_map().lock().unwrap().remove(&key);
+    let mut memory = memory_map().lock().unwrap();
+    memory.remove(&key);
     let mut map = load_disk_map(session_dir);
     if map.remove(&key).is_some() {
-        save_disk_map(session_dir, &map);
+        let _ = save_disk_map(session_dir, &map);
     }
 }
 

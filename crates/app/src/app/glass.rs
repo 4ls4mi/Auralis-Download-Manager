@@ -4,6 +4,8 @@ mod settings;
 mod tools;
 mod accounts;
 mod prompts;
+mod full_backup;
+pub(super) use full_backup::FullBackup;
 use super::*;
 use serde_json::{Value, json};
 
@@ -18,6 +20,7 @@ pub(super) struct HandoffSlot {
     pub prepared: Option<Result<mdm_torrent::PreparedRecovery,String>>,
     pub result: Option<Result<Value,String>>,
     pub cancelled: bool,
+    pub automatic: bool,
 }
 pub(super) type HandoffSlots = HashMap<u64, std::sync::Arc<std::sync::Mutex<HandoffSlot>>>;
 
@@ -84,15 +87,6 @@ impl App {
                 wake.request_repaint();
             });
             return Some(json!({"ok":true,"pending":true}).to_string());
-        }
-        if cmd.query.as_deref()==Some("glass-full-backup-preflight") {
-            if !self.moving.is_empty() || !self.renaming.is_empty() || !self.deferred_torrent_queue.is_empty() {
-                return Some(json!({"error":"Wait for file moves and renames to finish before backing up."}).to_string());
-            }
-            return Some(match crate::backup_snapshot::prepare(&self.items, &self.queues, &self.settings) {
-                Ok(snapshot)=>json!({"ok":true,"downloads":self.items.len(),"files":snapshot.contents.len()}),
-                Err(error)=>json!({"error":error})
-            }.to_string());
         }
         if cmd.query.as_deref()==Some("glass-backup-settings") {
             let mut value=match serde_json::to_value(&self.settings) { Ok(v)=>v, Err(e)=>return Some(json!({"error":e.to_string()}).to_string()) };
@@ -396,11 +390,13 @@ impl App {
                 let Some(torrent)=self.glass_torrent_recovery.get(&id).and_then(|slot|slot.lock().ok().and_then(|result|result.as_ref().and_then(|r|r.as_ref().ok()).and_then(|report|report.matches.get(candidate_index)).and_then(|candidate|(candidate.info_hash==info_hash&&candidate.files.iter().any(|file|file.file_index==file_index)).then(||candidate.torrent.clone())))) else {return fail("The matching torrent is no longer available; check it again");};
                 let expected_hash=info_hash.to_owned();
                 let dest=item.dest.clone();
+                let source=item.url.clone();
+                let automatic=cmd.silent;
                 let state_path=mdm_engine::state::state_path(&dest);
                 let Some(parent)=dest.parent().map(PathBuf::from) else{return fail("The download has no recovery folder")};
                 let host=self.torrent_host.clone();
                 let known=self.session_hashes();
-                let slot=std::sync::Arc::new(std::sync::Mutex::new(HandoffSlot::default()));
+                let slot=std::sync::Arc::new(std::sync::Mutex::new(HandoffSlot { automatic, ..Default::default() }));
                 self.glass_torrent_handoffs.insert(id,slot.clone());
                 let wake=self.ui_ctx.clone();
                 self.rt.spawn(async move {
@@ -413,11 +409,14 @@ impl App {
                       Ok(_) if slot.lock().map_or(true,|value|value.cancelled)=>Err("Torrent recovery was cancelled; the original partial was kept".into()),
                       Ok(_)=>tokio::task::spawn_blocking(move || -> Result<mdm_torrent::PreparedRecovery,String> {
                         let saved=mdm_engine::state::ResumeState::load(&state_path)?;
-                        if saved.dest!=dest {return Err("Saved state does not belong to this file".into());}
+                        if saved.dest!=dest || saved.url!=source {return Err("Saved state does not belong to this file".into());}
                         let stamp=std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_err(|e|e.to_string())?.as_millis();
                         let folder=(0..100).map(|n|parent.join(format!(".auralis-recovery-{id}-{stamp}-{n}"))).find(|path|!path.exists()).ok_or("Cannot choose a recovery folder")?;
                         let prepared=mdm_torrent::prepare_saved_recovery(&torrent,&saved,file_index,&folder).map_err(|e|e.to_string())?;
                         if prepared.metadata.info_hash!=expected_hash {return Err(format!("The selected torrent changed; the original partial was kept. Prepared files remain at {}.",folder.display()));}
+                        if automatic && prepared.staged.evidence.matching.len()<2 {
+                            return Err(format!("Automatic recovery needs two matching pieces at handoff. The original partial was kept. Prepared files remain at {}.",folder.display()));
+                        }
                         Ok(prepared)
                       }).await.map_err(|_|"Torrent preparation task failed".to_owned()).and_then(|result|result),
                     };
@@ -426,13 +425,24 @@ impl App {
                 });
                 return Some(json!({"ok":true,"pending":true}).to_string());
             }
-            "check-recovery-magnet" => {
-                if !cmd.silent { self.auto_recovery_pending.remove(&id); self.auto_recovery_searches.remove(&id); }
-                if value.len()>8192 {return fail("Magnet link is too long");}
-                let Some(source)=mdm_torrent::Source::magnet(value) else {return fail("Enter a valid magnet link");};
+            "check-recovery-magnet" | "check-recovery-torrent-url" => {
+                enum MetadataSource {
+                    Magnet(mdm_torrent::Source),
+                    Url(url::Url),
+                }
+                let source = if operation=="check-recovery-magnet" {
+                    if value.len()>8192 {return fail("Magnet link is too long");}
+                    let Some(source)=mdm_torrent::Source::magnet(value) else {return fail("Enter a valid magnet link");};
+                    MetadataSource::Magnet(source)
+                } else {
+                    match mdm_torrent::manual_recovery_source::parse(value) {
+                        Ok(url)=>MetadataSource::Url(url),
+                        Err(error)=>return fail(&error),
+                    }
+                };
                 let item=self.items.iter().find(|i|i.id==id).unwrap();
-                if item.live.is_some() || item.status==Status::Complete || item.torrent.is_some() || item.video.is_some() || item.gallery.is_some() || item.remote.is_some() {
-                    return fail("Stop an incomplete ordinary download before checking a magnet link");
+                if item.live.is_some() || item.status==Status::Complete || item.torrent.is_some() || item.video.is_some() || item.gallery.is_some() || item.remote.is_some() || item.context.private {
+                    return fail("Stop an incomplete, non-private ordinary download before checking a torrent link");
                 }
                 if self.recovery_check_running(id) || self.repair_check_running(id) || self.glass_torrent_recovery.values().any(|slot|slot.lock().map_or(true,|result|result.is_none())) {
                     return fail("Wait for the other saved-data operation to finish");
@@ -440,10 +450,13 @@ impl App {
                 let dest=item.dest.clone();
                 let state_path=mdm_engine::state::state_path(&dest);
                 if !state_path.exists() {return fail("No saved download state is available for this file");}
+                self.auto_recovery_pending.remove(&id);
+                self.auto_recovery_searches.remove(&id);
                 let host=self.torrent_host.clone();
                 let known=self.session_hashes();
+                let dns=self.settings.dns();
+                let route=self.route.clone();
                 let slot=std::sync::Arc::new(std::sync::Mutex::new(None));
-                self.glass_torrent_recovery.remove(&id);
                 self.glass_torrent_handoffs.remove(&id);
                 self.glass_torrent_recovery.insert(id,slot.clone());
                 let wake=self.ui_ctx.clone();
@@ -451,8 +464,13 @@ impl App {
                     let answer=async {
                         let saved=mdm_engine::state::ResumeState::load(&state_path)?;
                         if saved.dest!=dest {return Err("Saved state does not belong to this file".to_owned());}
-                        let session=host.session(known).await?;
-                        let meta=session.metadata(&source,crate::torrentdlg::METADATA_WAIT,None).await.map_err(|e|e.to_string())?;
+                        let meta=match source {
+                            MetadataSource::Magnet(source)=>{
+                                let session=host.session(known).await?;
+                                session.metadata(&source,crate::torrentdlg::METADATA_WAIT,None).await.map_err(|e|e.to_string())?
+                            }
+                            MetadataSource::Url(url)=>mdm_torrent::manual_recovery_source::metadata(url,&dns,&route).await?,
+                        };
                         tokio::task::spawn_blocking(move || -> Result<_,String> {
                             let files=mdm_torrent::candidate_search::matching_files(&meta.torrent,&saved)?;
                             let mut report=mdm_torrent::candidate_search::SearchReport{searched:1,..Default::default()};
@@ -472,12 +490,14 @@ impl App {
             "find-recovery-torrents" => {
                 if !cmd.silent { self.auto_recovery_pending.remove(&id); self.auto_recovery_searches.remove(&id); }
                 let item=self.items.iter().find(|i|i.id==id).unwrap();
+                if item.context.private {return fail("Online torrent recovery search is unavailable for private downloads");}
                 if item.live.is_some() || item.status==Status::Complete || item.torrent.is_some() || item.video.is_some() || item.gallery.is_some() || item.remote.is_some() {
                     return fail("Stop an incomplete ordinary download before searching for recovery torrents");
                 }
                 if self.recovery_check_running(id) || self.repair_check_running(id) { return fail("A saved-data operation is already running"); }
                 if self.glass_torrent_recovery.values().any(|slot|slot.lock().map_or(true,|result|result.is_none())) { return fail("Wait for the other torrent search to finish"); }
                 let dest=item.dest.clone();
+                let source=item.url.clone();
                 let name=item.file_name.clone();
                 let state_path=mdm_engine::state::state_path(&dest);
                 if !state_path.exists() {return fail("No saved download state is available for this file");}
@@ -490,7 +510,10 @@ impl App {
                 let wake=self.ui_ctx.clone();
                 self.rt.spawn(async move {
                     let answer=match mdm_engine::state::ResumeState::load(&state_path) {
-                        Ok(saved) if saved.dest==dest => mdm_torrent::candidate_search::find_archive_matches(&name,&saved,&opts).await,
+                        Ok(saved) if saved.dest == dest && saved.url == source && saved.segments.iter().any(|segment| segment.cursor > segment.start) => {
+                            mdm_torrent::candidate_search::find_archive_matches(&name,&saved,&opts).await
+                        }
+                        Ok(saved) if saved.dest == dest && saved.url == source => Err("No saved download bytes are available to compare".to_owned()),
                         Ok(_) => Err("Saved state does not belong to this file".to_owned()),
                         Err(error)=>Err(error),
                     };

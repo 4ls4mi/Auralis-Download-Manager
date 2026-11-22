@@ -10,13 +10,13 @@ import {
   Activity, Archive, CheckCircle2, Clock3, Download as DownloadIcon, File,
   FileArchive, Film, Folder, FolderOpen,
   Pause, Play, Plus, Search, Settings, Square, Trash2, ListChecks, ChevronDown,
-  ListFilter
+  ListFilter, Network, Route
 } from "lucide-react";
 import {
   CrystalWindow, WindowTop, GradientBar, ConnectionMap, SpeedGraph, pct, rate, units,
   timeLeft, openWindow
 } from "./CrystalShared";
-import type { Dashboard, Download as MdmFile, DownloadVisual, VisualDashboard } from "./CrystalShared";
+import type { Dashboard, Download as MdmFile, DownloadVisual, TorrentRecoveryStage, VisualDashboard } from "./CrystalShared";
 
 
 import type { DeleteRequest } from "./CrystalDialog";
@@ -46,6 +46,14 @@ function StatusBadge({item}:{item:MdmFile}){
   const label=item.status==="Complete"?"Completed":item.status==="Stopped"?"Paused":item.status;
   return <span className={"cg-status "+item.status.toLowerCase()}><span className="dot"/>{label}</span>;
 }
+const recoveryRowLabels:Partial<Record<TorrentRecoveryStage,string>>={
+  searching:"Searching for a torrent",
+  matched:"Review torrent match",
+  "no-match":"No verified torrent match",
+  "search-failed":"Torrent search failed",
+  preparing:"Preparing torrent recovery",
+  "handoff-failed":"Torrent recovery failed",
+};
 export default function CrystalApp(){
   const [data,setData]=useState<Dashboard>(blank),[online,setOnline]=useState(false),[message,setMessage]=useState("Connecting to downloads…");
   const [chosen,setChosen]=useState<number|null>(null),[filter,setFilter]=useState("All Downloads"),[term,setTerm]=useState("");
@@ -58,6 +66,7 @@ export default function CrystalApp(){
   const [doubleClickOpen,setDoubleClickOpen]=useState(false);
   const [showCategories,setShowCategories]=useState(true);
   const [updateVersion,setUpdateVersion]=useState<string|null>(null);
+  const [dismissedRecovery,setDismissedRecovery]=useState<Record<number,TorrentRecoveryStage>>({});
   const [appVersion,setAppVersion]=useState("");
   useEffect(()=>{void getVersion().then(setAppVersion).catch(()=>setAppVersion("unavailable"))},[]);
   const [columnWidths,setColumnWidths]=useState<number[]>(loadColumns);
@@ -395,11 +404,25 @@ export default function CrystalApp(){
     else if(d.status==="Complete")openWindow(`complete-${d.id}`,`/?complete=${d.id}`,720,420);
     else pop(d.id);
   };
+  const recoveryNotice=data.downloads.find(d=>{
+    const visual=visuals[d.id],stage=visual?.recovery_stage;
+    return stage!==dismissedRecovery[d.id]&&(
+      (stage==="matched"||stage==="preparing")&&visual.recovery_auto_search||
+      stage==="handed-off"&&visual.recovery_handoff_available&&d.status==="Downloading"
+    );
+  });
+  const noticeStage=recoveryNotice&&visuals[recoveryNotice.id]?.recovery_stage;
   return <CrystalWindow><WindowTop title="Auralis Download Manager — Download Manager">
     <span className="cg-muted" style={{fontSize:"var(--min-text-size)",whiteSpace:"nowrap",marginRight:9}}>{online?"● Connected":"○ Offline"}</span>
   </WindowTop>
   <div className="cg-main-body" onContextMenu={e=>e.preventDefault()}>
     {updateVersion&&<div className="cg-update-notice" role="status"><span><strong>Update available</strong> · Auralis {updateVersion}</span><button className="cg-btn cg-btn-primary" onClick={()=>{openWindow("tool-update-notice","/?tool=update-notice",680,520)}}>Review and download</button><button className="cg-btn" aria-label="Dismiss update notice" onClick={()=>setUpdateVersion(null)}>Close</button></div>}
+    {recoveryNotice&&noticeStage&&<div className="cg-recovery-notice" role="status">
+      <span><strong>{noticeStage==="handed-off"?"Downloading via BitTorrent":"Torrent match found"}</strong>
+      <small>{recoveryNotice.file} · {noticeStage==="matched"?"Review the match before continuing with peers.":noticeStage==="preparing"?"Auralis is checking saved pieces before continuing with BitTorrent peers.":"Auralis reused verified pieces from the direct download."}</small></span>
+      <button className="cg-btn" onClick={()=>pop(recoveryNotice.id)}>{noticeStage==="matched"?"Review match":"View download"}</button>
+      <button className="cg-btn" aria-label="Dismiss torrent recovery notice" onClick={()=>setDismissedRecovery(old=>({...old,[recoveryNotice.id]:noticeStage}))}>Close</button>
+    </div>}
     <div className="cg-menubar">
       {menus.map(menu=><div className="cg-menu-parent" key={menu}>
         <button className={"cg-menu-trigger "+(openMenu===menu?"active":"")} onClick={()=>{setContext(null);setOpenMenu(openMenu===menu?null:menu)}}>{menu}</button>
@@ -437,7 +460,11 @@ export default function CrystalApp(){
             onPointerMove={e=>{const drag=resizingColumn.current;if(drag?.index===index)setColumnWidth(index,drag.width+(e.clientX-drag.start)/(drag.scale||1))}}
             onPointerUp={()=>{resizingColumn.current=null}} onPointerCancel={()=>{resizingColumn.current=null}}
             onKeyDown={e=>{if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();setColumnWidth(index,columnWidths[index]+(e.key==='ArrowRight'?10:-10))}}}/></span>})}</header>
-          {shown.map(d=><div className={"cg-row "+(selected.includes(d.id)?"selected":"")} key={d.id} role="group" aria-label={`Download ${d.file}`}
+          {shown.map(d=>{
+            const visual=visuals[d.id],stage=visual?.recovery_stage;
+            const recoveryLabel=stage&&recoveryRowLabels[stage];
+            const mixed=Boolean(visual?.direct_recovery),isTorrent=Boolean(visual?.is_torrent);
+            return <div className={"cg-row "+(selected.includes(d.id)?"selected":"")} key={d.id} role="group" aria-label={`Download ${d.file}`}
             onClick={e=>{const next=selectDownload(shown.map(x=>x.id),selected,anchor.current,d.id,e.shiftKey,e.ctrlKey||e.metaKey);setSelected(next);if(!e.shiftKey)anchor.current=d.id;setChosen(next.includes(d.id)?d.id:next.at(-1)??null);setContext(null)}} onDoubleClick={()=>rowDouble(d)}
             onContextMenu={e=>{
               e.preventDefault();if(!selected.includes(d.id)){setSelected([d.id]);anchor.current=d.id}setChosen(d.id);setOpenMenu(null);
@@ -445,14 +472,23 @@ export default function CrystalApp(){
             }}>
             <label className="cg-select-cell" onClick={e=>e.stopPropagation()} onDoubleClick={e=>e.stopPropagation()}><input type="checkbox" aria-label={`Select ${d.file}`} checked={selected.includes(d.id)} onChange={e=>{const next=e.target.checked?[...selected,d.id]:selected.filter(id=>id!==d.id);setSelected(next);setChosen(e.target.checked?d.id:next.at(-1)??null);anchor.current=d.id;setContext(null)}}/></label>
             <span className="cg-file" role="button" tabIndex={0} aria-pressed={selected.includes(d.id)} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();setSelected([d.id]);setChosen(d.id);anchor.current=d.id}}}><FileSymbol name={d.file}/><span className="cg-file-info">
-              <strong title={d.file}>{d.file}</strong><small>{units(d.downloaded)} / {units(d.size)} {visuals[d.id]?.is_torrent&&<span className="cg-transfer-kind" title={visuals[d.id]?.direct_recovery?"Started as a direct download and continued using BitTorrent":"This download uses BitTorrent"} aria-label={visuals[d.id]?.direct_recovery?"Direct download continued as torrent":"Torrent download"}>{visuals[d.id]?.direct_recovery?"◈ Direct → Torrent":"◆ Torrent"}</span>}</small><span className="cg-row-status"><StatusBadge item={d}/><small>{d.status==="Downloading"?rate(d.speed):"—"}</small></span></span></span>
+              <strong title={d.file}>{d.file}</strong>
+              <small>{units(d.downloaded)} / {units(d.size)} {isTorrent&&<span className={`cg-transfer-kind${mixed?" cg-transfer-mixed":""}`}
+                role="img" aria-label={mixed?"Direct download continued as torrent":"Torrent download"}
+                title={mixed?"Started as a direct download and continued via BitTorrent":"Started as a BitTorrent download"}>
+                {mixed?<Route size={12} aria-hidden="true"/>:<Network size={12} aria-hidden="true"/>}
+                {mixed?"Direct → Torrent":"Torrent"}
+              </span>}</small>
+              <span className="cg-row-status"><StatusBadge item={d}/><small>{d.status==="Downloading"?rate(d.speed):"—"}</small></span></span></span>
             <span className="cg-row-progress">
               <GradientBar percent={pct(d)} size={d.size} active={d.status==="Downloading"} showLabel/>
-              <ConnectionMap segments={visuals[d.id]?.segments} connections={visuals[d.id]?.connections} downloading={d.status==="Downloading"} compact/>
+              {isTorrent?<small className="cg-list-peers">{visual?.torrent?.peers==null?"BitTorrent peers":`${visual.torrent.peers} ${visual.torrent.peers===1?"peer":"peers"}`}</small>
+              :<ConnectionMap segments={visual?.segments} connections={visual?.connections} downloading={d.status==="Downloading"} compact/>}
               <SpeedGraph values={fileRates[d.id]??[d.speed,d.speed]} small/>
+              {recoveryLabel&&<button className="cg-btn cg-recovery-row-link" onClick={e=>{e.stopPropagation();pop(d.id)}} onDoubleClick={e=>e.stopPropagation()}>{recoveryLabel}</button>}
             </span>
             <span>{timeLeft(d)}</span>
-          </div>)}
+          </div>})}
           {!shown.length&&<div className="cg-empty"><FolderOpen size={35}/><strong>{online?"No downloads in this view":"Connecting to Auralis"}</strong>
             <p>{online?"Add a URL or torrent to begin.":message}</p>
             {online&&<button className="cg-btn cg-btn-primary" onClick={()=>add()}><Plus size={15}/> Add URL</button>}

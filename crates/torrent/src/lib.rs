@@ -24,6 +24,7 @@ use librqbit::{
 
 pub mod blocklist;
 pub mod candidate_search;
+pub mod manual_recovery_source;
 mod names;
 pub mod rename_plugin;
 pub mod trackers;
@@ -553,12 +554,26 @@ impl Meta {
 /// useful when preparing a recovery: inspecting a candidate should not start
 /// a download or announce it to a swarm.
 pub fn metadata_from_bytes(torrent: &[u8]) -> Result<Meta, TorrentError> {
+    parse_metadata(torrent, false)
+}
+
+/// Validate saved peer torrent metadata for a portable backup without opening
+/// the torrent or contacting trackers. Private tracker subscriptions and
+/// explicit per-user tracker credentials stay on their original device.
+pub fn metadata_for_backup(torrent: &[u8]) -> Result<Meta, TorrentError> {
+    parse_metadata(torrent, true)
+}
+
+fn parse_metadata(torrent: &[u8], backup: bool) -> Result<Meta, TorrentError> {
     if torrent.len() as u64 > MAX_TORRENT_FILE {
         return Err(engine("torrent metadata is too large"));
     }
     let meta = librqbit::torrent_from_bytes(torrent).map_err(|_| TorrentError::NotATorrent)?;
     if meta.info.data.piece_length == 0 {
         return Err(TorrentError::NotATorrent);
+    }
+    if backup && (meta.info.data.private || trackers::has_backup_credentials(torrent)) {
+        return Err(engine("backups cannot include private or credential-bearing torrents"));
     }
     let hash = meta.info_hash.as_string();
     let info = meta.info.data.validate().map_err(engine)?;

@@ -2748,6 +2748,9 @@ async fn segmented(
     mut saved: ResumeState,
     first: Option<Body>,
 ) -> Result<(), Error> {
+    // A fresh download may switch to one stream. An explicit resume has
+    // already saved bytes and must retain their ranges for other recovery paths.
+    let resuming = first.is_none();
     let path = state_path(&saved.dest);
     let mut synced = Synced {
         at: std::time::Instant::now(),
@@ -2788,8 +2791,8 @@ async fn segmented(
         }
     };
     match &result {
-        // Not resumable on one connection: the state is useless.
-        Err(Error::NoRanges) => {
+        // The caller will start a fresh stream that replaces this attempt's ranges.
+        Err(Error::NoRanges) if !resuming => {
             let _ = std::fs::remove_file(&path);
         }
         // Complete: the final state stays until `finish` has renamed the part file, so a

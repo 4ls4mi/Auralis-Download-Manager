@@ -196,6 +196,10 @@ fn boot_existing_engine(_app: &AppHandle) -> ApiResult<String> {
 /// Stop the downloader and allow it to save before the containing process exits.
 fn stop_engine() -> ApiResult<()> {
     if current_backend().is_ok_and(|state| state.glass && state.headless) {
+        let backup = send_ipc(&mdm_ipc::Command { query: Some("glass-full-backup-status".into()), ..Default::default() });
+        if backup.ok().and_then(|reply| serde_json::from_str::<serde_json::Value>(&reply).ok()).is_some_and(|reply| reply["pending"] == true) {
+            return Err("Wait for the download backup or restore to finish before exiting.".into());
+        }
         mdm_ipc::send(&mdm_ipc::Command { exit: true, ..Default::default() })
             .map_err(|e| format!("Could not stop the downloader: {e}"))?;
     }
@@ -566,7 +570,7 @@ async fn bulk_action(action: String) -> ApiResult<mdm_ipc::api::ActAnswer> {
 #[tauri::command]
 async fn file_operation(id: u64, operation: String, value: Option<String>) -> ApiResult<serde_json::Value> {
     if !matches!(operation.as_str(), "details" | "redownload" | "speed-limit" |
-        "open" | "folder" | "open-with" | "queue-add" | "queue-remove" | "refresh-address" | "checksum" | "checksum-result" | "check-saved" | "check-saved-result" | "repair-saved" | "repair-saved-result" | "find-recovery-torrents" | "find-recovery-torrents-result" | "check-recovery-magnet" | "start-recovery-torrent" | "start-recovery-torrent-result" | "cancel-recovery-torrent" | "completion-options" | "extract" | "extract-status" | "extract-password" | "extract-cancel") {
+        "open" | "folder" | "open-with" | "queue-add" | "queue-remove" | "refresh-address" | "checksum" | "checksum-result" | "check-saved" | "check-saved-result" | "repair-saved" | "repair-saved-result" | "find-recovery-torrents" | "find-recovery-torrents-result" | "check-recovery-magnet" | "check-recovery-torrent-url" | "start-recovery-torrent" | "start-recovery-torrent-result" | "cancel-recovery-torrent" | "completion-options" | "extract" | "extract-status" | "extract-password" | "extract-cancel") {
         return Err("Unsupported file operation".into());
     }
     tauri::async_runtime::spawn_blocking(move || {
@@ -836,7 +840,7 @@ fn main() {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            hidden_progress_window_ids, restore_hidden_progress_window, backup_prompt_enabled, export_material_file, export_theme_file, backup::export_preferences, backup::import_preferences, startup::startup_settings, startup::set_startup_settings, material_backdrop::set_material_acrylic, material_window::set_material_window_shape, material_window::inspect_material_window_region, pending_file_info, file_info_action, choose_download_path, window_preferences, glass_tool, choose_folder, choose_setting_file, list_network_adapters, open_glass_window, show_update_toast, close_progress_windows, hide_download_to_tray, drag_download, drag_state, choose_move, clipboard_text, video_tool, open_youtube_sign_in, youtube_session_status, browser_video,
+            hidden_progress_window_ids, restore_hidden_progress_window, backup_prompt_enabled, export_material_file, export_theme_file, backup::export_preferences, backup::import_preferences, backup::export_full_backup, backup::import_full_backup, startup::startup_settings, startup::set_startup_settings, material_backdrop::set_material_acrylic, material_window::set_material_window_shape, material_window::inspect_material_window_region, pending_file_info, file_info_action, choose_download_path, window_preferences, glass_tool, choose_folder, choose_setting_file, list_network_adapters, open_glass_window, show_update_toast, close_progress_windows, hide_download_to_tray, drag_download, drag_state, choose_move, clipboard_text, video_tool, open_youtube_sign_in, youtube_session_status, browser_video,
             boot_engine, dashboard_snapshot, dashboard_visuals, download_action,
             add_download, select_wallpaper, queue_action, glass_settings, update_glass_setting,
             browser_integration, browser_connection_status, prepare_auralis_extension, prepare_auralis_store, extension_store_link, open_extension_store, bulk_action, file_operation, add_torrent_file, choose_recovery_torrent, quit_glass, fork_update::glass_update_check, fork_update::glass_update_download, fork_update::glass_update_install

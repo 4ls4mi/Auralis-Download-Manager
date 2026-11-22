@@ -869,6 +869,7 @@ pub struct App {
     glass_duplicate_serial:u64,
     glass_account: Option<(mdm_debrid::ServiceKind,crate::debrid::SignIn)>,
     glass_checks: glass::CheckSlots,
+    full_backup: glass::FullBackup,
     glass_recovery_checks: glass::RecoverySlots,
     glass_repair_checks: glass::RepairSlots,
     glass_torrent_recovery: glass::TorrentRecoverySlots,
@@ -876,7 +877,7 @@ pub struct App {
     /// Per-session automatic searches and the ones awaiting automatic handoff.
     auto_recovery_attempted: std::collections::HashSet<u64>,
     auto_recovery_pending: std::collections::HashSet<u64>,
-    auto_recovery_searches: std::collections::HashSet<u64>,
+    auto_recovery_searches: HashMap<u64, Instant>,
     glass_exit_requested: bool,
     glass_power_serial: u64,
     /// Addresses (and their browser context) waiting for Download File Info to close.
@@ -1419,6 +1420,24 @@ fn category_icon(c: Category) -> IconKey {
     IconKey::Themed(need, silk)
 }
 
+/// The direct engine already exhausted its retry and address-refresh paths.
+/// Only a source-related terminal failure can lead to automatic searching.
+fn automatic_torrent_source_failure(error: &mdm_engine::Error) -> bool {
+    use mdm_engine::Error;
+    match error {
+        Error::Status(status) => {
+            status.is_server_error() || matches!(status.as_u16(), 401 | 403 | 404 | 408 | 410 | 416 | 429)
+        }
+        Error::Http(error) => error.is_connect() || error.is_timeout() || error.is_body(),
+        Error::Net { kind, .. } => *kind != mdm_engine::NetKind::Tls,
+        Error::FtpReply { code, .. } => matches!(code, 421 | 425 | 426 | 450 | 451 | 530 | 532 | 550 | 553),
+        Error::BadRange(_) | Error::ShortBody | Error::FileChanged | Error::NoRanges
+        | Error::RangesUnavailable | Error::LinkExpired | Error::GotWebPage | Error::BotCheck
+        | Error::Throttled(..) | Error::Refused(_) => true,
+        _ => false,
+    }
+}
+
 fn automatic_torrent_choice(report: &mdm_torrent::candidate_search::SearchReport) -> Option<(usize, String)> {
     if report.failed != 0 || report.matches.len() != 1 { return None; }
     let candidate=&report.matches[0];
@@ -1430,7 +1449,7 @@ fn automatic_torrent_choice(report: &mdm_torrent::candidate_search::SearchReport
 
 #[cfg(test)]
 mod automatic_torrent_choice_tests {
-    use super::automatic_torrent_choice;
+    use super::{automatic_torrent_choice, automatic_torrent_source_failure};
     use mdm_torrent::candidate_search::{Candidate, MatchedCandidate, MatchingFile, SearchReport};
 
     fn report() -> SearchReport {
@@ -1441,6 +1460,18 @@ mod automatic_torrent_choice_tests {
             }],
         }] }
     }
+    #[test]
+    fn only_source_errors_trigger_automatic_torrent_recovery() {
+        use mdm_engine::Error;
+        assert!(automatic_torrent_source_failure(&Error::LinkExpired));
+        assert!(automatic_torrent_source_failure(&Error::RangesUnavailable));
+        assert!(automatic_torrent_source_failure(&Error::Status(reqwest::StatusCode::NOT_FOUND)));
+        assert!(!automatic_torrent_source_failure(&Error::NoSpace { needed: 20, free: 10 }));
+        assert!(!automatic_torrent_source_failure(&Error::BadState("invalid partial".into())));
+        assert!(!automatic_torrent_source_failure(&Error::ChecksumMismatch("sha256")));
+        assert!(!automatic_torrent_source_failure(&Error::Cancelled));
+    }
+
     #[test]
     fn automatic_recovery_requires_complete_candidate_checks_and_unique_evidence() {
         let mut sample=report();
@@ -1694,6 +1725,7 @@ impl App {
             glass_duplicate_serial:0,
             glass_account: None,
             glass_checks: Default::default(),
+            full_backup: Default::default(),
             glass_recovery_checks: Default::default(),
             glass_repair_checks: Default::default(),
             glass_torrent_recovery: Default::default(),
@@ -3353,7 +3385,7 @@ impl App {
         self.saver.flush();
         let item=self.items.iter_mut().find(|item|item.id==id).expect("item checked above");
         let before=(item.dest.clone(),item.downloaded,item.status,item.error.clone(),item.resumable,item.recovery_damaged);
-        item.direct_recovery=Some(crate::model::DirectRecoveryOrigin{dest:item.dest.clone(),downloaded:prepared.source_downloaded,damaged:item.recovery_damaged});
+        item.direct_recovery=Some(crate::model::DirectRecoveryOrigin{dest:item.dest.clone(),downloaded:prepared.source_downloaded,damaged:item.recovery_damaged,verified_bytes:Some(verified),direct_error:item.error.clone()});
         item.dest=staged.clone();
         item.downloaded=verified;
         item.status=Status::Stopped;
@@ -6099,6 +6131,22 @@ impl App {
     fn answer(&mut self, cmd: &ipc::Command) -> String {
         use ipc::api::{ApiAnswer, DownloadInfo, ErrorAnswer, ListAnswer, line};
         if self.glass_owned() && !cmd.remote
+            && let Some(answer) = self.glass_backup_answer(cmd)
+        {
+            return answer;
+        }
+        let reading_during_backup = matches!(cmd.query.as_deref(), Some("list" | "glass-backend" | "glass-visuals" | "glass-settings"))
+            && cmd.action.is_none() && cmd.api.is_none() && !cmd.pair
+            && cmd.url.is_none() && cmd.torrent_file.is_none()
+            && cmd.video_lookup.is_none() && cmd.video_poll.is_none() && cmd.video_pick.is_none();
+        if self.full_backup.busy() && !reading_during_backup {
+            return line(&ErrorAnswer {
+                error: "Wait for the backup or restore to finish.".into(),
+                code: Some("backup-busy".into()),
+            });
+        }
+
+        if self.glass_owned() && !cmd.remote
             && let Some(answer) = self.glass_answer(cmd)
         { return answer; }
         // The browser's quality menu (its native host asks): whatever the automation API's
@@ -6216,10 +6264,20 @@ impl App {
                     "description": i.description,
                     "category": i.category.key(),
                     "is_torrent": i.torrent.is_some(),
+                    "torrent": i.torrent.as_ref().map(|torrent| serde_json::json!({
+                        "peers": torrent.peers,
+                        "uploaded": torrent.uploaded,
+                        "upload_speed": torrent.up_speed,
+                        "info_hash": torrent.hash,
+                        "selected_files": torrent.files.as_ref().map(Vec::len),
+                    })),
                     "direct_recovery": i.direct_recovery.is_some(),
                     "original_partial": i.direct_recovery.as_ref().map(|origin|mdm_engine::naming::part_path(&origin.dest).to_string_lossy().into_owned()),
+                    "recovery_verified_bytes": i.direct_recovery.as_ref().and_then(|origin|origin.verified_bytes),
+                    "recovery_direct_error": i.direct_recovery.as_ref().and_then(|origin|origin.direct_error.as_deref()),
                     "recovery_search_available": self.glass_torrent_recovery.contains_key(&i.id),
-                    "recovery_auto_search": self.auto_recovery_searches.contains(&i.id) && self.glass_torrent_recovery.contains_key(&i.id),
+                    "recovery_auto_search": self.auto_recovery_searches.contains_key(&i.id) && self.glass_torrent_recovery.contains_key(&i.id),
+                    "recovery_stage": self.torrent_recovery_stage(i),
                     "recovery_handoff_available": self.glass_torrent_handoffs.contains_key(&i.id),
                     "is_video": i.video.is_some(),
                     "is_gallery": i.gallery.is_some(),
@@ -6951,6 +7009,15 @@ impl App {
         self.queues[q].running = false;
         for id in self.queues[q].items.clone() {
             self.stop(id);
+            // Stopping a queue isn't the same as exhausting its direct retries.
+            self.auto_recovery_attempted.insert(id);
+            self.auto_recovery_pending.remove(&id);
+            if let Some(slot) = self.glass_torrent_handoffs.get(&id)
+                && let Ok(mut handoff) = slot.lock()
+                && handoff.automatic && handoff.result.is_none()
+            {
+                handoff.cancelled = true;
+            }
         }
     }
 
@@ -7644,57 +7711,114 @@ impl App {
         }
     }
 
-    /// Pull engine progress into the rows; open "Download complete" when one finishes.
-    /// Search after a failed non-resumable ordinary download only when the
-    /// user opted in. A unique candidate with at least two matching pieces is
-    /// still partial evidence, so automatic handoff also requires opt-in.
+    fn torrent_recovery_stage(&self, item: &Item) -> Option<&'static str> {
+        if item.direct_recovery.is_some() {
+            return Some("handed-off");
+        }
+        if let Some(slot) = self.glass_torrent_handoffs.get(&item.id) {
+            let handoff = slot.lock().ok()?;
+            return Some(match &handoff.result {
+                None => "preparing",
+                Some(Err(_)) => "handoff-failed",
+                Some(Ok(_)) => "handed-off",
+            });
+        }
+        let search = self.glass_torrent_recovery.get(&item.id)?.lock().ok()?;
+        Some(match search.as_ref() {
+            None => "searching",
+            Some(Err(_)) => "search-failed",
+            Some(Ok(report)) if !report.matches.is_empty() => "matched",
+            Some(Ok(report)) if report.searched > 0 && report.failed == report.searched => "search-failed",
+            Some(Ok(_)) => "no-match",
+        })
+    }
+
+    fn eligible_for_automatic_torrent_recovery(&self, item: &Item) -> bool {
+        item.status == Status::Error && item.live.is_none() && item.torrent.is_none()
+            && item.direct_recovery.is_none() && item.video.is_none() && item.gallery.is_none()
+            && item.remote.is_none() && item.checksum.is_none() && !item.context.private
+            && !self.stopped_by_hand.contains(&item.id) && !self.quota.held.contains(&item.id)
+            && item.snap.as_ref().and_then(|snap| snap.failure.as_ref()).is_some_and(automatic_torrent_source_failure)
+            && self.failures.get(&item.id).is_some_and(|(_, attempts)| !queue::retry_pending_for(&self.queues, item.id, *attempts))
+    }
+
+    fn make_room_for_automatic_torrent_result(&mut self) {
+        const MAX_MATCHED_REPORTS: usize = 8;
+        let cached: Vec<_> = self.auto_recovery_searches.iter().filter_map(|(&id, &searched_at)| {
+            let result = self.glass_torrent_recovery.get(&id)?.lock().ok()?;
+            let report = result.as_ref()?.as_ref().ok()?;
+            (!report.matches.is_empty()).then_some((id, searched_at))
+        }).collect();
+        if cached.len() >= MAX_MATCHED_REPORTS
+            && let Some((id, _)) = cached.into_iter()
+                .filter(|(id, _)| !self.auto_recovery_pending.contains(id))
+                .min_by_key(|(_, searched_at)| *searched_at)
+        {
+            self.glass_torrent_recovery.remove(&id);
+            self.auto_recovery_searches.remove(&id);
+        }
+    }
+
+    /// After engine and queue retries have finished, only an explicit preference permits a
+    /// search. Automatic handoff also requires a unique candidate with two checked pieces.
     fn poll_automatic_torrent_recovery(&mut self) {
         if !self.glass_owned() { return; }
         let ids: Vec<u64> = self.auto_recovery_pending.iter().copied().collect();
         for id in ids {
-            let result = self.glass_torrent_recovery.get(&id).and_then(|slot|slot.lock().ok().and_then(|guard|guard.as_ref().map(|report| report.as_ref().ok().and_then(automatic_torrent_choice))));
-            let Some(selection)=result else {continue};
+            let result = self.glass_torrent_recovery.get(&id).and_then(|slot| {
+                slot.lock().ok().and_then(|guard| guard.as_ref().map(|report| report.as_ref().ok().and_then(automatic_torrent_choice)))
+            });
+            let Some(selection) = result else { continue };
             self.auto_recovery_pending.remove(&id);
-            let still_eligible=self.items.iter().any(|item|item.id==id && item.status==Status::Error && item.live.is_none() && item.resumable==Some(false)
-                && item.torrent.is_none() && item.direct_recovery.is_none() && item.video.is_none() && item.gallery.is_none() && item.remote.is_none()
-                && item.checksum.is_none() && !item.context.private)
-                && !self.stopped_by_hand.contains(&id)
-                && !queue::retry_pending_for(&self.queues,id,self.failures.get(&id).map_or(0,|(_,n)|*n));
-            if self.settings.torrent_recovery_mode=="auto" && still_eligible {
-                if let Some((file_index,info_hash))=selection {
-                    let payload=serde_json::json!({"candidate":0,"file_index":file_index,"info_hash":info_hash,"accept_partial_match":true});
-                    let cmd=ipc::Command{action:Some("glass-item".into()),category:Some("start-recovery-torrent".into()),ids:vec![id],queue:Some(payload.to_string()),silent:true,..Default::default()};
-                    let answer=self.glass_answer(&cmd).unwrap_or_default();
-                    if let Ok(value)=serde_json::from_str::<serde_json::Value>(&answer) && value["pending"]==true {
-                        if let Some(item)=self.items.iter_mut().find(|item|item.id==id) {item.note("Matching torrent found; preparing verified pieces for torrent recovery.");}
-                        self.dirty=true;
+            if self.settings.torrent_recovery_mode != "auto"
+                || !self.items.iter().any(|item| item.id == id && self.eligible_for_automatic_torrent_recovery(item))
+            {
+                continue;
+            }
+            if let Some((file_index, info_hash)) = selection {
+                let payload = serde_json::json!({"candidate":0,"file_index":file_index,"info_hash":info_hash,"accept_partial_match":true});
+                let cmd = ipc::Command { action: Some("glass-item".into()), category: Some("start-recovery-torrent".into()), ids: vec![id], queue: Some(payload.to_string()), silent: true, ..Default::default() };
+                let answer = self.glass_answer(&cmd).unwrap_or_default();
+                if let Ok(value) = serde_json::from_str::<serde_json::Value>(&answer) {
+                    if value["pending"] == true {
+                        if let Some(item) = self.item(id) { item.note("Matching torrent found. Preparing verified pieces for torrent recovery."); }
+                        self.dirty = true;
+                    } else if let Some(error) = value["error"].as_str() {
+                        let result = Some(Err(format!("Could not start automatic torrent recovery: {error}")));
+                        self.glass_torrent_handoffs.entry(id).or_insert_with(|| {
+                            std::sync::Arc::new(std::sync::Mutex::new(glass::HandoffSlot { result, ..Default::default() }))
+                        });
                     }
                 }
             }
         }
-        if !matches!(self.settings.torrent_recovery_mode.as_str(),"ask"|"auto") ||
-            self.glass_torrent_recovery.len()>=8 || self.glass_torrent_recovery.values().any(|slot|slot.lock().map_or(true,|r|r.is_none())) {return;}
-        let candidate=self.items.iter().find(|item| {
-            item.status==Status::Error && item.live.is_none() && item.resumable==Some(false) && item.downloaded>0 &&
-            item.torrent.is_none() && item.direct_recovery.is_none() && item.video.is_none() && item.gallery.is_none() && item.remote.is_none() &&
-            !item.context.private && item.checksum.is_none() && !self.stopped_by_hand.contains(&item.id) &&
-            self.failures.contains_key(&item.id) && !self.auto_recovery_attempted.contains(&item.id) &&
-            !queue::retry_pending_for(&self.queues,item.id,self.failures.get(&item.id).map_or(0,|(_,n)|*n)) &&
-            mdm_engine::state::state_path(&item.dest).exists()
-        }).map(|item|item.id);
-        if let Some(id)=candidate {
-            let cmd=ipc::Command{action:Some("glass-item".into()),category:Some("find-recovery-torrents".into()),ids:vec![id],silent:true,..Default::default()};
-            let answer=self.glass_answer(&cmd).unwrap_or_default();
-            if serde_json::from_str::<serde_json::Value>(&answer).is_ok_and(|v|v["pending"]==true) {
-                self.auto_recovery_attempted.insert(id);
-                self.auto_recovery_searches.insert(id);
-                if self.settings.torrent_recovery_mode=="auto" {self.auto_recovery_pending.insert(id);}
-                if let Some(item)=self.items.iter_mut().find(|item|item.id==id) {item.note("Download cannot resume; searching Internet Archive for matching torrents.");}
-                self.dirty=true;
+        if !matches!(self.settings.torrent_recovery_mode.as_str(), "ask" | "auto")
+            || self.glass_torrent_recovery.values().any(|slot| slot.lock().map_or(true, |result| result.is_none()))
+        {
+            return;
+        }
+        let candidate = self.items.iter().find(|item| {
+            self.eligible_for_automatic_torrent_recovery(item)
+                && !self.auto_recovery_attempted.contains(&item.id)
+                && !self.glass_torrent_recovery.contains_key(&item.id)
+                && !self.recovery_check_running(item.id) && !self.repair_check_running(item.id)
+        }).map(|item| (item.id, mdm_engine::state::state_path(&item.dest)));
+        if let Some((id, state_path)) = candidate {
+            self.auto_recovery_attempted.insert(id);
+            if !state_path.is_file() { return; }
+            let cmd = ipc::Command { action: Some("glass-item".into()), category: Some("find-recovery-torrents".into()), ids: vec![id], silent: true, ..Default::default() };
+            let answer = self.glass_answer(&cmd).unwrap_or_default();
+            if serde_json::from_str::<serde_json::Value>(&answer).is_ok_and(|value| value["pending"] == true) {
+                self.make_room_for_automatic_torrent_result();
+                self.auto_recovery_searches.insert(id, Instant::now());
+                if self.settings.torrent_recovery_mode == "auto" { self.auto_recovery_pending.insert(id); }
+                if let Some(item) = self.item(id) { item.note("The direct download failed. Searching Internet Archive for matching torrents."); }
+                self.dirty = true;
             }
         }
     }
 
+    /// Pull engine progress into the rows and open the completion window for finished downloads.
     fn poll(&mut self, ctx: &egui::Context) {
         self.poll_moves();
         self.poll_dragged_out();
@@ -7735,13 +7859,17 @@ impl App {
             }
         }
         for id in repaired { self.glass_recovery_checks.remove(&id); }
-        let ready:Vec<_>=self.glass_torrent_handoffs.iter().filter_map(|(id,slot)| {
-            slot.lock().ok().and_then(|mut value|value.prepared.take().map(|result|(result,value.cancelled))).map(|(result,cancelled)|(*id,slot.clone(),result,cancelled))
+        let ready: Vec<_> = self.glass_torrent_handoffs.iter().filter_map(|(id, slot)| {
+            let mut handoff = slot.lock().ok()?;
+            let result = handoff.prepared.take()?;
+            Some((*id, slot.clone(), result, handoff.cancelled, handoff.automatic))
         }).collect();
-        for (id,slot,prepared,cancelled) in ready {
-            let result=prepared.and_then(|value| {
-                let folder=value.folder.clone();
-                if cancelled {return Err(format!("Torrent recovery was cancelled. The original partial and prepared files at {} were kept.",folder.display()));}
+        for (id, slot, prepared, cancelled, automatic) in ready {
+            let result = prepared.and_then(|value| {
+                let folder = value.folder.clone();
+                if cancelled || (automatic && (self.settings.torrent_recovery_mode != "auto" || self.stopped_by_hand.contains(&id))) {
+                    return Err(format!("Torrent recovery was cancelled. The original partial and prepared files at {} were kept.", folder.display()));
+                }
                 self.commit_torrent_recovery(id,value).map_err(|error|format!("{error} Prepared files were kept at {}.",folder.display()))
             });
             let success=result.is_ok();
@@ -11729,6 +11857,12 @@ impl App {
         // that hangs is reported too, minimized or not (#202).
         crate::crash::logic_begin();
         crate::crash::step(crate::crash::Step::Commands);
+        self.poll_glass_full_backup();
+        if !self.full_backup.busy() {
+            for command in std::mem::take(&mut self.full_backup.deferred) {
+                self.handle_command(command, ctx);
+            }
+        }
         let mut handled = false;
         // A command that may open a window (not a question answered at once).
         let mut opens = false;
@@ -11738,6 +11872,7 @@ impl App {
                 Some(reply) => {
                     let _ = reply.send(self.answer(&inc.cmd));
                 }
+                None if self.full_backup.busy() => self.full_backup.deferred.push_back(inc.cmd),
                 None => {
                     opens = true;
                     self.handle_command(inc.cmd, ctx);
@@ -11755,6 +11890,11 @@ impl App {
         let _ = opens;
         if handled {
             ctx.request_ui_pass(egui::ViewportId::ROOT);
+        }
+        if self.full_backup.busy() {
+            ctx.request_repaint_after(Duration::from_millis(250));
+            crate::crash::logic_end();
+            return;
         }
         self.lookups.prune(Instant::now());
         crate::crash::step(crate::crash::Step::NetworkSettings);
@@ -13155,6 +13295,31 @@ mod torrent_recovery_handoff_tests {
         let rt=Box::leak(Box::new(tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap()));
         let (_,commands)=std::sync::mpsc::channel();
         let mut app=std::mem::ManuallyDrop::new(App::assemble(&egui::Context::default(),rt.handle().clone(),commands,loaded,crate::Start::Shown));
+        let search = ipc::Command {
+            action: Some("glass-item".into()),
+            category: Some("find-recovery-torrents".into()),
+            ids: vec![1],
+            ..Default::default()
+        };
+        app.items[0].context.private = true;
+        let refused = app.glass_answer(&search).unwrap();
+        assert!(refused.contains("private downloads"));
+        assert!(app.glass_torrent_recovery.is_empty());
+        app.items[0].context.private = false;
+
+        let staged = mdm_torrent::prepare_saved_recovery(&torrent, &saved, 0, &tmp.path().join("stage-opt-out")).unwrap();
+        let slot = std::sync::Arc::new(std::sync::Mutex::new(glass::HandoffSlot {
+            prepared: Some(Ok(staged)),
+            automatic: true,
+            ..Default::default()
+        }));
+        app.glass_torrent_handoffs.insert(1, slot.clone());
+        app.settings.torrent_recovery_mode = "ask".into();
+        app.poll(&egui::Context::default());
+        assert!(slot.lock().unwrap().result.as_ref().unwrap().as_ref().unwrap_err().contains("cancelled"));
+        assert!(app.items[0].torrent.is_none());
+        app.glass_torrent_handoffs.remove(&1);
+
         // Cancellation while the search is still pending must prevent its
         // eventual result from launching an automatic torrent handoff.
         app.auto_recovery_pending.insert(1);

@@ -232,6 +232,16 @@ fn chapter_args(chapters: bool, ffmpeg: bool, converted: bool) -> Vec<String> {
     }
 }
 
+/// A subtitle written alongside this video, using its requested language code.
+pub fn saved_subtitle_language<'a>(video: &Path, name: &'a str) -> Option<&'a str> {
+    let prefix = format!("{}.", video.file_stem()?.to_str()?);
+    let (lang, ext) = name.strip_prefix(&prefix)?.rsplit_once('.')?;
+    (!lang.is_empty()
+        && lang.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_')
+        && SUB_EXTS.iter().any(|sub| ext.eq_ignore_ascii_case(sub)))
+        .then_some(lang)
+}
+
 /// The subtitle files saved beside `video` (`<stem>.<lang>.<srt|vtt…>`, as yt-dlp names them).
 fn side_files(video: &Path) -> Vec<PathBuf> {
     let (Some(dir), Some(stem)) = (video.parent(), video.file_stem()) else {
@@ -540,6 +550,13 @@ fn yt_dlp_leftover(rest: &str, outputs: bool) -> bool {
             _ => false,
         };
     working || finished
+}
+
+/// Whether this name follows a known unfinished yt-dlp or download-engine stream convention.
+pub fn is_unfinished_output(stem: &str, name: &str) -> bool {
+    name.to_lowercase()
+        .strip_prefix(&format!("{}.", stem.to_lowercase()))
+        .is_some_and(|rest| yt_dlp_leftover(rest, false))
 }
 
 /// What yt-dlp left in `dir` for a download saved as `<stem>.%(ext)s` (our template), as

@@ -9,7 +9,11 @@
 - **视频和音频：**配置扩展及 yt-dlp 后，打开受支持的视频页面并选择清晰度和字幕。只有来源提供大小时才会显示；某些格式需要 FFmpeg 合并视频和音频。
 - **种子：**使用 **Add Torrent** 打开 `.torrent` 文件或粘贴磁力链接，检查文件和保存位置。可用性取决于其他节点。
 - **外观：**在 **Settings → Appearance** 中选择颜色和材质；在 **Indicators** 中分别设置进度条、连接和图表。使用 **Export current theme…** 导出 JSON 材质，编辑后用 **Import theme…** 导入。参见[材质格式](../auralis-material-format.md)。
-- **偏好设置备份：**在 **Settings → General → Preferences backup** 中使用 **Save backup** 和 **Restore backup**。当前版本保存偏好设置和材质，但不包含已下载文件、未完成文件、下载历史、密码或 Cookie。在新电脑上检查保存路径。完整文件备份仍在开发中。
+- 要备份或恢复下载，请先停止传输、校验和队列。在 **Settings → General → Download backup** 中选择 **Back up downloads…**，保存设置、历史记录、队列、支持的文件及已保存的进度。在新安装中选择 **Restore downloads…**，再选择备份归档和目标文件夹。**Preferences backup** 可将设置单独保存为 JSON。备份不包含密码或 Cookie。
 - **启动和更新：**在 **Settings → General** 中设置随 Windows 启动，在 **Advanced → Updates** 中设置更新通知。
 
-本地哈希可以发现保存后的变化，但不能单独证明原始数据真实可靠。下载窗口中的 **Check saved data** 检查已保存哈希的区块；如果 HTTP 服务器兼容，**Check source and repair** 可以准备重新下载受损区段。在 **Find a torrent for recovery** 中，可主动搜索 Internet Archive、选择种子文件或比较磁力链接。部分区块匹配不能证明其余内容一致；继续下载会使用其他节点并保留原始部分文件。自动恢复和完整文件备份仍在开发中。
+本地哈希可以发现保存后的变化，但不能单独证明原始数据真实可靠。下载窗口中的 **Check saved data** 检查已保存哈希的区块；如果 HTTP 服务器兼容，**Check source and repair** 可以准备重新下载受损区段。
+
+在即将发布的 Windows 版本中，可以在 **Settings → Torrents** 中启用自动恢复。符合条件的直连下载用尽重试次数后，Auralis 会使用文件名中的词语在 Internet Archive 中搜索。你可以先检查匹配结果，也可以在仅有一个匹配项、至少两个已保存的分片通过验证且所有候选项均已成功检查时让 Auralis 自动继续。私密下载及带有预期整文件校验和的下载不在此功能范围内。
+
+在下载窗口中，也可以通过 **Find a torrent for recovery** 检查本地种子文件、磁力链接或指向种子文件的公开 HTTP(S) 链接。Auralis 会将通过验证的分片复制到新的恢复文件夹，保留原始未完成文件，并从 BitTorrent 节点获取剩余分片。下载窗口会显示详细状态，列表中已恢复的下载则会标记为 **Direct → Torrent**。

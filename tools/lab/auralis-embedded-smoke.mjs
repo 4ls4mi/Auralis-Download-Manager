@@ -4,7 +4,7 @@ import {spawn,spawnSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {createServer} from 'node:http';
 import {createRequire} from 'node:module';
-import {mkdir,mkdtemp,readFile,rm} from 'node:fs/promises';
+import {mkdir,mkdtemp,readFile,rm,writeFile} from 'node:fs/promises';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -36,6 +36,19 @@ const server=createServer((req,res)=>{
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const probe=net.createServer();await new Promise(r=>probe.listen(0,'127.0.0.1',r));const port=probe.address().port;await new Promise(r=>probe.close(r));
 async function ipc(command){const endpoint=JSON.parse(await readFile(path.join(data,'ipc.json'),'utf8'));return new Promise((resolve,reject)=>{let text='';const s=net.connect({host:'127.0.0.1',port:endpoint.port},()=>s.write(JSON.stringify({token:endpoint.token,...command})+'\n'));s.setTimeout(10000,()=>s.destroy(Error('IPC timeout')));s.on('data',b=>{text+=b;if(text.includes('\n')){s.end();resolve(text.trim())}});s.on('end',()=>resolve(text.trim()));s.on('error',reject)})}
+async function fullBackup(command){
+ const read=async request=>{
+  const answer=JSON.parse(await ipc(request));
+  if(answer.error)throw exited(answer.error);
+  return answer;
+ };
+ const started=await read(command);
+ assert.ok(Number.isSafeInteger(started.id),'Missing backup job ID');
+ return until(async()=>{
+  const status=await read({query:'glass-full-backup-status',ids:[started.id]});
+  return status.pending?null:status;
+ },'Backup job did not finish',90000);
+}
 async function browserCapture(url) {
  const host=process.env.AURALIS_NATIVE_HOST;assert.ok(host,'AURALIS_NATIVE_HOST is required');
  const message={url,filename:'from-browser.bin',size:contents.length,mime:'application/octet-stream',referrer:url,pageUrl:url,explicit:true,v:'0.2.4'};
@@ -171,19 +184,38 @@ try {
  await ipc({action:'pause',ids:[partial.id]});
  const paused=await until(async()=>JSON.parse(await ipc({query:'list'})).downloads.find(d=>d.id===partial.id&&d.status==='Stopped'&&d.downloaded>0),'Resume fixture did not pause');
  assert.ok(paused.downloaded<slowContents.length,'Resume fixture finished before it could be paused');
+ const archive=path.join(root,'test.auralis-backup');
+ const uiDirectory=path.join(data,'backup-ui');
+ await mkdir(uiDirectory,{recursive:true});
+ const manifest=path.join(uiDirectory,'test.json');
+ await writeFile(manifest,JSON.stringify({appearance:{'mh-glass-theme':'ocean'},startup:{enabled:false,mode:'window'}}));
+ const savedBackup=await fullBackup({action:'glass-export-full-backup',dir:archive,queue:manifest});
+ assert.equal(savedBackup.path,archive);
+
  await quitApp(page,'Auralis');
  await browser.close();browser=null;
  app=spawnApp();
  browser=await until(async()=>{if(app.exitCode!==null)throw exited(`Auralis exited after restart: ${app.exitCode}`);try{return await chromium.connectOverCDP(`http://127.0.0.1:${port}`,{timeout:2000})}catch{return null}},'WebView did not restart');
  const restarted=await until(()=>browser.contexts().flatMap(c=>c.pages()).find(p=>!p.isClosed()&&!p.url().includes('?')),'Restarted main window missing');
  await until(async()=>JSON.parse(await ipc({query:'list'})).downloads.find(d=>d.url===downloadUrl&&d.status==='Complete'),'Download was not restored after restart');
- const restored=await until(async()=>JSON.parse(await ipc({query:'list'})).downloads.find(d=>d.url===resumeUrl&&d.status==='Stopped'&&d.downloaded>0),'Partial download was not restored');
+ await until(async()=>JSON.parse(await ipc({query:'list'})).downloads.find(d=>d.url===resumeUrl&&d.status==='Stopped'&&d.downloaded>0),'Partial download was not restored after restart');
+ const restoreRoot=path.join(root,'restored-downloads');
+ const restoredBackup=await fullBackup({action:'glass-import-full-backup',dir:archive,queue:restoreRoot});
+ assert.equal(restoredBackup.restored_to,restoreRoot);
+ assert.equal(restoredBackup.ui['mh-glass-theme'],'ocean');
+ const rows=JSON.parse(await ipc({query:'list'})).downloads;
+ const completedCopy=rows.find(d=>d.url===downloadUrl&&d.id!==completed.id&&d.status==='Complete');
+ assert.ok(completedCopy,'Backup did not restore the completed file');
+ assert.equal(createHash('sha256').update(await readFile(completedCopy.path)).digest('hex'),hash,'Completed backup bytes changed');
+ const restored=rows.find(d=>d.url===resumeUrl&&d.id!==partial.id&&d.status==='Stopped');
+ assert.ok(restored,'Backup did not restore the paused download');
+ assert.equal(restored.downloaded,paused.downloaded,'Restored partial lost downloaded bytes');
  await ipc({action:'start',ids:[restored.id]});
  const resumed=await until(async()=>{const d=JSON.parse(await ipc({query:'list'})).downloads.find(d=>d.id===restored.id);if(d?.status==='Error')throw exited(`Resumed download failed: ${d.error||'unknown error'}`);return d?.status==='Complete'?d:null},'Partial download did not resume and finish',180000);
  assert.ok(!path.relative(root,resumed.path).startsWith('..')&&!path.isAbsolute(path.relative(root,resumed.path)),'Resumed download escaped its isolated folder');
  assert.equal(createHash('sha256').update(await readFile(resumed.path)).digest('hex'),slowHash,'Resumed file does not match');
  await quitApp(restarted,'Restarted Auralis');
- console.log('PASS: integrated downloader ran without a legacy child, downloaded a verified file, handled a browser capture, and resumed a partial download after restart.');
+ console.log('PASS: integrated downloader ran without a legacy child, downloaded a verified file, handled a browser capture, restored completed bytes, and resumed a partial download restored from a backup.');
 } catch(error) {
  console.error('Fixture diagnostics:',JSON.stringify({requestCount,lastStatus,gotAddResponse:Boolean(addResponse),appExit:app?.exitCode}));
  if(output)console.error('Auralis output:',output);

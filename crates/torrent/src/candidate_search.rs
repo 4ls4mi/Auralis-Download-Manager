@@ -162,7 +162,10 @@ pub async fn find_archive_matches(
     saved: &mdm_engine::state::ResumeState,
     opts: &Options,
 ) -> Result<SearchReport, String> {
-    let candidates = search_archive(name, opts).await?;
+    let candidates = tokio::time::timeout(
+        std::time::Duration::from_secs(20),
+        search_archive(name, opts),
+    ).await.map_err(|_| "Internet Archive search timed out")??;
     let mut report = SearchReport::default();
     for candidate in candidates {
         report.searched += 1;
@@ -194,7 +197,7 @@ pub async fn find_archive_matches(
         .await
         .map_err(|_| "Torrent comparison task failed")?;
         let (torrent, files, info_hash) = result?;
-        if !files.is_empty() {
+        if !files.is_empty() && !report.matches.iter().any(|existing| existing.info_hash == info_hash) {
             report.matches.push(MatchedCandidate {
                 candidate,
                 info_hash,
@@ -275,6 +278,9 @@ fn parse_candidates(bytes: &[u8]) -> Result<Vec<Candidate>, String> {
             .pop_if_empty()
             .push(id)
             .push(&format!("{id}_archive.torrent"));
+        if candidates.iter().any(|candidate: &Candidate| candidate.identifier == id) {
+            continue;
+        }
         candidates.push(Candidate {
             identifier: id.to_owned(),
             title,
@@ -292,7 +298,7 @@ pub async fn search_archive(name: &str, opts: &Options) -> Result<Vec<Candidate>
     url.query_pairs_mut()
         .append_pair(
             "q",
-            &format!("title:({terms}) AND format:\"Archive BitTorrent\""),
+            &format!("(title:({terms}) OR identifier:({terms})) AND format:\"Archive BitTorrent\""),
         )
         .append_pair("fl[]", "identifier")
         .append_pair("fl[]", "title")
@@ -338,7 +344,7 @@ mod tests {
     }
     #[test]
     fn candidates_reject_unsafe_ids_and_are_only_hints() {
-        let body = br#"{"response":{"docs":[{"identifier":"valid-id","title":"Example"},{"identifier":"../unsafe"},{"identifier":"x/y"}]}}"#;
+        let body = br#"{"response":{"docs":[{"identifier":"valid-id","title":"Example"},{"identifier":"valid-id","title":"Duplicate"},{"identifier":"../unsafe"},{"identifier":"x/y"}]}}"#;
         let results = parse_candidates(body).unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(

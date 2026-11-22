@@ -32,9 +32,11 @@ Open **Settings → Appearance** to choose a color theme and surface material. U
 
 To export the current theme, select **Export current theme…**, edit the JSON and use **Import theme…**. The file is declarative data, not executable code; see [the material format](../auralis-material-format.md). You can ask someone or an AI assistant to help edit it, then review and import the resulting file.
 
-## Back up preferences
+## Back up and restore
 
-In **Settings → General → Preferences backup**, choose **Save backup** and keep the resulting file somewhere safe. On a new installation choose **Restore backup** there, or use the first-install restore prompt if shown. The current backup includes preferences and appearance, including custom materials; it does **not** include downloaded files, partial downloads or download history. Passwords, account credentials and browser cookies are excluded. Paths may need updating on a new PC. A backup that also includes downloaded files and partial downloads is in development.
+In **Settings → General → Download backup**, choose **Back up downloads…**. Stop active transfers, checks and queues first. The `.auralis-backup` archive saves settings, appearance, history, queues, supported downloaded files and saved progress. On the new installation select **Restore downloads…**, choose the archive and pick a destination for the restored files.
+
+To copy only settings and appearance, use **General → Preferences backup → Save backup…**. Import the JSON through **Restore backup…** or the first-install restore prompt. Backups exclude passwords, account credentials and browser cookies. Review device-specific paths after restoring.
 
 ## Windows startup and updates
 
@@ -42,4 +44,8 @@ Use **Settings → General** to choose whether Auralis starts with Windows and w
 
 ## Integrity and limitations
 
-When a supported whole-file checksum is supplied by a server, Auralis can use it to check the completed download. A locally generated hash can detect later changes to data but cannot independently prove what the server originally sent. In the download window, **Check saved data** checks blocks with saved hashes. For compatible HTTP sources, **Check source and repair** can prepare changed ranges for downloading again. Under **Find a torrent for recovery**, you can request an Internet Archive search, choose a torrent file, or compare a magnet. A matching piece does not verify the remaining file. Continuing uses torrent peers, saves to a separate folder and preserves the original partial. Torrent recovery currently excludes private downloads and downloads with an expected whole-file checksum. Automatic torrent fallback and full-file backup are still in development.
+When a supported whole-file checksum is supplied by a server, Auralis can use it to check the completed download. A locally generated hash can detect later changes to data but cannot independently prove what the server originally sent. In the download window, **Check saved data** checks blocks with saved hashes. For compatible HTTP sources, **Check source and repair** can prepare changed ranges for downloading again.
+
+In the upcoming Windows build, open **Settings → Torrents → Torrent recovery after a direct download fails** to opt in. After eligible direct downloads exhaust their retries, Auralis searches Internet Archive with words from the filename. Choose **Search for matching torrents, then ask me** to review the match yourself, or enable automatic continuation for a single match with at least two verified pieces and successful candidate checks. Private downloads and those with expected whole-file checksums are excluded.
+
+In the download window, **Find a torrent for recovery** also checks a local torrent file, a magnet, or a public HTTP(S) torrent link. Auralis copies verified pieces to a new recovery folder, keeps the original partial and fetches missing pieces from BitTorrent peers. The download window shows search and transfer details. The list shows **Direct → Torrent** for recovered downloads.

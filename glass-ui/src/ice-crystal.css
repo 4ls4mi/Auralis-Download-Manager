@@ -724,7 +724,31 @@
 @keyframes cg-update-attention{0%,100%{box-shadow:inset 0 1px #ffffff45}50%{box-shadow:inset 0 1px #ffffff70,0 0 12px rgba(var(--accent-rgb),.6)}}
 @media (prefers-reduced-motion:reduce){.cg-update-notice{animation:none}}
 
-.cg-transfer-kind{display:inline-block;margin-left:6px;padding:1px 5px;border:1px solid var(--edge-strong);border-radius:5px;color:var(--ink);font-size:.9em}
+/* Torrent transfer and recovery details */
+.cg-transfer-kind{display:inline-flex;gap:4px;align-items:center;vertical-align:middle;margin-inline-start:6px;padding:1px 5px;border:1px solid var(--edge-strong);border-radius:5px;color:var(--ink);font-size:.9em;white-space:nowrap}
+.cg-transfer-kind svg{color:var(--accent);flex:none}
+.cg-transfer-mixed svg{color:var(--violet)}
+.cg-recovery-row-link{grid-column:1/-1;justify-self:start;padding:3px 7px;font-size:var(--min-text-size);text-align:start}
+.cg-list-peers{color:var(--muted)}
+.cg-recovery-notice{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;border:1px solid var(--edge-strong);border-inline-start:3px solid var(--accent);background:var(--surface)}
+.cg-recovery-notice>span{display:grid;gap:3px;flex:1 1 200px;min-width:0;overflow-wrap:anywhere}
+.cg-recovery-notice small{color:var(--muted)}
+.cg-recovery-notice>.cg-btn{padding:5px 9px}
+.cg-recovery-panel{flex:0 0 auto;overflow-wrap:anywhere}
+.cg-recovery-panel h3,.cg-recovery-panel p{margin:0}
+.cg-recovery-panel p,.cg-recovery-panel details{margin-block-start:8px}
+.cg-recovery-panel summary{cursor:pointer}
+.cg-recovery-panel .cg-bottom-actions{margin-block:10px}
+.cg-recovery-link{display:flex;align-items:end;gap:8px;flex-wrap:wrap}
+.cg-recovery-link label{flex:1 1 230px;min-width:0}
+.cg-recovery-matches{display:grid;gap:8px;list-style:none;padding:0;margin:10px 0 0}
+.cg-recovery-matches:empty{display:none}
+.cg-recovery-matches li{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding-block-start:8px;border-block-start:1px solid var(--edge)}
+.cg-recovery-matches small{display:block;color:var(--muted)}
+.cg-swarm .cg-section-title h3{display:inline-flex;align-items:center;gap:6px}
+.cg-swarm dl{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px;margin:0}
+.cg-swarm dt{color:var(--muted)}
+.cg-swarm dd{margin:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 
 /* Progress fills use a matte finish without animated shine or bloom. */
 .cg-window .cg-percent-track{filter:none}

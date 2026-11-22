@@ -25,6 +25,7 @@ mdm-ipc = { path = "../../crates/ipc" }
 mdm-app = { path = "../../crates/app", optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+tempfile = "3"
 rfd = "0.17"
 open = "5"
 

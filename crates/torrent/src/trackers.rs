@@ -30,7 +30,7 @@ pub fn allowed(tracker: &str, proxied: bool) -> bool {
 }
 
 /// An address on the internet (not this computer, the local network or a reserved range).
-fn public(ip: IpAddr) -> bool {
+pub(crate) fn public(ip: IpAddr) -> bool {
     match ip {
         IpAddr::V4(a) => {
             let o = a.octets();
@@ -175,6 +175,29 @@ pub fn listed(bytes: &[u8]) -> Vec<String> {
         }
     }
     out
+}
+
+/// Check both fields: a tracker an engine ignores could still leak credentials
+/// if its raw metadata is copied to a backup.
+pub(super) fn has_backup_credentials(torrent: &[u8]) -> bool {
+    top_level(torrent).is_none_or(|entries| {
+        entries.into_iter().any(|(key, value)| {
+            let urls: Vec<_> = match key {
+                b"announce" => string_at(value).into_iter().collect(),
+                b"announce-list" => list_of_lists(value).into_iter().flatten().flatten().collect(),
+                _ => return false,
+            };
+            urls.into_iter().any(|raw| {
+                std::str::from_utf8(raw).ok().and_then(|url| url::Url::parse(url).ok()).is_some_and(|url| {
+                    !url.username().is_empty() || url.password().is_some() ||
+                        url.query_pairs().any(|(key, _)| {
+                            ["passkey", "token", "auth", "apikey", "key"]
+                                .iter().any(|name| key.eq_ignore_ascii_case(name))
+                        })
+                })
+            })
+        })
+    })
 }
 
 /// A .torrent with `more` trackers (each a tier of its own, after the ones it has; those it

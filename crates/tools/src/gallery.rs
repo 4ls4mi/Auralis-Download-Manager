@@ -455,6 +455,7 @@ impl ByEngine<'_> {
         sh.progress.speed = 0.0;
         sh.progress.engine = None;
         for p in saved {
+            sh.know(p.clone());
             if sh.files.len() < KEEP_PATHS {
                 sh.files.push(p);
             }
@@ -488,6 +489,7 @@ pub struct GalleryJob {
     current: Arc<crate::streams::Current>,
     /// gallery-dl downloads now (its run after the engine's, or all of it).
     on_helper: Arc<std::sync::atomic::AtomicBool>,
+    settled: Arc<std::sync::atomic::AtomicBool>,
 }
 
 /// The line gallery-dl prints for each file it lists (`--print`): its address and its path.
@@ -581,7 +583,8 @@ impl GalleryJob {
         let (sh, ch, folder) = (shared.clone(), child.clone(), folder.to_owned());
         let (cur, helper) = (current.clone(), on_helper.clone());
         let (tool, url) = (tool.clone(), url.to_owned());
-        std::thread::spawn(move || {
+        let settled = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let worker = move || {
             let _cookies = cookies;
             if let Some(engine) = engine {
                 let by_engine = ByEngine {
@@ -620,12 +623,18 @@ impl GalleryJob {
             };
             read(stdout, &sh);
             finish(&sh, &ch, folder, saved.as_ref());
+        };
+        let done = settled.clone();
+        std::thread::spawn(move || {
+            worker();
+            done.store(true, std::sync::atomic::Ordering::Release);
         });
         Ok(GalleryJob {
             shared,
             child,
             current,
             on_helper,
+            settled,
         })
     }
 
@@ -645,10 +654,12 @@ impl GalleryJob {
         self.on_helper.load(std::sync::atomic::Ordering::Acquire)
     }
 
-    /// Its progress. Stopped only once the engine's part has ended (its files closed).
+    /// Its progress. Stopped only once the workers have closed and recorded their files.
     pub fn progress(&self) -> Progress {
         let mut p = self.shared.lock().unwrap().progress.clone();
-        if p.state == State::Stopped && self.current.busy() {
+        if p.state == State::Stopped
+            && !self.settled.load(std::sync::atomic::Ordering::Acquire)
+        {
             p.state = State::Running;
             p.speed = 0.0;
         }

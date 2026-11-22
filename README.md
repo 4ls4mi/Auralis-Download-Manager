@@ -40,9 +40,11 @@ Credentials and browser cookies are excluded from preferences backups; you may n
 
 Read the [English guide](docs/auralis-guide-drafts/en.md) or [Arabic guide](docs/auralis-guide-drafts/ar.md). Short guides are also available in [French](docs/auralis-guide-drafts/fr.md), [German](docs/auralis-guide-drafts/de.md), [Spanish](docs/auralis-guide-drafts/es.md), [Portuguese](docs/auralis-guide-drafts/pt-BR.md) and [Simplified Chinese](docs/auralis-guide-drafts/zh-CN.md). These guides are being updated alongside the app.
 
-Ordinary segmented downloads write their received bytes directly into a single temporary file. Saved-data checking can detect changes in blocks that have recorded hashes; repair depends on a compatible server and cannot make a server support byte ranges. For a stopped direct download, the recovery window can compare a chosen torrent or magnet, or search Internet Archive after you request it. Matching saved pieces do not prove the remaining content is identical. Torrent recovery needs peers and retains the original partial file. Automatic fallback is still in development.
+Ordinary segmented downloads write their received bytes directly into a single temporary file. Saved-data checking can detect changes in blocks that have recorded hashes; repair depends on a compatible server and cannot make a server support byte ranges. The upcoming Windows build adds automatic fallback for eligible direct downloads after direct retries are exhausted. In **Settings → Torrents**, choose whether Auralis should ask before using a match or continue automatically when there is one match, at least two saved pieces verify, and all candidate checks succeed. Automatic search uses Internet Archive. From **Find a torrent for recovery** in the download window, you can check a local torrent, magnet or public HTTP(S) torrent link. Auralis reuses only verified pieces, keeps the original partial and uses BitTorrent peers to fetch the rest. The download list marks recovered items **Direct → Torrent**.
 
-Appearance settings can export and import an editable theme JSON; indicator choices are included. Preferences backup does not yet include downloaded files, partial files or download history. A full-file backup is being developed.
+Appearance settings can export and import an editable theme JSON with indicator choices.
+
+In **Settings → General → Download backup**, use **Back up downloads…** to save preferences, history, queues, supported downloaded files and saved progress. Stop transfers, checks and queues first. Use **Restore downloads…** to select the archive and a destination for the files on the new installation. **Preferences backup** also offers a smaller settings-only JSON.
 
 ## Installation
 

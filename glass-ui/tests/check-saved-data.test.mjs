@@ -9,7 +9,7 @@ test('native shell permits the saved-data operations used by the progress window
  const source=readFileSync(new URL('../src-tauri/src/main.rs',import.meta.url),'utf8');
  const whitelist=source.match(/if !matches!\(operation\.as_str\(\),([\s\S]*?)\) \{\s*return Err\("Unsupported file operation"/);
  assert.ok(whitelist,'file operation allowlist must be present');
- for(const operation of ['check-saved','check-saved-result','repair-saved','repair-saved-result','find-recovery-torrents','find-recovery-torrents-result','check-recovery-magnet','start-recovery-torrent','start-recovery-torrent-result','cancel-recovery-torrent'])assert.ok(whitelist[1].includes(`"${operation}"`),`${operation} is blocked by the native shell`);
+ for(const operation of ['check-saved','check-saved-result','repair-saved','repair-saved-result','find-recovery-torrents','find-recovery-torrents-result','check-recovery-magnet','check-recovery-torrent-url','start-recovery-torrent','start-recovery-torrent-result','cancel-recovery-torrent'])assert.ok(whitelist[1].includes(`"${operation}"`),`${operation} is blocked by the native shell`);
 });
 test('saved-data check reports changed and unhashed bytes without claiming repair',{skip:!executablePath||!existsSync(executablePath)},async()=>{
  const server=await createServer({configFile:false,root:fileURLToPath(new URL('..',import.meta.url)),server:{host:'127.0.0.1',port:0},logLevel:'silent'});await server.listen();
@@ -117,19 +117,19 @@ test('torrent search explains disclosure and reports only compared pieces',{skip
  await page.getByText(/Searching sends words from this file’s name to Internet Archive/).waitFor();
  assert.equal(await page.evaluate(()=>window.calls.some(c=>c.args?.operation==='find-recovery-torrents')),false);
  await page.getByRole('button',{name:'Search Internet Archive'}).click();
- await page.getByText(/2 matching piece\(s\), 3 not checked/).waitFor();
- assert.match(await page.locator('main').innerText(),/a match does not verify the rest of the file/i);
- assert.match(await page.locator('main').innerText(),/does not start downloading the file or change the saved data/i);
+ await page.getByText(/2 matching pieces · 3 unchecked/).waitFor();
+ assert.match(await page.locator('main').innerText(),/a match verifies only the pieces compared/i);
+ assert.match(await page.locator('main').innerText(),/checking reads the saved data/i);
  assert.ok(await page.evaluate(()=>window.calls.some(c=>c.args?.operation==='find-recovery-torrents')));
  await page.getByRole('button',{name:'Choose torrent file…'}).click();
  await page.waitForFunction(()=>window.calls.some(c=>c.cmd==='choose_recovery_torrent'));
- await page.getByText(/2 matching piece\(s\), 3 not checked/).waitFor();
- await page.getByLabel('Magnet link').fill('magnet:?xt=urn:btih:0123456789012345678901234567890123456789');
- await page.getByRole('button',{name:'Check magnet link'}).click();
+ await page.getByText(/2 matching pieces · 3 unchecked/).waitFor();
+ await page.getByLabel('Magnet or torrent URL').fill('magnet:?xt=urn:btih:0123456789012345678901234567890123456789');
+ await page.getByRole('button',{name:'Check link'}).click();
  await page.waitForFunction(()=>window.calls.some(c=>c.args?.operation==='check-recovery-magnet'));
- await page.getByText(/2 matching piece\(s\), 3 not checked/).waitFor();
+ await page.getByText(/2 matching pieces · 3 unchecked/).waitFor();
  assert.equal(await page.getByRole('button',{name:'Continue with this torrent'}).isDisabled(),true);
- await page.getByRole('checkbox',{name:/matching saved pieces do not prove/}).check();
+ await page.getByRole('checkbox',{name:/the rest of the torrent may differ/}).check();
  await page.getByRole('button',{name:'Continue with this torrent'}).click();
  await page.getByText(/Prepared for torrent recovery/).waitFor();
  assert.ok(await page.evaluate(()=>window.calls.some(c=>c.args?.operation==='start-recovery-torrent')));
@@ -190,7 +190,7 @@ test('torrent handoff reports failure and does not claim the transfer started',{
   }};
  });await page.goto(server.resolvedUrls.local[0]+'?detail=7');
  await page.getByText('Find a torrent for recovery').click();await page.getByRole('button',{name:'Search Internet Archive'}).click();
- await page.getByRole('checkbox',{name:/matching saved pieces do not prove/}).check();
+ await page.getByRole('checkbox',{name:/the rest of the torrent may differ/}).check();
  await page.getByRole('button',{name:'Continue with this torrent'}).click();
  await page.getByRole('alert').filter({hasText:'Could not save the recovery state'}).waitFor();
  assert.doesNotMatch(await page.locator('main').innerText(),/Prepared for torrent recovery/);
@@ -208,7 +208,7 @@ test('a direct-to-torrent handoff remains clearly identified after reopening',{s
    if(cmd==='file_operation'&&args.operation==='details')return {own_limit_kb:null,is_torrent:true};return null;
   }};
  });await page.goto(server.resolvedUrls.local[0]+'?detail=7');
- await page.getByText('Direct download → torrent').waitFor();
+ await page.getByText('Direct download → BitTorrent').waitFor();
  await page.getByText(/The original partial was preserved/).waitFor();
  assert.match(await page.locator('main').innerText(),/C:\/original\.bin\.part/);
  assert.equal(await page.getByText('Find a torrent for recovery').count(),0);
@@ -262,8 +262,7 @@ test('torrent recovery clearly refuses downloads with an expected whole-file che
    if(cmd==='file_operation'&&args.operation==='find-recovery-torrents-result')return {complete:true,searched:1,failed:0,matches:[{candidate:0,file_index:0,info_hash:'0123456789012345678901234567890123456789',title:'Example',path:'file.zip',matching_pieces:1,unavailable_pieces:2}]};return null;
   }};
  });await page.goto(server.resolvedUrls.local[0]+'?detail=7');await page.getByText('Find a torrent for recovery').click();await page.getByRole('button',{name:'Search Internet Archive'}).click();
- await page.getByText(/not yet available for a download with an expected whole-file checksum/).waitFor();
- await page.getByRole('checkbox',{name:/matching saved pieces do not prove/}).check();
+ await page.getByText(/unavailable for a file with an expected whole-file checksum/).waitFor();
  assert.equal(await page.getByRole('button',{name:'Continue with this torrent'}).isDisabled(),true);
  }finally{await browser.close();await server.close()}
 });
@@ -285,8 +284,8 @@ test('cancel during preparation asks the backend to stop the handoff',{skip:!exe
    if(cmd==='file_operation'&&args.operation==='cancel-recovery-torrent')return {already_started:false};return null;
   }};
  });await page.goto(server.resolvedUrls.local[0]+'?detail=7');await page.getByText('Find a torrent for recovery').click();await page.getByRole('button',{name:'Search Internet Archive'}).click();
- await page.getByRole('checkbox',{name:/matching saved pieces do not prove/}).check();await page.getByRole('button',{name:'Continue with this torrent'}).click();
- await page.getByText(/Rechecking and preparing verified pieces/).waitFor();await page.getByRole('button',{name:'Cancel',exact:true}).click();
+ await page.getByRole('checkbox',{name:/the rest of the torrent may differ/}).check();await page.getByRole('button',{name:'Continue with this torrent'}).click();
+ await page.getByText(/Rechecking saved pieces before continuing/).waitFor();await page.getByRole('button',{name:'Cancel',exact:true}).click();
  assert.ok(await page.evaluate(()=>window.calls.some(c=>c.args?.operation==='cancel-recovery-torrent')));
  }finally{await browser.close();await server.close()}
 });
@@ -304,12 +303,12 @@ test('cancel delegates a just-completed handoff to the backend',{skip:!executabl
    if(cmd==='file_operation'&&args.operation==='find-recovery-torrents')return {pending:true};
    if(cmd==='file_operation'&&args.operation==='find-recovery-torrents-result')return {complete:true,searched:1,failed:0,matches:[{candidate:0,file_index:0,info_hash:'0123456789012345678901234567890123456789',title:'Example',path:'file.zip',matching_pieces:1,unavailable_pieces:2}]};
    if(cmd==='file_operation'&&args.operation==='start-recovery-torrent')return {pending:true};
-   if(cmd==='file_operation'&&args.operation==='start-recovery-torrent-result')return {complete:false};
+   if(cmd==='file_operation'&&args.operation==='start-recovery-torrent-result')return {complete:true,report:{verified_bytes:40,path:'C:/recovery/file.zip'}};
    if(cmd==='file_operation'&&args.operation==='cancel-recovery-torrent')return {already_started:true};return null;
   }};
  });await page.goto(server.resolvedUrls.local[0]+'?detail=7');await page.getByText('Find a torrent for recovery').click();await page.getByRole('button',{name:'Search Internet Archive'}).click();
- await page.getByRole('checkbox',{name:/matching saved pieces do not prove/}).check();await page.getByRole('button',{name:'Continue with this torrent'}).click();
- await page.getByText(/Rechecking and preparing verified pieces/).waitFor();await page.getByRole('button',{name:'Cancel',exact:true}).click();
+ await page.getByRole('checkbox',{name:/the rest of the torrent may differ/}).check();await page.getByRole('button',{name:'Continue with this torrent'}).click();
+ await page.getByText(/Prepared for torrent recovery/).waitFor();await page.getByRole('button',{name:'Cancel',exact:true}).click();
  assert.ok(await page.evaluate(()=>window.calls.some(c=>c.args?.operation==='cancel-recovery-torrent')));
  }finally{await browser.close();await server.close()}
 });

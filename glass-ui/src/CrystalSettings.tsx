@@ -1,4 +1,4 @@
-import {savePreferences,restorePreferences} from "./preferencesBackup";
+import {savePreferences,restorePreferences,saveDownloadBackup,restoreDownloadBackup} from "./preferencesBackup";
 
 import {loadMaterials,materialId,materialPresets,extraMaterials,parseMaterial,MATERIALS_KEY,resolveMaterial} from "./customMaterials";
 import {loadThemes,parseTheme,paletteForTheme,themeId,THEMES_KEY,type ThemeFile,type ThemeSettings} from "./themeFiles";
@@ -48,6 +48,7 @@ export default function CrystalSettings(){
   const [cfg,setCfg]=useState<EngineSettings|null>(null);
   const [queues,setQueues]=useState<Queue[]>([]);
   const [busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
+  const [backupAction, setBackupAction] = useState<"save" | "restore" | null>(null);
   const [browser,setBrowser]=useState("");
   const [appVersion,setAppVersion]=useState("");
   const [updatePresentation,setUpdatePresentation]=useState(()=>localStorage.getItem("auralis-update-presentation")||"quiet");
@@ -160,10 +161,57 @@ export default function CrystalSettings(){
     <label className="cg-slider"><span>{title}<b>{appearance[name] as number}{suffix}</b></span>
       <input type="range" data-setting={name} min={min} max={max} value={appearance[name] as number}
         onChange={e=>set(name,Number(e.target.value))}/></label>;
+  const downloadBackup = async (action: "save" | "restore") => {
+    if (busy) return;
+    setBusy(true);
+    setBackupAction(action);
+    setError("");
+    setNotice("");
+    try {
+      if (action === "save") {
+        const backup = await saveDownloadBackup();
+        if (backup) setNotice(`Download backup saved to ${backup.path}.`);
+      } else {
+        const backup = await restoreDownloadBackup();
+        if (!backup) return;
+        setNotice(backup.restored_to
+          ? `Download backup restored to ${backup.restored_to}.`
+          : "Download backup restored.");
+        setUpdatePresentation(localStorage.getItem("auralis-update-presentation") || "quiet");
+        await load();
+        const warnings = backup.warning ? [backup.warning] : [];
+        try {
+          setStartup(await invoke<{ enabled: boolean; mode: string }>("startup_settings"));
+        } catch (error) {
+          warnings.push(`Could not read restored startup settings: ${String(error)}`);
+        }
+        if (backup.appearanceError) {
+          warnings.push(`Could not apply appearance preferences: ${backup.appearanceError}`);
+        }
+        if (warnings.length) setError(warnings.join(" "));
+      }
+    } catch (error) {
+      setError(`Could not ${action} the download backup: ${String(error)}`);
+    } finally {
+      setBackupAction(null);
+      setBusy(false);
+    }
+  };
+
   const body=()=>{
     switch(tab){
       case "General":return <>
-        <section className="cg-glass cg-progress-section"><h3>Preferences backup</h3><p>Save your appearance and download preferences for a new Windows installation. Passwords, account credentials and browser cookies are not included; file paths may need updating.</p><div className="cg-bottom-actions"><button className="cg-btn" onClick={async()=>{setError("");try{const file=await savePreferences();if(file)setNotice("Preferences backup saved.")}catch(e){setError(String(e))}}}>Save backup…</button><button className="cg-btn" onClick={async()=>{setError("");try{if(await restorePreferences()){setNotice("Preferences restored. Reopen Auralis windows to apply the appearance.");location.reload()}}catch(e){setError(String(e))}}}>Restore backup…</button></div></section>
+        <section className="cg-glass cg-progress-section" aria-labelledby="download-backup-heading">
+          <h3 id="download-backup-heading">Download backup</h3>
+          <p>Keep preferences, download history, queues, supported files and saved progress in one archive.
+            Stop downloads, checks and queues before saving or restoring. Choose a location for the restored files.</p>
+          <div className="cg-bottom-actions">
+            <button type="button" className="cg-btn" disabled={busy} onClick={() => void downloadBackup("save")}>Back up downloads…</button>
+            <button type="button" className="cg-btn" disabled={busy} onClick={() => void downloadBackup("restore")}>Restore downloads…</button>
+          </div>
+          <p role="status" hidden={!backupAction}>{backupAction === "save" ? "Creating download backup…" : "Restoring download backup…"}</p>
+        </section>
+        <section className="cg-glass cg-progress-section"><h3>Preferences backup</h3><p>Save your appearance and download preferences for a new Windows installation. Passwords, account credentials and browser cookies are not included; file paths may need updating.</p><div className="cg-bottom-actions"><button className="cg-btn" disabled={busy} onClick={async()=>{setBusy(true);setError("");setNotice("");try{const file=await savePreferences();if(file)setNotice("Preferences backup saved.")}catch(e){setError(String(e))}finally{setBusy(false)}}}>Save backup…</button><button className="cg-btn" disabled={busy} onClick={async()=>{setBusy(true);setError("");setNotice("");try{if(await restorePreferences()){setNotice("Preferences restored. Reopen Auralis windows to apply the appearance.");location.reload()}}catch(e){setError(String(e))}finally{setBusy(false)}}}>Restore backup…</button></div></section>
         <label className="cg-toggle"><span><strong>Start Auralis with Windows</strong><small>Launch Auralis automatically when you sign in to Windows.</small></span><input type="checkbox" disabled={!startup||busy} checked={startup?.enabled??false} onChange={e=>void changeStartup(e.target.checked,startup?.mode??"minimized")}/></label>
         <label className="cg-field">When Windows starts<select value={startup?.mode??"minimized"} disabled={!startup||busy} onChange={e=>void changeStartup(startup?.enabled??false,e.target.value)}><option value="minimized">Start minimized in the system tray</option><option value="window">Open the main window</option></select><small>Applies to Windows startup. Open Auralis normally from its shortcut whenever you want the main window.</small></label>
         <p>Browser captures wait for Download File Info so you can confirm the destination and download options.</p>
@@ -205,7 +253,7 @@ export default function CrystalSettings(){
         <div className="cg-settings-fallback">After installing, restart the browser if the extension does not connect. Try a real download link to confirm interception.</div>
       </>;
       case "Torrents":return <>
-        <label className="cg-field">Recovery after a non-resumable download fails<select value={cfg?.torrent_recovery_mode??"off"} disabled={!cfg||busy} onChange={e=>void change("torrent_recovery_mode",e.target.value)}><option value="off">Off — search manually</option><option value="ask">Search for matching torrents, then ask me</option><option value="auto">Search and continue automatically when unambiguous</option></select><small>Search sends words from the filename to Internet Archive. Continuing uses BitTorrent peers. Matching saved pieces do not verify the unseen remainder. Automatic continuation requires one match with at least two verified pieces and no failed candidate checks; otherwise, review the results manually. The original partial is kept. Private downloads and files with an expected checksum are excluded.</small></label>
+        <label className="cg-field">Torrent recovery after a direct download fails<select value={cfg?.torrent_recovery_mode??"off"} disabled={!cfg||busy} onChange={e=>void change("torrent_recovery_mode",e.target.value)}><option value="off">Off — search manually</option><option value="ask">Search for matching torrents, then ask me</option><option value="auto">Search and continue automatically when unambiguous</option></select><small>Automatic recovery starts after Auralis exhausts the available direct retries. Search sends words from the filename to Internet Archive. Continuing uses BitTorrent peers. Matching saved pieces do not verify the unseen remainder. Automatic continuation requires one match with at least two verified pieces and no failed candidate checks; otherwise, review the results manually. The original partial is kept. Private downloads and files with an expected checksum are excluded.</small></label>
         {check("torrent_keep_sharing","Continue sharing after download","Keep uploading to other peers after the file finishes")}
         {check("torrent_dht","Use distributed hash table (DHT)","Discover BitTorrent peers")}
         {check("torrent_lsd","Discover local peers (LSD)","Use local peer discovery")}
@@ -297,7 +345,7 @@ export default function CrystalSettings(){
     </aside><div className="cg-settings-body cg-glass">
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <div><h2>{tab}</h2><p>Download and appearance preferences</p><p className="cg-settings-version">Current version: <strong>{appVersion||"Checking…"}</strong></p></div>
-        <span className="cg-status-message">{busy?"Saving…":cfg?<><Check size={14}/> Connected</>:"Connecting"}</span>
+        <span className="cg-status-message">{busy?(backupAction?"Working…":"Saving…"):cfg?<><Check size={14}/> Connected</>:"Connecting"}</span>
       </div>
       {error&&<p className="cg-error">{error}</p>}
       {notice&&<p className="cg-success"><CheckCircle2 size={14}/> {notice}</p>}
@@ -305,7 +353,7 @@ export default function CrystalSettings(){
       <div>{tab==="Advanced"&&settingsPanel==="Updates"?<><label className="cg-field">Update notification<select value={updatePresentation} onChange={e=>{setUpdatePresentation(e.target.value);localStorage.setItem("auralis-update-presentation",e.target.value)}}><option value="quiet">Quiet — show in Auralis only</option><option value="notify">Windows notification and Auralis corner popup</option><option value="toast">Auralis corner popup only</option><option value="dialog">Open update details immediately</option></select></label><CrystalUpstream/>{adapterPicker()}</>:tab==="Appearance"||tab==="Accounts"||settingsPanel==="Main options"?body():<CrystalOriginalSettings section={tab}/>}</div>
     </div></div>
     <footer className="cg-bottom-actions" style={{padding:"9px 18px"}}><span className="cg-muted" style={{marginRight:"auto",fontSize:"var(--min-text-size)"}}>Auralis {appVersion||"…"} • Windows x64 • Changes are saved automatically</span>
-      <button className="cg-btn cg-btn-primary" onClick={()=>void import("@tauri-apps/api/window").then(m=>m.getCurrentWindow().close())}>Done</button>
+      <button className="cg-btn cg-btn-primary" disabled={backupAction!==null} onClick={()=>void import("@tauri-apps/api/window").then(m=>m.getCurrentWindow().close())}>Done</button>
     </footer>
   </CrystalWindow>;
 }
