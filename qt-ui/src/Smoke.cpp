@@ -12,13 +12,16 @@
 #include <QTimer>
 #include <QUuid>
 
+#include <utility>
+
 namespace {
 const QByteArray Payload = QByteArray("Auralis Qt downloader integrity test\n").repeated(56 * 1024);
 constexpr qsizetype InitialBytes = 320 * 1024;
 constexpr qsizetype ChunkBytes = 32 * 1024;
 }
 
-EngineSmoke::EngineSmoke(Engine &engine) : m_engine(engine)
+EngineSmoke::EngineSmoke(Engine &engine, TrayCheck checkTray)
+    : m_engine(engine), m_checkTray(std::move(checkTray))
 {
     const auto root = QDir(m_engine.dataDirectory());
     m_name = QStringLiteral("auralis-qt-smoke-%1.bin").arg(QUuid::createUuid().toString(QUuid::Id128));
@@ -102,18 +105,37 @@ void EngineSmoke::inspectTransfers()
             observeTransferWindow(id);
             if (!m_framePresented)
                 return;
-            if (m_step == Step::Starting) {
-                m_step = Step::WaitingForPause;
-                qInfo("Smoke: the initial active progress window rendered. Pausing from its toolbar.");
-                if (!pauseTransfer())
-                    fail(QStringLiteral("The progress window's Pause action could not be invoked."));
-            } else {
-                m_step = Step::Finishing;
-                qInfo("Smoke: the resumed active progress window reopened and rendered.");
-            }
+            verifyTrayMenu(m_step == Step::WaitingForResume);
         }
         return;
     }
+}
+
+void EngineSmoke::verifyTrayMenu(bool resumed)
+{
+    const Step checking = resumed ? Step::CheckingResumedTrayMenu : Step::CheckingInitialTrayMenu;
+    m_step = checking;
+    if (!m_checkTray) {
+        fail(QStringLiteral("The tray context menu test is unavailable."));
+        return;
+    }
+    m_checkTray([this, checking, resumed](bool opened) {
+        if (m_step != checking)
+            return;
+        if (!opened) {
+            fail(QStringLiteral("The tray context menu could not be opened during an active transfer."));
+            return;
+        }
+        if (resumed) {
+            m_step = Step::Finishing;
+            qInfo("Smoke: resumed progress window rendered and tray context menu opened.");
+        } else {
+            m_step = Step::WaitingForPause;
+            qInfo("Smoke: initial progress window rendered and tray context menu opened. Pausing from the toolbar.");
+            if (!pauseTransfer())
+                fail(QStringLiteral("The progress window's Pause action could not be invoked."));
+        }
+    });
 }
 
 void EngineSmoke::observeTransferWindow(qulonglong id)
@@ -161,7 +183,7 @@ void EngineSmoke::verifyShutdown(bool clean)
     }
     qInfo("Smoke: Rust service stopped cleanly.");
     QSaveFile marker(QDir(m_engine.dataDirectory()).filePath(QStringLiteral("qt-engine-smoke.ok")));
-    const QByteArray confirmation("Qt progress windows rendered on start and resume. Rust transfer and file integrity verified.\n");
+    const QByteArray confirmation("Qt progress windows and tray menus opened on start and resume. Rust transfer and file integrity verified.\n");
     if (!marker.open(QIODevice::WriteOnly) || marker.write(confirmation) != confirmation.size() || !marker.commit())
         qFatal("Could not persist the Qt engine integration result.");
 }
@@ -214,7 +236,9 @@ void EngineSmoke::serve()
             auto *pump = new QTimer(socket);
             const auto end = last + 1;
             connect(pump, &QTimer::timeout, socket, [this, socket, pump, end, first, position = first]() mutable {
-                const auto available = m_step == Step::Finishing ? end : qMin(end, first + InitialBytes);
+                const bool checkingTray = m_step == Step::CheckingInitialTrayMenu || m_step == Step::CheckingResumedTrayMenu;
+                const auto heldBytes = InitialBytes + (checkingTray ? 3 * ChunkBytes : 0);
+                const auto available = m_step == Step::Finishing ? end : qMin(end, first + heldBytes);
                 if (position < available && socket->bytesToWrite() < ChunkBytes) {
                     const auto written = socket->write(Payload.constData() + position, qMin(ChunkBytes, available - position));
                     if (written < 0) {
