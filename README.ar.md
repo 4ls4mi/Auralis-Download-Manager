@@ -6,10 +6,6 @@
 
 [تنزيل أحدث إصدار لنظام Windows](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest) · [حزم إضافة المتصفح](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest) · [ملاحظات الإصدارات](CHANGELOG.md)
 
-## أوراليس أثناء العمل
-
-![تنزيل مباشر مع شريط التقدم والاتصالات ومخطط سرعة النقل](docs/images/auralis/user-transfer.gif)
-
 ## المزايا
 
 - تنزيل متعدد الاتصالات مع الإيقاف والاستئناف وقوائم الانتظار والتحكم في السرعة ومخطط مباشر للنقل.

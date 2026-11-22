@@ -6,10 +6,6 @@ Auralis is a free Windows x64 download manager with a glass-inspired interface, 
 
 [Download Auralis for Windows](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest) · [Download the Auralis browser extension](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest) · [Release notes](https://github.com/4ls4mi/Auralis-Download-Manager/releases)
 
-## Auralis in action
-
-![Live download with progress, connections and transfer graph](docs/images/auralis/user-transfer.gif)
-
 ## What you can do with Auralis
 
 ### Downloads, queues and speed
