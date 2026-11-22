@@ -1,0 +1,71 @@
+name: Verify and attach Auralis 0.3.56 release files
+
+on:
+  push:
+    branches: [wip/auralis-publish-v0.3.56]
+    paths: [.github/workflows/auralis-publish-v0.3.56.yml]
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: auralis-self-hosted-windows
+  cancel-in-progress: false
+
+jobs:
+  attach:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ github.token }}
+      TESTED_RUN: '45008957863'
+      TESTED_SHA: cfa4bfe16f226c5419cf24ab2391a2390955e566
+      RELEASE_ID: '454356669'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: cfa4bfe16f226c5419cf24ab2391a2390955e566
+          persist-credentials: false
+
+      - name: Verify original Windows job and release draft
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/$GH_REPO/actions/runs/$TESTED_RUN" > tested-run.json
+          jq -e --arg sha "$TESTED_SHA" --arg repo "$GH_REPO" \
+            '.head_sha == $sha and .head_repository.full_name == $repo and
+             .head_branch == "wip/auralis-visual-updates" and .status == "completed" and
+             .path == ".github/workflows/auralis-self-hosted-windows.yml"' tested-run.json > /dev/null
+          gh api "repos/$GH_REPO/actions/runs/$TESTED_RUN/jobs" > tested-jobs.json
+          jq -e --arg sha "$TESTED_SHA" \
+            'any(.jobs[]; .head_sha == $sha and .name == "Build and test on your PC" and
+             .status == "completed" and .conclusion == "success")' tested-jobs.json > /dev/null
+          gh api "repos/$GH_REPO/releases/$RELEASE_ID" > release.json
+          jq -e --arg sha "$TESTED_SHA" \
+            '.draft and .tag_name == "v0.3.56" and .target_commitish == $sha' release.json > /dev/null
+
+      - name: Attach tested files and verify release asset digests
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run download "$TESTED_RUN" --name auralis-download-manager-windows-x64 --dir installer
+          gh run download "$TESTED_RUN" --name auralis-browser-extensions --dir extensions
+          test "$(find installer -type f | wc -l)" -eq 1
+          test "$(find extensions -type f | wc -l)" -eq 3
+          cp 'installer/Auralis Download Manager_0.3.56_x64-setup.exe' Auralis.Download.Manager_0.3.56_x64-setup.exe
+          files=(Auralis.Download.Manager_0.3.56_x64-setup.exe extensions/auralis-{chromium,edge-store,firefox}.zip)
+          for file in "${files[@]}"; do test -s "$file"; done
+          if ! gh release upload v0.3.56 "${files[@]}"; then
+            echo 'The upload command reported an error. Verifying the uploaded files.'
+          fi
+          for attempt in {1..10}; do
+            if gh api "repos/$GH_REPO/releases/$RELEASE_ID" > release.json &&
+              python3 .github/scripts/verify-auralis-release.py release.json 0.3.56 "$TESTED_SHA" "${files[@]}"; then
+              sha256sum "${files[@]}"
+              exit 0
+            fi
+            sleep 3
+          done
+          exit 1
