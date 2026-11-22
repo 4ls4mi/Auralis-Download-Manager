@@ -1,0 +1,34 @@
+name: Import user supplied Auralis pictures
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: auralis-self-hosted-windows
+  cancel-in-progress: false
+jobs:
+  collect:
+    runs-on: [self-hosted, Windows, X64, auralis]
+    timeout-minutes: 5
+    steps:
+      - name: Collect the five specified pictures
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $desktop = 'C:\Users\Alsami\Desktop'
+          $files = @('ChatGPT Image Nov 22, 2026, 04_11_11 AM.png', 'ChatGPT Image Nov 22, 2026, 04_11_18 AM.png', 'ChatGPT Image Nov 22, 2026, 04_11_24 AM.png', 'ChatGPT Image Nov 22, 2026, 04_11_30 AM.png', 'ChatGPT Image Nov 22, 2026, 04_11_36 AM.png')
+          $out = Join-Path $env:RUNNER_TEMP ("auralis-provided-pictures-" + $env:GITHUB_RUN_ID)
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          for ($i = 0; $i -lt $files.Count; $i++) {
+            $src = Join-Path $desktop $files[$i]
+            if (-not (Test-Path -LiteralPath $src -PathType Leaf)) { throw "One of the five specified pictures was not found: $($files[$i])" }
+            Copy-Item -LiteralPath $src -Destination (Join-Path $out ("picture-{0}.png" -f ($i + 1)))
+          }
+          "AURALIS_PICTURES_DIR=$out" >> $env:GITHUB_ENV
+      - name: Upload pictures for the project page
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: auralis-user-provided-pictures
+          path: ${{ env.AURALIS_PICTURES_DIR }}/*.png
+          if-no-files-found: error
+          retention-days: 3
