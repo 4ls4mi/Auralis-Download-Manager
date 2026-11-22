@@ -94,11 +94,13 @@ function appearanceDefaults(){
   return version==="1";
  } catch { return false }
 }
-const supportedShape=(shape:string)=>shape==="wave"?"droplet":["rounded","square","faceted","droplet"].includes(shape)?shape:"rounded";
+const supportedShape=(shape:string)=>["wave","droplet"].includes(shape)?"bubble":["rounded","square","faceted","bubble"].includes(shape)?shape:"rounded";
+const supportedFill=(value:string)=>value==="gradient"?"gradient":"liquid-glass";
+const supportedPalette=(value:string)=>value==="neon"?"blue-purple":value;
 export function loadAppearance(): Appearance {
   const legacy=appearanceDefaults();
   return {
-    theme: stored("theme", legacy?"silver":"ocean"), material: [...["brushed-glass","frosted-water-351","rose-pine","window-glass","oversimplified"],...Object.keys(extraMaterials),...loadMaterials().map(materialId)].includes(stored("material", legacy?"frosted-water-351":"rose-pine")) ? stored("material", legacy?"frosted-water-351":"rose-pine") : (legacy?"frosted-water-351":"rose-pine"), tintHue: Number(stored("tint-hue", legacy?"209":"203")), tintStrength: Number(stored("tint-strength", legacy?"50":"0")), indicator: stored("indicator", legacy?"blue-purple":"aurora"), progressMaterial: stored("progress-material", legacy?"gradient":"liquid-aero"), connectionMaterial: stored("connection-material", legacy?"gradient":"liquid-aero"), graphMaterial: stored("graph-material", "gradient"), trackFinish: stored("track-finish", "recessed"), trackColor: stored("track-color", "ice"), progressShape: supportedShape(stored("progress-shape", "rounded")), graphIndicator: stored("graph-indicator", stored("indicator", legacy?"blue-purple":"aurora")), graphShape: stored("graph-shape", "area"), connectionTrackFinish: stored("connection-track-finish", "recessed"), connectionTrackColor: stored("connection-track-color", "ice"), connectionIndicator: stored("connection-indicator", stored("indicator", legacy?"blue-purple":"aurora")), connectionShape: supportedShape(stored("connection-shape", stored("progress-shape", "rounded"))), clipboardMode: stored("clipboard-mode", "paste"),
+    theme: stored("theme", legacy?"silver":"ocean"), material: [...["brushed-glass","frosted-water-351","rose-pine","oversimplified"],...Object.keys(extraMaterials),...loadMaterials().map(materialId)].includes(stored("material", legacy?"frosted-water-351":"rose-pine")) ? stored("material", legacy?"frosted-water-351":"rose-pine") : (legacy?"frosted-water-351":"rose-pine"), tintHue: Number(stored("tint-hue", legacy?"209":"203")), tintStrength: Number(stored("tint-strength", legacy?"50":"0")), indicator: supportedPalette(stored("indicator", legacy?"blue-purple":"aurora")), progressMaterial: supportedFill(stored("progress-material", legacy?"gradient":"liquid-glass")), connectionMaterial: supportedFill(stored("connection-material", legacy?"gradient":"liquid-glass")), graphMaterial: supportedFill(stored("graph-material", "gradient")), trackFinish: stored("track-finish", "recessed"), trackColor: stored("track-color", "ice"), progressShape: supportedShape(stored("progress-shape", "rounded")), graphIndicator: supportedPalette(stored("graph-indicator", stored("indicator", legacy?"blue-purple":"aurora"))), graphShape: stored("graph-shape", "area"), connectionTrackFinish: stored("connection-track-finish", "recessed"), connectionTrackColor: stored("connection-track-color", "ice"), connectionIndicator: supportedPalette(stored("connection-indicator", stored("indicator", legacy?"blue-purple":"aurora"))), connectionShape: supportedShape(stored("connection-shape", stored("progress-shape", "rounded"))), clipboardMode: stored("clipboard-mode", "paste"),
     surfaceStyle: ["material","clear","soft","frosted","tinted"].includes(stored("surface-style","material")) ? stored("surface-style","material") : "material",
     wallMain: stored("wall-main", ""), wallDetail: stored("wall-detail", ""),
     mainMode: stored("back-main", "desktop") as BackgroundMode,
@@ -201,12 +203,12 @@ export function GradientBar({percent,showLabel=false,size,active=true}:{percent:
   const {appearance}=useCrystal();const colors=indicatorColors(appearance.indicator);
   const fill=Math.max(0,Math.min(100,percent));
   return <div className="cg-percent-wrap" aria-label={`Download ${fill.toFixed(1)} percent completed`}>
-    <div className={`cg-percent-track cg-track-${appearance.trackFinish} cg-track-color-${appearance.trackColor} ${backdropPalette(appearance.trackColor)?"cg-palette-track":""}`} style={backdropStyle(appearance.trackColor)}>
+    <div className={`cg-percent-track cg-track-${appearance.trackFinish} cg-track-color-${appearance.trackColor} ${backdropPalette(appearance.trackColor)?"cg-palette-track":""}`} style={{...backdropStyle(appearance.trackColor),"--indicator-glow":colors[1]} as CSSProperties}>
       {isLiquidMaterial(appearance.progressMaterial) ? <LiquidProgress percent={fill} colors={colors} material={appearance.progressMaterial} size={size} active={active}/> : appearance.progressMaterial === "frosted-ribbon" ? <FrostedRibbon shape={appearance.progressShape} percent={fill} colors={colors} finish={appearance.trackFinish} tint={appearance.trackColor} tintColors={backdropPalette(appearance.trackColor)} fallback={`linear-gradient(90deg,${colors.join(",")})`}/> : fill>0&&<span className="cg-percent-fill" style={{
         width:`${fill}%`,
         backgroundImage:`linear-gradient(90deg,${colors.join(",")})`,
         backgroundSize:`${10000/fill}% 100%`,
-        boxShadow:"none"
+        boxShadow:`inset 0 2px 4px #ffffffa0, inset 0 -3px 6px #03122b99, 0 0 10px ${colors[1]}99`
       }}/>}
     </div>{showLabel&&<strong>{fill.toFixed(0)}%</strong>}
   </div>;
@@ -225,7 +227,7 @@ export function ConnectionMap({segments,connections,downloading,paused=false,com
   const slots=connectionSlots(shown,compact);
   return <div className={"cg-chunks "+(compact?"compact":"")}>
     {compact&&<div className="cg-chunk-label"><span>{connections?`${visible.length} connections`:"Connections unavailable"}</span></div>}
-    <div ref={gridRef} className={`cg-chunk-map cg-connection-track-${appearance.connectionTrackFinish} cg-connection-tint-${appearance.connectionTrackColor} ${backdropPalette(appearance.connectionTrackColor)?"cg-palette-track":""} `+(compact?"compact":"cg-fixed-connections")+(tubes&&!compact?" cg-piped-connections":"")} style={{...backdropStyle(appearance.connectionTrackColor),...(compact?{gridTemplateColumns:`repeat(${Math.max(1,slots.length)},minmax(0,1fr))`}:{})}} role="group" aria-label={connections?`${visible.length} engine connections${visible.length>32?', first 32 shown':''}`:"Connections unavailable"}>
+    <div ref={gridRef} className={`cg-chunk-map cg-connection-track-${appearance.connectionTrackFinish} cg-connection-tint-${appearance.connectionTrackColor} ${backdropPalette(appearance.connectionTrackColor)?"cg-palette-track":""} `+(compact?"compact":"cg-fixed-connections")+(tubes&&!compact?" cg-piped-connections":"")} style={{...backdropStyle(appearance.connectionTrackColor),"--indicator-glow":colors[1],...(compact?{gridTemplateColumns:`repeat(${Math.max(1,slots.length)},minmax(0,1fr))`}:{})} as CSSProperties} role="group" aria-label={connections?`${visible.length} engine connections${visible.length>32?', first 32 shown':''}`:"Connections unavailable"}>
      {tubes&&!compact&&<ConnectionTubes container={gridRef} slots={receivingTubeSlots(connections,downloading&&!paused)} colors={indicatorColors(appearance.indicator)}/>}
      {slots.map((c,index)=>{if(!c)return <span key={`empty-${index}`} className="cg-connection-empty" aria-hidden="true"/>;
       const fill=c.percent;const active=downloading&&c.state==="Receiving";const lost=connectionLost(c,downloading);const label=`Connection ${c.id+1}: ${paused?"Paused":lost?"Connection lost or retrying":downloading?c.state:"Not active"}; downloaded ${units(c.downloaded)}; ${rate(c.speed)}; ${fill===null?"assigned range unavailable":`${units(c.received)} of ${units(c.assigned)} (${fill.toFixed(1)}%)`}. Assigned sections can change as work is redistributed.`;
@@ -248,7 +250,7 @@ export function SpeedGraph({values,small=false}:{values:number[];small?:boolean}
   const curved=coords.slice(1).reduce((path,pt,i)=>{const prev=coords[i],mid=(prev.x+pt.x)/2;return `${path} C${mid},${prev.y} ${mid},${pt.y} ${pt.x},${pt.y}`},`M${coords[0].x},${coords[0].y}`);
   const surface=`${curved} L100,65 L0,65 Z`;
   return <svg className={`cg-graph ${small?"cg-graph-small":""} ${liquid?`cg-liquid-graph ${appearance.graphMaterial}`:""}`} viewBox="0 0 100 65"
-    preserveAspectRatio="none" role="img" aria-label="Real measured transfer-speed history">
+    preserveAspectRatio="none" style={{"--indicator-glow":colors[1]} as CSSProperties} role="img" aria-label="Real measured transfer-speed history">
     <defs>
       <linearGradient id={`${id}-line`} x1="0%" x2="100%" y1="0%" y2="0%">
         <stop offset="0%" stopColor={colors[0]}/><stop offset="50%" stopColor={colors[1]}/><stop offset="100%" stopColor={colors[2]}/>
@@ -291,7 +293,7 @@ export function WindowTop({ title, children, noMax = false }: {
 }) {
   return <header className="cg-window-top">
     <div className="cg-title" data-tauri-drag-region
-      onMouseDown={e => { if (e.button === 0 && e.target === e.currentTarget) void getCurrentWindow().startDragging(); }}>
+      onMouseDown={e => { if (e.button !== 0) return; if (e.detail === 2 && !noMax) { e.preventDefault(); void getCurrentWindow().toggleMaximize(); } else if (e.detail === 1) void getCurrentWindow().startDragging(); }}>
       <span className="cg-logo" data-tauri-drag-region><img src="/auralis.svg" alt="" width="22" height="22" draggable="false" /></span>
       <span data-tauri-drag-region>{title}</span>
     </div>{children}<WindowButtons noMax={noMax} />

@@ -769,3 +769,15 @@
 /* Detail-window progress is independent of the compact main-list bar. */
 .cg-window .cg-piped-progress-page .cg-progress-tube .cg-percent-track{height:24px;min-height:24px}
 .cg-window .cg-piped-progress-page .cg-progress-tube .cg-percent-track:has(.cg-sculpted-track){height:32px;min-height:32px}
+
+/* Palette-driven luminous glass, shared by all indicator colors. */
+.cg-window .cg-percent-fill { box-shadow:inset 0 2px 4px #ffffffa0,inset 0 -3px 6px #03122b99,0 0 10px var(--indicator-glow,var(--accent))!important }
+.cg-window .cg-percent-fill::after {display:block!important;background:linear-gradient(180deg,#ffffff99,transparent 40%,#00103244 72%,#d5ffff66)}
+.cg-window .cg-liquid-progress {filter:drop-shadow(0 0 4px var(--indicator-glow,var(--accent)))}
+.cg-window .cg-chunk-map>span.active>i,.cg-window .cg-liquid-chunk {filter:drop-shadow(0 0 4px var(--indicator-glow,var(--accent)))}
+.cg-window .cg-graph {filter:drop-shadow(0 0 3px var(--indicator-glow,var(--accent)))}
+.cg-window.cg-progress-shape-bubble .cg-percent-track {height:32px;border-radius:50% / 60%;background:linear-gradient(180deg,#e6faff88,#50698388 32%,#101d3988 72%,#b8ebff88);box-shadow:inset 0 2px 5px #fff9,inset 0 -3px 7px #0008}
+.cg-window.cg-progress-shape-bubble .cg-percent-fill {border-radius:50% / 60%}
+.cg-window.cg-connection-shape-bubble .cg-chunk-map>span {border-radius:46% / 50%;box-shadow:inset 0 2px 4px #fffa,inset 0 -3px 5px #06143299}
+.cg-window:is(.cg-material-frosted-water-351,.cg-material-builtin-smoked-glass,.cg-material-builtin-pearl-frost) :is(.cg-toolbar>button,.cg-btn):not(:disabled) {border-color:var(--vivid,var(--accent))!important;box-shadow:inset 0 1px #ffffff80,0 0 5px var(--vivid,var(--accent))!important}
+.cg-window:is(.cg-material-frosted-water-351,.cg-material-builtin-smoked-glass,.cg-material-builtin-pearl-frost) :is(.cg-toolbar>button,.cg-btn):hover:not(:disabled) {background:color-mix(in srgb,var(--vivid,var(--accent)) 35%,transparent)!important;box-shadow:inset 0 1px #fff,0 0 14px var(--vivid,var(--accent))!important}

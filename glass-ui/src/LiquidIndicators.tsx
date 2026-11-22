@@ -22,8 +22,8 @@ export function LiquidProgress({percent,colors,material,size,active=true}:{perce
   const t=active&&!reduce.matches?now/1000:0,speed=2*Math.PI/liquidDuration(size),phase=t*speed,reach=Math.min(h*.34,end*.5),mix=(1+Math.sin(phase*.62))*.5,shift=Math.min(mix,1-mix),top=end-reach*(1-mix-shift),bottom=end-reach*(mix-shift);
   const edge=(q:number)=>{const q1=q*q*(3-2*q),wiggle=.25*Math.sin(q*Math.PI*2-phase*2)*Math.sin(Math.PI*q);return clamp(top+(bottom-top)*clamp(q1+wiggle,0,1),0,end)};
   ctx.save();ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(edge(0),0);for(let j=0;j<=24;j++){const q=j/24;ctx.lineTo(edge(q),q*h)}ctx.lineTo(0,h);ctx.closePath();ctx.clip();
-  // Keep the moving water front and palette, without glossy reflections.
-  const g=ctx.createLinearGradient(0,0,w,0);g.addColorStop(0,colors[0]||'#18cfff');g.addColorStop(.5,colors[1]||'#306cff');g.addColorStop(1,colors[2]||'#a344ff');ctx.fillStyle=g;ctx.fillRect(0,0,end,h);
+  // Layer directional light over the palette to give the liquid a glassy depth.
+  const g=ctx.createLinearGradient(0,0,w,0);g.addColorStop(0,colors[0]||'#18cfff');g.addColorStop(.5,colors[1]||'#306cff');g.addColorStop(1,colors[2]||'#a344ff');ctx.fillStyle=g;ctx.fillRect(0,0,end,h);const gloss=ctx.createLinearGradient(0,0,0,h);gloss.addColorStop(0,"rgba(255,255,255,.68)");gloss.addColorStop(.25,"rgba(255,255,255,.05)");gloss.addColorStop(.68,"rgba(0,15,55,.22)");gloss.addColorStop(1,"rgba(200,255,255,.42)");ctx.fillStyle=gloss;ctx.fillRect(0,0,end,h);
   if(material==='liquid-glass'&&h>=12){for(let j=0;j<5;j++){const xx=((j*67+t*(11+j*3))%(Math.max(1,end+12)))-6,yy=h*(.25+.13*(j%4));ctx.beginPath();ctx.arc(xx,yy,Math.max(.7,h*.04),0,Math.PI*2);ctx.strokeStyle='rgba(220,255,255,.55)';ctx.lineWidth=.7;ctx.stroke()}}
   ctx.restore();ctx.beginPath();for(let j=0;j<=24;j++){const q=j/24;j?ctx.lineTo(edge(q),h*q):ctx.moveTo(edge(q),0)}ctx.strokeStyle=colors[1]||'#306cff';ctx.lineWidth=material==='liquid-crystal'?1.4:.9;ctx.stroke();
   // A maximum of two small droplets: emerge at the front, then fall near its base.
