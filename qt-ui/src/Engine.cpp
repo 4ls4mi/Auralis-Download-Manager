@@ -170,9 +170,12 @@ void Engine::request(const QVariantMap &command, const QJSValue &callback)
     const bool changesDownloads = local.isEmpty() && shellAction.isEmpty()
         && !command.contains(QStringLiteral("query"));
     const auto deliver = [this, callback, shellAction](const QVariantMap &response) {
-        const QString error = response.value(QStringLiteral("error")).toString();
+        const QVariant value = response.value(QStringLiteral("result"));
+        QString error = response.value(QStringLiteral("error")).toString();
+        if (error.isEmpty())
+            error = value.toMap().value(QStringLiteral("error")).toString();
         if (callback.isCallable()) {
-            callback.call({m_scriptEngine->toScriptValue(response.value(QStringLiteral("result"))),
+            callback.call({m_scriptEngine->toScriptValue(value),
                            error.isEmpty() ? QJSValue(QJSValue::NullValue) : QJSValue(error)});
         } else if (!error.isEmpty()) {
             emit operationFailed(error);

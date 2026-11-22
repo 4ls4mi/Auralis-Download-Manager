@@ -28,7 +28,13 @@ $runnerRoot = Join-Path $env:LOCALAPPDATA 'AuralisRunner'
 if ($system -and $system.FreeSpace -lt $minimumSystemSpace -and $alternate) {
     $runnerRoot = Join-Path ($alternate.DeviceID + '\') 'AuralisRunner'
 }
-$targetDir = Join-Path $runnerRoot 'target'
+# Qt SDK extraction may use a roomy alternate drive while Cargo keeps the
+# same cache path as the existing self-hosted release workflow.
+$rustRoot = Join-Path $env:LOCALAPPDATA 'AuralisRunner'
+if ($system -and $system.FreeSpace -lt 4GB -and $alternate) {
+    $rustRoot = Join-Path ($alternate.DeviceID + '\') 'AuralisRunner'
+}
+$targetDir = Join-Path $rustRoot 'target'
 $qtCache = Join-Path $runnerRoot 'qt-cache'
 $temp = Join-Path $runnerRoot 'temp'
 $sharedCache = Join-Path $env:RUNNER_WORKSPACE 'auralis-cache'
