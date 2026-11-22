@@ -1,0 +1,236 @@
+/* Aurora uses the desktop acrylic as its backing. The rim and individual
+   panels tint that backdrop in different places to give each pane its depth. */
+.cg-window.cg-material-builtin-aurora-night {
+  --aurora-shell: 13 25 53;
+  --aurora-pane: 30 48 93;
+  --aurora-edge: #99c8ff9e;
+  --aurora-light: #dceaffdc;
+  --aurora-depth: #070c2bae;
+  --aurora-top: #85a7ff4d;
+  --aurora-face: #172a554d;
+  --aurora-bottom: #08112377;
+  --aurora-key-face: #10213e;
+  --aurora-key-shadow: #02081ea6;
+  --aurora-ink: #eff7ff;
+  --aurora-muted: #c8ddf6;
+}
+
+.cg-window.cg-material-builtin-aurora-ice {
+  --aurora-shell: 197 232 250;
+  --aurora-pane: 198 235 252;
+  --aurora-edge: #f3feffff;
+  --aurora-light: #fff;
+  --aurora-depth: #24688b75;
+  --aurora-top: #faffffb3;
+  --aurora-face: #ccecff2b;
+  --aurora-bottom: #89cde73d;
+  --aurora-key-face: #c9ecfa;
+  --aurora-key-shadow: #2e63885c;
+  --aurora-ink: #10243d;
+  --aurora-muted: #284867;
+}
+
+.cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) {
+  --ink: var(--aurora-ink);
+  --muted: var(--aurora-muted);
+  --subtle: var(--aurora-muted);
+  --aurora-cut: polygon(8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px), 0 8px);
+}
+
+/* Keep the shell thin. The trim carries the color shifts, so the middle
+   stays translucent and the acrylic behind the panels can show through. */
+.cg-window.cg-surface-frosted:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-content {
+  background:
+    linear-gradient(165deg, var(--aurora-top), transparent 26%, transparent 77%, var(--aurora-bottom)),
+    rgb(var(--aurora-shell) / .44) !important;
+  border-color: var(--aurora-edge) !important;
+  border-radius: var(--auralis-frame-radius, 20px);
+  box-shadow:
+    inset 0 1px 2px var(--aurora-light),
+    inset 0 0 0 3px #caeaff24,
+    inset 0 -2px 10px var(--aurora-depth) !important;
+}
+
+.cg-window.cg-surface-frosted.cg-material-builtin-aurora-ice .cg-content {
+  background:
+    linear-gradient(165deg, var(--aurora-top), transparent 24%, transparent 83%, var(--aurora-bottom)),
+    rgb(var(--aurora-shell) / .58) !important;
+}
+
+.cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-content::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 1;
+}
+
+.cg-window.cg-material-builtin-aurora-night .cg-content::before {
+  background:
+    radial-gradient(90% 34% at 8% 0%, #7c5fe352, transparent 70%),
+    radial-gradient(66% 31% at 90% 100%, #008ed965, transparent 70%);
+  box-shadow: inset 1px 1px 4px #a2bfff94, inset -1px -2px 5px #558ef89c;
+}
+
+.cg-window.cg-material-builtin-aurora-ice .cg-content::before {
+  background: radial-gradient(83% 34% at 74% 0%, #ffffff7d, transparent 74%);
+  box-shadow: inset 1px 1px 4px white, inset -1px -2px 5px #9debffb0;
+}
+
+/* Each panel has its own front surface and rim. Reflective shapes inside a pane
+   are clipped to its background and never cover labels, rows or menus. */
+.cg-window.cg-surface-frosted:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice):is(.cg-target-main,.cg-target-details) .cg-fit-content :is(.cg-glass,.cg-window-top,.cg-menubar) {
+  background:
+    var(--aurora-panel-optics, linear-gradient(145deg, transparent, transparent)),
+    linear-gradient(160deg, var(--aurora-top), var(--aurora-face) 30%, transparent 65%, var(--aurora-bottom)),
+    rgb(var(--aurora-pane) / .22) !important;
+  border: 1px solid var(--aurora-edge) !important;
+  border-radius: 12px !important;
+  box-shadow:
+    inset 0 1px 2px var(--aurora-light),
+    inset 0 -2px 5px var(--aurora-depth),
+    0 2px 8px var(--aurora-depth) !important;
+}
+
+.cg-window.cg-material-builtin-aurora-night .cg-list-panel {
+  --aurora-panel-optics:
+    radial-gradient(ellipse 100% 91% at 80% 106%, transparent 61%, #778aff13 65%, #a58bf044 69%, #bdd2ff72 70%, transparent 72%),
+    radial-gradient(ellipse 85% 119% at 7% 109%, #3757ab18 56%, #70c7fa39 58%, #b8f2ff68 59%, transparent 61%);
+}
+
+.cg-window.cg-material-builtin-aurora-night .cg-sidebar {
+  --aurora-panel-optics: radial-gradient(ellipse 128% 71% at -43% 95%, #c47aff26 69%, #bcb2ff68 70%, transparent 73%);
+}
+
+.cg-window.cg-material-builtin-aurora-night .cg-footer {
+  --aurora-panel-optics: radial-gradient(ellipse 82% 100% at 66% -58%, transparent 80%, #76b8ff4f 96%, transparent);
+}
+
+.cg-window.cg-material-builtin-aurora-ice .cg-list-panel {
+  --aurora-panel-optics:
+    linear-gradient(137deg, #effbff0f 16%, #f4ffff80 16.4%, #b2e4fa29 17%, transparent 45%),
+    linear-gradient(133deg, transparent 61%, #95d8f943 61.3%, #faffff99 62%, #d5f4ff42 62.6%, transparent 82%, #f8ffff9c 82.3%, #a9e5fc45 83%),
+    linear-gradient(43deg, #92cfef3d, transparent 44%, #fff5 68%, transparent 89%);
+}
+
+.cg-window.cg-material-builtin-aurora-ice .cg-sidebar {
+  --aurora-panel-optics: linear-gradient(142deg, transparent 58%, #ffffff9e 58.6%, #aadff72e 59%, transparent 78%);
+}
+
+.cg-window.cg-material-builtin-aurora-ice .cg-footer {
+  --aurora-panel-optics: linear-gradient(130deg, #ffffff60 16%, transparent 17%, transparent 76%, #a7ddf65c 77%, #fff5);
+}
+
+.cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-fit-content :is(.cg-title,.cg-sidebar button,.cg-settings-nav button,.cg-menubar button,.cg-row) {
+  color: var(--aurora-ink) !important;
+}
+
+.cg-window.cg-material-builtin-aurora-night .cg-fit-content :is(.cg-title,.cg-sidebar button,.cg-settings-nav button,.cg-menubar button,.cg-row) {
+  text-shadow: 0 1px 3px #00122e;
+}
+
+.cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-fit-content :is(.cg-sidebar,.cg-settings-nav) button.selected {
+  background: linear-gradient(155deg, #ffce804d, #ffb65124 46%, #ffbc5615) !important;
+  border-color: #ffc4609e !important;
+  color: #ffd285 !important;
+  box-shadow: inset 0 1px #ffe6ba9b !important;
+}
+
+.cg-window.cg-material-builtin-aurora-ice .cg-fit-content :is(.cg-sidebar,.cg-settings-nav) button.selected {
+  color: #61360a !important;
+  background: linear-gradient(155deg, #fffbecb9, #ffc96662 55%, #fff2be42) !important;
+}
+
+/* A chamfered glass rim and inset face have separate lighting. The button
+   itself stays uncut so its hit target and keyboard focus ring are preserved. */
+.cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-fit-content .cg-toolbar {
+  gap: 5px;
+  padding: 5px 7px;
+  min-height: 49px;
+}
+
+.cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-fit-content .cg-toolbar > button {
+  --tone: rgb(var(--aurora-key-rgb, 74 215 255)) !important;
+  --aurora-key-highlight: .23;
+  position: relative;
+  flex: 1 0 36px !important;
+  min-width: 36px !important;
+  max-width: 90px !important;
+  min-height: 39px;
+  padding: 5px;
+  border: 0 !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible;
+  filter: drop-shadow(0 2px 1px var(--aurora-key-shadow));
+}
+
+.cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-fit-content .cg-toolbar > button::before,
+.cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-fit-content .cg-toolbar > button::after {
+  content: "";
+  position: absolute;
+  clip-path: var(--aurora-cut);
+  pointer-events: none;
+}
+
+.cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-fit-content .cg-toolbar > button::before {
+  inset: 0;
+  background: linear-gradient(151deg, var(--aurora-light), var(--tone) 30%, var(--aurora-key-face) 73%, var(--tone));
+  opacity: .85;
+  z-index: -2;
+}
+
+.cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-fit-content .cg-toolbar > button::after {
+  inset: 2px;
+  background:
+    linear-gradient(140deg, #fff7 0%, #fff0 25%, #0000 68%, rgb(var(--aurora-key-rgb, 74 215 255) / .44)),
+    linear-gradient(180deg, rgb(var(--aurora-key-rgb, 74 215 255) / var(--aurora-key-highlight)), transparent),
+    var(--aurora-key-face);
+  box-shadow: inset 0 1px #fff7, inset 0 -4px 8px var(--aurora-key-shadow);
+  z-index: -1;
+}
+
+.cg-window.cg-material-builtin-aurora-ice .cg-fit-content .cg-toolbar > button::before {
+  background: linear-gradient(150deg, white 12%, #c1e9f8 40%, var(--tone) 90%, white);
+}
+
+.cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-fit-content .cg-toolbar > button:is(.primary,:hover,:focus-visible):not(:disabled) {
+  --aurora-key-highlight: .58;
+  filter: drop-shadow(0 1px 4px color-mix(in srgb, var(--tone) 55%, transparent));
+}
+
+.cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-fit-content .cg-toolbar > button:is(:hover,:focus-visible):not(:disabled) {
+  --aurora-key-highlight: .88;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-fit-content .cg-toolbar > button:is([data-action=add],[data-action=torrent]) { --aurora-key-rgb: 8 233 121 }
+.cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-fit-content .cg-toolbar > button[data-action=start] { --aurora-key-rgb: 0 199 255 }
+.cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-fit-content .cg-toolbar > button:is([data-action=stop],[data-action=stop-all],[data-action=queue-start]) { --aurora-key-rgb: 255 168 0 }
+.cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-fit-content .cg-toolbar > button:is([data-action=remove],[data-action=delete-completed]) { --aurora-key-rgb: 255 57 139 }
+.cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-fit-content .cg-toolbar > button[data-action=settings] { --aurora-key-rgb: 184 64 255 }
+.cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-fit-content .cg-toolbar > button:is([data-action=scheduler],[data-action=queue-stop]) { --aurora-key-rgb: 0 215 233 }
+
+.cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice):is(.cg-dark,.cg-light):is(.cg-target-main,.cg-target-details) .cg-fit-content .cg-toolbar > button > svg {
+  color: var(--aurora-key-ink, var(--tone)) !important;
+  filter: drop-shadow(0 1px 1px var(--aurora-key-shadow)) drop-shadow(0 0 3px color-mix(in srgb, var(--tone) 55%, transparent)) !important;
+}
+
+.cg-window.cg-material-builtin-aurora-ice .cg-toolbar > button {
+  --aurora-key-ink: color-mix(in srgb, var(--tone) 56%, #00335a);
+}
+
+@media (forced-colors: active) {
+  .cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice) .cg-fit-content .cg-toolbar > button {
+    border: 1px solid ButtonText !important;
+  }
+
+  .cg-window:is(.cg-material-builtin-aurora-night,.cg-material-builtin-aurora-ice):is(.cg-dark,.cg-light):is(.cg-target-main,.cg-target-details) .cg-fit-content .cg-toolbar > button > svg {
+    color: ButtonText !important;
+    filter: none !important;
+  }
+}

@@ -47,7 +47,7 @@
 
 .cg-window-notice{position:absolute;left:20px;right:20px;bottom:20px;z-index:100;display:flex;align-items:center;gap:12px;background:var(--popover)}.cg-window-notice>span{flex:1;overflow-wrap:anywhere}
 
-.cg-window:is(.cg-dark,.cg-light) .cg-winbuttons .tray{color:#36d9ef}.cg-window:is(.cg-dark,.cg-light) .cg-winbuttons .minimize{color:#ffc566}.cg-window:is(.cg-dark,.cg-light) .cg-winbuttons .maximize{color:#b99aff}.cg-window:is(.cg-dark,.cg-light) .cg-winbuttons .close{color:#ff728d}.cg-window .cg-toolbar button svg,.cg-window .cg-btn svg{transition:transform .18s ease,filter .18s ease}.cg-window .cg-toolbar button:hover svg,.cg-window .cg-btn:hover svg{transform:translateY(-2px) scale(1.12);filter:drop-shadow(0 0 5px currentColor)}.cg-window button:active svg{transform:scale(.88)}.cg-percent-fill{box-shadow:0 0 10px rgba(111,96,255,.8),0 0 20px rgba(86,114,255,.35)}.cg-chunk-map>span.active{box-shadow:0 0 8px rgba(113,91,255,.65),inset 0 1px rgba(255,255,255,.35)}.cg-chunk-map>span>i{box-shadow:0 0 8px rgba(130,99,255,.7)}
+.cg-window:is(.cg-dark,.cg-light) .cg-winbuttons .tray{color:#36d9ef}.cg-window:is(.cg-dark,.cg-light) .cg-winbuttons .minimize{color:#ffc566}.cg-window:is(.cg-dark,.cg-light) .cg-winbuttons .maximize{color:#b99aff}.cg-window:is(.cg-dark,.cg-light) .cg-winbuttons .close{color:#ff728d}.cg-window .cg-toolbar button svg,.cg-window .cg-btn svg{transition:transform .18s ease,filter .18s ease}.cg-window .cg-toolbar button:hover svg,.cg-window .cg-btn:hover svg{transform:translateY(-2px) scale(1.12);filter:drop-shadow(0 0 5px currentColor)}.cg-window button:active svg{transform:scale(.88)}.cg-percent-fill{box-shadow:0 0 10px rgba(111,96,255,.8),0 0 20px rgba(86,114,255,.35)}.cg-chunk-map>span.active{box-shadow:inset 0 1px rgba(255,255,255,.35)}
 @media(prefers-reduced-motion:reduce){.cg-window .cg-toolbar button svg,.cg-window .cg-btn svg{transition:none}.cg-window .cg-toolbar button:hover svg,.cg-window .cg-btn:hover svg,.cg-window button:active svg{transform:none}}
 
 .cg-percent-track{filter:drop-shadow(0 0 5px rgba(92,99,255,.55))}
@@ -84,7 +84,7 @@
 .cg-light .cg-toolbar>button[data-action="scheduler"]{--tone:#007d70!important}
 .cg-window .cg-winbuttons button:hover{color:#fff!important;box-shadow:0 0 14px currentColor}
 .cg-window .cg-winbuttons .tray:hover{background:#008da5!important}.cg-window .cg-winbuttons .minimize:hover{background:#aa6c06!important}.cg-window .cg-winbuttons .maximize:hover{background:#7952c7!important}.cg-window .cg-winbuttons .close:hover{background:#dc354d!important}
-.cg-graph polyline{filter:drop-shadow(0 0 2px #8874ff)}
+
 .cg-material-black.cg-dark .cg-content{background:rgba(0,0,0,.94)!important}.cg-material-frost .cg-content{backdrop-filter:blur(20px) saturate(135%)!important}.cg-material-acrylic .cg-content{backdrop-filter:blur(26px) saturate(145%)!important}.cg-material-mica .cg-content{backdrop-filter:blur(12px) saturate(90%)!important}.cg-material-aero .cg-content{box-shadow:inset 0 1px rgba(255,255,255,.55),0 18px 50px rgba(0,30,70,.35)!important}.cg-material-plexo .cg-content{box-shadow:inset 0 1px rgba(255,255,255,.42),0 0 25px rgba(var(--accent-rgb),.22)!important}
 
 .cg-row-progress{display:grid;grid-template-columns:minmax(64px,1fr) minmax(75px,1.2fr);align-items:center;gap:4px 7px}.cg-row-progress .cg-graph-small{grid-column:1/-1}.cg-row-progress .cg-chunk-label{font-size:max(var(--min-text-size),calc(var(--font-size)*.75))}.cg-indicator-row{display:grid;grid-template-columns:minmax(100px,.65fr) minmax(0,1.35fr);gap:9px;align-items:start}.cg-indicator-row .cg-overall{padding-top:15px}.cg-indicator-row .cg-selected-chunks{min-width:0}@media(max-width:600px){.cg-indicator-row{grid-template-columns:1fr}.cg-indicator-row .cg-overall{padding-top:0}}
@@ -571,7 +571,7 @@
 .cg-window .cg-track-color-violet,.cg-window .cg-connection-tint-violet{--cg-track-tint:#b77ce8}
 .cg-window .cg-track-color-teal,.cg-window .cg-connection-tint-teal{--cg-track-tint:#39c6bc}
 .cg-window .cg-track-color-amber,.cg-window .cg-connection-tint-amber{--cg-track-tint:#e5a14c}
-.cg-window .cg-percent-track:not(:has(.cg-frost-ribbon)):not(:has(.cg-sculpted-track)),.cg-window .cg-chunk-map>span:not(.lost,.paused,.cg-sculpted-cell){background:linear-gradient(180deg,color-mix(in srgb,var(--cg-track-tint) 38%,#27435b),color-mix(in srgb,var(--cg-track-tint) 20%,#152c42))!important}
+.cg-window .cg-percent-track:not(.cg-bubble-track):not(:has(.cg-frost-ribbon)):not(:has(.cg-sculpted-track)),.cg-window .cg-chunk-map>span:not(.lost,.paused,.cg-sculpted-cell){background:linear-gradient(180deg,color-mix(in srgb,var(--cg-track-tint) 38%,#27435b),color-mix(in srgb,var(--cg-track-tint) 20%,#152c42))!important}
 .cg-window .cg-percent-track.cg-track-clear:not(:has(.cg-frost-ribbon)):not(:has(.cg-sculpted-track)),.cg-window .cg-chunk-map.cg-connection-track-clear>span:not(.lost,.paused,.cg-sculpted-cell){background:linear-gradient(180deg,color-mix(in srgb,var(--cg-track-tint) 65%,#d7f5ff),color-mix(in srgb,var(--cg-track-tint) 40%,#345977),color-mix(in srgb,var(--cg-track-tint) 70%,#c2eeff))!important;box-shadow:inset 0 1px 2px #fff9,inset 0 -1px 2px #b9f4ff8a}
 .cg-window .cg-percent-track.cg-track-frosted:not(:has(.cg-frost-ribbon)):not(:has(.cg-sculpted-track)),.cg-window .cg-chunk-map.cg-connection-track-frosted>span:not(.lost,.paused,.cg-sculpted-cell){background:linear-gradient(180deg,color-mix(in srgb,var(--cg-track-tint) 35%,#f4ffff),color-mix(in srgb,var(--cg-track-tint) 50%,#a4c3d3),color-mix(in srgb,var(--cg-track-tint) 30%,#edfaff))!important;box-shadow:inset 0 1px 3px #fff9,inset 0 -2px 5px #7199b277}
 .cg-window .cg-percent-track.cg-track-recessed:not(:has(.cg-frost-ribbon)):not(:has(.cg-sculpted-track)),.cg-window .cg-chunk-map.cg-connection-track-recessed>span:not(.lost,.paused,.cg-sculpted-cell){background:linear-gradient(180deg,color-mix(in srgb,var(--cg-track-tint) 15%,#091a2d),color-mix(in srgb,var(--cg-track-tint) 30%,#30465a))!important;box-shadow:inset 0 2px 5px #000b,0 1px #ffffff70}
@@ -655,8 +655,6 @@
 .cg-window .cg-liquid-chunk.liquid-aero .cg-liquid-surface{stroke-width:1.7;stroke:rgba(255,255,255,.6)}
 .cg-window .cg-liquid-chunk.moving .cg-liquid-splash{animation:cg-liquid-jump 1.7s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
 .cg-liquid-graph-light{animation:cg-liquid-wash 2.8s ease-in-out infinite alternate}
-.cg-liquid-graph.liquid-crystal{filter:drop-shadow(0 1px 2px #bbf9ff77)}
-.cg-liquid-graph.liquid-aero{filter:drop-shadow(0 2px 3px #77aaff66)}
 @keyframes cg-liquid-slosh{from{transform:translateY(1px) rotate(-2deg)}to{transform:translateY(-1px) rotate(2deg)}}
 @keyframes cg-liquid-jump{0%,30%,100%{opacity:0;transform:translateY(0)}45%{opacity:1;transform:translateY(-4px)}70%{opacity:.8;transform:translateY(0)}}
 @keyframes cg-liquid-wash{from{transform:translateX(-9px)}to{transform:translateX(9px)}}
@@ -774,10 +772,32 @@
 .cg-window .cg-percent-fill { box-shadow:inset 0 2px 4px #ffffffa0,inset 0 -3px 6px #03122b99,0 0 10px var(--indicator-glow,var(--accent))!important }
 .cg-window .cg-percent-fill::after {display:block!important;background:linear-gradient(180deg,#ffffff99,transparent 40%,#00103244 72%,#d5ffff66)}
 .cg-window .cg-liquid-progress {filter:drop-shadow(0 0 4px var(--indicator-glow,var(--accent)))}
-.cg-window .cg-chunk-map>span.active>i,.cg-window .cg-liquid-chunk {filter:drop-shadow(0 0 4px var(--indicator-glow,var(--accent)))}
-.cg-window .cg-graph {filter:drop-shadow(0 0 3px var(--indicator-glow,var(--accent)))}
-.cg-window.cg-progress-shape-bubble .cg-percent-track {height:32px;border-radius:50% / 60%;background:linear-gradient(180deg,#e6faff88,#50698388 32%,#101d3988 72%,#b8ebff88);box-shadow:inset 0 2px 5px #fff9,inset 0 -3px 7px #0008}
-.cg-window.cg-progress-shape-bubble .cg-percent-fill {border-radius:50% / 60%}
+/* Bloom follows the data, regardless of the selected fill renderer. */
+.cg-window .cg-indicator-bloom {
+  filter:drop-shadow(0 0 2px var(--indicator-rim,var(--accent)))
+         drop-shadow(0 0 4px color-mix(in srgb,var(--indicator-glow,var(--accent)) 78%,transparent));
+}
+.cg-window .cg-chunk-map .cg-connection-fill {
+  position:absolute;
+  inset:0;
+  border-radius:inherit;
+  pointer-events:none;
+}
+.cg-window .cg-chunk-map .cg-connection-default-fill {
+  position:absolute;
+  inset:auto 0 0;
+  border-radius:inherit;
+  box-shadow:inset 0 1px 0 #eaffffbd;
+  transition:height .45s linear;
+}
+.cg-window .cg-chunk-map>.lost .cg-indicator-bloom {filter:none}
+.cg-window .cg-fit-content .cg-chunk-map .cg-connection-fill .cg-liquid-chunk {filter:none}
+.cg-window .cg-chunk-map>.active {
+  box-shadow:inset 0 1px #ffffff5c,0 0 5px color-mix(in srgb,var(--indicator-glow,var(--accent)) 58%,transparent);
+}
+@media(prefers-reduced-motion:reduce) {
+  .cg-window .cg-chunk-map .cg-connection-default-fill {transition:none}
+}
 .cg-window.cg-connection-shape-bubble .cg-chunk-map>span {border-radius:46% / 50%;box-shadow:inset 0 2px 4px #fffa,inset 0 -3px 5px #06143299}
 .cg-window:is(.cg-material-frosted-water-351,.cg-material-builtin-smoked-glass,.cg-material-builtin-pearl-frost) :is(.cg-toolbar>button,.cg-btn):not(:disabled) {border-color:var(--vivid,var(--accent))!important;box-shadow:inset 0 1px #ffffff80,0 0 5px var(--vivid,var(--accent))!important}
 .cg-window:is(.cg-material-frosted-water-351,.cg-material-builtin-smoked-glass,.cg-material-builtin-pearl-frost) :is(.cg-toolbar>button,.cg-btn):hover:not(:disabled) {background:color-mix(in srgb,var(--vivid,var(--accent)) 35%,transparent)!important;box-shadow:inset 0 1px #fff,0 0 14px var(--vivid,var(--accent))!important}
@@ -785,11 +805,10 @@
 /* Lobed Bubble progress shape: the empty vessel and filled liquid share one outline. */
 .cg-window.cg-progress-shape-bubble .cg-percent-track {position:relative;overflow:visible;height:40px;min-height:40px;background:none!important;box-shadow:none!important;border:0!important;border-radius:0!important;clip-path:none!important;mask-image:none!important;-webkit-mask-image:none!important}
 .cg-window.cg-progress-shape-bubble .cg-percent-track::after {display:none!important}
-.cg-window.cg-progress-shape-bubble .cg-bubble-vessel {display:block;width:100%;height:100%;overflow:visible;filter:drop-shadow(0 0 4px var(--indicator-glow,var(--accent)))}
+.cg-window.cg-progress-shape-bubble .cg-bubble-vessel {display:block;width:100%;height:100%;overflow:visible}
+.cg-bubble-prism-halo {opacity:.45;filter:blur(2.5px)}
+.cg-bubble-liquid-host .cg-liquid-progress {opacity:.88;filter:none}
 .cg-window.cg-progress-shape-bubble .cg-card-preview .cg-percent-track {height:58px;min-height:58px}
 .cg-window.cg-progress-shape-bubble .cg-row-progress .cg-percent-track {height:22px!important;min-height:22px!important}
-.cg-window .cg-bubble-active .cg-bubble-wave {animation:cg-bubble-light 2.8s ease-in-out infinite alternate}
-@keyframes cg-bubble-light {from {opacity:.45} to {opacity:1}}
-@media(prefers-reduced-motion:reduce){.cg-window .cg-bubble-active .cg-bubble-wave {animation:none}}
 
 .cg-bubble-liquid-host{position:relative;width:100%;height:100%;overflow:hidden}

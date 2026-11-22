@@ -1,0 +1,9 @@
+/* Fill the native backdrop all the way to the edge of the visible frame. */
+.cg-window.cg-window.cg-native-backdrop .cg-content {
+  inset: 0 !important;
+  border-radius: var(--native-backdrop-radius) !important;
+}
+
+.cg-window.cg-window.cg-native-backdrop:is(.cg-maximized, .cg-tiled) .cg-content {
+  border-radius: 0 !important;
+}

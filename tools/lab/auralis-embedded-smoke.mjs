@@ -100,6 +100,68 @@ try {
  await until(()=>page.evaluate(()=>window.__TAURI_INTERNALS__.invoke('plugin:window|is_maximized',{label:'main'})),'Maximize button did not maximize the window');
  await maximize.click();
  await until(async()=>!(await page.evaluate(()=>window.__TAURI_INTERNALS__.invoke('plugin:window|is_maximized',{label:'main'}))),'Maximize button did not restore the window');
+ // Check the installed app's native region without capturing the runner's desktop.
+ await page.evaluate(()=>{
+  localStorage.setItem('mh-glass-material','builtin-aurora-night');
+  localStorage.setItem('mh-glass-back-main','desktop');
+  window.dispatchEvent(new Event('storage'));
+ });
+ const acrylicFrame=page.locator('.cg-native-backdrop.cg-material-builtin-aurora-night:not(.cg-maximized, .cg-tiled) .cg-content');
+ await acrylicFrame.waitFor();
+ const frameStyle=await acrylicFrame.evaluate(element=>{
+  const style=getComputedStyle(element);
+  return {inset:style.inset,radius:style.borderTopLeftRadius,scale:window.devicePixelRatio};
+ });
+ assert.equal(frameStyle.inset,'0px');
+ assert.equal(frameStyle.radius,'20px');
+ const cornerProbe=Math.max(1,Math.floor(4*frameStyle.scale));
+ const inspectFrame=`
+$ErrorActionPreference = 'Stop'
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+
+public static class AuralisFrameCheck {
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Rect { public int Left, Top, Right, Bottom; }
+
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr CreateRectRgn(int left, int top, int right, int bottom);
+    [DllImport("gdi32.dll")]
+    private static extern bool DeleteObject(IntPtr region);
+    [DllImport("user32.dll")]
+    private static extern int GetWindowRgn(IntPtr window, IntPtr region);
+    [DllImport("gdi32.dll")]
+    private static extern int GetRgnBox(IntPtr region, out Rect rect);
+    [DllImport("gdi32.dll")]
+    private static extern bool PtInRegion(IntPtr region, int x, int y);
+
+    public static bool HasRoundedFrame(IntPtr window, int cornerProbe) {
+        IntPtr region = CreateRectRgn(0, 0, 0, 0);
+        if (region == IntPtr.Zero) return false;
+        try {
+            Rect bounds;
+            if (GetWindowRgn(window, region) == 0 || GetRgnBox(region, out bounds) == 0) return false;
+            int midX = bounds.Left + (bounds.Right - bounds.Left) / 2;
+            int midY = bounds.Top + (bounds.Bottom - bounds.Top) / 2;
+            return !PtInRegion(region, bounds.Left + cornerProbe, bounds.Top + cornerProbe)
+                && !PtInRegion(region, bounds.Right - 1 - cornerProbe, bounds.Top + cornerProbe)
+                && PtInRegion(region, midX, bounds.Top)
+                && PtInRegion(region, bounds.Left, midY);
+        } finally { DeleteObject(region); }
+    }
+}
+'@
+$process = Get-Process -Id ${app.pid}
+for ($attempt = 0; $attempt -lt 40; $attempt++) {
+    $process.Refresh()
+    if ([AuralisFrameCheck]::HasRoundedFrame($process.MainWindowHandle, ${cornerProbe})) { exit 0 }
+    Start-Sleep -Milliseconds 100
+}
+throw 'The installed app did not apply a rounded native region.'
+`;
+ const regionCheck=spawnSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',inspectFrame],{encoding:'utf8',timeout:15000});
+ assert.equal(regionCheck.status,0,`Could not verify the native acrylic frame: ${regionCheck.stderr || regionCheck.error || ''}`);
  const ps=spawnSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',`Get-CimInstance Win32_Process -Filter 'ParentProcessId=${app.pid}' | Select-Object -ExpandProperty Name`],{encoding:'utf8',timeout:15000});assert.equal(ps.status,0,'Could not inspect child processes');assert.doesNotMatch(ps.stdout,/^mdm-legacy\.exe\s*$/im,'A legacy downloader process was launched');
  const downloadUrl=`http://127.0.0.1:${server.address().port}/embedded-smoke-${Date.now()}.bin`;
  addResponse=await ipc({url:downloadUrl,silent:true});

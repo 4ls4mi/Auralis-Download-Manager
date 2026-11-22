@@ -203,9 +203,12 @@ export function timeLeft(d: Download) {
 export function GradientBar({percent,showLabel=false,size,active=true}:{percent:number;showLabel?:boolean;size?:number|null;active?:boolean}){
   const {appearance}=useCrystal();const colors=indicatorColors(appearance.indicator);
   const fill=Math.max(0,Math.min(100,percent));
+  const bubble = appearance.progressShape === "bubble";
+  const backdrop = backdropPalette(appearance.trackColor);
+  const trackClass = bubble ? "cg-bubble-track" : `cg-track-${appearance.trackFinish} cg-track-color-${appearance.trackColor}${backdrop ? " cg-palette-track" : ""}`;
   return <div className="cg-percent-wrap" aria-label={`Download ${fill.toFixed(1)} percent completed`}>
-    <div className={`cg-percent-track cg-track-${appearance.trackFinish} cg-track-color-${appearance.trackColor} ${backdropPalette(appearance.trackColor)?"cg-palette-track":""}`} style={{...backdropStyle(appearance.trackColor),"--indicator-glow":colors[1]} as CSSProperties}>
-      {appearance.progressShape === "bubble" ? <BubbleProgress percent={fill} colors={colors} backdrop={backdropPalette(appearance.trackColor)} material={appearance.progressMaterial} size={size} active={active}/> : isLiquidMaterial(appearance.progressMaterial) ? <LiquidProgress percent={fill} colors={colors} material={appearance.progressMaterial} size={size} active={active}/> : appearance.progressMaterial === "frosted-ribbon" ? <FrostedRibbon shape={appearance.progressShape} percent={fill} colors={colors} finish={appearance.trackFinish} tint={appearance.trackColor} tintColors={backdropPalette(appearance.trackColor)} fallback={`linear-gradient(90deg,${colors.join(",")})`}/> : fill>0&&<span className="cg-percent-fill" style={{
+    <div className={`cg-percent-track ${trackClass}`} style={{...(!bubble && backdropStyle(appearance.trackColor)),"--indicator-glow":colors[1]} as CSSProperties}>
+      {bubble ? <BubbleProgress percent={fill} colors={colors} backdrop={backdrop} finish={appearance.trackFinish} tint={appearance.trackColor} material={appearance.progressMaterial} size={size} active={active}/> : isLiquidMaterial(appearance.progressMaterial) ? <LiquidProgress percent={fill} colors={colors} material={appearance.progressMaterial} size={size} active={active}/> : appearance.progressMaterial === "frosted-ribbon" ? <FrostedRibbon shape={appearance.progressShape} percent={fill} colors={colors} finish={appearance.trackFinish} tint={appearance.trackColor} tintColors={backdropPalette(appearance.trackColor)} fallback={`linear-gradient(90deg,${colors.join(",")})`}/> : fill>0&&<span className="cg-percent-fill" style={{
         width:`${fill}%`,
         backgroundImage:`linear-gradient(90deg,${colors.join(",")})`,
         backgroundSize:`${10000/fill}% 100%`,
@@ -226,13 +229,35 @@ export function ConnectionMap({segments,connections,downloading,paused=false,com
   const visible=paused&&items.length===0?last.current:items;
   const shown=compact?visible:visible.slice(0,32);
   const slots=connectionSlots(shown,compact);
+  const liquid=isLiquidMaterial(appearance.connectionMaterial);
+  const gridStyle={
+    ...backdropStyle(appearance.connectionTrackColor),
+    "--indicator-glow":colors[1],
+    "--indicator-rim":colors[2],
+    ...(compact?{gridTemplateColumns:`repeat(${Math.max(1,slots.length)},minmax(0,1fr))`}:{}),
+  } as CSSProperties;
   return <div className={"cg-chunks "+(compact?"compact":"")}>
     {compact&&<div className="cg-chunk-label"><span>{connections?`${visible.length} connections`:"Connections unavailable"}</span></div>}
-    <div ref={gridRef} className={`cg-chunk-map cg-connection-track-${appearance.connectionTrackFinish} cg-connection-tint-${appearance.connectionTrackColor} ${backdropPalette(appearance.connectionTrackColor)?"cg-palette-track":""} `+(compact?"compact":"cg-fixed-connections")+(tubes&&!compact?" cg-piped-connections":"")} style={{...backdropStyle(appearance.connectionTrackColor),"--indicator-glow":colors[1],...(compact?{gridTemplateColumns:`repeat(${Math.max(1,slots.length)},minmax(0,1fr))`}:{})} as CSSProperties} role="group" aria-label={connections?`${visible.length} engine connections${visible.length>32?', first 32 shown':''}`:"Connections unavailable"}>
-     {tubes&&!compact&&<ConnectionTubes container={gridRef} slots={receivingTubeSlots(connections,downloading&&!paused)} colors={indicatorColors(appearance.indicator)}/>}
-     {slots.map((c,index)=>{if(!c)return <span key={`empty-${index}`} className="cg-connection-empty" aria-hidden="true"/>;
-      const fill=c.percent;const active=downloading&&c.state==="Receiving";const lost=connectionLost(c,downloading);const label=`Connection ${c.id+1}: ${paused?"Paused":lost?"Connection lost or retrying":downloading?c.state:"Not active"}; downloaded ${units(c.downloaded)}; ${rate(c.speed)}; ${fill===null?"assigned range unavailable":`${units(c.received)} of ${units(c.assigned)} (${fill.toFixed(1)}%)`}. Assigned sections can change as work is redistributed.`;
-      return <span key={c.id} data-worker={c.id} className={paused?"paused":lost?"lost":active?"active":""} title={label} aria-label={label} tabIndex={0}>{!paused&&fill!==null&&(fill>0||(active&&!lost&&isLiquidMaterial(appearance.connectionMaterial)))&&(isLiquidMaterial(appearance.connectionMaterial)?<LiquidChunk percent={fill} colors={colors} material={appearance.connectionMaterial} animate={active&&!lost} index={c.id}/>:<i style={{height:`${fill}%`,backgroundImage:`linear-gradient(0deg,${colors.join(",")})`,boxShadow:`0 0 8px ${colors[1]}, inset 0 1px 2px #ffffff99`}}/>)}{active&&!lost&&<InletDroplet percent={fill??0} colors={colors} index={c.id}/>}</span>})}
+    <div ref={gridRef} className={`cg-chunk-map cg-connection-track-${appearance.connectionTrackFinish} cg-connection-tint-${appearance.connectionTrackColor} ${backdropPalette(appearance.connectionTrackColor)?"cg-palette-track":""} `+(compact?"compact":"cg-fixed-connections")+(tubes&&!compact?" cg-piped-connections":"")} style={gridStyle} role="group" aria-label={connections?`${visible.length} engine connections${visible.length>32?', first 32 shown':''}`:"Connections unavailable"}>
+      {tubes&&!compact&&<ConnectionTubes container={gridRef} slots={receivingTubeSlots(connections,downloading&&!paused)} colors={indicatorColors(appearance.indicator)}/>}
+      {slots.map((connection,index)=>{
+        if(!connection)return <span key={`empty-${index}`} className="cg-connection-empty" aria-hidden="true"/>;
+        const {id,percent:fill,state,downloaded,speed,received,assigned}=connection;
+        const active=!paused&&downloading&&state==="Receiving";
+        const lost=connectionLost(connection,downloading);
+        const status=paused?"Paused":lost?"Connection lost or retrying":downloading?state:"Not active";
+        const range=fill===null?"assigned range unavailable":`${units(received)} of ${units(assigned)} (${fill.toFixed(1)}%)`;
+        const label=`Connection ${id+1}: ${status}; downloaded ${units(downloaded)}; ${rate(speed)}; ${range}. Assigned sections can change as work is redistributed.`;
+        const hasFill=!paused&&fill!==null&&(fill>0||(active&&!lost&&liquid));
+        return <span key={id} data-worker={id} className={paused?"paused":lost?"lost":active?"active":""} title={label} aria-label={label} tabIndex={0}>
+          {hasFill&&<span className="cg-connection-fill cg-indicator-bloom" aria-hidden="true">
+            {liquid
+              ?<LiquidChunk percent={fill} colors={colors} material={appearance.connectionMaterial} animate={active&&!lost} index={id}/>
+              :<i className="cg-connection-default-fill" style={{height:`${fill}%`,backgroundImage:`linear-gradient(180deg,#ffffff65,transparent 38%,#06133244),linear-gradient(0deg,${colors.join(",")})`}}/>}
+          </span>}
+          {active&&!lost&&<InletDroplet percent={fill??0} colors={colors} index={id}/>}
+        </span>;
+      })}
     </div>
   </div>;
 }
@@ -251,7 +276,7 @@ export function SpeedGraph({values,small=false}:{values:number[];small?:boolean}
   const curved=coords.slice(1).reduce((path,pt,i)=>{const prev=coords[i],mid=(prev.x+pt.x)/2;return `${path} C${mid},${prev.y} ${mid},${pt.y} ${pt.x},${pt.y}`},`M${coords[0].x},${coords[0].y}`);
   const surface=`${curved} L100,65 L0,65 Z`;
   return <svg className={`cg-graph ${small?"cg-graph-small":""} ${liquid?`cg-liquid-graph ${appearance.graphMaterial}`:""}`} viewBox="0 0 100 65"
-    preserveAspectRatio="none" style={{"--indicator-glow":colors[1]} as CSSProperties} role="img" aria-label="Real measured transfer-speed history">
+    preserveAspectRatio="none" style={{"--indicator-glow":colors[1],"--indicator-rim":colors[2]} as CSSProperties} role="img" aria-label="Real measured transfer-speed history">
     <defs>
       <linearGradient id={`${id}-line`} x1="0%" x2="100%" y1="0%" y2="0%">
         <stop offset="0%" stopColor={colors[0]}/><stop offset="50%" stopColor={colors[1]}/><stop offset="100%" stopColor={colors[2]}/>
@@ -267,10 +292,14 @@ export function SpeedGraph({values,small=false}:{values:number[];small?:boolean}
 
     {[15,37,57].map(y=><line key={y} x1="0" x2="100" y1={y} y2={y}
       stroke="rgba(180,227,242,.11)" strokeWidth=".4"/>)}
+    <g className="cg-graph-data cg-indicator-bloom">
     {appearance.graphShape==="area"&&(liquid?<><path d={surface} fill={`url(#${id}-line)`} opacity=".72"/><path d={surface} fill={`url(#${id}-depth)`}/><g clipPath={`url(#${id}-liquid-clip)`}><g className="cg-liquid-graph-light"><path d="M-25 33 Q0 20 25 33 T75 33 T125 33" fill="none" stroke="rgba(220,255,255,.14)" strokeWidth="1.2" vectorEffect="non-scaling-stroke"/></g>{appearance.graphMaterial==='liquid-glass'&&[14,36,61,83].map((x,i)=><circle key={x} cx={x} cy={54+(i%2)*5} r=".65" fill="none" stroke="rgba(235,255,255,.4)" strokeWidth=".3"/>)}{appearance.graphMaterial==='liquid-crystal'&&<path d={curved} transform="translate(0 3)" fill="none" stroke="rgba(240,255,255,.32)" strokeWidth=".6" vectorEffect="non-scaling-stroke"/>}{appearance.graphMaterial==='liquid-aero'&&<path d={curved} transform="translate(0 5)" fill="none" stroke="rgba(240,255,255,.18)" strokeWidth="3" vectorEffect="non-scaling-stroke"/>}</g></>:<polygon points={trail} fill={`url(#${id}-fill)`}/>)}
     {appearance.graphShape==="bars"&&seq.map((v,i)=>{const ratio=clampGraph(v/peak),x=i*100/seq.length,width=Math.max(.1,80/seq.length),y=(liquid?65:58)-ratio*(liquid?55:48),height=ratio*(liquid?55:48);return <g key={i}><rect x={x} y={y} width={width} height={height} fill={`url(#${id}-line)`}/>{liquid&&<rect x={x} y={y} width={width} height={height} fill={`url(#${id}-depth)`}/>}</g>})}
     {appearance.graphShape!=="bars"&&(liquid?<path d={curved} fill="none" stroke={`url(#${id}-line)`} strokeWidth={small?"2.4":"2.1"} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke"/>:<polyline points={points} fill="none" stroke={`url(#${id}-line)`} strokeWidth={small?"1.9":"1.7"} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke"/>)}
-    {liquid&&appearance.graphShape!=="bars"&&<path d={curved} fill="none" stroke="rgba(240,255,255,.68)" strokeWidth={appearance.graphMaterial==='liquid-crystal'?'.9':'.55'} strokeLinecap="round" vectorEffect="non-scaling-stroke"/>}
+    {appearance.graphShape!=="bars"&&(liquid
+      ?<path d={curved} fill="none" stroke="rgba(240,255,255,.68)" strokeWidth=".65" strokeLinecap="round" vectorEffect="non-scaling-stroke"/>
+      :<polyline points={points} fill="none" stroke="rgba(240,255,255,.63)" strokeWidth=".65" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke"/>)}
+    </g>
   </svg>;
 }
 const directions = ["North", "South", "East", "West", "NorthEast", "NorthWest", "SouthEast", "SouthWest"] as const;
@@ -342,43 +371,83 @@ export function CrystalWindow({ children, target = "main" }: {
     window.addEventListener('resize',resize);reset();
     return()=>{disposed=true;window.clearTimeout(resizeTimer);cancelAnimationFrame(raf);observer.disconnect();mutations.disconnect();el.removeEventListener('click',sectionClick);el.removeEventListener('change',reset);el.removeEventListener('toggle',reset,true);window.removeEventListener('resize',resize)};
   },[appearance.uiScale,appearance.fontSize,appearance.fontFamily,target]);
-  useEffect(()=>{
-    let disposed=false, pending=false, running=false, timer=0, outline:number[][]|null=null;
-    const apply=async()=>{if(disposed)return;if(running){pending=true;return}running=true;try{await invoke("set_material_window_shape",{material:appearance.material,outline,flat:maximized||tiled});if(!disposed)window.dispatchEvent(new Event("auralis-material-shape-applied"))}catch(e){if(!disposed)setWindowError(`Material outline unavailable: ${String(e)}`)}finally{running=false;if(pending&&!disposed){pending=false;void apply()}}};
-    const resize=()=>{if(!timer)timer=window.setTimeout(()=>{timer=0;void apply()},50)};
-    const onOutline=(event:Event)=>{outline=(event as CustomEvent<number[][]>).detail;void apply()};
-    window.addEventListener("resize",resize);window.addEventListener("glass-frost-outline",onOutline);void apply();
-    return()=>{disposed=true;window.clearTimeout(timer);window.removeEventListener("resize",resize);window.removeEventListener("glass-frost-outline",onOutline)};
-  },[appearance.material,maximized,tiled]);
   const main = target === "main", mode = main ? appearance.mainMode : appearance.detailMode;
   const customMaterial=extraMaterials[appearance.material]??loadMaterials().find(m=>materialId(m)===appearance.material);
   const selectedMaterial=customMaterial??materialPresets[appearance.material]??materialPresets["frosted-water-351"];
   const surfaceStyle=materialBackdrop(appearance.material,selectedMaterial);
+  const selectedBackdrop = nativeBackdrop(mode, appearance.material, surfaceStyle, maximized || tiled);
+  const backdropRadius = selectedBackdrop === null ? null
+    : appearance.material === "builtin-aurora-night" || appearance.material === "builtin-aurora-ice" ? 20 : 14;
+  const compositionQueue = useRef(Promise.resolve());
+  useEffect(() => {
+    const windowHandle = getCurrentWindow();
+    const flat = maximized || tiled;
+    let disposed = false;
+    let pending = false;
+    let timer = 0;
+    let initialized = false;
+    let outline: number[][] | null = null;
+
+    const updateShape = () => {
+      if (disposed || pending) return;
+      pending = true;
+      compositionQueue.current = compositionQueue.current.catch(() => undefined).then(async () => {
+        pending = false;
+        if (disposed) return;
+        if (!selectedBackdrop && !initialized) {
+          await windowHandle.clearEffects().catch(() => undefined);
+          if (disposed) return;
+        }
+        try {
+          await invoke("set_material_window_shape", {
+            material: appearance.material, outline, flat, backdropRadius,
+          });
+        } catch (error) {
+          if (disposed) return;
+          await windowHandle.clearEffects().catch(() => undefined);
+          if (!disposed) setWindowError(`Material outline unavailable: ${String(error)}`);
+          return;
+        }
+        initialized = true;
+        if (disposed || !selectedBackdrop) return;
+        // The visible shell and native window region must agree before acrylic
+        // is applied. Resizing can reset composition, so refresh it afterwards.
+        try {
+          await windowHandle.setEffects({
+            effects: [selectedBackdrop === "blur" ? Effect.Blur : Effect.Acrylic],
+            state: EffectState.Active,
+          });
+        } catch {
+          if (disposed) return;
+          await windowHandle.clearEffects().catch(() => undefined);
+          if (!disposed) setWindowError("Windows backdrop blur is unavailable; transparent glass is being used.");
+        }
+      });
+    };
+
+    const onResize = () => {
+      if (timer) return;
+      timer = window.setTimeout(() => { timer = 0; updateShape(); }, 50);
+    };
+    const onOutline = (event: Event) => {
+      outline = (event as CustomEvent<number[][]>).detail;
+      updateShape();
+    };
+    window.addEventListener("resize", onResize);
+    window.addEventListener("glass-frost-outline", onOutline);
+    updateShape();
+    return () => {
+      disposed = true;
+      window.clearTimeout(timer);
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("glass-frost-outline", onOutline);
+    };
+  }, [appearance.material, maximized, tiled, selectedBackdrop, backdropRadius]);
   const surfaceOpacity=Math.min(1,Math.max(.2,1-selectedMaterial.translucency/125));
   const themeTintRgb=useMemo(()=>(appearance.material==="builtin-aurora-night"?[21,37,76]:appearance.material==="builtin-aurora-ice"?[225,244,255]:(theme.neutralTint??theme.rgb.split(",").map(Number))) as [number,number,number],[theme,appearance.material]);
   const path = main ? appearance.wallMain : (appearance.wallDetail || appearance.wallMain);
   const src = path ? convertFileSrc(path) : "/alpine.svg";
   const video = /\.(mp4|webm|mov|m4v)$/i.test(path);
-  const effectQueue=useRef<Promise<void>>(Promise.resolve());
-  useEffect(() => {
-    const w=getCurrentWindow();let active=true;
-    const selected=nativeBackdrop(mode,appearance.material,surfaceStyle,maximized||tiled);
-    // Serialize native requests so an old material cannot restore a rectangular
-    // backdrop after the user has switched to the shaped frosted window.
-    const applyBackdrop=()=>{
-      effectQueue.current=effectQueue.current.catch(()=>undefined).then(async()=>{
-        if(!active)return;
-        if(selected===null){await w.clearEffects().catch(()=>undefined);return}
-        try{await w.setEffects({effects:[selected==='blur'?Effect.Blur:Effect.Acrylic],state:EffectState.Active})}
-        catch{if(active){setWindowError("Windows backdrop blur is unavailable; transparent glass is being used.");await w.clearEffects().catch(()=>undefined)}}
-      });
-    };
-    // Applying a native window region can reset its composition attributes.
-    // Reapply the current material after the region completes, including resize.
-    window.addEventListener("auralis-material-shape-applied",applyBackdrop);
-    applyBackdrop();
-    return()=>{active=false;window.removeEventListener("auralis-material-shape-applied",applyBackdrop)};
-  }, [mode, appearance.material, surfaceStyle,maximized,tiled]);
   // White palettes need light surfaces and dark foregrounds in every material.
   const blackGlass = appearance.material === "builtin-black-glass";
   const auroraDark = appearance.material === "builtin-aurora-night";
@@ -387,6 +456,7 @@ export function CrystalWindow({ children, target = "main" }: {
   const lightAccentRgb = theme.light ? theme.rgb.split(",").map(v=>Math.round(Number(v)*.36)).join(",") : theme.id === "white-pearl" ? "101,86,67" : "64,91,112";
   const lightAccent = `rgb(${lightAccentRgb})`;
   const style = {
+    "--native-backdrop-radius": backdropRadius === null ? undefined : `${backdropRadius}px`,
     "--accent": auroraLight ? "#087eb8" : auroraDark ? "#46d8ff" : effectiveLight ? lightAccent : theme.accent,
     "--accent-secondary": auroraDark || auroraLight ? "#a752ff" : theme.secondary,
     "--palette-hue": auroraDark || auroraLight ? 210 : themeHue(theme),
@@ -414,7 +484,7 @@ export function CrystalWindow({ children, target = "main" }: {
     "--min-window-button": (30/Math.min(1,Math.max(.4,fit)))+"px",
     "--font-size": Math.max(Math.min(20,Math.max(12,appearance.fontSize)),12/Math.max(.4,fit))+"px"
   } as CSSProperties;
-  return <div className={`cg-window ${main?"cg-target-main":"cg-target-details"} cg-mode-${mode} cg-material-${appearance.material} cg-surface-${surfaceStyle} cg-theme-${theme.id} ${theme.light&&effectiveLight?"cg-custom-light":""} ${customMaterial?`cg-custom-material cg-finish-${customMaterial.finish} cg-controls-${customMaterial.controls} cg-layout-${customMaterial.layout??'standard'} cg-text-${customMaterial.text??'crisp'}`:""} cg-progress-shape-${appearance.progressShape} cg-connection-shape-${appearance.connectionShape} ${maximized?"cg-maximized":""} ${tiled?"cg-tiled":""} ${effectiveLight?"cg-light":"cg-dark"} ${appearance.highContrast?"cg-high-contrast":""}`} style={style}>
+  return <div className={`cg-window ${main?"cg-target-main":"cg-target-details"} cg-mode-${mode} ${selectedBackdrop ? "cg-native-backdrop" : ""} cg-material-${appearance.material} cg-surface-${surfaceStyle} cg-theme-${theme.id} ${theme.light&&effectiveLight?"cg-custom-light":""} ${customMaterial?`cg-custom-material cg-finish-${customMaterial.finish} cg-controls-${customMaterial.controls} cg-layout-${customMaterial.layout??'standard'} cg-text-${customMaterial.text??'crisp'}`:""} cg-progress-shape-${appearance.progressShape} cg-connection-shape-${appearance.connectionShape} ${maximized?"cg-maximized":""} ${tiled?"cg-tiled":""} ${effectiveLight?"cg-light":"cg-dark"} ${appearance.highContrast?"cg-high-contrast":""}`} style={style}>
     {mode === "wallpaper" && <div className="cg-wallpaper">
       {video ? <video key={src} autoPlay loop muted playsInline src={src} /> :
         <div style={{ backgroundImage: `url("${src}")` }} />}

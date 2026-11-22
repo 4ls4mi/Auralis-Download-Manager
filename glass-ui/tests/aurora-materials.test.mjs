@@ -21,7 +21,80 @@ test('dark and light Aurora materials stay distinct and save across reload', {sk
  assert.notEqual(styles[0],styles[1]);
  } finally {await browser.close();await server.close()}
 });
-test('Aurora toolbar retains distinct action colors and layered surfaces',{skip:!executablePath||!existsSync(executablePath)},async()=>{
- const server=await createServer({configFile:false,root:fileURLToPath(new URL('..',import.meta.url)),server:{host:'127.0.0.1',port:0},logLevel:'silent'});await server.listen();const browser=await chromium.launch({headless:true,executablePath,args:['--no-sandbox']});
- try{const page=await browser.newPage();await page.addInitScript(()=>{localStorage.setItem('auralis-browser-guide-seen','1');localStorage.setItem('mh-glass-material','builtin-aurora-night');window.__TAURI_EVENT_PLUGIN_INTERNALS__={unregisterListener:()=>{}};window.__TAURI_INTERNALS__={metadata:{currentWindow:{label:'main'},currentWebview:{label:'main'}},transformCallback:()=>1,unregisterCallback:()=>{},invoke:async cmd=>{if(cmd==='dashboard_snapshot')return {downloads:[],queues:[],categories:[],speed:0};if(cmd==='dashboard_visuals')return {downloads:[]};return null}}});await page.goto(server.resolvedUrls.local[0]);await page.waitForSelector('.cg-toolbar button[data-action=add] svg');const state=await page.evaluate(()=>{const button=n=>{const b=document.querySelector(`.cg-toolbar button[data-action="${n}"]`);return {tone:getComputedStyle(b).getPropertyValue('--tone').trim(),icon:getComputedStyle(b.querySelector('svg')).color}};return {add:button('add'),settings:button('settings'),shine:getComputedStyle(document.querySelector('.cg-content'),'::before').backgroundImage}});assert.equal(state.add.tone,'#08e979');assert.equal(state.settings.tone,'#b840ff');assert.notEqual(state.add.icon,state.settings.icon);assert.match(state.shine,/radial-gradient/)}finally{await browser.close();await server.close()}
+test('Aurora shows translucent panes and faceted action colors with desktop acrylic', {
+ skip: !executablePath || !existsSync(executablePath)
+}, async () => {
+ const server = await createServer({
+  configFile: false,
+  root: fileURLToPath(new URL('..', import.meta.url)),
+  server: {host: '127.0.0.1', port: 0},
+  logLevel: 'silent'
+ });
+ await server.listen();
+ const browser = await chromium.launch({headless: true, executablePath, args: ['--no-sandbox']});
+ try {
+  for (const material of ['builtin-aurora-night', 'builtin-aurora-ice']) {
+   const page = await browser.newPage({viewport: {width: 960, height: 690}});
+   await page.addInitScript(material => {
+    localStorage.setItem('auralis-browser-guide-seen', '1');
+    localStorage.setItem('mh-glass-material', material);
+    localStorage.setItem('mh-glass-back-main', 'desktop');
+    window.__TAURI_EVENT_PLUGIN_INTERNALS__ = {unregisterListener: () => {}};
+    window.__TAURI_INTERNALS__ = {
+     metadata: {currentWindow: {label: 'main'}, currentWebview: {label: 'main'}},
+     transformCallback: () => 1,
+     unregisterCallback: () => {},
+     invoke: async (command, args) => {
+      if (command === 'dashboard_snapshot') return {downloads: [], queues: [], categories: [], speed: 0};
+      if (command === 'dashboard_visuals') return {downloads: []};
+      if (command === 'plugin:window|set_effects') window.auroraEffects = args.value?.effects;
+      return null;
+     }
+    };
+   }, material);
+   await page.goto(server.resolvedUrls.local[0]);
+   const add = page.locator('.cg-toolbar button[data-action=add]');
+   const settings = page.locator('.cg-toolbar button[data-action=settings]');
+   await add.waitFor();
+   await page.waitForFunction(() => window.auroraEffects?.includes('acrylic'));
+   assert.equal(await page.locator('.cg-wallpaper').count(), 0);
+   const optics = await page.evaluate(() => {
+    const shell = getComputedStyle(document.querySelector('.cg-content'));
+    const sidebar = getComputedStyle(document.querySelector('.cg-sidebar'));
+    const pane = getComputedStyle(document.querySelector('.cg-list-panel'));
+    return {
+     shellBase: shell.backgroundColor,
+     paneBase: pane.backgroundColor,
+     sidebarLayers: sidebar.backgroundImage,
+     panelLayers: pane.backgroundImage
+    };
+   });
+   assert.match(optics.shellBase, /^rgba\(/);
+   assert.match(optics.paneBase, /^rgba\(/);
+   assert.notEqual(optics.sidebarLayers, optics.panelLayers);
+   assert.match(optics.panelLayers, material.endsWith('night') ? /radial-gradient/ : /linear-gradient/);
+   const buttonSurface = element => {
+    const rim = getComputedStyle(element, '::before');
+    const face = getComputedStyle(element, '::after');
+    return {shape: rim.clipPath, face: face.backgroundImage, ink: getComputedStyle(element.querySelector('svg')).color};
+   };
+   const addSurface = await add.evaluate(buttonSurface);
+   const settingsSurface = await settings.evaluate(buttonSurface);
+   assert.match(addSurface.shape, /^polygon\(/);
+   assert.notEqual(addSurface.ink, settingsSurface.ink);
+   if (material.endsWith('night')) {
+    assert.equal(addSurface.ink, 'rgb(8, 233, 121)');
+    assert.equal(settingsSurface.ink, 'rgb(184, 64, 255)');
+   } else {
+    assert.match(addSurface.ink, /^color\(srgb /);
+    assert.match(settingsSurface.ink, /^color\(srgb /);
+   }
+   await settings.hover();
+   assert.notEqual((await settings.evaluate(buttonSurface)).face, settingsSurface.face);
+   await page.close();
+  }
+ } finally {
+  await browser.close();
+  await server.close();
+ }
 });
