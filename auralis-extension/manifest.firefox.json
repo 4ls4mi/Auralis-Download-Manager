@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "default_locale": "en",
   "name": "__MSG_name__",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "description": "__MSG_description__",
   "homepage_url": "https://github.com/4ls4mi/misterdownloadmanager",
   "browser_specific_settings": {
@@ -34,6 +34,7 @@
   ],
   "background": {
     "scripts": [
+      "appearance-profile.js",
       "background.js"
     ]
   },
@@ -55,6 +56,8 @@
         "<all_urls>"
       ],
       "js": [
+        "appearance-profile.js",
+        "companion-appearance.js",
         "video.js"
       ],
       "all_frames": true,
@@ -75,6 +78,8 @@
         "*://*.youtube.com/*"
       ],
       "js": [
+        "appearance-profile.js",
+        "companion-appearance.js",
         "thumbnail.js"
       ],
       "run_at": "document_idle"

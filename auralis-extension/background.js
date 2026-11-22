@@ -10,6 +10,8 @@
 // (docs/browser-help.md). The browser may stop this script whenever it is idle: what must last
 // (the rules, the status, the pause) is kept in storage, not in memory.
 
+// Manifest V3 Chromium uses a worker; Firefox and Safari list it before this script.
+if (typeof importScripts === "function") importScripts("appearance-profile.js");
 const ext = globalThis.browser ?? globalThis.chrome;
 const HOST = "com.misterdownloadmanager.host";
 const VERSION = ext.runtime.getManifest().version;
@@ -89,16 +91,42 @@ async function native(message, ms = HOST_WAIT) {
   }
 }
 
-// Appearance is local to the browser's own Auralis installation. A failed read
-// must leave the connection badge and remote download target alone.
+// Share one local read across open popups and visible companion controls.
 let appearanceRequest;
+let appearanceReply;
+let nextAppearanceRead = 0;
 function desktopAppearance() {
-  if (!appearanceRequest) {
-    appearanceRequest = withTimeout(ext.runtime.sendNativeMessage(HOST, { appearance: true }), 2500)
-      .then((reply) => reply || { ok: false }, () => ({ ok: false }))
-      .finally(() => { appearanceRequest = undefined; });
-  }
+  if (appearanceRequest) return appearanceRequest;
+  if (appearanceReply && Date.now() < nextAppearanceRead) return Promise.resolve(appearanceReply);
+  appearanceRequest = withTimeout(ext.runtime.sendNativeMessage(HOST, { appearance: true }), 2500)
+    .then((reply) => reply || { ok: false }, () => ({ ok: false }))
+    .then((reply) => {
+      appearanceReply = reply;
+      nextAppearanceRead = Date.now() + (reply.ok ? 2000 : 7000);
+      return reply;
+    })
+    .finally(() => { appearanceRequest = undefined; });
   return appearanceRequest;
+}
+
+async function companionAppearance() {
+  const model = globalThis.__auralisAppearanceProfile;
+  const initial = await ext.storage.local.get([model.choiceKey, model.cacheKey]);
+  if (initial[model.choiceKey] === "browser") return { ok: true, palette: null };
+  const live = await desktopAppearance();
+  // Read the choice again in case the user changed it while the host was answering.
+  const state = await ext.storage.local.get([model.choiceKey, model.cacheKey]);
+  const cached = model.readSnapshot(state[model.cacheKey]);
+  const snapshot = live.ok && model.readSnapshot(live.appearance) || cached;
+  if (snapshot && JSON.stringify(snapshot) !== JSON.stringify(cached)) {
+    await ext.storage.local.set({ [model.cacheKey]: snapshot }).catch(() => {});
+  }
+  const theme = model.selectedTheme(snapshot, state[model.choiceKey]);
+  // Web pages receive only styling tokens inside the isolated content script's
+  // runtime message, never the material's name, catalog or native reply.
+  return { ok: true, palette: theme ? {
+    colors: theme.colors, light: theme.light, radius: theme.radius, opaque: theme.opaque,
+  } : null };
 }
 
 // ---- another MDM (#157): a server's, through its remote control ------------------------------
@@ -221,9 +249,19 @@ async function noteLookup(on) {
 
 async function showStatus() {
   const why = (await remoteTarget()) ? null : (await readStatus()).why;
-  const { paused } = await ext.storage.local.get({ paused: false });
+  const model = globalThis.__auralisAppearanceProfile;
+  const keys = { paused: false, ...(model ? { [model.choiceKey]: "desktop", [model.cacheKey]: null } : {}) };
+  const settings = await ext.storage.local.get(keys);
+  const { paused } = settings;
+  const theme = model?.selectedTheme(model.readSnapshot(settings[model.cacheKey]), settings[model.choiceKey]);
+  const color = why && why !== "update-app" ? (theme?.colors.destructive || "#C42B1C")
+    : (theme?.colors.caution || "#6B6B6B");
   try {
-    await action.setBadgeBackgroundColor({ color: why ? "#C42B1C" : "#6B6B6B" });
+    await action.setBadgeBackgroundColor({ color });
+    if (action.setBadgeTextColor) {
+      const ink = theme && model.luminance(color) > .179 ? "#08090c" : "#ffffff";
+      await Promise.resolve(action.setBadgeTextColor({ color: ink })).catch(() => {});
+    }
     await action.setBadgeText({ text: why && why !== "update-app" ? "!" : paused ? "II" : "" });
     await action.setTitle({ title: why ? t(`status_${why.replace(/-/g, "_")}`) : paused ? t("status_paused") : t("status_connected") });
   } catch {
@@ -2716,6 +2754,8 @@ async function injectOpenTabs() {
   if (!ext.scripting) return;
   const tabs = await ext.tabs.query({ url: ["http://*/*", "https://*/*"] }).catch(() => []);
   for (const entry of ext.runtime.getManifest().content_scripts || []) {
+    const includeAll = (entry.matches || []).includes("<all_urls>");
+    const includes = (entry.matches || []).filter(pattern => pattern !== "<all_urls>").map(matcher);
     const excludes = (entry.exclude_matches || []).map(matcher);
     for (const tab of tabs) {
       let u;
@@ -2724,7 +2764,7 @@ async function injectOpenTabs() {
       } catch {
         continue;
       }
-      if (excludes.some((m) => m(u))) continue;
+      if ((!includeAll && !includes.some((m) => m(u))) || excludes.some((m) => m(u))) continue;
       ext.scripting
         .executeScript({ target: { tabId: tab.id, allFrames: Boolean(entry.all_frames) }, files: entry.js })
         .catch(() => {});
@@ -3185,8 +3225,18 @@ ext.runtime.onMessage.addListener((m, sender, sendResponse) => {
   // pages; content scripts send from the web page they are in.
   const own = String(sender.url || "").startsWith(ext.runtime.getURL(""));
   const fromPage = Boolean(sender.tab) && !own;
-  (fromPage ? pageMessage(m, sender) : popupMessage(m, sender)).then(sendResponse, () => sendResponse({ ok: false }));
+  const response = m.type === "companion-appearance"
+    ? (fromPage && isWeb(sender.url || "") ? companionAppearance() : Promise.resolve({ ok: false }))
+    : fromPage ? pageMessage(m, sender) : popupMessage(m, sender);
+  response.then(sendResponse, () => sendResponse({ ok: false }));
   return true; // answered later
+});
+
+const appearanceModel = globalThis.__auralisAppearanceProfile;
+ext.storage.onChanged?.addListener((changes, area) => {
+  if (area === "local" && appearanceModel && (changes[appearanceModel.cacheKey] || changes[appearanceModel.choiceKey])) {
+    showStatus().catch(() => {});
+  }
 });
 
 showStatus();

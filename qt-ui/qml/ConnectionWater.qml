@@ -13,6 +13,8 @@ Canvas {
     property color endColor: profile.secondary
     property color trackColor: profile.background
     readonly property var profile: MaterialTheme.profile(material)
+    readonly property var startTone: MaterialTheme.neonTone(startColor)
+    readonly property var endTone: MaterialTheme.neonTone(endColor)
     readonly property real amount: typeof value === "number" && Number.isFinite(value)
         ? Math.max(0, Math.min(1, value)) : 0
     readonly property real surfaceY: 1.7 + (height - 3.4) * (1 - amount)
@@ -98,12 +100,13 @@ Canvas {
             return
 
         const color = MaterialTheme.rgba
-        const frost = MaterialTheme.mix(endColor, "#edfcff", .62, .97)
+        const first = startTone
+        const last = endTone
         const track = ctx.createLinearGradient(0, 0, w, h)
-        track.addColorStop(0, color(profile.upper, .30))
-        track.addColorStop(.24, color(trackColor, .18))
-        track.addColorStop(.69, color(trackColor, .18))
-        track.addColorStop(1, color(endColor, .34))
+        track.addColorStop(0, color(profile.upper, profile.light ? .37 : .16))
+        track.addColorStop(.30, color(trackColor, .16))
+        track.addColorStop(.70, color(trackColor, .23))
+        track.addColorStop(1, color(last.core, profile.light ? .53 : .37))
         outline(ctx, w, h)
         ctx.fillStyle = track
         ctx.fill()
@@ -111,69 +114,74 @@ Canvas {
         if (amount > 0) {
             ctx.save()
             ctx.clip()
-
             const depth = h - surfaceY
-            const amplitude = amount < 1 ? Math.min(depth * .30, receiving ? h * .087 : h * .037) : 0
+            const amplitude = amount < 1 ? Math.min(depth * .26, receiving ? h * .061 : h * .026) : 0
             const surface = surfaceY + Math.sin(waterPhase) * amplitude * .3
-            traceSurface(ctx, w, surface, amplitude)
 
-            ctx.lineJoin = "round"
-            const water = ctx.createLinearGradient(0, surfaceY, w * .32, h)
-            water.addColorStop(0, MaterialTheme.mix(endColor, "#def8ff", .23, .98))
-            water.addColorStop(.28, color(startColor, .95))
-            water.addColorStop(.70, color(startColor, sculpted ? .73 : .89))
-            water.addColorStop(1, color(endColor, .96))
-            ctx.save()
+            // Clip both the dense liquid and its reflections to the moving meniscus.
+            traceSurface(ctx, w, surface, amplitude)
             ctx.lineTo(w, h)
             ctx.lineTo(0, h)
             ctx.closePath()
+            ctx.save()
+            ctx.clip()
+
+            const water = ctx.createLinearGradient(0, surface, w * .32, h)
+            water.addColorStop(0, color(first.glow, .91))
+            water.addColorStop(.17, color(first.body, .97))
+            water.addColorStop(.46, color(first.core, 1))
+            water.addColorStop(.76, color(last.core, sculpted ? .99 : .94))
+            water.addColorStop(.94, color(last.body, .99))
+            water.addColorStop(1, color(last.glow, .85))
             ctx.fillStyle = water
-            ctx.fill()
+            ctx.fillRect(0, 0, w, h)
+
+            const refraction = ctx.createLinearGradient(0, 0, w, 0)
+            refraction.addColorStop(0, color(first.glow, .40))
+            refraction.addColorStop(.045, color(first.edge, .43))
+            refraction.addColorStop(.13, color(first.glow, .18))
+            refraction.addColorStop(.23, "transparent")
+            refraction.addColorStop(.76, "transparent")
+            refraction.addColorStop(.91, color(last.glow, .27))
+            refraction.addColorStop(1, color(last.body, .65))
+            ctx.fillStyle = refraction
+            ctx.fillRect(0, 0, w, h)
             ctx.restore()
 
             if (amount < 1) {
                 traceSurface(ctx, w, surface, amplitude)
-                ctx.lineWidth = Math.min(5.6, h * .22)
-                ctx.strokeStyle = color(endColor, .45)
+                const glow = ctx.createLinearGradient(0, 0, w, 0)
+                glow.addColorStop(0, color(first.glow, receiving ? .65 : .44))
+                glow.addColorStop(1, color(last.glow, receiving ? .69 : .48))
+                ctx.lineWidth = Math.min(4.5, w * .16)
+                ctx.strokeStyle = glow
                 ctx.stroke()
-                ctx.lineWidth = Math.min(3.6, h * .14)
-                ctx.strokeStyle = color(endColor, .80)
+                const edge = ctx.createLinearGradient(0, 0, w, 0)
+                edge.addColorStop(0, color(first.edge, .96))
+                edge.addColorStop(1, color(last.edge, .92))
+                ctx.lineWidth = Math.min(1.12, w * .075)
+                ctx.strokeStyle = edge
                 ctx.stroke()
-                ctx.lineWidth = 1.15
-                ctx.strokeStyle = frost
-                ctx.stroke()
-            }
-
-            // A narrow side reflection gives the moving liquid depth.
-            const refraction = ctx.createLinearGradient(0, 0, w, 0)
-            refraction.addColorStop(0, color(profile.upper, .42))
-            refraction.addColorStop(.20, color(profile.upper, .06))
-            refraction.addColorStop(.62, "transparent")
-            refraction.addColorStop(1, color(endColor, .55))
-            ctx.fillStyle = refraction
-            ctx.fillRect(0, surfaceY + amplitude, w, depth)
-
-            if (receiving && !MaterialTheme.reducedMotion && depth > 7) {
-                for (let index = 0; index < 2; ++index) {
-                    const rise = (waterPhase / (Math.PI * 2) + index * .54) % 1
-                    const x = w * (.35 + index * .28 + .08 * Math.sin(rise * 6))
-                    const y = h - 3 - rise * (depth - 4)
-                    ctx.beginPath()
-                    ctx.arc(x, y, index === 0 ? 1.65 : 1.1, 0, Math.PI * 2)
-                    ctx.lineWidth = .8
-                    ctx.strokeStyle = frost
-                    ctx.stroke()
-                }
             }
             ctx.restore()
         }
 
         outline(ctx, w, h)
-        ctx.lineWidth = receiving ? 3.1 : 1.8
-        ctx.strokeStyle = color(endColor, receiving ? .62 : .28)
-        ctx.stroke()
+        if (amount > 0) {
+            const halo = ctx.createLinearGradient(0, Math.max(0, surfaceY - 2), 0, h)
+            halo.addColorStop(0, color(first.glow, 0))
+            halo.addColorStop(.43, color(first.glow, receiving ? .33 : .23))
+            halo.addColorStop(1, color(last.glow, receiving ? .59 : .40))
+            ctx.lineWidth = 3.2
+            ctx.strokeStyle = halo
+            ctx.stroke()
+        }
+        const rim = ctx.createLinearGradient(0, 0, w, h)
+        rim.addColorStop(0, color(profile.upper, profile.light ? .78 : .56))
+        rim.addColorStop(.47, color(profile.upper, .19))
+        rim.addColorStop(1, color(amount > 0 ? last.edge : profile.upper, amount > 0 ? .85 : .34))
         ctx.lineWidth = .8
-        ctx.strokeStyle = color(profile.upper, amount > 0 ? .73 : .48)
+        ctx.strokeStyle = rim
         ctx.stroke()
     }
 }

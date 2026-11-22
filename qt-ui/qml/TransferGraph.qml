@@ -9,6 +9,8 @@ Canvas {
     property color gridColor: MaterialTheme.palette.divider
     property bool light: MaterialTheme.palette.light
     property string graphShape: WindowAppearance.graphShape
+    readonly property var lineTone: MaterialTheme.neonTone(lineColor)
+    readonly property var endpointTone: MaterialTheme.neonTone(endpointColor)
 
     renderTarget: Canvas.Image
     onSamplesChanged: requestPaint()
@@ -36,7 +38,7 @@ Canvas {
             ctx.lineTo(i * spacing, floor - samples[i] / peak * range)
     }
 
-    function drawBars(ctx, peak, floor, range, glow, pigment, specular) {
+    function drawBars(ctx, peak, floor, range, glow, core, edge) {
         const stride = width / samples.length
         const gap = Math.min(3, stride * .27)
         const barWidth = Math.max(1, stride - gap)
@@ -49,19 +51,23 @@ Canvas {
             const top = floor - barHeight
             const x = i * stride + gap * .5
             ctx.fillStyle = glow
-            ctx.globalAlpha = light ? .14 : .21
+            ctx.globalAlpha = light ? .18 : .32
             ctx.fillRect(x - haloSize, top - haloSize, barWidth + haloSize * 2, barHeight + haloSize)
-            ctx.fillStyle = pigment
-            ctx.globalAlpha = .76
+            ctx.fillStyle = core
+            ctx.globalAlpha = .95
             ctx.fillRect(x, top, barWidth, barHeight)
-            ctx.fillStyle = specular
-            ctx.globalAlpha = .92
-            ctx.fillRect(x, top, barWidth, Math.min(barHeight, height < 38 ? 1.2 : 2))
+            ctx.fillStyle = glow
+            ctx.globalAlpha = .69
+            ctx.fillRect(x, top, barWidth, Math.min(barHeight, height < 38 ? 2.15 : 3.4))
+            ctx.fillStyle = edge
+            ctx.globalAlpha = .98
+            ctx.fillRect(x, top, barWidth, Math.min(barHeight, height < 38 ? 1 : 1.35))
         }
     }
 
     onPaint: {
         const ctx = getContext("2d")
+        ctx.reset()
         ctx.clearRect(0, 0, width, height)
         if (width < 2 || height < 3)
             return
@@ -82,14 +88,13 @@ Canvas {
 
         const peak = Math.max(1, ...samples) * 1.15
         const range = Math.max(1, height - Math.min(8, height * .32))
-        const glow = gradient(ctx, lineColor, endpointColor)
-        const first = MaterialTheme.safeAccent(lineColor, light)
-        const last = MaterialTheme.safeAccent(endpointColor, light)
-        const pigment = gradient(ctx, first, last)
-        const specular = light ? pigment : gradient(ctx, MaterialTheme.mix(first, "#ebf8ff", .31, 1),
-                                                     MaterialTheme.mix(last, "#ebf8ff", .31, 1))
+        const first = lineTone
+        const last = endpointTone
+        const glow = gradient(ctx, first.glow, last.glow)
+        const core = gradient(ctx, first.core, last.core)
+        const edge = gradient(ctx, first.edge, last.edge)
         if (graphShape === "bars") {
-            drawBars(ctx, peak, floor, range, glow, pigment, specular)
+            drawBars(ctx, peak, floor, range, glow, core, edge)
             ctx.globalAlpha = 1
             return
         }
@@ -99,24 +104,34 @@ Canvas {
             ctx.lineTo(width - 1, floor)
             ctx.lineTo(0, floor)
             ctx.closePath()
-            ctx.globalAlpha = light ? .23 : .28
-            ctx.fillStyle = glow
+            ctx.fillStyle = gradient(ctx, first.body, last.body)
+            ctx.globalAlpha = light ? .15 : .25
+            ctx.fill()
+            const depth = ctx.createLinearGradient(0, 0, 0, height)
+            depth.addColorStop(0, MaterialTheme.rgba(first.core, 0))
+            depth.addColorStop(1, MaterialTheme.rgba(last.core, light ? .12 : .34))
+            ctx.fillStyle = depth
+            ctx.globalAlpha = 1
             ctx.fill()
         }
 
         trace(ctx, peak, floor, range)
         ctx.lineJoin = "round"
         ctx.lineCap = "round"
+        const compact = height < 38
         ctx.strokeStyle = glow
-        ctx.lineWidth = height < 38 ? 5 : 8
-        ctx.globalAlpha = light ? .14 : .22
+        ctx.lineWidth = compact ? 5.4 : 8
+        ctx.globalAlpha = light ? .13 : .20
         ctx.stroke()
-        ctx.strokeStyle = pigment
-        ctx.lineWidth = height < 38 ? 2.6 : 4.2
-        ctx.globalAlpha = light ? .33 : .54
+        ctx.lineWidth = compact ? 3.1 : 4.8
+        ctx.globalAlpha = light ? .28 : .48
         ctx.stroke()
-        ctx.strokeStyle = specular
-        ctx.lineWidth = height < 38 ? 1.4 : 2.25
+        ctx.strokeStyle = core
+        ctx.lineWidth = compact ? 1.9 : 3
+        ctx.globalAlpha = light ? .91 : .72
+        ctx.stroke()
+        ctx.strokeStyle = edge
+        ctx.lineWidth = compact ? .95 : 1.55
         ctx.globalAlpha = 1
         ctx.stroke()
     }

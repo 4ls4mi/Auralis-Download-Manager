@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(AuralisQt VERSION 0.3.61 LANGUAGES CXX)
+project(AuralisQt VERSION 0.3.62 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -31,7 +31,7 @@ if(WIN32)
     enable_language(RC)
     configure_file(src/WindowsIcon.rc.in "${CMAKE_CURRENT_BINARY_DIR}/WindowsIcon.rc" @ONLY)
     target_sources(auralis-download-manager PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/WindowsIcon.rc")
-    target_link_libraries(auralis-download-manager PRIVATE dwmapi)
+    target_link_libraries(auralis-download-manager PRIVATE dwmapi comctl32)
 endif()
 
 qt_add_shaders(auralis-download-manager "glass_effects"

@@ -19,12 +19,16 @@ Window {
     readonly property bool canCheck: automaticChecks && updateSupported && Boolean(backend)
     readonly property var colors: MaterialTheme.palette
     readonly property bool working: stage !== ""
+    readonly property bool updateInProgress: updateWindow.requestInProgress
+    readonly property string statusStage: updateInProgress ? updateWindow.statusStage : availableUpdate ? "available" : ""
+    readonly property var statusRelease: updateInProgress ? updateWindow.release : availableUpdate
     readonly property int bottomGap: 148
 
     property var release: null
     property string offeredVersion: ""
     property string stage: ""
 
+    objectName: "updateNotice"
     title: qsTr("Auralis update available")
     flags: Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.WindowDoesNotAcceptFocus
     modality: Qt.NonModal
@@ -134,6 +138,7 @@ Window {
     }
 
     function showUpdate(owner) {
+        if (updateInProgress) { updateWindow.open(); return; }
         if (!availableUpdate) { manualCheck(owner); return; }
         visible = false;
         if (!updateWindow.requestInProgress) updateWindow.hostWindow = owner || anchorWindow;
@@ -193,20 +198,16 @@ Window {
         spacing: 8
         RowLayout {
             Layout.fillWidth: true
-            BrandMark {
-                Layout.preferredWidth: 22
-                Layout.preferredHeight: 22
-            }
-            Label {
+            UpdateStatusCard {
                 Layout.fillWidth: true
-                text: popup.title
-                color: popup.colors.text
-                font.pixelSize: 17
-                font.weight: Font.DemiBold
-                elide: Text.ElideRight
+                stage: "available"
+                installedVersion: popup.backend.version || ""
+                targetVersion: popup.release?.version || ""
+                installerBytes: Number(popup.release?.size || 0)
             }
             GlassButton {
                 objectName: "updateNoticeDismiss"
+                Layout.alignment: Qt.AlignTop
                 text: "×"
                 accent: popup.colors.destructive
                 Accessible.name: qsTr("Dismiss this version")
@@ -220,18 +221,12 @@ Window {
                 onClicked: popup.dismiss()
             }
         }
-        Label {
-            Layout.fillWidth: true
-            color: popup.colors.muted
-            wrapMode: Text.Wrap
-            text: qsTr("Version %1 is ready to review.").arg(popup.release ? popup.release.version : "")
-        }
-        RowLayout {
+        Flow {
             Layout.fillWidth: true
             spacing: 6
             GlassButton {
                 objectName: "updateNoticeDetails"
-                text: qsTr("See details")
+                text: qsTr("Review update")
                 enabled: !popup.working
                 onClicked: popup.review()
             }
@@ -244,12 +239,11 @@ Window {
                 enabled: !popup.working
                 onClicked: popup.remindLater()
             }
-            Item { Layout.fillWidth: true }
             GlassButton {
                 objectName: "updateNoticeInstall"
                 text: qsTr("Download and install")
                 accent: popup.colors.positive
-                highlighted: true
+                filled: true
                 enabled: !popup.working
                 onClicked: popup.installUpdate()
             }

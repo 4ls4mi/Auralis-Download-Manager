@@ -13,6 +13,10 @@ Canvas {
     property color progressEnd: MaterialTheme.palette.secondary
     property color connectionStart: progressStart
     property color connectionEnd: progressEnd
+    readonly property var progressStartTone: MaterialTheme.neonTone(progressStart)
+    readonly property var progressEndTone: MaterialTheme.neonTone(progressEnd)
+    readonly property var connectionStartTone: MaterialTheme.neonTone(connectionStart)
+    readonly property var connectionEndTone: MaterialTheme.neonTone(connectionEnd)
     // The content cards reserve this lane for the vertical portion.
     property real gutter: 8
 
@@ -43,20 +47,6 @@ Canvas {
         function onReducedMotionChanged() { tubes.requestPaint() }
     }
 
-    function pointAt(points, distance) {
-        for (let index = 1; index < points.length; ++index) {
-            const first = points[index - 1]
-            const second = points[index]
-            const length = Math.hypot(second.x - first.x, second.y - first.y)
-            if (distance <= length && length > 0) {
-                const ratio = Math.max(0, distance / length)
-                return Qt.point(first.x + (second.x - first.x) * ratio, first.y + (second.y - first.y) * ratio)
-            }
-            distance -= length
-        }
-        return points[points.length - 1]
-    }
-
     function trace(ctx, points) {
         ctx.beginPath()
         ctx.moveTo(points[0].x, points[0].y)
@@ -64,8 +54,35 @@ Canvas {
             ctx.lineTo(points[index].x, points[index].y)
     }
 
-    function pipe(ctx, points, beginColor, endColor, active, offset) {
-        const ink = MaterialTheme.rgba
+    function pipeGradient(ctx, first, last, fromColor, toColor, alpha) {
+        if (Math.abs(last.x - first.x) + Math.abs(last.y - first.y) < 8 || Qt.colorEqual(fromColor, toColor))
+            return MaterialTheme.rgba(toColor, alpha)
+        const fill = ctx.createLinearGradient(first.x, first.y, last.x, last.y)
+        fill.addColorStop(0, MaterialTheme.rgba(fromColor, alpha))
+        fill.addColorStop(1, MaterialTheme.rgba(toColor, alpha))
+        return fill
+    }
+
+    function currentGradient(ctx, first, last, firstTone, lastTone, length, active, offset) {
+        if (!active || MaterialTheme.reducedMotion || length < 8)
+            return pipeGradient(ctx, first, last, firstTone.glow, lastTone.glow, active ? .72 : .23)
+
+        // A broad reflection travels along the continuous seam and fades at either end.
+        const cycle = (phase / (Math.PI * 2) + 1 - offset / 100) % 1
+        const middle = .12 + cycle * .76
+        const reflectivity = .15 * Math.sin(Math.PI * cycle)
+        const fluid = ctx.createLinearGradient(first.x, first.y, last.x, last.y)
+        fluid.addColorStop(0, MaterialTheme.rgba(firstTone.glow, .72))
+        fluid.addColorStop(Math.max(.01, middle - .29), MaterialTheme.mix(firstTone.glow, lastTone.glow,
+            Math.max(0, middle - .29), .72))
+        fluid.addColorStop(middle, MaterialTheme.mix(firstTone.glow, lastTone.glow, middle, .72 + reflectivity))
+        fluid.addColorStop(Math.min(.99, middle + .29), MaterialTheme.mix(firstTone.glow, lastTone.glow,
+            Math.min(1, middle + .29), .72))
+        fluid.addColorStop(1, MaterialTheme.rgba(lastTone.glow, .72))
+        return fluid
+    }
+
+    function pipe(ctx, points, firstTone, lastTone, active, offset) {
         const first = points[0]
         const last = points[points.length - 1]
         const total = points.slice(1).reduce((length, point, index) =>
@@ -73,93 +90,80 @@ Canvas {
         if (total < 2)
             return
 
-        const fluid = ctx.createLinearGradient(first.x, first.y, last.x, last.y)
-        fluid.addColorStop(0, ink(beginColor, active ? .93 : .23))
-        fluid.addColorStop(1, ink(endColor, active ? .96 : .38))
         trace(ctx, points)
         ctx.lineJoin = "round"
-        ctx.lineCap = "round"
-        ctx.lineWidth = 9.2
-        ctx.strokeStyle = ink(endColor, active ? .47 : .13)
-        ctx.stroke()
-        ctx.lineWidth = 6
-        ctx.strokeStyle = "rgba(7,19,37,0.74)"
-        ctx.stroke()
-        ctx.lineWidth = 3.8
-        ctx.strokeStyle = fluid
-        ctx.stroke()
-        ctx.lineWidth = 1
-        ctx.strokeStyle = MaterialTheme.mix(endColor, "#e2faff", .72, active ? .69 : .19)
-        ctx.stroke()
+        ctx.lineCap = "butt"
 
-        if (active && !MaterialTheme.reducedMotion) {
-            // Individual water packets keep moving through the elbows.
-            const interval = 38
-            const movement = phase / (Math.PI * 2) * interval * 3
-            for (let at = (movement + offset) % interval; at < total; at += interval) {
-                const streak = []
-                const length = Math.min(12, total - at)
-                for (let step = 0; step < length; step += 2)
-                    streak.push(pointAt(points, at + step))
-                streak.push(pointAt(points, at + length))
-                if (streak.length < 2)
-                    continue
-                trace(ctx, streak)
-                ctx.lineWidth = 5.4
-                ctx.strokeStyle = ink(endColor, .80)
-                ctx.stroke()
-                ctx.lineWidth = 1.9
-                ctx.strokeStyle = MaterialTheme.mix(endColor, "#f5fdff", .76, .98)
-                ctx.stroke()
-            }
-        }
+        ctx.lineWidth = 8.1
+        ctx.strokeStyle = pipeGradient(ctx, first, last, firstTone.glow, lastTone.glow, active ? .13 : .045)
+        ctx.stroke()
+        ctx.lineWidth = 5.6
+        ctx.strokeStyle = MaterialTheme.mix(firstTone.core, lastTone.core, .5, .89)
+        ctx.stroke()
+        ctx.lineWidth = 3.65
+        ctx.strokeStyle = pipeGradient(ctx, first, last, firstTone.glow, lastTone.glow, active ? .48 : .19)
+        ctx.stroke()
+        ctx.lineWidth = 2.1
+        ctx.strokeStyle = pipeGradient(ctx, first, last, firstTone.core, lastTone.core, active ? .90 : .93)
+        ctx.stroke()
+        ctx.lineWidth = .72
+        ctx.strokeStyle = currentGradient(ctx, first, last, firstTone, lastTone, total, active, offset)
+        ctx.stroke()
     }
 
     function droplet(ctx, outlet, surfaceY, cellWidth, index) {
         const cycle = (phase / (Math.PI * 2) + index * .381966) % 1
         const fall = surfaceY - outlet.y
-        const radius = Math.min(3.5, cellWidth * .12)
+        const radius = Math.min(2.3, cellWidth * .09)
         if (fall < 3 || radius < 1)
             return
 
+        const first = connectionStartTone
+        const last = connectionEndTone
+        const ink = MaterialTheme.rgba
         ctx.save()
         // The drop separates from the outlet, accelerates, then breaks at the waterline.
         if (cycle < .69) {
             const flight = cycle / .69
             const y = outlet.y + fall * flight * flight
             const x = outlet.x
-            const ink = ctx.createLinearGradient(x - radius, y - radius, x + radius, y + radius)
-            ink.addColorStop(0, MaterialTheme.mix(connectionStart, "#eafdff", .58, 1))
-            ink.addColorStop(.55, connectionStart)
-            ink.addColorStop(1, connectionEnd)
+            const length = radius * (1.40 + flight * .75)
+            const liquid = ctx.createLinearGradient(x - radius, y - radius, x + radius, y + radius)
+            liquid.addColorStop(0, first.glow)
+            liquid.addColorStop(.31, first.body)
+            liquid.addColorStop(.65, last.core)
+            liquid.addColorStop(1, last.glow)
             ctx.globalAlpha = Math.min(1, cycle * 22)
             ctx.beginPath()
-            ctx.moveTo(x, y - radius * (1.15 + flight * .7))
+            ctx.moveTo(x, y - length)
             ctx.bezierCurveTo(x - radius * .36, y - radius, x - radius, y - radius * .15, x - radius, y + radius * .30)
             ctx.bezierCurveTo(x - radius, y + radius * 1.58, x + radius, y + radius * 1.58, x + radius, y + radius * .30)
-            ctx.bezierCurveTo(x + radius, y - radius * .18, x + radius * .36, y - radius, x, y - radius * (1.15 + flight * .7))
+            ctx.bezierCurveTo(x + radius, y - radius * .18, x + radius * .36, y - radius, x, y - length)
             ctx.closePath()
-            ctx.lineWidth = 3
-            ctx.strokeStyle = MaterialTheme.rgba(connectionEnd, .40)
+            ctx.lineWidth = 1.8
+            ctx.strokeStyle = ink(last.glow, .18)
             ctx.stroke()
-            ctx.lineWidth = .8
-            ctx.strokeStyle = MaterialTheme.mix(connectionEnd, "#08192d", .49, .85)
-            ctx.fillStyle = ink
+            ctx.fillStyle = liquid
             ctx.fill()
+            ctx.lineWidth = .54
+            ctx.strokeStyle = ink(last.edge, .64)
             ctx.stroke()
             ctx.beginPath()
-            ctx.arc(x - radius * .34, y + radius * .25, radius * .33, 0, Math.PI * 2)
-            ctx.fillStyle = "rgba(238,253,255,0.87)"
-            ctx.fill()
+            ctx.moveTo(x - radius * .40, y - radius * .14)
+            ctx.quadraticCurveTo(x - radius * .63, y + radius * .16, x - radius * .42, y + radius * .44)
+            ctx.lineCap = "round"
+            ctx.lineWidth = .48
+            ctx.strokeStyle = ink(first.edge, .73)
+            ctx.stroke()
         } else {
             const splash = (cycle - .69) / .31
-            const span = radius * (1 + splash * 1.45)
-            ctx.globalAlpha = (1 - splash) * .79
+            const span = radius * (1 + splash * 1.25)
+            ctx.globalAlpha = (1 - splash) * .58
             ctx.beginPath()
             ctx.moveTo(outlet.x - span, surfaceY)
             ctx.quadraticCurveTo(outlet.x, surfaceY - radius * (1 - splash), outlet.x + span, surfaceY)
-            ctx.lineWidth = Math.max(.65, radius * .38)
-            ctx.strokeStyle = MaterialTheme.mix(connectionEnd, "#f1fdff", .57, 1)
+            ctx.lineWidth = Math.max(.52, radius * .30)
+            ctx.strokeStyle = last.edge
             ctx.stroke()
         }
         ctx.restore()
@@ -179,7 +183,7 @@ Canvas {
 
         const upper = Qt.point(gutter, inlet.y)
         const split = Qt.point(gutter, outlet.y)
-        pipe(ctx, [inlet, upper, split, outlet], progressStart, progressEnd, flowing, 0)
+        pipe(ctx, [inlet, upper, split, outlet], progressStartTone, progressEndTone, flowing, 0)
 
         if (!gridItem || !workers || workers.count === 0 || gridItem.width <= 0)
             return
@@ -207,17 +211,17 @@ Canvas {
             return
 
         const active = flowing && rows.some(row => row.receiving)
-        pipe(ctx, [split, Qt.point(gutter, rows[rows.length - 1].y)], progressEnd, connectionStart, active, 13)
+        pipe(ctx, [split, Qt.point(gutter, rows[rows.length - 1].y)], progressEndTone, connectionStartTone, active, 13)
 
         for (const row of rows) {
             const headerStart = Qt.point(gutter, row.y)
             const headerEnd = Qt.point(row.ports[row.ports.length - 1].point.x, row.y)
-            pipe(ctx, [headerStart, headerEnd], connectionStart, connectionEnd, flowing && row.receiving, 20)
+            pipe(ctx, [headerStart, headerEnd], connectionStartTone, connectionEndTone, flowing && row.receiving, 20)
             for (let index = 0; index < row.ports.length; ++index) {
                 const port = row.ports[index]
                 const start = Qt.point(port.point.x, row.y)
                 const receiving = flowing && port.receiving
-                pipe(ctx, [start, port.point], connectionStart, connectionEnd, receiving, 29 + index * 3)
+                pipe(ctx, [start, port.point], connectionStartTone, connectionEndTone, receiving, 29 + index * 3)
                 if (receiving && !MaterialTheme.reducedMotion)
                     droplet(ctx, port.point, port.surface, port.width, port.index)
             }

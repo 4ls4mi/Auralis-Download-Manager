@@ -434,8 +434,8 @@ GridLayout {
                 onChosen: value => MaterialTheme.progressPalette = value
             }
             GlassProgress {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 32
+                Layout.preferredWidth: parent.width * .53
+                Layout.preferredHeight: 38
                 value: .64
                 shape: WindowAppearance.progressShape === "material" ?
                     (["bubble", "prism", "ice"].includes(profile.shape) ? profile.shape : "round") : WindowAppearance.progressShape

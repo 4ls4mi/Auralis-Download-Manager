@@ -16,6 +16,7 @@ DetachedDialogWindow {
     property bool waitingForAutomaticCheck: false
     readonly property bool checking: stage === "checking" || stage === "rechecking"
     readonly property bool requestInProgress: checking || busy
+    readonly property string statusStage: stage === "downloading" ? transfer?.state || "connecting" : stage
     readonly property double totalBytes: Number(transfer?.total || release?.size || 0)
     readonly property double downloadedBytes: Math.min(totalBytes, Math.max(0, Number(transfer?.downloaded || 0)))
     readonly property real completion: totalBytes > 0 ? downloadedBytes / totalBytes : 0
@@ -35,6 +36,8 @@ DetachedDialogWindow {
         closeWhenCurrent.stop()
         stage = "checking"
         problem = ""
+        release = null
+        transfer = null
         waitingForAutomaticCheck = awaitAutomaticCheck
         open()
         if (!awaitAutomaticCheck)
@@ -138,54 +141,16 @@ DetachedDialogWindow {
     }
 
     bodyContent: [
-        RowLayout {
+        UpdateStatusCard {
             Layout.fillWidth: true
-            spacing: 12
-            BrandMark {
-                Layout.preferredWidth: 44
-                Layout.preferredHeight: 44
-            }
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: 4
-                Label {
-                    Layout.fillWidth: true
-                    text: {
-                        if (update.checking) return qsTr("Checking for updates…")
-                        if (update.stage === "latest") return qsTr("Auralis is up to date")
-                        if (update.stage === "downloading") return update.transfer?.state === "verifying" ?
-                            qsTr("Verifying the installer…") : qsTr("Downloading Auralis…")
-                        if (update.stage === "installing") return qsTr("Starting the installer…")
-                        if (update.stage === "closing") return qsTr("Closing Auralis for the update…")
-                        if (update.stage === "error") return qsTr("Update check unavailable")
-                        return qsTr("Auralis %1 is available").arg(update.release?.version || "")
-                    }
-                    textFormat: Text.PlainText
-                    font.pixelSize: 19
-                    font.weight: Font.DemiBold
-                    color: update.colors.ink
-                    wrapMode: Text.WordWrap
-                }
-                Label {
-                    Layout.fillWidth: true
-                    text: qsTr("Installed version %1").arg(update.backend.version || "")
-                    textFormat: Text.PlainText
-                    color: update.colors.muted
-                    wrapMode: Text.WordWrap
-                }
-                Label {
-                    Layout.fillWidth: true
-                    visible: update.busy && Boolean(update.release?.version)
-                    text: qsTr("Updating to %1").arg(update.release?.version || "")
-                    textFormat: Text.PlainText
-                    color: update.colors.muted
-                    wrapMode: Text.WordWrap
-                }
-            }
+            stage: update.statusStage
+            installedVersion: update.backend.version || ""
+            targetVersion: update.release?.version || ""
+            installerBytes: update.totalBytes
         },
         ProgressBar {
             Layout.fillWidth: true
-            visible: update.checking
+            visible: update.checking && !MaterialTheme.reducedMotion
             indeterminate: true
             Accessible.name: qsTr("Checking for Auralis updates")
         },
@@ -262,6 +227,7 @@ DetachedDialogWindow {
             GlassButton {
                 objectName: "downloadAuralisUpdate"
                 text: qsTr("Download and install")
+                Accessible.description: qsTr("Install Auralis %1").arg(update.release?.version || "")
                 accent: update.colors.positive
                 visible: update.stage === "available" || update.stage === "rechecking"
                 enabled: update.stage === "available"

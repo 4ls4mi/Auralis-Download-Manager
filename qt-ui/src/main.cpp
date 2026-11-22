@@ -2,7 +2,9 @@
 #include "Smoke.h"
 
 #include <QAction>
+#include <QActionGroup>
 #include <QApplication>
+#include <QClipboard>
 #include <QCryptographicHash>
 #include <QCursor>
 #include <QDir>
@@ -180,23 +182,47 @@ int main(int argc, char **argv)
     });
 
     QMenu trayMenu;
+    QMenu progressMenu;
     QSystemTrayIcon tray(app.windowIcon());
     QSystemTrayIcon progressTray(QIcon(QStringLiteral(":/auralis/auralis-progress.png")));
-    QHash<qulonglong, QAction *> progressActions;
+    QHash<qulonglong, QAction *> downloadActions;
     if (engine.trayAvailable()) {
         tray.setToolTip(app.applicationName());
-        QObject::connect(trayMenu.addAction(QObject::tr("Open Auralis")), &QAction::triggered, &app, activate);
-        QObject::connect(trayMenu.addAction(QObject::tr("Add download")), &QAction::triggered, root,
-            [root, activate] { activate(); QMetaObject::invokeMethod(root, "addDownload"); });
-        QObject::connect(trayMenu.addAction(QObject::tr("Settings")), &QAction::triggered, root,
-            [root] { QMetaObject::invokeMethod(root, "showSettings"); });
-        auto *progressMenu = trayMenu.addMenu(QObject::tr("Hidden download windows"));
-        progressMenu->menuAction()->setVisible(false);
-        progressMenu->setToolTipsVisible(true);
-        progressTray.setContextMenu(progressMenu);
-        QObject::connect(&engine, &Engine::progressTrayItemsChanged, progressMenu,
-            [root, progressMenu, &progressTray, &progressActions](const QVariantList &items) {
+        QObject::connect(trayMenu.addAction(QObject::tr("Open Auralis Download Manager")),
+                         &QAction::triggered, &app, activate);
+        trayMenu.addSeparator();
+
+        const auto addWindowCommand = [&trayMenu, root](const QString &label, const char *method) {
+            auto *action = trayMenu.addAction(label);
+            QObject::connect(action, &QAction::triggered, root, [root, method] {
+                QMetaObject::invokeMethod(root, method);
+            });
+            return action;
+        };
+        auto *add = addWindowCommand(QObject::tr("Add new download…"), "addDownload");
+        auto *batch = trayMenu.addAction(QObject::tr("Add batch download…"));
+        QObject::connect(batch, &QAction::triggered, root, [root, activate] {
+            activate();
+            QMetaObject::invokeMethod(root, "showBatchDownload");
+        });
+        auto *clipboard = trayMenu.addAction(QObject::tr("Add batch download from clipboard"));
+        QObject::connect(clipboard, &QAction::triggered, root, [root, activate] {
+            const QVariant text = QApplication::clipboard()->text();
+            activate();
+            QMetaObject::invokeMethod(root, "showBatchDownloadFromClipboard", Q_ARG(QVariant, text));
+        });
+
+        auto *downloadsMenu = trayMenu.addMenu(QObject::tr("Downloads in progress"));
+        downloadsMenu->setToolTipsVisible(true);
+        auto *noDownloads = downloadsMenu->addAction(QObject::tr("No active or hidden downloads"));
+        noDownloads->setEnabled(false);
+        progressMenu.setToolTipsVisible(true);
+        progressTray.setContextMenu(&progressMenu);
+        QObject::connect(&engine, &Engine::trayDownloadItemsChanged, downloadsMenu,
+            [root, downloadsMenu, noDownloads, &progressMenu, &progressTray, &downloadActions](const QVariantList &items) {
                 QSet<qulonglong> currentIds;
+                int hiddenCount = 0;
+                QString hiddenTip;
                 for (const auto &value : items) {
                     const auto item = value.toMap();
                     bool valid = false;
@@ -204,13 +230,14 @@ int main(int argc, char **argv)
                     if (!valid || !id || currentIds.contains(id))
                         continue;
                     currentIds.insert(id);
-                    auto *action = progressActions.value(id);
+                    auto *action = downloadActions.value(id);
                     if (!action) {
-                        action = progressMenu->addAction(QString());
+                        action = downloadsMenu->addAction(QString());
                         QObject::connect(action, &QAction::triggered, root, [root, id] {
-                            QMetaObject::invokeMethod(root, "showDownload", Q_ARG(QVariant, QVariant::fromValue(id)));
+                            QMetaObject::invokeMethod(root, "showDownload",
+                                Q_ARG(QVariant, QVariant::fromValue(id)), Q_ARG(QVariant, QVariant(false)));
                         });
-                        progressActions.insert(id, action);
+                        downloadActions.insert(id, action);
                     }
                     auto file = item.value(QStringLiteral("name")).toString();
                     const QString fullName = file;
@@ -220,29 +247,72 @@ int main(int argc, char **argv)
                     const QString summary = item.value(QStringLiteral("summary")).toString();
                     action->setText(QObject::tr("%1 — %2").arg(file, summary));
                     action->setToolTip(QObject::tr("%1\n%2").arg(fullName, item.value(QStringLiteral("details")).toString()));
+                    if (item.value(QStringLiteral("hidden")).toBool()) {
+                        if (!progressMenu.actions().contains(action))
+                            progressMenu.addAction(action);
+                        ++hiddenCount;
+                        hiddenTip = action->toolTip();
+                    } else {
+                        progressMenu.removeAction(action);
+                    }
                 }
-                for (auto entry = progressActions.begin(); entry != progressActions.end();) {
+                for (auto entry = downloadActions.begin(); entry != downloadActions.end();) {
                     if (currentIds.contains(entry.key())) {
                         ++entry;
                         continue;
                     }
                     auto *action = entry.value();
-                    progressMenu->removeAction(action);
+                    downloadsMenu->removeAction(action);
+                    progressMenu.removeAction(action);
                     action->deleteLater();
-                    entry = progressActions.erase(entry);
+                    entry = downloadActions.erase(entry);
                 }
-                progressMenu->menuAction()->setVisible(!currentIds.isEmpty());
-                if (currentIds.size() == 1) {
-                    progressTray.setToolTip(progressActions.constBegin().value()->toolTip().left(127));
-                } else {
-                    progressTray.setToolTip(QObject::tr("Auralis — %1 hidden download windows").arg(currentIds.size()));
-                }
-                progressTray.setVisible(!currentIds.isEmpty());
+                noDownloads->setVisible(currentIds.isEmpty());
+                progressTray.setToolTip(hiddenCount == 1 ? hiddenTip.left(127)
+                    : QObject::tr("Auralis — %1 hidden download windows").arg(hiddenCount));
+                progressTray.setVisible(hiddenCount > 0);
             });
-        QObject::connect(&progressTray, &QSystemTrayIcon::activated, progressMenu,
-            [progressMenu](QSystemTrayIcon::ActivationReason reason) {
+        QObject::connect(&progressTray, &QSystemTrayIcon::activated, &progressMenu,
+            [&progressMenu](QSystemTrayIcon::ActivationReason reason) {
                 if (reason == QSystemTrayIcon::Trigger || reason == QSystemTrayIcon::DoubleClick)
-                    progressMenu->popup(QCursor::pos());
+                    progressMenu.popup(QCursor::pos());
+            });
+
+        trayMenu.addSeparator();
+        auto *limiterMenu = trayMenu.addMenu(QObject::tr("Speed limiter"));
+        auto *limiterChoices = new QActionGroup(limiterMenu);
+        auto *limiterOn = limiterMenu->addAction(QObject::tr("Turn on"));
+        auto *limiterOff = limiterMenu->addAction(QObject::tr("Turn off"));
+        for (auto *action : {limiterOn, limiterOff}) {
+            action->setCheckable(true);
+            limiterChoices->addAction(action);
+            QObject::connect(action, &QAction::triggered, root, [root, enabled = action == limiterOn] {
+                QMetaObject::invokeMethod(root, "setTraySpeedLimiter", Q_ARG(QVariant, QVariant(enabled)));
+            });
+        }
+        addWindowCommand(QObject::tr("Scheduler"), "showScheduler");
+        auto *mainQueue = trayMenu.addAction(QObject::tr("Start main download queue"));
+        QObject::connect(mainQueue, &QAction::triggered, root, [root, mainQueue] {
+            QMetaObject::invokeMethod(root, "setMainQueueRunningFromTray", Q_ARG(QVariant, mainQueue->data()));
+        });
+        addWindowCommand(QObject::tr("Settings"), "showSettings");
+        QObject::connect(&trayMenu, &QMenu::aboutToShow, &trayMenu,
+            [&engine, root, add, batch, clipboard, limiterMenu, limiterOn, limiterOff, mainQueue] {
+                const bool available = engine.ready() && !root->property("busy").toBool();
+                add->setEnabled(available);
+                batch->setEnabled(available);
+                clipboard->setEnabled(available);
+                limiterMenu->setEnabled(available);
+                const bool known = root->property("traySpeedLimiterKnown").toBool();
+                const bool enabled = root->property("traySpeedLimiterOn").toBool();
+                limiterOn->setChecked(known && enabled);
+                limiterOff->setChecked(known && !enabled);
+                const auto queue = engine.dashboard().value(QStringLiteral("queues")).toList().value(0).toMap();
+                const bool running = queue.value(QStringLiteral("running")).toBool();
+                mainQueue->setText(running ? QObject::tr("Stop main download queue")
+                    : QObject::tr("Start main download queue"));
+                mainQueue->setData(!running);
+                mainQueue->setEnabled(available && !queue.isEmpty());
             });
         QObject::connect(&engine, &Engine::updateNotificationRequested, &tray, [&tray](const QString &version) {
             tray.showMessage(QObject::tr("Auralis update available"),
@@ -254,7 +324,7 @@ int main(int argc, char **argv)
             QMetaObject::invokeMethod(root, "showUpdates");
         });
         trayMenu.addSeparator();
-        QObject::connect(trayMenu.addAction(QObject::tr("Exit")), &QAction::triggered, &engine,
+        QObject::connect(trayMenu.addAction(QObject::tr("Exit Auralis")), &QAction::triggered, &engine,
             [&engine] { engine.requestQuit(); });
         tray.setContextMenu(&trayMenu);
         QObject::connect(&tray, &QSystemTrayIcon::activated, &app, [activate](QSystemTrayIcon::ActivationReason reason) {

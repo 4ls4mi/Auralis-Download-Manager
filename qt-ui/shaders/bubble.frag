@@ -7,6 +7,7 @@ layout(std140, binding = 0) uniform ProgressUniforms {
     mat4 qt_Matrix;
     float qt_Opacity;
     vec2 surfaceSize;
+    float padding;
     vec4 liquidStart;
     vec4 liquidEnd;
     vec4 glassTint;
@@ -28,7 +29,7 @@ vec4 layer(vec4 below, vec3 light, float alpha)
 void main()
 {
     vec2 size = max(state.surfaceSize, vec2(1.0));
-    vec2 pixel = qt_TexCoord0 * size;
+    vec2 pixel = qt_TexCoord0 * (size + 2.0 * state.padding) - state.padding;
     float width = max(1.0, size.x - 4.0);
     float height = max(1.0, size.y - 3.0);
     float x = clamp((pixel.x - 2.0) / width, 0.0, 1.0);
@@ -73,38 +74,47 @@ void main()
 
     vec3 spectral = mix(vec3(0.34, 0.91, 1.0), vec3(0.95, 0.39, 0.86),
                         0.5 + 0.5 * sin(tau * (1.2 * x + 0.23 * curvedY)));
-    vec4 glass = layer(vec4(0.0), state.glassTint.rgb, 0.035 + 0.22 * rim);
-    glass = layer(glass, spectral, 0.32 * rim + 0.25 * bounce);
-    glass = layer(glass, vec3(0.92, 0.98, 1.0), specular * glint * 0.74);
+    vec4 glass = layer(vec4(0.0), state.glassTint.rgb, 0.075 + 0.24 * rim);
+    glass = layer(glass, spectral, 0.27 * rim + 0.19 * bounce);
+    glass = layer(glass, vec3(0.84, 0.93, 1.0), specular * glint * 0.62);
 
     float fillEdge = clamp(state.amount, 0.0, 1.0);
     float frontSpan = min(height * 0.36, width * min(fillEdge, 1.0 - fillEdge));
     float curvature = frontSpan * (0.54 * (depth - 0.62)
                       + state.flow * 0.55 * sin(state.phase + curvedY * 2.6));
-    float filled = 1.0 - smoothstep(-0.8, 0.8, (x - fillEdge) * width - curvature);
+    float frontDistance = (x - fillEdge) * width - curvature;
+    float filled = 1.0 - smoothstep(-0.8, 0.8, frontDistance);
     filled *= step(0.001, fillEdge);
     filled = max(filled, step(0.999, fillEdge));
 
-    vec3 pigment = mix(state.liquidStart.rgb, state.liquidEnd.rgb,
+    vec3 emitter = mix(state.liquidStart.rgb, state.liquidEnd.rgb,
                        clamp(x / max(fillEdge, 0.28), 0.0, 1.0));
-    float shadow = mix(0.75, 0.36, state.polish) + 0.45 * pow(abs(curvedY), 1.5);
-    vec3 body = pigment * shadow + vec3(0.012, 0.020, 0.046);
-    vec3 luminous = clamp(pigment * 1.25, 0.0, 1.0);
-    vec3 reflection = mix(pigment, vec3(0.96, 0.99, 1.0), 0.64);
-    vec4 liquid = layer(glass, body, 0.87);
-    liquid = layer(liquid, luminous, 0.34 * depth + 0.62 * bounce + 0.46 * rim);
-    liquid = layer(liquid, spectral, 0.27 * rim + 0.19 * bounce);
-    liquid = layer(liquid, reflection, 0.92 * specular * glint + 0.27 * bounce);
+    float shoulder = pow(abs(curvedY), 1.7);
+    vec3 body = mix(vec3(0.011, 0.020, 0.050), emitter,
+                    mix(0.35, 0.21, state.polish) + 0.35 * shoulder);
+    vec3 luminous = clamp(emitter * 1.10, 0.0, 1.0);
+    vec3 reflection = mix(emitter, vec3(0.92, 0.98, 1.0), 0.28);
+    float upperRidge = exp(-pow((curvedY + 0.73) * 5.7, 2.0));
+    float lowerRidge = exp(-pow((curvedY - 0.80) * 6.2, 2.0));
+    vec4 liquid = layer(glass, body, 0.96);
+    liquid = layer(liquid, luminous, 0.19 + 0.42 * shoulder + 0.33 * bounce);
+    liquid = layer(liquid, spectral, 0.16 * rim);
+    liquid = layer(liquid, luminous, 0.64 * upperRidge + 0.69 * lowerRidge);
+    liquid = layer(liquid, reflection, 0.86 * specular * glint + 0.22 * bounce);
     float ripple = x * 3.0 - state.phase / tau;
     float lightWave = pow(0.5 + 0.5 * sin(tau * ripple + curvedY * 2.2), 12.0);
     float current = state.flow * lightWave * (0.25 + 0.75 * depth);
-    liquid = layer(liquid, pigment * 0.66, current * 0.24);
-    liquid = layer(liquid, reflection, current * (0.36 + 0.28 * bounce));
-    float meniscus = exp(-abs((x - fillEdge) * width - curvature) / max(1.2, height * 0.17));
-    liquid = layer(liquid, reflection, meniscus * 0.67 * depth);
+    liquid = layer(liquid, luminous, current * (0.22 + 0.35 * shoulder));
+    liquid = layer(liquid, reflection, current * (0.12 + 0.24 * bounce));
+    float meniscus = exp(-abs(frontDistance) / max(1.2, height * 0.13));
+    liquid = layer(liquid, reflection, meniscus * 0.71 * depth);
 
     float sideDistance = max(2.0 - pixel.x, pixel.x - size.x + 2.0);
-    float halo = (1.0 - smoothstep(0.0, 2.5, max(rimDistance, sideDistance))) * (1.0 - coverage);
     vec4 color = mix(glass, liquid, filled) * coverage;
-    fragColor = (color + layer(vec4(0.0), luminous, 0.22 * halo * filled)) * state.qt_Opacity;
+    float lightDistance = max(0.0, max(max(rimDistance, sideDistance), frontDistance));
+    float glowReach = state.padding + 1.0;
+    float nearGlow = exp(-pow(lightDistance / (glowReach * 0.37), 2.0));
+    float wideGlow = 1.0 - smoothstep(0.0, glowReach, lightDistance);
+    float halo = (0.34 * nearGlow + 0.17 * wideGlow) * step(0.001, fillEdge) * (1.0 - filled * coverage);
+    fragColor = (color + vec4(luminous * halo, halo) * (1.0 - color.a)) * state.qt_Opacity;
 }

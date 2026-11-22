@@ -47,7 +47,7 @@ public:
     Q_INVOKABLE QString localPath(const QUrl &url) const;
     Q_INVOKABLE bool openPath(const QString &path) const;
     Q_INVOKABLE bool openFolder(const QString &path) const;
-    Q_INVOKABLE void setProgressTrayItems(const QVariantList &items) { emit progressTrayItemsChanged(items); }
+    Q_INVOKABLE void setTrayDownloadItems(const QVariantList &items) { emit trayDownloadItemsChanged(items); }
     Q_INVOKABLE void notifyUpdate(const QString &version);
     Q_INVOKABLE bool applyBackdrop(QWindow *window, bool enabled, bool dark) const;
     Q_INVOKABLE void installInteractiveResize(QWindow *window, int borderSize, int cornerSize) const;
@@ -55,7 +55,7 @@ public:
 signals:
     void dashboardChanged();
     void visualsChanged();
-    void progressTrayItemsChanged(const QVariantList &items);
+    void trayDownloadItemsChanged(const QVariantList &items);
     void readyChanged();
     void statusChanged();
     void operationFailed(const QString &message);

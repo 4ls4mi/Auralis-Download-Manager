@@ -22,7 +22,7 @@ Dialog {
     width: Math.min(650, parent ? parent.width - 28 : 650)
     padding: 16
 
-    function present() {
+    function present(clipboardText) {
         if (visible || busy)
             return
         failure = ""
@@ -30,10 +30,17 @@ Dialog {
         packages = []
         links = []
         open()
-        load()
+        if (typeof clipboardText !== "string") {
+            load()
+        } else if (clipboardText.trim()) {
+            pasted.text = clipboardText
+            update({operation: "import", text: clipboardText}, false)
+        } else {
+            load(qsTr("The clipboard contains no text. Copy some download links and try again."))
+        }
     }
 
-    function load() {
+    function load(hint) {
         if (busy)
             return
         busy = true
@@ -42,6 +49,7 @@ Dialog {
             failure = Transfer.problem(reply, error)
             if (failure)
                 return
+            failure = hint || ""
             const state = reply && reply.data ? reply.data : {}
             links = state.links || []
             packages = state.packages || []

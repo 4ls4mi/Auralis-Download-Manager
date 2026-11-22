@@ -10,6 +10,8 @@ Item {
     property int borderSize: 7
     property int cornerSize: 13
     property bool windowMouseEvents: false
+    property bool showGrip: false
+    property color gripColor: "white"
 
     // ApplicationWindow's content item is inset by the header and footer.
     parent: hostWindow.contentItem.parent ?? hostWindow.contentItem
@@ -21,6 +23,30 @@ Item {
     Component.onCompleted: {
         if (windowMouseEvents && Qt.platform.os === "windows")
             engine.installInteractiveResize(hostWindow, borderSize, cornerSize)
+    }
+
+    Item {
+        visible: root.showGrip
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        width: root.cornerSize
+        height: root.cornerSize
+        Accessible.ignored: true
+
+        Repeater {
+            model: [4, 8, 12]
+            Rectangle {
+                required property int modelData
+                width: modelData * Math.SQRT2
+                height: 1
+                x: parent.width - 4 - (width + modelData) / 2
+                y: parent.height - 4 - modelData / 2
+                rotation: -45
+                color: root.gripColor
+                opacity: .64
+                antialiasing: true
+            }
+        }
     }
 
     component ResizeArea: MouseArea {

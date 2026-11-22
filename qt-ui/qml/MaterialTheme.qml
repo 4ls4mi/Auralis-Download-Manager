@@ -310,6 +310,20 @@ QtObject {
             ? indicatorPalettes[id] : indicatorPalettes["blue-purple"]).colors;
     }
 
+    function neonTone(color) {
+        const source = rgba(color, 1);
+        const saturation = source.hsvSaturation;
+        const hue = source.hsvHue < 0 ? .60 : source.hsvHue;
+        const chroma = saturation < .16 ? Math.max(.08, saturation) : .58 + .42 * saturation;
+        const glow = Qt.hsva(hue, chroma, Math.min(1, Math.max(.90, source.hsvValue * 1.13)), 1);
+        return {
+            core: mix(glow, "#030610", .79, 1),
+            body: mix(glow, "#071023", .46, 1),
+            glow: glow,
+            edge: mix(glow, "#eff9ff", .28, 1)
+        };
+    }
+
     function safeAccent(color, light) {
         const value = rgba(color, 1);
         const luma = value.r * .213 + value.g * .715 + value.b * .072;

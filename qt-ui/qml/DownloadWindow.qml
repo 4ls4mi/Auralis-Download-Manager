@@ -14,6 +14,7 @@ ApplicationWindow {
     property bool minimizeToTray: false
     signal hideToTrayRequested(var downloadId)
     property string material: MaterialTheme.current
+    readonly property int resizeInset: 14
     readonly property var colors: MaterialTheme.profile(material)
     readonly property string transferLayout: colors.layout || ""
     readonly property bool sideTabs: ["fogSlate", "violetRail", "coralSlate"].includes(transferLayout)
@@ -395,13 +396,79 @@ ApplicationWindow {
                     onMaximizeRequested: root.toggleMaximized()
                     onCloseRequested: root.close()
                 }
-                Item { Layout.preferredWidth: 5 }
+                Item { Layout.preferredWidth: root.resizeInset }
+            }
+        }
+        ToolBar {
+            objectName: "transferCommands"
+            Layout.fillWidth: true
+            leftPadding: root.resizeInset + 2
+            rightPadding: root.resizeInset + 2
+            topPadding: 7
+            bottomPadding: 7
+            background: GlassSurface { material: root.material; role: "toolbar"; backdropAvailable: root.backdropAvailable }
+            contentItem: Flow {
+                spacing: 7
+                GlassButton {
+                    objectName: "pauseOrResumeDownload"
+                    material: root.material
+                    text: root.runningTransfer ? qsTr("Pause") : root.item && root.item.status === "Queued" ? qsTr("Start") : qsTr("Resume")
+                    visible: !!root.item && !root.finished
+                    enabled: !root.busy && (root.runningTransfer || (!root.recoveryBusy && !(root.telemetry && root.telemetry.recovery_damaged)))
+                    accent: root.runningTransfer ? root.colors.caution : root.colors.positive
+                    onClicked: root.perform(root.runningTransfer ? "pause" : "start", false)
+                }
+                GlassButton {
+                    objectName: "stopOrCloseDownload"
+                    material: root.material
+                    text: root.runningTransfer ? qsTr("Cancel…") : qsTr("Close")
+                    accent: root.runningTransfer ? root.colors.destructive : root.colors.accent
+                    onClicked: root.runningTransfer ? stopConsent.open() : root.close()
+                }
+                GlassButton { material: root.material; text: qsTr("Open folder"); enabled: !!root.item; onClicked: root.openLocation(true) }
+                GlassButton {
+                    material: root.material
+                    text: qsTr("Open file")
+                    visible: root.finished
+                    accent: root.colors.positive
+                    onClicked: root.openLocation(false)
+                }
+                GlassButton {
+                    material: root.material
+                    text: qsTr("Open with…")
+                    visible: root.finished
+                    onClicked: root.itemRequest("open-with", null)
+                }
+                GlassButton {
+                    material: root.material
+                    text: qsTr("Move file…")
+                    visible: root.finished
+                    enabled: !root.busy
+                    onClicked: movePicker.open()
+                }
+                GlassButton {
+                    material: root.material
+                    text: qsTr("Verify checksum")
+                    visible: root.finished && !!root.details.checksum
+                    enabled: !root.busy && !root.pendingResult
+                    onClicked: root.beginCheck("checksum", root.details.checksum, qsTr("Verifying checksum…"))
+                }
+                GlassButton {
+                    objectName: "openDownloadRecovery"
+                    material: root.material
+                    text: qsTr("Recovery…")
+                    visible: root.recoveryAvailable && root.activeTab !== root.recoveryTab
+                    accent: root.colors.accent
+                    onClicked: root.openRecovery()
+                }
             }
         }
         ToolBar {
             visible: !root.sideTabs
             Layout.fillWidth: true
             padding: 8
+            leftPadding: root.resizeInset + 2
+            rightPadding: root.resizeInset + 2
             background: GlassSurface { material: root.material; role: "toolbar"; backdropAvailable: root.backdropAvailable }
             contentItem: Flow {
                 spacing: 7
@@ -421,7 +488,14 @@ ApplicationWindow {
         }
     }
 
-    WindowResizeHandles { hostWindow: root; windowMouseEvents: true }
+    WindowResizeHandles {
+        hostWindow: root
+        windowMouseEvents: true
+        borderSize: 11
+        cornerSize: 19
+        showGrip: true
+        gripColor: root.colors.muted
+    }
 
     Timer {
         id: water
@@ -437,6 +511,7 @@ ApplicationWindow {
         visible: root.sideTabs
         anchors.top: parent.top
         anchors.bottom: parent.bottom
+        anchors.bottomMargin: root.resizeInset
         anchors.left: parent.left
         width: root.transferLayout === "violetRail"
             ? Math.max(122, Math.min(169, Math.round(root.width * .21)))
@@ -493,8 +568,10 @@ ApplicationWindow {
         id: view
         anchors.top: parent.top
         anchors.bottom: parent.bottom
+        anchors.bottomMargin: root.resizeInset
         anchors.left: root.sideTabs ? transferRail.right : parent.left
         anchors.right: parent.right
+        anchors.rightMargin: root.resizeInset
         clip: true
         padding: root.transferLayout === "fogSlate" ? 10 : 12
         contentWidth: availableWidth
@@ -584,9 +661,9 @@ ApplicationWindow {
                             Layout.fillWidth: true
                             GlassProgress {
                                 id: downloadProgress
-                                Layout.fillWidth: root.progressShape !== "bubble"
-                                Layout.preferredWidth: root.progressShape === "bubble" ? progressLine.width * .53 : 100
-                                Layout.preferredHeight: root.progressShape === "bubble" ? 38 : 27
+                                Layout.preferredWidth: progressLine.width * .53
+                                Layout.minimumWidth: 0
+                                Layout.preferredHeight: 38
                                 value: Transfer.fraction(root.item)
                                 animated: root.runningTransfer
                                 shape: root.progressShape
@@ -602,7 +679,7 @@ ApplicationWindow {
                                 color: root.summaryInk
                                 font.bold: true
                             }
-                            Item { Layout.fillWidth: root.progressShape === "bubble"; visible: root.progressShape === "bubble" }
+                            Item { Layout.fillWidth: true; Layout.minimumWidth: 0 }
                         }
                         Label {
                             visible: root.mixed
@@ -969,64 +1046,6 @@ ApplicationWindow {
                 progressEnd: root.progressColors[1]
                 connectionStart: root.connectionColors[0]
                 connectionEnd: root.connectionColors[1]
-            }
-        }
-    }
-
-    footer: ToolBar {
-        padding: 10
-        background: GlassSurface { material: root.material; role: "footer"; backdropAvailable: root.backdropAvailable }
-        contentItem: Flow {
-            spacing: 7
-            GlassButton { material: root.material; text: qsTr("Open folder"); enabled: !!root.item; onClicked: root.openLocation(true) }
-            GlassButton {
-                material: root.material
-                text: qsTr("Open file")
-                visible: root.finished
-                accent: root.colors.positive
-                onClicked: root.openLocation(false)
-            }
-            GlassButton {
-                material: root.material
-                text: qsTr("Open with…")
-                visible: root.finished
-                onClicked: root.itemRequest("open-with", null)
-            }
-            GlassButton {
-                material: root.material
-                text: qsTr("Move file…")
-                visible: root.finished
-                enabled: !root.busy
-                onClicked: movePicker.open()
-            }
-            GlassButton {
-                material: root.material
-                text: qsTr("Verify checksum")
-                visible: root.finished && !!root.details.checksum
-                enabled: !root.busy && !root.pendingResult
-                onClicked: root.beginCheck("checksum", root.details.checksum, qsTr("Verifying checksum…"))
-            }
-            GlassButton {
-                objectName: "openDownloadRecovery"
-                material: root.material
-                text: qsTr("Recovery…")
-                visible: root.recoveryAvailable && root.activeTab !== root.recoveryTab
-                accent: root.colors.accent
-                onClicked: root.openRecovery()
-            }
-            GlassButton {
-                material: root.material
-                text: root.runningTransfer ? qsTr("Pause") : root.item && root.item.status === "Queued" ? qsTr("Start") : qsTr("Resume")
-                visible: !!root.item && !root.finished
-                enabled: !root.busy && (root.runningTransfer || (!root.recoveryBusy && !(root.telemetry && root.telemetry.recovery_damaged)))
-                accent: root.runningTransfer ? root.colors.caution : root.colors.positive
-                onClicked: root.perform(root.runningTransfer ? "pause" : "start", false)
-            }
-            GlassButton {
-                material: root.material
-                text: root.runningTransfer ? qsTr("Cancel…") : qsTr("Close")
-                accent: root.runningTransfer ? root.colors.destructive : root.colors.accent
-                onClicked: root.runningTransfer ? stopConsent.open() : root.close()
             }
         }
     }

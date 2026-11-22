@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "default_locale": "en",
   "name": "__MSG_name__",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "__MSG_description__",
   "permissions": [
     "contextMenus",
@@ -17,6 +17,7 @@
   ],
   "background": {
     "scripts": [
+      "appearance-profile.js",
       "background.js"
     ],
     "persistent": false
@@ -39,6 +40,8 @@
         "<all_urls>"
       ],
       "js": [
+        "appearance-profile.js",
+        "companion-appearance.js",
         "video.js"
       ],
       "all_frames": true,
@@ -59,6 +62,8 @@
         "*://*.youtube.com/*"
       ],
       "js": [
+        "appearance-profile.js",
+        "companion-appearance.js",
         "thumbnail.js"
       ],
       "run_at": "document_idle"

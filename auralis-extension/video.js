@@ -24,6 +24,8 @@
   if (prev && typeof prev.teardown === "function") prev.teardown();
   for (const old of document.querySelectorAll("mdm-video-button")) old.remove();
   const ext = globalThis.browser ?? globalThis.chrome;
+  const theme = globalThis.__auralisCompanionAppearance;
+  let releaseTheme = null;
 
   // A video worth a button: big enough to be content, not a short muted looping clip (an
   // animated picture or a background). A sound player (<audio> with controls) gets one too.
@@ -879,19 +881,23 @@
 :host { all: initial; }
 * { box-sizing: border-box; }
 .pill, .menu, .tip, .guide {
-  --go: #57cc5a; --go-hi: #47b94a; --go-ink: #08200b; --stamp: #1b7a26; --accent: #1b7a26;
-  --ok: #1b7a26; --warn: #8a5300; --err: #c42b1c; --warn-dot: #F7B500;
-  --bg: #fcfcfb; --bg2: #eef1f5; --bd: #c4ccd8; --tx: #111318; --tx2: #5f6676; --hov: rgba(87, 204, 90, .16);
-  --sh: 0 1px 2px rgba(17, 19, 24, .18), 0 6px 14px rgba(17, 19, 24, .18);
+  --go: var(--ac-accent, #8deaff);
+  --go-hi: color-mix(in srgb, var(--go), var(--bg2) 10%);
+  --go-ink: var(--ac-accent-ink, #071c2b);
+  --stamp: var(--ac-link, #8deaff);
+  --accent: var(--ac-link, #8deaff);
+  --ok: var(--ac-positive, #74f6bf);
+  --warn: var(--ac-caution, #ffe19c);
+  --err: var(--ac-destructive, #ffacb9);
+  --warn-dot: var(--warn);
+  --bg: var(--ac-background, #102036);
+  --bg2: var(--ac-surface, #19324c);
+  --bd: var(--ac-border, #57748f);
+  --tx: var(--ac-text, #f4f8ff);
+  --tx2: var(--ac-muted, #c8d7e8);
+  --hov: var(--ac-hover, #244463);
+  --sh: 0 2px 4px #0004, 0 8px 16px #0006;
   --font: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, "Noto Sans", sans-serif;
-}
-/* Windows (the system) in dark mode, not the page: MDM's navy board; the green stays. */
-@media (prefers-color-scheme: dark) {
-  .pill, .menu, .tip, .guide {
-    --accent: #7fe07f; --ok: #7fe07f; --warn: #ffd36b; --err: #ff99a4;
-    --bg: #0c1a33; --bg2: #081226; --bd: #2a3d63; --tx: #f2f5fb; --tx2: #b7c3da; --hov: rgba(87, 204, 90, .18);
-    --sh: 0 2px 4px rgba(0, 0, 0, .45), 0 8px 16px rgba(0, 0, 0, .45);
-  }
 }
 [dir="rtl"] { --font: "Segoe UI", "Segoe UI Variable Text", system-ui, -apple-system, Roboto, "Noto Sans Arabic", "Noto Sans", sans-serif; }
 /* The tab: a light raised frame at the video's edge; the Download part in green, the arrow and
@@ -1029,38 +1035,65 @@ button:focus-visible { outline: none; }
   background-image: linear-gradient(90deg, var(--hov), rgba(127, 127, 127, .12), var(--hov));
   animation: shimmer 1.4s linear infinite; }
 /* A compact, stable Auralis control. The extension menu stays in the page. */
-.pill {height:32px;gap:0;border-radius:10px;background:rgba(12,25,48,.92);border:1px solid #84c8ef99;color:#eaf9ff;backdrop-filter:blur(12px)}
-.pill:not(.bare) .go {background:transparent;color:#d9f8ff;box-shadow:none;padding:3px;cursor:pointer}
-.pill:not(.bare) .go:hover {background:rgba(114,187,255,.22)}
-.pill .label,.pill .sub,.pill .chip,.pill .grip,.pill .x,.pill .acts {display:none!important}
-.pill .more {width:18px;border:0;background:transparent;color:#c8eeff}
-.menu {border-radius:12px;background:#101e36;color:#edf8ff;border-color:#88b9df88;box-shadow:0 12px 35px #0009}
-.pill,.menu {--accent:#d0b4ff;--tx:#f5f8ff;--tx2:#c4cee4;--hov:rgba(176,143,255,.24);--bd:rgba(213,228,255,.30);--go:#65e4d0;--warn:#ffce79;--err:#ff9ba8}
-.pill {background:linear-gradient(145deg,rgba(73,56,112,.94),rgba(15,28,45,.96));border:1px solid #dfd2ff77;box-shadow:inset 0 1px #ffffff55,0 6px 18px #0009}
-.pill:not(.bare) .go:hover,.pill .more:hover {background:#b48dff55}
-.menu {width:min(310px,calc(100vw - 16px));height:min(300px,calc(100vh - 16px));min-width:min(260px,calc(100vw - 16px));min-height:180px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);resize:both;overflow:auto;overscroll-behavior:contain;padding:8px;border-radius:16px;background:linear-gradient(145deg,rgba(55,80,114,.87),rgba(18,28,49,.94));border-color:#c8e8ff80;backdrop-filter:blur(22px) saturate(135%);box-shadow:inset 0 1px #fff8,0 18px 42px #000b}
-.menu .mh{cursor:default;user-select:none;border-radius:10px;background:linear-gradient(110deg,#a9e4ff35,#bd9cff20)}.menu .rows{max-height:none;overflow:visible}
-.menu button {height:32px;border-radius:8px;cursor:pointer}.menu button:hover {background:#b99aff3d}.menu .cap{color:#d9c6ff}.menu .rows{scrollbar-width:thin;scrollbar-color:#a98ee2 transparent}
-.menu .quality-tabs{display:flex;gap:4px;margin:4px 0}.menu .quality-tabs button{flex:1;justify-content:center;padding:4px;font-size:12px}.menu .quality-tabs button[aria-selected="true"]{background:#8467d96b;box-shadow:inset 0 -2px #d6c1ff}
-.menu .subtitle-section{margin:5px 2px;padding:5px;border:1px solid #ffffff30;border-radius:9px;background:#ffffff0b}.menu .subtitle-list{max-height:140px;overflow:auto}.menu .subtitle-list button[aria-pressed="true"]{background:#a886fa66;box-shadow:inset 3px 0 #dbcbff}.menu [data-act="window"] {display:none!important}
+.pill {
+  height: 32px;
+  gap: 0;
+  border-radius: var(--ac-radius, 10px);
+  background: var(--ac-control, var(--bg2));
+  border: 1px solid var(--go);
+  color: var(--tx);
+  backdrop-filter: var(--ac-blur, blur(12px));
+}
+.pill:not(.bare) .go { background: transparent; color: var(--tx); box-shadow: none; padding: 3px; cursor: pointer; }
+.pill:not(.bare) .go:hover, .pill .more:hover, .pill .more[aria-expanded="true"] { background: var(--hov); }
+.pill .label, .pill .sub, .pill .chip, .pill .grip, .pill .x, .pill .acts { display: none !important; }
+.pill .more { width: 18px; border: 0; background: transparent; color: var(--accent); }
+.menu {
+  width: min(310px, calc(100vw - 16px));
+  height: min(300px, calc(100vh - 16px));
+  min-width: min(260px, calc(100vw - 16px));
+  min-height: 180px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
+  resize: both;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 8px;
+  border-radius: var(--ac-radius, 10px);
+  background: var(--ac-panel, var(--bg));
+  color: var(--tx);
+  border-color: var(--bd);
+  backdrop-filter: var(--ac-blur, blur(16px));
+  box-shadow: 0 14px 32px #0008;
+}
+.menu .mh { cursor: default; user-select: none; border-radius: var(--ac-radius, 10px); background: var(--hov); }
+.menu button { height: 32px; border-radius: min(8px, var(--ac-radius, 10px)); cursor: pointer; }
+.menu .cap { color: var(--accent); }
+.menu .quality-tabs { display: flex; gap: 4px; margin: 4px 0; }
+.menu .quality-tabs button { flex: 1; justify-content: center; padding: 4px; font-size: 12px; }
+.menu .quality-tabs button[aria-selected="true"] {
+  background: var(--ac-selected, var(--hov));
+  box-shadow: inset 0 -2px var(--go);
+}
+.menu [data-act="window"] { display: none !important; }
 /* Keep the compact panel fixed while its contents scroll inside it. */
 .menu.open{display:flex;flex-direction:column;box-sizing:border-box;overflow:hidden;white-space:normal}
 .menu > *{flex-shrink:0;min-width:0}
 .menu .mh > div{flex:1;min-width:0;overflow:hidden}
 .menu .mh .t,.menu .mh .s{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.menu .rows{flex:1 1 auto;min-height:32px;max-height:none;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:#a98ee2 transparent}
+.menu .rows{flex:1 1 auto;min-height:32px;max-height:none;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:var(--go) transparent}
 .menu .rows::-webkit-scrollbar,.menu .subtitle-list::-webkit-scrollbar{width:4px;height:4px}
-.menu .rows::-webkit-scrollbar-thumb,.menu .subtitle-list::-webkit-scrollbar-thumb{background:#a98ee2;border-radius:8px}
+.menu .rows::-webkit-scrollbar-thumb,.menu .subtitle-list::-webkit-scrollbar-thumb{background:var(--go);border-radius:8px}
 .menu .rows button,.menu .subtitle-list button{min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .menu .subtitle-controls{display:grid;gap:5px;padding:5px 3px;border-bottom:1px solid var(--bd);font-size:11px}
 .menu .subtitle-heading{display:flex;align-items:flex-start;gap:7px;min-width:0}.menu .subtitle-heading>span{flex:none;padding-top:6px}
-.menu .subtitle-combo{flex:1;min-width:0}.menu .subtitle-combo .subtitle-trigger{height:26px;width:100%;display:flex;align-items:center;justify-content:space-between;gap:6px;padding:3px 7px;border:1px solid #a8bde088;border-radius:7px;background:linear-gradient(145deg,#435978cc,#1b2b43e8);color:var(--tx);font-size:11px}
+.menu .subtitle-combo{flex:1;min-width:0}.menu .subtitle-combo .subtitle-trigger{height:26px;width:100%;display:flex;align-items:center;justify-content:space-between;gap:6px;padding:3px 7px;border:1px solid var(--bd);border-radius:7px;background:var(--bg2);color:var(--tx);font-size:11px}
 .menu .subtitle-trigger .subtitle-value{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.menu .subtitle-trigger .subtitle-chevron{color:var(--accent);flex:none}
-.menu .subtitle-list{max-height:112px;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;margin:3px 0 0;padding:3px;border:1px solid #a8bde066;border-radius:8px;background:#182840f5;scrollbar-width:thin;scrollbar-color:#a98ee2 transparent}
+.menu .subtitle-list{max-height:112px;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;margin:3px 0 0;padding:3px;border:1px solid var(--bd);border-radius:8px;background:var(--bg2);scrollbar-width:thin;scrollbar-color:var(--go) transparent}
 .menu .subtitle-list[hidden]{display:none}.menu .subtitle-list button{height:25px;min-height:25px;display:block;padding:4px 7px;text-align:left;color:var(--tx);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:5px}
-.menu .subtitle-list button[aria-selected="true"]{background:#856dba80;box-shadow:inset 2px 0 #d9c3ff}.menu .subtitle-list button:focus-visible,.menu .subtitle-trigger:focus-visible{outline:2px solid #d9c3ff;outline-offset:-2px}
-.menu .subtitle-modes{display:flex;gap:7px;align-items:center;flex-wrap:wrap}.menu .subtitle-modes label{display:flex;align-items:center;gap:3px}.menu .subtitle-modes small{flex-basis:100%;color:var(--tx2)}
-.menu button.quality-row{height:auto;min-height:42px;display:flex;flex-direction:column;align-items:stretch;gap:2px;padding:5px 8px;text-align:left;border-bottom:1px solid #ffffff18}
+.menu .subtitle-list button[aria-selected="true"]{background:var(--ac-selected,var(--hov));box-shadow:inset 2px 0 var(--go)}.menu .subtitle-list button:focus-visible,.menu .subtitle-trigger:focus-visible{outline:2px solid var(--go);outline-offset:-2px}
+.menu .subtitle-modes{display:flex;gap:7px;align-items:center;flex-wrap:wrap}.menu .subtitle-modes label{display:flex;align-items:center;gap:3px}.menu input[type="radio"]{accent-color:var(--go)}.menu .subtitle-modes small{flex-basis:100%;color:var(--tx2)}
+.menu button.quality-row{height:auto;min-height:42px;display:flex;flex-direction:column;align-items:stretch;gap:2px;padding:5px 8px;text-align:left;border-bottom:1px solid var(--ac-border-soft,var(--bd))}
 .menu .quality-primary{display:flex;align-items:center;gap:4px;min-width:0;white-space:nowrap}.menu .quality-name{font-weight:650;overflow:hidden;text-overflow:ellipsis}.menu .quality-badge,.menu .quality-codec{flex:none;font-size:9px;padding:1px 3px;border:1px solid var(--accent);border-radius:3px;color:var(--accent)}
 .menu .quality-details{font-size:10px;font-weight:400;color:var(--tx2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .menu .cookie-controls{display:grid;grid-template-columns:minmax(0,1fr);padding:3px;gap:3px;font-size:11px}
@@ -1069,7 +1102,7 @@ button:focus-visible { outline: none; }
 .menu .subtitle-controls{gap:3px;padding:3px}.menu button.quality-row{min-height:38px;padding:4px 7px}
 .menu .cookie-controls select{max-width:135px}
 .menu [data-act="hide"],.menu [data-act="never"],.menu [data-act="settings"]{height:25px;font-size:11px}
-.cookie-controls {padding:6px;display:flex;gap:5px;align-items:center;flex-wrap:wrap}.cookie-controls button {width:auto;height:auto;background:#355983;padding:5px 7px}.cookie-controls input {max-width:150px}.cookie-controls select,.cookie-controls input,.rows select {background:#20334f;color:#fff;border:1px solid #8ab3d788;border-radius:5px;padding:4px}
+.cookie-controls {padding:6px;display:flex;gap:5px;align-items:center;flex-wrap:wrap}.cookie-controls button {width:auto;height:auto;background:var(--go);color:var(--go-ink);padding:5px 7px}.cookie-controls .cookie-fetch:hover{background:color-mix(in srgb,var(--go),var(--bg2) 10%)}.cookie-controls input {max-width:150px}.cookie-controls select,.cookie-controls input,.rows select {background:var(--bg2);color:var(--tx);border:1px solid var(--bd);border-radius:5px;padding:4px}
 @media (prefers-reduced-motion: reduce) {
   .pill { transition: none; transform: none; }
   .spin, .chip.skel, .menu .skrow { animation: none; }
@@ -1096,9 +1129,9 @@ button:focus-visible { outline: none; }
     <span class="icon">
       <img class="logo" alt="" draggable="false">
       <span class="spin"></span>
-      <svg class="i-sent" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="8" fill="var(--ok)"/><path d="M4.6 8.2 7 10.5l4.4-4.6" stroke="#fff" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <svg class="i-warn" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="8" fill="var(--warn-dot)"/><path d="M8 4.2v4.6" stroke="#1b1b1b" stroke-width="1.7" stroke-linecap="round"/><circle cx="8" cy="11.4" r="1" fill="#1b1b1b"/></svg>
-      <svg class="i-err" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="8" fill="var(--err)"/><path d="M8 4.2v4.6" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/><circle cx="8" cy="11.4" r="1" fill="#fff"/></svg>
+      <svg class="i-sent" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="8" fill="var(--ok)"/><path d="M4.6 8.2 7 10.5l4.4-4.6" stroke="var(--ac-positive-ink,#fff)" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <svg class="i-warn" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="8" fill="var(--warn-dot)"/><path d="M8 4.2v4.6" stroke="var(--ac-caution-ink,#1b1b1b)" stroke-width="1.7" stroke-linecap="round"/><circle cx="8" cy="11.4" r="1" fill="var(--ac-caution-ink,#1b1b1b)"/></svg>
+      <svg class="i-err" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="8" fill="var(--err)"/><path d="M8 4.2v4.6" stroke="var(--ac-destructive-ink,#fff)" stroke-width="1.7" stroke-linecap="round"/><circle cx="8" cy="11.4" r="1" fill="var(--ac-destructive-ink,#fff)"/></svg>
       <svg class="i-off" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.4" stroke="var(--tx2)" stroke-width="1.5" fill="none"/><path d="M3.6 12.4 12.4 3.6" stroke="var(--tx2)" stroke-width="1.5"/></svg>
       <svg class="i-drm" viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="7" width="9" height="7" rx="1.5" fill="var(--tx2)"/><path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7" stroke="var(--tx2)" stroke-width="1.5" fill="none"/></svg>
     </span>
@@ -1129,6 +1162,7 @@ button:focus-visible { outline: none; }
   <button role="menuitem" data-act="never"><span class="mi"><svg viewBox="0 0 16 16" ${ICON} stroke-width="1.4"><circle cx="8" cy="8" r="5.5"/><path d="M2.5 8h11M8 2.5c2 2 2 9 0 11M8 2.5c-2 2-2 9 0 11"/></svg></span><span></span></button>
   <button role="menuitem" data-act="settings"><span class="mi"><svg viewBox="0 0 16 16" ${ICON} stroke-width="1.4"><circle cx="8" cy="8" r="2"/><path d="M8 1.8v2M8 12.2v2M1.8 8h2M12.2 8h2M3.6 3.6l1.4 1.4M11 11l1.4 1.4M3.6 12.4 5 11M11 5l1.4-1.4"/></svg></span><span></span></button>
 </div>`;
+  const unstyle = theme?.attach(shadow);
   const $ = (sel) => shadow.querySelector(sel);
   const pill = $(".pill");
   const go = $(".go");
@@ -1715,6 +1749,7 @@ button:focus-visible { outline: none; }
     if (hideFullscreen && document.fullscreenElement) return hide(true);
     if (!attach()) return hide(true);
     root.style.setProperty("display", "block", "important");
+    if (!releaseTheme) releaseTheme = theme?.activate();
     const c = describeNow(v);
     if (!PRIVATE && !usable(looks.get(c.key))) scheduleLook(v);
     if (pill.dataset.key !== String(c.key) || !fullWidth) {
@@ -1740,6 +1775,8 @@ button:focus-visible { outline: none; }
       shadow.activeElement?.blur();
     }
     pill.classList.remove("shown");
+    releaseTheme?.();
+    releaseTheme = null;
     cancelAnimationFrame(raf);
     raf = 0;
     const was = video;
@@ -2436,6 +2473,9 @@ button:focus-visible { outline: none; }
     removeEventListener("pointermove", onMove, true);
     removeEventListener("keydown", onTab, true);
     removeEventListener("loadstart", onLoadStart, true);
+    releaseTheme?.();
+    releaseTheme = null;
+    unstyle?.();
     root.remove();
     never = true;
     allowed = false;

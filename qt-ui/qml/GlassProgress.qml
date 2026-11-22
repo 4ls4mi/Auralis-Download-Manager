@@ -19,6 +19,9 @@ Item {
 
     readonly property var profile: MaterialTheme.profile(material)
     readonly property bool sculpted: fillStyle === "sculpted"
+    readonly property var firstTone: MaterialTheme.neonTone(startColor)
+    readonly property var lastTone: MaterialTheme.neonTone(endColor)
+    readonly property real glowMargin: height >= 28 ? 5 : 3
     readonly property int contour: shape === "bubble" ? 1 : ["prism", "ice", "chamfer"].includes(shape) ? 2
         : ["square", "plain"].includes(shape) ? 3 : 0
     readonly property bool renderWithShader: width >= 12 && height >= 7
@@ -50,6 +53,7 @@ Item {
 
     Loader {
         anchors.fill: parent
+        anchors.margins: -progress.glowMargin
         active: progress.renderWithShader
         sourceComponent: shader
     }
@@ -57,9 +61,10 @@ Item {
     Component {
         id: shader
         ShaderEffect {
-            property vector2d surfaceSize: Qt.vector2d(width, height)
-            property color liquidStart: progress.startColor
-            property color liquidEnd: progress.endColor
+            property vector2d surfaceSize: Qt.vector2d(progress.width, progress.height)
+            property real padding: progress.glowMargin
+            property color liquidStart: progress.firstTone.glow
+            property color liquidEnd: progress.lastTone.glow
             property color glassTint: progress.trackColor
             property real amount: progress.shownAmount
             property real phase: progress.wavePhase
@@ -88,9 +93,9 @@ Item {
 
                 // The color field is transparent. Reflections live on the rim.
                 ShapePath {
-                    strokeWidth: progress.shape === "bubble" ? 2.5 : 1.35
-                    strokeColor: MaterialTheme.rgba(progress.endColor, .34)
-                    fillColor: MaterialTheme.rgba(progress.trackColor, .09)
+                    strokeWidth: 1.45
+                    strokeColor: MaterialTheme.rgba(progress.lastTone.glow, .46)
+                    fillColor: MaterialTheme.rgba(progress.trackColor, .12)
                     PathSvg { path: vessel.trackPath }
                 }
 
@@ -98,31 +103,38 @@ Item {
                     strokeWidth: -1
                     fillGradient: LinearGradient {
                         x1: 0; y1: 0; x2: 0; y2: vessel.height
-                        GradientStop { position: 0; color: MaterialTheme.rgba(progress.profile.upper, .54) }
-                        GradientStop { position: .2; color: MaterialTheme.rgba(progress.profile.accent, .16) }
+                        GradientStop { position: 0; color: MaterialTheme.rgba(progress.firstTone.edge, .45) }
+                        GradientStop { position: .18; color: MaterialTheme.rgba(progress.firstTone.glow, .12) }
                         GradientStop { position: .42; color: "transparent" }
                         GradientStop { position: .66; color: MaterialTheme.rgba(progress.profile.shade, .05) }
-                        GradientStop { position: .88; color: MaterialTheme.rgba(progress.profile.accent, .22) }
-                        GradientStop { position: 1; color: MaterialTheme.rgba(progress.profile.edge, .61) }
+                        GradientStop { position: .88; color: MaterialTheme.rgba(progress.lastTone.glow, .17) }
+                        GradientStop { position: 1; color: MaterialTheme.rgba(progress.lastTone.edge, .45) }
                     }
                     PathSvg { path: vessel.trackPath }
                 }
 
                 ShapePath {
-                    strokeWidth: Math.min(3.8, vessel.height * .29)
-                    strokeColor: MaterialTheme.rgba(progress.endColor, .27)
+                    strokeWidth: 2 * progress.glowMargin + 1
+                    strokeColor: MaterialTheme.mix(progress.firstTone.glow, progress.lastTone.glow, .5, .13)
                     fillColor: "transparent"
                     PathSvg { path: vessel.fillPath }
                 }
 
                 ShapePath {
-                    strokeWidth: .9
-                    strokeColor: MaterialTheme.mix(progress.endColor, progress.profile.upper, .30, .83)
+                    strokeWidth: progress.glowMargin
+                    strokeColor: MaterialTheme.mix(progress.firstTone.glow, progress.lastTone.glow, .5, .39)
+                    fillColor: "transparent"
+                    PathSvg { path: vessel.fillPath }
+                }
+
+                ShapePath {
+                    strokeWidth: 1
+                    strokeColor: MaterialTheme.rgba(progress.lastTone.edge, .9)
                     fillGradient: LinearGradient {
-                        x1: 0; y1: vessel.height * .65; x2: vessel.width; y2: vessel.height * .12
-                        GradientStop { position: 0; color: MaterialTheme.rgba(progress.startColor, .96) }
-                        GradientStop { position: .61; color: MaterialTheme.rgba(progress.endColor, .91) }
-                        GradientStop { position: 1; color: MaterialTheme.rgba(progress.endColor, .98) }
+                        x1: 0; y1: 0; x2: Math.max(1, vessel.width * progress.shownAmount); y2: 0
+                        GradientStop { position: 0; color: progress.firstTone.body }
+                        GradientStop { position: .57; color: MaterialTheme.mix(progress.firstTone.body, progress.lastTone.body, .5, 1) }
+                        GradientStop { position: 1; color: progress.lastTone.body }
                     }
                     PathSvg { path: vessel.fillPath }
                 }
@@ -131,12 +143,13 @@ Item {
                     strokeWidth: -1
                     fillGradient: LinearGradient {
                         x1: 0; y1: 0; x2: 0; y2: vessel.height
-                        GradientStop { position: 0; color: MaterialTheme.mix(progress.startColor, progress.profile.upper, .58, .92) }
-                        GradientStop { position: .20; color: MaterialTheme.rgba(progress.startColor, .22) }
-                        GradientStop { position: .42; color: "transparent" }
-                        GradientStop { position: .60; color: MaterialTheme.rgba(progress.profile.shade, progress.sculpted ? .25 : .10) }
-                        GradientStop { position: .80; color: MaterialTheme.rgba(progress.endColor, .10) }
-                        GradientStop { position: 1; color: MaterialTheme.mix(progress.endColor, progress.profile.upper, .50, .69) }
+                        GradientStop { position: 0; color: MaterialTheme.rgba(progress.firstTone.glow, .56) }
+                        GradientStop { position: .13; color: MaterialTheme.rgba(progress.firstTone.edge, .84) }
+                        GradientStop { position: .31; color: MaterialTheme.rgba(progress.firstTone.glow, .23) }
+                        GradientStop { position: .55; color: MaterialTheme.rgba(progress.lastTone.core, progress.sculpted ? .87 : .70) }
+                        GradientStop { position: .73; color: MaterialTheme.rgba(progress.lastTone.core, .41) }
+                        GradientStop { position: .91; color: MaterialTheme.rgba(progress.lastTone.glow, .84) }
+                        GradientStop { position: 1; color: MaterialTheme.rgba(progress.lastTone.edge, .55) }
                     }
                     PathSvg { path: vessel.fillPath }
                 }
@@ -150,16 +163,16 @@ Item {
                         y1: vessel.height
                         y2: 0
                         GradientStop { position: 0; color: "transparent" }
-                        GradientStop { position: .27; color: MaterialTheme.rgba(progress.profile.shade, .28) }
-                        GradientStop { position: .52; color: MaterialTheme.rgba(progress.profile.upper, .61) }
-                        GradientStop { position: .73; color: MaterialTheme.rgba(progress.endColor, .26) }
+                        GradientStop { position: .29; color: MaterialTheme.rgba(progress.firstTone.glow, .25) }
+                        GradientStop { position: .51; color: MaterialTheme.rgba(progress.firstTone.edge, .58) }
+                        GradientStop { position: .67; color: MaterialTheme.rgba(progress.lastTone.glow, .29) }
                         GradientStop { position: 1; color: "transparent" }
                     }
                     PathSvg { path: progress.liquidMoving ? vessel.fillPath : "" }
                 }
 
                 ShapePath {
-                    strokeColor: MaterialTheme.rgba(progress.profile.upper, .79)
+                    strokeColor: MaterialTheme.rgba(progress.firstTone.edge, .76)
                     strokeWidth: Math.min(1.8, vessel.height * .078)
                     capStyle: ShapePath.RoundCap
                     fillColor: "transparent"
@@ -170,7 +183,7 @@ Item {
                 }
 
                 ShapePath {
-                    strokeColor: MaterialTheme.rgba(progress.endColor, .53)
+                    strokeColor: MaterialTheme.rgba(progress.lastTone.glow, .68)
                     strokeWidth: Math.min(1.35, vessel.height * .055)
                     capStyle: ShapePath.RoundCap
                     fillColor: "transparent"
@@ -182,7 +195,7 @@ Item {
 
                 ShapePath {
                     strokeWidth: .95
-                    strokeColor: MaterialTheme.rgba(progress.profile.edge, .67)
+                    strokeColor: MaterialTheme.rgba(progress.lastTone.glow, .25)
                     fillColor: "transparent"
                     PathSvg { path: vessel.trackPath }
                 }
@@ -194,11 +207,11 @@ Item {
         anchors.centerIn: parent
         visible: progress.showLabel
         text: qsTr("%1%").arg(Math.round(progress.amount * 100))
-        color: progress.profile.text
+        color: "#ffffff"
         font.pixelSize: 12
         font.weight: Font.DemiBold
-        style: progress.profile.light ? Text.Normal : Text.Outline
-        styleColor: MaterialTheme.rgba(progress.profile.shade, .9)
+        style: Text.Outline
+        styleColor: progress.lastTone.core
         Accessible.ignored: true
     }
 }

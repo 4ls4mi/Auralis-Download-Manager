@@ -24,6 +24,7 @@ ApplicationWindow {
     palette.button: colors.background
     palette.highlight: colors.accent
 
+    readonly property int resizeInset: 14
     readonly property var colors: MaterialTheme.palette
     property string category: "General"
     property var config: null
@@ -238,52 +239,84 @@ ApplicationWindow {
         background: GlassSurface { role: "content"; backdropAvailable: settingsBackdrop.backdropAvailable }
     }
 
-    header: ToolBar {
-        padding: 0
-        background: GlassSurface { role: "title"; radius: 0; backdropAvailable: settingsBackdrop.backdropAvailable }
+    header: ColumnLayout {
+        spacing: 0
+        ToolBar {
+            Layout.fillWidth: true
+            padding: 0
+            background: GlassSurface { role: "title"; radius: 0; backdropAvailable: settingsBackdrop.backdropAvailable }
 
-        contentItem: RowLayout {
-            spacing: 7
-            Item {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 45
-                BrandMark {
-                    id: settingsBrand
-                    anchors.left: parent.left
-                    anchors.leftMargin: 15
-                    anchors.verticalCenter: parent.verticalCenter
+            contentItem: RowLayout {
+                spacing: 7
+                Item {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 45
+                    BrandMark {
+                        id: settingsBrand
+                        anchors.left: parent.left
+                        anchors.leftMargin: 15
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+                    Label {
+                        anchors.left: settingsBrand.right
+                        anchors.leftMargin: 8
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: root.title
+                        elide: Text.ElideRight
+                        font.weight: Font.DemiBold
+                        color: root.colors.text
+                    }
+                    CaptionMoveArea {
+                        objectName: "settingsTitleDragArea"
+                        hostWindow: root
+                        anchors.fill: parent
+                        onDoubleClickRequested: root.toggleMaximize()
+                    }
                 }
+                CaptionControls {
+                    maximized: root.visibility === Window.Maximized
+                    closeLabel: qsTr("Close settings")
+                    onMinimizeRequested: root.showMinimized()
+                    onMaximizeRequested: root.toggleMaximize()
+                    onCloseRequested: root.close()
+                }
+                Item { Layout.preferredWidth: root.resizeInset }
+            }
+        }
+        ToolBar {
+            objectName: "settingsCommands"
+            Layout.fillWidth: true
+            leftPadding: root.resizeInset + 2
+            rightPadding: root.resizeInset + 2
+            topPadding: 4
+            bottomPadding: 5
+            background: GlassSurface { role: "toolbar"; radius: 0; backdropAvailable: settingsBackdrop.backdropAvailable }
+            contentItem: RowLayout {
+                spacing: 8
                 Label {
-                    anchors.left: settingsBrand.right
-                    anchors.leftMargin: 8
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: root.title
+                    Layout.fillWidth: true
+                    text: root.saving ? qsTr("Saving…") : root.reading ? qsTr("Loading settings…") : root.notice ||
+                        (engine.ready ? qsTr("Auralis %1").arg(engine.version) : engine.status)
                     elide: Text.ElideRight
-                    font.weight: Font.DemiBold
-                    color: root.colors.text
+                    color: root.colors.muted
                 }
-                CaptionMoveArea {
-                    objectName: "settingsTitleDragArea"
-                    hostWindow: root
-                    anchors.fill: parent
-                    onDoubleClickRequested: root.toggleMaximize()
+                GlassButton {
+                    objectName: "settingsDone"
+                    text: qsTr("Done")
+                    accent: root.colors.positive
+                    highlighted: true
+                    onClicked: root.close()
                 }
             }
-            CaptionControls {
-                maximized: root.visibility === Window.Maximized
-                closeLabel: qsTr("Close settings")
-                onMinimizeRequested: root.showMinimized()
-                onMaximizeRequested: root.toggleMaximize()
-                onCloseRequested: root.close()
-            }
-            Item { Layout.preferredWidth: 4 }
         }
     }
 
     RowLayout {
         anchors.fill: parent
         anchors.margins: 12
+        anchors.rightMargin: root.resizeInset
+        anchors.bottomMargin: root.resizeInset
         spacing: 12
 
         Frame {
@@ -445,20 +478,12 @@ ApplicationWindow {
         }
     }
 
-    WindowResizeHandles { hostWindow: root; windowMouseEvents: true }
-
-    footer: ToolBar {
-        background: GlassSurface { role: "footer"; radius: 0; backdropAvailable: settingsBackdrop.backdropAvailable }
-        contentItem: RowLayout {
-            spacing: 8
-            Label {
-                Layout.fillWidth: true
-                text: root.saving ? qsTr("Saving…") : root.reading ? qsTr("Loading settings…") : root.notice ||
-                    (engine.ready ? qsTr("Auralis %1").arg(engine.version) : engine.status)
-                elide: Text.ElideRight
-                color: root.colors.muted
-            }
-            GlassButton { text: qsTr("Done"); accent: root.colors.positive; highlighted: true; onClicked: root.close() }
-        }
+    WindowResizeHandles {
+        hostWindow: root
+        windowMouseEvents: true
+        borderSize: 11
+        cornerSize: 19
+        showGrip: true
+        gripColor: root.colors.muted
     }
 }

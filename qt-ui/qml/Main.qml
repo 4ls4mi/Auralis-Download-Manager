@@ -109,10 +109,14 @@ ApplicationWindow {
     readonly property bool closeToTray: enginePrompts.settings.close_to_tray !== false
     readonly property bool progressMinimizeToTray: enginePrompts.settings.progress_minimize_to_tray === undefined
         ? minimizeToTray : enginePrompts.settings.progress_minimize_to_tray !== false
-    readonly property var hiddenProgressItems: {
+    readonly property bool traySpeedLimiterKnown: typeof enginePrompts.settings.speed_limit_on === "boolean"
+    readonly property bool traySpeedLimiterOn: enginePrompts.settings.speed_limit_on === true
+    readonly property var trayDownloadItems: {
+        const hiddenIds = new Set(hiddenProgressIds)
         const entries = []
         for (const item of downloads) {
-            if (!hiddenProgressIds.includes(String(item.id)) || item.status === "Complete")
+            const hidden = hiddenIds.has(String(item.id))
+            if (item.status === "Complete" || (!hidden && item.status !== "Downloading"))
                 continue
             const visual = visualById[item.id] || {}
             const percentage = item.size > 0 ? (100 * TransferData.fraction(item)).toFixed(1) + "%" : qsTr("Size unknown")
@@ -124,14 +128,14 @@ ApplicationWindow {
             const resume = visual.resumable === true ? qsTr("Can resume")
                 : visual.resumable === false ? qsTr("Resume unavailable") : ""
             const details = [summary, transport, resume].filter(Boolean).join(" · ")
-            entries.push({id: item.id, name: item.file, summary: summary, details: details})
+            entries.push({id: item.id, name: item.file, summary: summary, details: details, hidden: hidden})
         }
         return entries
     }
 
-    onHiddenProgressItemsChanged: {
+    onTrayDownloadItemsChanged: {
         if (engine.trayAvailable)
-            engine.setProgressTrayItems(hiddenProgressItems)
+            engine.setTrayDownloadItems(trayDownloadItems)
     }
 
     property var graphValues: []
@@ -395,6 +399,36 @@ ApplicationWindow {
         }
     }
 
+    function showBatchDownload() {
+        if (online && !busy && !batchDialog.visible)
+            batchDialog.present()
+    }
+
+    function showBatchDownloadFromClipboard(text) {
+        if (online && !busy)
+            enginePrompts.links.present(text)
+    }
+
+    function showScheduler() {
+        if (settingsWindow.visibility === Window.Minimized)
+            settingsWindow.showNormal()
+        settingsWindow.showCategory("Scheduler")
+    }
+
+    function setMainQueueRunningFromTray(running) {
+        const queue = queues[0]
+        if (queue && Boolean(queue.running) !== running)
+            request({action: running ? "start_queue" : "stop_queue", queue: queue.name}, true)
+    }
+
+    function setTraySpeedLimiter(enabled) {
+        request({action: "glass-setting", category: "speed_limit_on", queue: String(enabled)}, false, () => {
+            enginePrompts.settings = Object.assign({}, enginePrompts.settings, {speed_limit_on: enabled})
+            if (settingsWindow.visible)
+                settingsWindow.load()
+        })
+    }
+
     function showSettings() {
         if (settingsWindow.visibility === Window.Minimized)
             settingsWindow.showNormal()
@@ -622,7 +656,7 @@ ApplicationWindow {
     Action {
         id: schedulerAction
         text: qsTr("Scheduler")
-        onTriggered: settingsWindow.showCategory("Scheduler")
+        onTriggered: root.showScheduler()
     }
     Action {
         id: startQueue
@@ -1070,7 +1104,7 @@ ApplicationWindow {
                             MenuRule {}
                             AppMenuItem { symbol: "file"; text: qsTr("Download video from a page…"); enabled: root.online; onTriggered: enginePrompts.video.presentLookup() }
                             AppMenuItem { symbol: "folder"; text: qsTr("Download a gallery…"); enabled: root.online; onTriggered: galleryDialog.present() }
-                            AppMenuItem { symbol: "queue"; text: qsTr("Batch download…"); enabled: root.online; onTriggered: batchDialog.present() }
+                            AppMenuItem { symbol: "queue"; text: qsTr("Batch download…"); enabled: root.online; onTriggered: root.showBatchDownload() }
                             AppMenuItem { symbol: "add"; text: qsTr("Link grabber…"); enabled: root.online; onTriggered: enginePrompts.links.present() }
                             MenuRule {}
                             AppMenuItem { symbol: "tray"; text: qsTr("Hide in system tray"); enabled: Boolean(engine.trayAvailable); onTriggered: root.hideMainToTray() }
@@ -1151,13 +1185,6 @@ ApplicationWindow {
                         }
                     }
                     Item { Layout.fillWidth: true; Layout.fillHeight: root.sideMenus }
-                    GlassButton {
-                        visible: !root.sideMenus && Boolean(settingsWindow.availableUpdate)
-                        text: qsTr("Update available")
-                        Accessible.description: settingsWindow.availableUpdate
-                            ? qsTr("Auralis %1").arg(settingsWindow.availableUpdate.version) : ""
-                        onClicked: root.showUpdates()
-                    }
                 }
             }
         }
@@ -1244,6 +1271,19 @@ ApplicationWindow {
                     Item { Layout.fillWidth: true }
                 }
             }
+        }
+
+        UpdateStatusCard {
+            objectName: "mainUpdateBanner"
+            Layout.fillWidth: true
+            visible: Boolean(updateNotice.statusStage)
+            stage: updateNotice.statusStage
+            installedVersion: engine.version
+            targetVersion: updateNotice.statusRelease?.version || ""
+            installerBytes: Number(updateNotice.statusRelease?.size || 0)
+            actionLabel: updateNotice.updateInProgress ? qsTr("View update status") : qsTr("Review update")
+            announceChanges: true
+            onActionRequested: root.showUpdates()
         }
 
         Frame {
@@ -1460,11 +1500,6 @@ ApplicationWindow {
                             Keys.onEscapePressed: clear()
                             background: GlassSurface { role: "field" }
                             Accessible.name: qsTr("Search downloads")
-                        }
-                        GlassButton {
-                            visible: root.sideMenus && Boolean(settingsWindow.availableUpdate)
-                            text: qsTr("Update available")
-                            onClicked: root.showUpdates()
                         }
                     }
                     RowLayout {
