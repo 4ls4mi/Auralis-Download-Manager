@@ -63,22 +63,24 @@ async function quitApp(preferred,label){
   if(!page||page.isClosed()){
    // WebView2 may replace its DevTools connection after a restart. A stale
    // Playwright connection can have no pages even while the new process is alive.
-   // Reconnect to the same local endpoint, but still require a real main page.
+   // Reconnect to the same local endpoint. Any Auralis WebView may issue
+   // quit_glass, including a completion window left open after the transfer.
+   const appPage=connection=>connection.contexts().flatMap(c=>c.pages()).find(p=>!p.isClosed()&&(/^(?:https?:\/\/tauri\.localhost|tauri:\/\/localhost)(?:[\/?#]|$)/i).test(p.url()));
    let lastReconnect=0;
    const next=await until(async()=>{
     if(app.exitCode!==null)return 'exited';
-    let found=browser.contexts().flatMap(c=>c.pages()).find(p=>!p.isClosed()&&!p.url().includes('?'));
+    let found=appPage(browser);
     if(found)return found;
     if(Date.now()-lastReconnect<1000)return null;
     lastReconnect=Date.now();
     try{
      const fresh=await chromium.connectOverCDP(`http://127.0.0.1:${port}`,{timeout:1500});
-     found=fresh.contexts().flatMap(c=>c.pages()).find(p=>!p.isClosed()&&!p.url().includes('?'));
+     found=appPage(fresh);
      if(found){browser=fresh;return found}
      await fresh.close().catch(()=>{});
     }catch{/* Keep waiting for the replacement DevTools endpoint. */}
     return null;
-   },`${label}: no main window for shutdown`,20000);
+   },`${label}: no Auralis window for shutdown`,20000);
    if(next==='exited')break;page=next;
   }
   try{await page.evaluate(()=>window.__TAURI_INTERNALS__.invoke('quit_glass'));break}
