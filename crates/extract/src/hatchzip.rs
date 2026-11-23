@@ -41,19 +41,17 @@ pub fn find_hatchzip() -> Option<PathBuf> {
 /// The folder an extraction in place goes into before it is put where the settings say:
 /// `<archive's name>.hatchzip-out` beside the archive (numbered when that name is taken). The
 /// record of the run keeps it, so a second run continues the first in the same folder.
-pub fn work_folder(dest: &Path, base: &str) -> PathBuf {
+pub fn work_folder(dest: &Path, base: &str) -> std::io::Result<PathBuf> {
     let name = mdm_engine::naming::sanitize(base);
     let name = if name.is_empty() {
         "extracted".to_owned()
     } else {
         name
     };
+    std::fs::create_dir_all(dest)?;
     let folder = dest.join(format!("{name}.hatchzip-out"));
-    if std::fs::symlink_metadata(&folder).is_ok() {
-        crate::safe::numbered(&folder)
-    } else {
-        folder
-    }
+    crate::safe::reserve_numbered(&folder, |candidate| std::fs::create_dir(candidate))
+        .map(|(path, ())| path)
 }
 
 /// Whether HatchZip's error says it can't extract this archive in place, only while keeping it
@@ -133,7 +131,7 @@ impl Runs {
     }
 }
 
-/// Extract `archive` in place into `out` (made if missing). The password goes through the
+/// Extract `archive` in place into the reserved `out` directory. The password goes through the
 /// environment, never the command line (which other programs can read). `cancel` stops it:
 /// HatchZip is safe to stop at any moment. What it wrote is checked by the caller.
 pub fn extract(
@@ -143,7 +141,7 @@ pub fn extract(
     password: Option<&str>,
     cancel: Option<&AtomicBool>,
 ) -> Result<(), Error> {
-    std::fs::create_dir_all(out)?;
+    crate::safe::require_directory(out)?;
     // Full paths: HatchZip runs in its output folder, MDM's own and writable, never in the
     // folder MDM was started in (its install folder from the Start menu), as 7-Zip does (#845).
     let full = |p: &Path| std::path::absolute(p).unwrap_or_else(|_| p.to_owned());

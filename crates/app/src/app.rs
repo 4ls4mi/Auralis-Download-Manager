@@ -6169,6 +6169,15 @@ impl App {
             if cmd.url.is_some() || cmd.torrent_file.is_some() {
                 return self.remote_add(cmd.clone());
             }
+            if cmd.query.as_deref() != Some("list")
+                && !matches!(cmd.action.as_deref(),
+                    Some("pause" | "start" | "remove" | "delete" | "start_queue" | "stop_queue"))
+            {
+                return line(&ErrorAnswer {
+                    error: "This command is unavailable to remote devices".into(),
+                    code: Some("remote-command".into()),
+                });
+            }
         } else if let Some(on) = cmd.api {
             self.settings.automation_api = on;
             self.dirty = true;
@@ -6430,7 +6439,7 @@ impl App {
                     error: "invalid bulk command".into(), code: Some("invalid-action".into()),
                 }),
             };
-            return line(&self.act(if action == "stop-all" { "pause" } else { "remove" }, &ids)
+            return line(&self.act(if action == "stop-all" { "pause" } else { "remove" }, &ids, false)
                 .unwrap_or_default());
         }
         if !cmd.remote && glass_owned
@@ -6510,6 +6519,14 @@ impl App {
                     code: Some("unknown-queue".into()),
                 });
             };
+            if cmd.remote && self.items.iter().any(|item|
+                item.context.private && self.queues[q].items.contains(&item.id))
+            {
+                return line(&ErrorAnswer {
+                    error: "This queue can only be controlled on the computer".into(),
+                    code: Some("local-queue".into()),
+                });
+            }
             if action == "start_queue" {
                 self.start_queue(q);
             } else {
@@ -6519,25 +6536,26 @@ impl App {
             return line(&ipc::api::ActAnswer::default());
         }
         if let Some(action) = cmd.action.as_deref() {
-            return match self.act(action, &cmd.ids) {
+            return match self.act(action, &cmd.ids, cmd.remote) {
                 Ok(done) => line(&done),
                 Err(e) => line(&e),
             };
         }
         match cmd.query.as_deref() {
             Some("list") => {
-                let downloads = self
-                    .items
-                    .iter()
+                let private_ids: std::collections::HashSet<_> = if cmd.remote {
+                    self.items.iter().filter(|item| item.context.private).map(|item| item.id).collect()
+                } else {
+                    Default::default()
+                };
+                let items = self.items.iter().filter(|item| !private_ids.contains(&item.id));
+                let downloads = items.clone()
                     .map(|i| DownloadInfo {
                         id: i.id,
                         file: i.file_name.clone(),
-                        // A paired device sees no folder of the computer's, nor a password in
-                        // an address.
+                        // Sources can contain signed URLs, account identifiers and tracker keys.
                         url: if cmd.remote {
-                            let mut u = i.url.clone();
-                            let _ = u.set_password(None);
-                            u.to_string()
+                            String::new()
                         } else {
                             i.url.to_string()
                         },
@@ -6552,12 +6570,16 @@ impl App {
                         speed: if i.live.is_some() { i.rate() as u64 } else { 0 },
                         added: i.added.clone(),
                         category: i.category.key().into_owned(),
-                        error: i.error.clone().filter(|_| i.status == Status::Error),
+                        error: i.error.as_ref().filter(|_| i.status == Status::Error).map(|error| {
+                            if cmd.remote {
+                                crate::i18n::t("Download failed").to_owned()
+                            } else {
+                                error.clone()
+                            }
+                        }),
                     })
                     .collect();
-                let speed: f64 = self
-                    .items
-                    .iter()
+                let speed: f64 = items
                     .filter(|i| i.live.is_some())
                     .map(|i| i.rate())
                     .sum();
@@ -6567,7 +6589,7 @@ impl App {
                     .map(|q| ipc::api::QueueInfo {
                         name: q.name.clone(),
                         running: q.running,
-                        ids: q.items.clone(),
+                        ids: q.items.iter().copied().filter(|id| !private_ids.contains(id)).collect(),
                     })
                     .collect();
                 let categories = Category::all()
@@ -6705,7 +6727,9 @@ impl App {
         };
         // Already in the list: no one at the computer to ask, so Options' choice, with "ask"
         // taken as "add it again" (under a numbered name).
-        if let Some(dup) = self.items.iter().find(|i| i.url == url).map(|i| i.id) {
+        if let Some(dup) = self.items.iter()
+            .find(|i| i.url == url && (!cmd.remote || !i.context.private)).map(|i| i.id)
+        {
             match self.settings.duplicate_action {
                 2 => self.overwrite(dup),
                 3 => {
@@ -6859,6 +6883,7 @@ impl App {
         &mut self,
         action: &str,
         ids: &[u64],
+        remote: bool,
     ) -> Result<ipc::api::ActAnswer, ipc::api::ErrorAnswer> {
         if !matches!(action, "pause" | "start" | "remove" | "delete") {
             return Err(ipc::api::ErrorAnswer {
@@ -6868,7 +6893,7 @@ impl App {
         }
         let mut answer = ipc::api::ActAnswer::default();
         for &id in ids {
-            let Some(item) = self.item(id) else {
+            let Some(item) = self.item(id).filter(|item| !remote || !item.context.private) else {
                 answer.skipped.push(ipc::api::Skipped {
                     id,
                     why: "no such download".into(),
@@ -13458,7 +13483,7 @@ mod torrent_recovery_handoff_tests {
 }
 
 #[cfg(test)]
-mod access_key_tests {
+mod app_surface_tests {
     use super::*;
     use crate::chrome::{MenuEntry, access_key};
 
@@ -13533,6 +13558,42 @@ mod access_key_tests {
             loaded,
             crate::Start::Shown,
         ))
+    }
+
+    #[test]
+    fn paired_api_omits_private_downloads_and_sensitive_details() {
+        let mut app = app();
+        app.settings.remote_on = true;
+        app.settings.automation_api = true;
+        app.items[0].context.private = true;
+        let item = &mut app.items[1];
+        item.url = url::Url::parse("https://example.com/archive?credential=source-token").unwrap();
+        item.dest = PathBuf::from("local-folder/archive.zip");
+        item.status = Status::Error;
+        item.error = Some("Failed to create local-folder/archive.zip".into());
+
+        let mut list = ipc::Command { query: Some("list".into()), remote: true, ..Default::default() };
+        let remote: ipc::api::ListAnswer = serde_json::from_str(&app.answer(&list)).unwrap();
+        assert_eq!(remote.downloads.iter().map(|item| item.id).collect::<Vec<_>>(), [2, 3]);
+        assert!(remote.downloads.iter().all(|item| item.url.is_empty() && item.path.is_empty()));
+        assert!(remote.downloads[0].error.as_deref().is_some_and(|error| !error.contains("local-folder")));
+        assert!(remote.queues[0].ids.is_empty());
+
+        let remove = ipc::Command { action: Some("remove".into()), ids: vec![1], remote: true, ..Default::default() };
+        let result: ipc::api::ActAnswer = serde_json::from_str(&app.answer(&remove)).unwrap();
+        assert!(result.done.is_empty());
+        assert_eq!(result.skipped[0].why, "no such download");
+        let stop = ipc::Command { action: Some("stop_queue".into()), queue: Some(app.queues[0].name.clone()),
+            remote: true, ..Default::default() };
+        let result: ipc::api::ErrorAnswer = serde_json::from_str(&app.answer(&stop)).unwrap();
+        assert_eq!(result.code.as_deref(), Some("local-queue"));
+
+        list.remote = false;
+        let local: ipc::api::ListAnswer = serde_json::from_str(&app.answer(&list)).unwrap();
+        assert_eq!(local.downloads.len(), 3);
+        assert_eq!(local.queues[0].ids, [1]);
+        assert!(local.downloads[1].url.contains("source-token"));
+        assert!(local.downloads[1].error.as_deref().is_some_and(|error| error.contains("local-folder")));
     }
 
     /// Every menu MDM builds, in the states that change them: the menu bar, its menus, the

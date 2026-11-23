@@ -41,6 +41,32 @@ function frame(x, y, width, height, radius, style) {
             V ${y + r} Q ${x} ${y} ${x + r} ${y} Z`;
 }
 
+function buttonFrame(x, y, width, height, radius, style) {
+    if (style !== "bubble" || width <= 0 || height <= 0 || radius <= 0)
+        return frame(x, y, width, height, radius, style);
+
+    const corner = Math.min(radius, width * .27, height * .37);
+    const wave = corner * .22;
+    const right = x + width;
+    const top = y + wave;
+    const bottom = y + height - wave;
+    const leftShoulder = x + corner;
+    const rightShoulder = right - corner;
+    const center = x + width * .5;
+    const handle = (center - leftShoulder) * .36;
+    return `M ${leftShoulder} ${top}
+            C ${leftShoulder + handle} ${top} ${center - handle} ${top - 2.5 * wave} ${center} ${top}
+            S ${rightShoulder - handle} ${top} ${rightShoulder} ${top}
+            Q ${right} ${top} ${right} ${top + corner}
+            V ${bottom - corner}
+            Q ${right} ${bottom} ${rightShoulder} ${bottom}
+            C ${rightShoulder - handle} ${bottom} ${center + handle} ${bottom + 2.5 * wave} ${center} ${bottom}
+            S ${leftShoulder + handle} ${bottom} ${leftShoulder} ${bottom}
+            Q ${x} ${bottom} ${x} ${bottom - corner}
+            V ${top + corner}
+            Q ${x} ${top} ${leftShoulder} ${top} Z`;
+}
+
 function cutCorners(width, height, radius, style) {
     const cut = Math.max(0, Math.min(radius, width * .41, height * .49));
     return {

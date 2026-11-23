@@ -9,11 +9,11 @@ pub mod browsers;
 pub mod capture;
 pub mod extension;
 
-use std::io::{BufRead, BufReader, Write};
+use std::io::{self, BufRead, BufReader, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
 use std::path::PathBuf;
 use std::sync::mpsc::Sender;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 
@@ -468,6 +468,8 @@ pub fn request_checked(cmd: &Command) -> Result<String, SendError> {
 const ANSWER_WAIT: Duration = Duration::from_secs(2);
 /// How long the channel waits for the app's answer to a question before saying `timeout`.
 const REPLY_WAIT: Duration = Duration::from_secs(2);
+/// Allows large download histories while bounding replies from a stale or invalid endpoint.
+const MAX_REPLY: usize = 64 << 20;
 
 /// Why a command didn't reach the app.
 #[derive(Debug)]
@@ -513,7 +515,7 @@ fn exchange(cmd: &Command, wait: Duration) -> Result<String, SendError> {
     let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, ep.port));
     let mut s = TcpStream::connect_timeout(&addr, Duration::from_millis(500))
         .map_err(|e| not_running(e.to_string()))?;
-    s.set_read_timeout(Some(wait)).ok();
+    s.set_write_timeout(Some(ANSWER_WAIT)).map_err(refused)?;
     let line = serde_json::to_string(&Envelope {
         token: ep.token,
         cmd: cmd.clone(),
@@ -521,16 +523,44 @@ fn exchange(cmd: &Command, wait: Duration) -> Result<String, SendError> {
     .map_err(|e| SendError::Refused(e.to_string()))?;
     s.write_all(format!("{line}\n").as_bytes())
         .map_err(refused)?;
-    let mut ack = String::new();
-    BufReader::new(s).read_line(&mut ack).map_err(refused)?;
-    Ok(ack.trim_end().to_owned())
+    let mut ack = read_answer(s, wait).map_err(refused)?;
+    ack.truncate(ack.trim_end().len());
+    Ok(ack)
+}
+
+fn read_answer(conn: TcpStream, wait: Duration) -> io::Result<String> {
+    let deadline = Instant::now() + wait;
+    let mut reader = BufReader::new(conn);
+    let mut answer = Vec::new();
+    loop {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return Err(io::Error::new(io::ErrorKind::TimedOut, "IPC reply timed out"));
+        }
+        reader.get_ref().set_read_timeout(Some(remaining))?;
+        let buf = reader.fill_buf()?;
+        let newline = buf.iter().position(|&byte| byte == b'\n');
+        let count = newline.unwrap_or(buf.len());
+        if answer.len() + count > MAX_REPLY {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "IPC reply is too large",
+            ));
+        }
+        answer.extend_from_slice(&buf[..count]);
+        if newline.is_some() || buf.is_empty() {
+            return String::from_utf8(answer)
+                .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err));
+        }
+        reader.consume(count);
+    }
 }
 
 /// Start listening; commands arrive on `tx` and `wake` is called for each (repaint the UI).
 pub fn serve(tx: Sender<Incoming>, wake: impl Fn() + Send + Sync + 'static) -> std::io::Result<()> {
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
     let port = listener.local_addr()?.port();
-    let token = random_token();
+    let token = create_token()?;
     if let Some(path) = endpoint_path() {
         if let Some(dir) = path.parent() {
             private_dir(dir)?;
@@ -586,6 +616,9 @@ fn accept_loop(
 }
 
 fn handle(conn: &TcpStream, token: &str, tx: &Sender<Incoming>, wake: &dyn Fn()) {
+    if conn.set_write_timeout(Some(ANSWER_WAIT)).is_err() {
+        return;
+    }
     let line = match read_request(conn) {
         Ok(line) => line,
         // Said so, so the browser's host doesn't take silence for an app that isn't there.
@@ -622,7 +655,10 @@ fn handle(conn: &TcpStream, token: &str, tx: &Sender<Incoming>, wake: &dyn Fn())
                 let answer = rrx
                     .recv_timeout(REPLY_WAIT)
                     .unwrap_or_else(|_| "timeout".into());
-                let _ = (&*conn).write_all(format!("{answer}\n").as_bytes());
+                let mut writer = conn;
+                if writer.write_all(answer.as_bytes()).is_ok() {
+                    let _ = writer.write_all(b"\n");
+                }
                 return;
             }
             // The app is quitting (its receiver gone): the command would be lost.
@@ -740,19 +776,22 @@ fn read_request(conn: &std::net::TcpStream) -> Result<String, Option<TooLarge>> 
     String::from_utf8(buf).map_err(|_| None)
 }
 
-/// 128 random bits from the OS, as hex (no extra crate: the std hasher's per-process keys).
+/// 256 random bits from the operating system, as hex.
 /// The channel's token, and each look-up's of the browser's quality menu
 /// (crates/app/src/videolookup.rs).
 pub fn random_token() -> String {
-    use std::collections::hash_map::RandomState;
-    use std::hash::{BuildHasher, Hasher};
-    (0..4)
-        .map(|i| {
-            let mut h = RandomState::new().build_hasher();
-            h.write_u64(i ^ std::process::id() as u64);
-            format!("{:016x}", h.finish())
-        })
-        .collect()
+    create_token().expect("the operating system's random number generator")
+}
+
+fn create_token() -> io::Result<String> {
+    use std::fmt::Write as _;
+    let mut bytes = [0u8; 32];
+    getrandom::fill(&mut bytes).map_err(|error| io::Error::other(error.to_string()))?;
+    let mut token = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        write!(token, "{byte:02x}").expect("formatting into String cannot fail");
+    }
+    Ok(token)
 }
 
 /// The argument every startup entry passes (the Run key, the XDG autostart entry, the
@@ -947,8 +986,9 @@ mod tests {
                 .send("{\"downloads\":[]}".into())
                 .unwrap();
         });
-        let line = b"{\"token\":\"secret\",\"query\":\"list\"}\n";
-        assert_eq!(exchange(port, line), "{\"downloads\":[]}\n");
+        let mut client = TcpStream::connect((Ipv4Addr::LOCALHOST, port)).unwrap();
+        client.write_all(b"{\"token\":\"secret\",\"query\":\"list\"}\n").unwrap();
+        assert_eq!(read_answer(client, ANSWER_WAIT).unwrap(), "{\"downloads\":[]}");
     }
 
     /// The browser's quality menu asks questions: each of its three wants the app's answer, and

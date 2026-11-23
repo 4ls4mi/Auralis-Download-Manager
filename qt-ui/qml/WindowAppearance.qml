@@ -66,12 +66,13 @@ QtObject {
 
     function fileUrl(path) {
         const value = String(path || "").replace(/\\/g, "/")
-        if (value.startsWith("file:")) return value
+        if (value.startsWith("file:")) return String(engine.localMediaUrl(value))
         if (!/^(?:\/|[A-Za-z]:\/)/.test(value)) return ""
         const encoded = value.split("/").map((part, index) =>
             index === 0 && /^[A-Za-z]:$/.test(part) ? part : encodeURIComponent(part)).join("/")
-        return encoded.startsWith("//") ? "file:" + encoded
+        const url = encoded.startsWith("//") ? "file:" + encoded
             : encoded.startsWith("/") ? "file://" + encoded : "file:///" + encoded
+        return String(engine.localMediaUrl(url))
     }
 
     function colorText(color) {

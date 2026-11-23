@@ -212,7 +212,7 @@ Dialog {
             Accessible.name: qsTr("Cookie header")
             background: GlassSurface { role: "field" }
         }
-        Label { visible: Boolean(root.lookupResult.title); text: root.lookupResult.title || ""; color: root.colors.ink; Layout.fillWidth: true; elide: Text.ElideRight }
+        Label { visible: Boolean(root.lookupResult.title); text: root.lookupResult.title || ""; textFormat: Text.PlainText; color: root.colors.ink; Layout.fillWidth: true; elide: Text.ElideRight }
         Label {
             visible: (root.lookupResult.state && root.lookupResult.state !== "ready") || root.failure !== ""
             Layout.fillWidth: true
@@ -221,6 +221,7 @@ Dialog {
             text: root.failure || (root.lookupResult.state === "pending" ? qsTr("Looking up available qualities…")
                  : root.lookupResult.reason === "no-ytdlp" ? qsTr("Install yt-dlp from Settings → Advanced.")
                  : root.lookupResult.message || root.lookupResult.reason || qsTr("This video could not be loaded."))
+            textFormat: Text.PlainText
         }
         TabBar {
             id: qualityTabs

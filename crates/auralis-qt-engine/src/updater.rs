@@ -15,6 +15,7 @@ const FEED: &str =
 // webhooks. The installer still comes from GitHub and must match its digest.
 const FALLBACK_FEED: &str = "https://auralis-release-push.auralis-updates.workers.dev/latest";
 const ASSET_PREFIX: &str = "https://github.com/4ls4mi/Auralis-Download-Manager/releases/download/";
+const MAX_FEED_BYTES: u64 = 8 * 1024 * 1024;
 const MAX_BYTES: u64 = 256 * 1024 * 1024;
 #[derive(Clone)]
 struct Candidate {
@@ -71,14 +72,29 @@ pub struct UpdateStatus {
     notes: Option<String>,
     size: Option<u64>,
 }
-fn client(timeout: Duration) -> Result<reqwest::blocking::Client, String> {
+fn client(
+    timeout: Duration,
+    redirect: reqwest::redirect::Policy,
+) -> Result<reqwest::blocking::Client, String> {
     reqwest::blocking::Client::builder()
         .user_agent("AuralisDownloadManager/update-check")
+        .https_only(true)
+        .redirect(redirect)
         .connect_timeout(Duration::from_secs(8))
         .timeout(timeout)
         .build()
         .map_err(|e| e.to_string())
 }
+fn installer_redirect(url: &reqwest::Url, previous: &[reqwest::Url]) -> bool {
+    previous.len() == 1
+        && previous[0].host_str() == Some("github.com")
+        && url.scheme() == "https"
+        && url.host_str() == Some("release-assets.githubusercontent.com")
+        && url.port().is_none()
+        && url.username().is_empty()
+        && url.password().is_none()
+}
+
 fn candidate_from_release(
     value: &serde_json::Value,
     current: &str,
@@ -86,12 +102,16 @@ fn candidate_from_release(
     let Some(tag) = value["tag_name"].as_str() else {
         return Ok(None);
     };
-    let Ok(version) = semver::Version::parse(tag.trim_start_matches(['v', 'V'])) else {
+    let number = tag
+        .strip_prefix('v')
+        .or_else(|| tag.strip_prefix('V'))
+        .unwrap_or(tag);
+    let Ok(version) = semver::Version::parse(number) else {
         return Ok(None);
     };
     let current =
         semver::Version::parse(current).map_err(|_| "The installed version is invalid")?;
-    if version <= current {
+    if version <= current || !version.pre.is_empty() || !version.build.is_empty() {
         return Ok(None);
     }
     // This repository also carries upstream MDM releases. Only releases with the Auralis
@@ -105,10 +125,12 @@ fn candidate_from_release(
     ];
     let matches: Vec<_> = assets
         .iter()
-        .filter(|asset| {
-            asset["name"]
-                .as_str()
-                .is_some_and(|name| expected_names.iter().any(|expected| expected == name))
+        .filter_map(|asset| {
+            let name = asset["name"].as_str()?;
+            expected_names
+                .iter()
+                .any(|expected| expected == name)
+                .then_some((asset, name))
         })
         .collect();
     if matches.is_empty() {
@@ -117,12 +139,15 @@ fn candidate_from_release(
     if matches.len() != 1 {
         return Err("This Auralis release must contain exactly one Windows x64 installer".into());
     }
-    let asset = matches[0];
+    let (asset, name) = matches[0];
     let url = asset["browser_download_url"]
         .as_str()
         .ok_or("The installer address is missing")?;
-    if !url.starts_with(ASSET_PREFIX) || url.contains('?') || url.contains('#') {
-        return Err("The installer is not from the Auralis GitHub releases".into());
+    let canonical_url = format!("{ASSET_PREFIX}{tag}/{}", name.replace(' ', "%20"));
+    if url != canonical_url && url != format!("{ASSET_PREFIX}{tag}/{name}") {
+        return Err(
+            "The installer address does not match the Auralis release version and asset".into(),
+        );
     }
     let digest = asset["digest"]
         .as_str()
@@ -138,7 +163,7 @@ fn candidate_from_release(
     Ok(Some(Candidate {
         version: version.to_string(),
         notes: value["body"].as_str().unwrap_or("").to_owned(),
-        url: url.to_owned(),
+        url: canonical_url,
         sha256: digest.to_ascii_lowercase(),
         size,
         staged: None,
@@ -155,30 +180,43 @@ fn release_feed(
             .header("Accept", "application/json")
             .send()
             .map_err(|e| e.to_string())?;
-        let value: serde_json::Value = response
-            .error_for_status()
-            .map_err(|e| e.to_string())?
-            .json()
+        let response = response.error_for_status().map_err(|e| e.to_string())?;
+        let mut bytes = Vec::new();
+        response
+            .take(MAX_FEED_BYTES + 1)
+            .read_to_end(&mut bytes)
             .map_err(|e| e.to_string())?;
+        if bytes.len() as u64 > MAX_FEED_BYTES {
+            return Err("The release feed exceeds its size limit".into());
+        }
+        let value: serde_json::Value = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
         if !value.is_array() {
             return Err("The release feed is invalid".into());
         }
         Ok(value)
     };
     match fetch(primary) {
-        Ok(value)=>Ok(value),
-        Err(error)=>fetch(fallback).map_err(|_|format!("Update check unavailable (GitHub: {error}); try again later or download the latest release from GitHub.")),
+        Ok(value) => Ok(value),
+        Err(error) => fetch(fallback).map_err(|_| {
+            format!("Update check unavailable (GitHub: {error}). Try again later or download the latest release from GitHub.")
+        }),
     }
 }
 fn check(current: &str) -> Result<UpdateStatus, String> {
     semver::Version::parse(current).map_err(|_| "The installed version is invalid")?;
-    let value = release_feed(&client(Duration::from_secs(12))?, FEED, FALLBACK_FEED)?;
+    let value = release_feed(
+        &client(Duration::from_secs(12), reqwest::redirect::Policy::none())?,
+        FEED,
+        FALLBACK_FEED,
+    )?;
     let releases = value
         .as_array()
         .ok_or("The GitHub release feed is invalid")?;
     let mut next: Option<Candidate> = None;
     for release in releases {
-        if release["draft"] == true || release["prerelease"] == true {
+        if release["draft"].as_bool() != Some(false)
+            || release["prerelease"].as_bool() != Some(false)
+        {
             continue;
         }
         if let Some(candidate) = candidate_from_release(release, current)? {
@@ -209,9 +247,14 @@ fn check(current: &str) -> Result<UpdateStatus, String> {
         },
     };
     let mut state = lock()?;
-    if let (Some(new), Some(old)) = (&mut next, state.as_ref()) {
-        if new.url == old.url && new.sha256 == old.sha256 {
-            new.staged = old.staged.clone();
+    if let Some(old) = state.as_mut() {
+        if let Some(new) = next
+            .as_mut()
+            .filter(|new| new.url == old.url && new.sha256 == old.sha256 && new.size == old.size)
+        {
+            new.staged = old.staged.take();
+        } else if let Some(staged) = old.staged.take() {
+            let _ = fs::remove_file(staged);
         }
     }
     *state = next;
@@ -275,23 +318,34 @@ fn copy_installer(
 }
 
 fn stage_installer(c: &Candidate) -> Result<PathBuf, String> {
-    let folder = mdm_ipc::data_dir()
-        .ok_or("The application profile is unavailable")?
-        .join("updates");
-    mdm_ipc::private_dir(&folder).map_err(|e| e.to_string())?;
+    // Custom download profiles can be shared or portable. The installer belongs
+    // in the Windows user's own profile, independent of the download state.
+    let folder = std::env::var_os("LOCALAPPDATA")
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute())
+        .ok_or("The Windows user profile is unavailable")?
+        .join("Auralis Download Manager Updates");
+    fs::create_dir_all(&folder).map_err(|e| e.to_string())?;
     let nonce = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|e| e.to_string())?
         .as_nanos();
-    let tmp = folder.join(format!("glass-{nonce}.part"));
-    let final_path = folder.join(format!("glass-{nonce}.exe"));
+    let tmp = folder.join(format!("auralis-update-{nonce}.part"));
+    let final_path = folder.join(format!("auralis-update-{nonce}.exe"));
     let result = (|| -> Result<(), String> {
-        let source = client(Duration::from_secs(180))?
+        let redirect = reqwest::redirect::Policy::custom(|attempt| {
+            if installer_redirect(attempt.url(), attempt.previous()) {
+                attempt.follow()
+            } else {
+                attempt.error("Unexpected installer download redirect")
+            }
+        });
+        let source = client(Duration::from_secs(180), redirect)?
             .get(&c.url)
             .send()
-            .map_err(|e| e.to_string())?
+            .map_err(|e| e.without_url().to_string())?
             .error_for_status()
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| e.without_url().to_string())?;
         let mut file = OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -325,7 +379,7 @@ fn download(version: &str) -> Result<u64, String> {
         let mut state = lock()?;
         let Some(next) = state
             .as_mut()
-            .filter(|next| next.url == c.url && next.sha256 == c.sha256)
+            .filter(|next| next.url == c.url && next.sha256 == c.sha256 && next.size == c.size)
         else {
             let _ = fs::remove_file(staged);
             return Err("The selected release changed; check again".into());
@@ -343,6 +397,25 @@ fn download(version: &str) -> Result<u64, String> {
     result
 }
 
+#[cfg(windows)]
+fn system_directory() -> Result<PathBuf, String> {
+    use std::{ffi::OsString, os::windows::ffi::OsStringExt};
+
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn GetSystemDirectoryW(buffer: *mut u16, size: u32) -> u32;
+    }
+
+    let mut buffer = [0_u16; 260];
+    // Windows writes at most the supplied number of UTF-16 code units.
+    let length = unsafe { GetSystemDirectoryW(buffer.as_mut_ptr(), buffer.len() as u32) } as usize;
+    if length == 0 || length >= buffer.len() {
+        return Err("The Windows system folder is unavailable".into());
+    }
+    Ok(PathBuf::from(OsString::from_wide(&buffer[..length])))
+}
+
+#[cfg(windows)]
 fn install(version: &str) -> Result<(), String> {
     use std::os::windows::process::CommandExt;
     let c = selected_candidate(version)?;
@@ -358,25 +431,29 @@ fn install(version: &str) -> Result<(), String> {
             "Automatic updates require the installed version of Auralis Download Manager".into(),
         );
     }
-    // Paths travel as environment variables, never as PowerShell source.
-    let script = r#"$ErrorActionPreference='Stop'; $p=[int]$env:MHG_UPDATE_PID; Wait-Process -Id $p -Timeout 90 -ErrorAction SilentlyContinue; if (Get-Process -Id $p -ErrorAction SilentlyContinue) { exit 1 }; $backend=Join-Path (Split-Path $env:MHG_UPDATE_OLD) 'mdm-legacy.exe'; for ($n=0; $n -lt 30; $n++) { $busy=Get-Process -Name 'mdm-legacy' -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $backend }; if (!$busy) { break }; Start-Sleep -Seconds 1 }; if ($busy) { Start-Process -FilePath $env:MHG_UPDATE_OLD; exit 1 }; try { $x=Start-Process -FilePath $env:MHG_UPDATE_INSTALLER -ArgumentList '/P','/UPDATE','/R' -PassThru; $x.WaitForExit(); if ($x.ExitCode -ne 0) { Start-Process -FilePath $env:MHG_UPDATE_OLD } } catch { Start-Process -FilePath $env:MHG_UPDATE_OLD }"#;
-    std::process::Command::new("powershell.exe")
+    let system = system_directory()?;
+    // Paths and integrity data travel as environment variables, never as PowerShell source.
+    std::process::Command::new(system.join("WindowsPowerShell/v1.0/powershell.exe"))
         .args([
             "-NoProfile",
             "-NonInteractive",
             "-WindowStyle",
             "Hidden",
             "-Command",
-            script,
+            include_str!("install-update.ps1"),
         ])
-        .env("MHG_UPDATE_PID", std::process::id().to_string())
-        .env("MHG_UPDATE_INSTALLER", &installer)
-        .env("MHG_UPDATE_OLD", &exe)
+        .current_dir(system)
+        .env("AURALIS_UPDATE_PID", std::process::id().to_string())
+        .env("AURALIS_UPDATE_INSTALLER", &installer)
+        .env("AURALIS_UPDATE_OLD", &exe)
+        .env("AURALIS_UPDATE_SHA256", &c.sha256)
+        .env("AURALIS_UPDATE_SIZE", c.size.to_string())
         .creation_flags(0x08000000)
         .spawn()
         .map_err(|e| format!("Could not start the installer: {e}"))?;
     Ok(())
 }
+#[cfg(windows)]
 pub(super) fn dispatch(
     action: &str,
     request: &serde_json::Value,
@@ -412,20 +489,25 @@ pub(super) fn dispatch(
 #[cfg(test)]
 mod tests {
     use super::*;
+    const LEGACY_URL: &str = "https://github.com/4ls4mi/Auralis-Download-Manager/releases/download/v0.3.2/Auralis%20Download%20Manager_0.3.2_x64-setup.exe";
+    const RELEASE_URL: &str = "https://github.com/4ls4mi/Auralis-Download-Manager/releases/download/v0.3.2/Auralis.Download.Manager_0.3.2_x64-setup.exe";
+
     fn release(url: &str, digest: &str) -> serde_json::Value {
         serde_json::json!({"tag_name":"v0.3.2","body":"Changes", "assets":[{"name":"Auralis Download Manager_0.3.2_x64-setup.exe","browser_download_url":url,"digest":digest,"size":123}]})
     }
     #[test]
     fn accepts_only_newer_fork_installer_with_digest() {
-        let good = release(
-            "https://github.com/4ls4mi/Auralis-Download-Manager/releases/download/v0.3.2/setup.exe",
-            &format!("sha256:{}", "a".repeat(64)),
+        let digest = format!("sha256:{}", "a".repeat(64));
+        let good = release(LEGACY_URL, &digest);
+        assert_eq!(
+            candidate_from_release(&good, "0.3.1").unwrap().unwrap().url,
+            LEGACY_URL
         );
-        assert!(candidate_from_release(&good, "0.3.1").unwrap().is_some());
         assert!(candidate_from_release(&good, "0.3.2").unwrap().is_none());
         let mut published = good.clone();
         published["assets"][0]["name"] =
             serde_json::json!("Auralis.Download.Manager_0.3.2_x64-setup.exe");
+        published["assets"][0]["browser_download_url"] = serde_json::json!(RELEASE_URL);
         assert!(
             candidate_from_release(&published, "0.3.1")
                 .unwrap()
@@ -434,16 +516,27 @@ mod tests {
         let mut wrong = good.clone();
         wrong["assets"][0]["name"] = serde_json::json!("MisterDownloadManager-0.9.0-setup.exe");
         assert!(candidate_from_release(&wrong, "0.3.1").unwrap().is_none());
-        let bad = release(
-            "https://evil.example/setup.exe",
-            &format!("sha256:{}", "a".repeat(64)),
-        );
-        assert!(candidate_from_release(&bad, "0.3.1").is_err());
-        let bad = release(
-            "https://github.com/4ls4mi/Auralis-Download-Manager/releases/download/v0.3.2/setup.exe",
-            "sha256:bad",
-        );
-        assert!(candidate_from_release(&bad, "0.3.1").is_err());
+        let other_artifact = release(RELEASE_URL, &digest);
+        assert!(candidate_from_release(&other_artifact, "0.3.1").is_err());
+        let other_tag = release(&LEGACY_URL.replace("/v0.3.2/", "/v0.3.1/"), &digest);
+        assert!(candidate_from_release(&other_tag, "0.3.1").is_err());
+        let invalid_digest = release(LEGACY_URL, "sha256:bad");
+        assert!(candidate_from_release(&invalid_digest, "0.3.1").is_err());
+    }
+
+    #[test]
+    fn only_follows_the_github_asset_cdn_handoff() {
+        let parse = |url| reqwest::Url::parse(url).unwrap();
+        let asset = parse(RELEASE_URL);
+        let cdn =
+            parse("https://release-assets.githubusercontent.com/github-production-release-asset");
+        assert!(installer_redirect(&cdn, std::slice::from_ref(&asset)));
+        assert!(!installer_redirect(&asset, std::slice::from_ref(&cdn)));
+        assert!(!installer_redirect(&cdn, &[asset.clone(), cdn.clone()]));
+        assert!(!installer_redirect(
+            &parse("http://release-assets.githubusercontent.com/"),
+            &[asset]
+        ));
     }
 
     #[test]

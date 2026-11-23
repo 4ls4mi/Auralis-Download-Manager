@@ -27,6 +27,7 @@ pub mod candidate_search;
 pub mod manual_recovery_source;
 mod names;
 pub mod rename_plugin;
+mod storage_paths;
 pub mod trackers;
 mod watch;
 pub use names::{UnsafeName, check as check_names};
@@ -410,9 +411,13 @@ fn prepare_saved(dir: &Path, proxied: bool) {
             changed = true;
             return false;
         };
+        if hash.len() != 40 || !hash.bytes().all(|digit| digit.is_ascii_hexdigit()) {
+            changed = true;
+            return false;
+        }
         let hash = hash.to_ascii_lowercase();
         let file = dir.join(format!("{hash}.torrent"));
-        let bytes = std::fs::read(&file).ok().filter(|b| check_bytes(b).is_ok());
+        let bytes = read_file(&file).ok().filter(|b| check_bytes(b).is_ok());
         let Some(bytes) = bytes else {
             for ext in ["torrent", "bitv"] {
                 let _ = std::fs::remove_file(dir.join(format!("{hash}.{ext}")));
@@ -420,6 +425,18 @@ fn prepare_saved(dir: &Path, proxied: bool) {
             changed = true;
             return false;
         };
+        let Some(output) = entry.get("output_folder").and_then(|path| path.as_str()) else {
+            changed = true;
+            return false;
+        };
+        if files_from_bytes(&bytes)
+            .and_then(|files| storage_paths::validate(Path::new(output), &files).map_err(engine))
+            .is_err()
+        {
+            tracing::warn!("torrent {hash}: automatic restore refused unsafe storage paths");
+            changed = true;
+            return false;
+        }
         if let Some(filtered) = trackers::filter_torrent(&bytes, proxied).filter(|f| *f != bytes) {
             let _ = std::fs::write(&file, filtered);
         }
@@ -1128,7 +1145,7 @@ impl Torrents {
         paused: bool,
     ) -> Result<String, TorrentError> {
         // Checked here too, whatever the caller (the app, the command line, a saved torrent).
-        check_bytes(torrent)?;
+        let entries = files_from_bytes(torrent)?;
         let wanted = librqbit::torrent_from_bytes(torrent)
             .map_err(|_| TorrentError::NotATorrent)?
             .info_hash
@@ -1146,6 +1163,7 @@ impl Torrents {
         };
         let res = {
             let _one = self.adding.lock().await;
+            storage_paths::validate(folder, &entries).map_err(engine)?;
             self.session
                 .add_torrent(AddTorrent::from_bytes(torrent), Some(opts))
                 .await

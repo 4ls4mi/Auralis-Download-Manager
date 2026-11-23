@@ -20,7 +20,6 @@ Item {
     property bool showReflection: role === "toolbar" && profile.shape === "aero"
 
     readonly property var profile: MaterialTheme.profile(material)
-    readonly property bool button: role === "button"
     readonly property bool shell: role === "window" || role === "modal"
     readonly property bool recess: role === "content" || role === "field" || role === "sidebar"
     readonly property bool sculpted: ["bubble", "aero"].includes(profile.shape)
@@ -40,13 +39,11 @@ Item {
         ? Math.max(foregroundBacking, MaterialTheme.opacityFor(material)) : 1
     readonly property real bevel: Math.max(1, Math.min(profile.bevel, height * .14, width * .10))
     readonly property real depth: Math.min(height / 3, 28 + profile.bevel)
-    readonly property real reflectivity: profile.gloss * (role === "field" ? .54 : role === "button" ? .82 : 1)
+    readonly property real reflectivity: profile.gloss * (role === "field" ? .54 : 1)
     readonly property real backingAlpha: {
         const amount = MaterialTheme.opacityFor(material);
         if (shell)
             return mediaOverlay >= 0 ? mediaOverlay : backdropAvailable ? amount : 1;
-        if (button)
-            return profile.opaque ? 1 : Math.min(.97, .41 + amount * .33 + emphasis * .30);
         if (plainMaterialAlpha)
             return Math.max(foregroundBacking, amount);
         if (role === "field")
@@ -59,23 +56,16 @@ Item {
                 return solidColor;
             return tintBacking ? MaterialTheme.tint(solidColor, backingAlpha) : MaterialTheme.rgba(solidColor, backingAlpha);
         }
-        if (button)
-            return MaterialTheme.mix(profile.buttonFace || profile.background, accent, .07 + emphasis * .38, backingAlpha);
         return MaterialTheme.tint(profile.background, backingAlpha);
     }
-    readonly property color rim: button
-        ? MaterialTheme.mix(profile.edge, accent, .35 + emphasis * .45, .43 + emphasis * .52)
-        : MaterialTheme.rgba(profile.edge, .33 + .32 * reflectivity)
+    readonly property color rim: MaterialTheme.rgba(profile.edge, .33 + .32 * reflectivity)
     readonly property string framePath: Geometry.frame(.6, .6, width - 1.2, height - 1.2, radius, outline)
 
     Rectangle {
         anchors.fill: parent
         visible: surface.flatStudio
-        radius: surface.button || surface.role === "field" || surface.studioPanel ? surface.radius : 0
-        color: surface.shell ? surface.backing : surface.button
-            ? MaterialTheme.mix(surface.profile.buttonFace || surface.profile.background, surface.accent,
-                Math.max(0, surface.emphasis - .12) * .37, 1)
-            : MaterialTheme.rgba(surface.flatFace, surface.flatFaceOpacity)
+        radius: surface.role === "field" || surface.studioPanel ? surface.radius : 0
+        color: surface.shell ? surface.backing : MaterialTheme.rgba(surface.flatFace, surface.flatFaceOpacity)
         border.width: surface.shell || surface.role === "field" ? 1 : 0
         border.color: surface.profile.surfaceLine || surface.profile.divider
 
@@ -110,7 +100,7 @@ Item {
                 GradientStop {
                     position: 0
                     color: MaterialTheme.rgba(surface.recess ? surface.profile.shade : surface.profile.upper,
-                        surface.recess ? .24 : .12 + .27 * surface.reflectivity + (surface.button ? .20 * surface.emphasis : 0))
+                        surface.recess ? .24 : .12 + .27 * surface.reflectivity)
                 }
                 GradientStop { position: .21; color: "transparent" }
                 GradientStop { position: .70; color: "transparent" }
@@ -124,7 +114,7 @@ Item {
             strokeColor: MaterialTheme.rgba(surface.profile.shade, surface.recess ? .27 : .34)
             fillColor: "transparent"
             PathSvg {
-                path: surface.cleanChrome && !surface.shell && !surface.button ? "" :
+                path: surface.cleanChrome && !surface.shell ? "" :
                     Geometry.frame(surface.bevel, surface.bevel, surface.width - 2 * surface.bevel,
                                    surface.height - 2 * surface.bevel, Math.max(0, surface.radius - surface.bevel), surface.outline)
             }
@@ -222,7 +212,7 @@ Item {
             fillGradient: LinearGradient {
                 x1: 0; y1: 0
                 x2: surface.width; y2: surface.height
-                GradientStop { position: 0; color: MaterialTheme.rgba(surface.accent, surface.emphasis * (surface.button ? .34 : .39)) }
+                GradientStop { position: 0; color: MaterialTheme.rgba(surface.accent, surface.emphasis * .39) }
                 GradientStop { position: 1; color: MaterialTheme.rgba(surface.accent, surface.emphasis * .07) }
             }
             PathSvg { path: surface.emphasis > 0 ? surface.framePath : "" }

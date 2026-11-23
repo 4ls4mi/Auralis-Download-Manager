@@ -340,11 +340,15 @@ fn in_place(
     let out = match resume {
         Some(out) => out,
         None => {
-            let out = hatchzip::work_folder(&policy.dest, &base);
-            runs.start(archive, &out)?;
+            let out = hatchzip::work_folder(&policy.dest, &base)?;
+            if let Err(error) = runs.start(archive, &out) {
+                let _ = std::fs::remove_dir(&out);
+                return Err(error.into());
+            }
             out
         }
     };
+    safe::require_directory(&out)?;
     let run = hatchzip::extract(
         tool,
         archive,

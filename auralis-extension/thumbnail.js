@@ -65,6 +65,7 @@
         const button=document.createElement('button'); button.type='button';
         button.className='quality'; button.textContent = `${choice.label || choice.ext || 'Download'} · ${sizeLabel(choice)}  ↓`;
         button.addEventListener('click', async event => {
+          if (!event.isTrusted) return;
           event.preventDefault(); event.stopPropagation(); button.disabled=true;
           try { const [kind,code]=subs.value.split(':'); const subtitles={langs:code?[code]:[],automatic:kind==='auto',embed:false}; const result=await ext.runtime.sendMessage({type:'video-pick',token:answer.token,choice:index,subs:subtitles});
             status.textContent=['started','queued','sent'].includes(result?.lookup?.state)?'Added to Auralis':'Could not start this download.';
@@ -245,6 +246,7 @@
       const entry={host,portal,position:positionMenu,close:closeMenu};
       host.addEventListener('click',e=>e.stopPropagation());
       button.addEventListener('click',e=>{
+        if (!e.isTrusted) return;
         e.preventDefault();e.stopPropagation();
         if(!menu.hidden){closeMenu();return}
         activeMenu?.close();document.body.append(portal);menu.hidden=false;button.setAttribute('aria-expanded','true');activeMenu=entry;panelResize.observe(menu);
@@ -259,7 +261,7 @@
         for(const option of options)option.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();mode.value=option.dataset.value;input.hidden=mode.value!=='file';trigger.firstElementChild.textContent=option.textContent;for(const other of options)other.setAttribute('aria-selected',String(other===option));close();trigger.focus()});
         controls.querySelector('.cookie-combo').addEventListener('keydown',e=>{if(e.key==='Escape'&&!list.hidden){e.preventDefault();e.stopPropagation();close();trigger.focus()}else if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();e.stopPropagation();list.hidden=false;trigger.setAttribute('aria-expanded','true');const index=options.indexOf(panelRoot.activeElement);options[(index+(e.key==='ArrowDown'?1:options.length-1))%options.length].focus()}});
         const result=document.createElement('div');
-        controls.querySelector('.fetch').addEventListener('click',async e=>{e.preventDefault();e.stopPropagation();const file=input.files?.[0];if(mode.value==='file'&&(!file||file.size>262144)){result.textContent='Choose a cookies.txt file under 256 KB.';return}const content=mode.value==='file'?await file.text():undefined;void lookup(`https://www.youtube.com/watch?v=${id}`,result,mode.value,content)});
+        controls.querySelector('.fetch').addEventListener('click',async e=>{if(!e.isTrusted)return;e.preventDefault();e.stopPropagation();const file=input.files?.[0];if(mode.value==='file'&&(!file||file.size>262144)){result.textContent='Choose a cookies.txt file under 256 KB.';return}const content=mode.value==='file'?await file.text():undefined;void lookup(`https://www.youtube.com/watch?v=${id}`,result,mode.value,content)});
         menu.append(controls,result); void lookup(`https://www.youtube.com/watch?v=${id}`,result,'browser','');
       });
       if (getComputedStyle(anchor).position === 'static') anchor.style.position='relative';

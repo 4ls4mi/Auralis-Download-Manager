@@ -187,8 +187,10 @@ DetachedDialogWindow {
         color: root.colors.ink
         padding: 10
         background: GlassSurface { material: root.material; role: "field" }
-        ToolTip.visible: hovered && contentWidth > width - leftPadding - rightPadding
-        ToolTip.text: text
+        PlainTextToolTip {
+            visible: field.hovered && field.contentWidth > field.width - field.leftPadding - field.rightPadding
+            text: field.text
+        }
     }
 
     component CompletionButton: GlassButton {
@@ -197,12 +199,15 @@ DetachedDialogWindow {
         material: root.material
         contentItem: Row {
             spacing: 6
+            transform: Translate { y: button.faceOffset }
             DashboardIcon {
                 visible: button.symbol !== ""
                 symbol: button.symbol
                 width: 17
                 height: 17
-                ink: button.accentFill ? button.buttonInk : button.displayAccent
+                relief: button.enabled
+                ink: button.iconInk
+                surface: button.faceColor
                 anchors.verticalCenter: parent.verticalCenter
             }
             Label {

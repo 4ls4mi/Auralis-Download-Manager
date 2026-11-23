@@ -303,6 +303,7 @@ QtObject {
                 visible: prompt.failure !== ""
                 Layout.fillWidth: true
                 text: prompt.failure
+                textFormat: Text.PlainText
                 wrapMode: Text.WordWrap
                 color: root.colors.destructive
             }

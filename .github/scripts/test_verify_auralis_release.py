@@ -15,8 +15,9 @@ class VerifyReleaseTest(unittest.TestCase):
         self.files = [Path(self.temp.name) / "installer.exe", Path(self.temp.name) / "extension.zip"]
         for index, path in enumerate(self.files):
             path.write_bytes(f"artifact {index}".encode())
-        self.release = {"draft": True, "tag_name": "v1.2.3", "target_commitish": "abc123", "assets": [
+        self.release = {"draft": True, "prerelease": False, "tag_name": "v1.2.3", "target_commitish": "abc123", "assets": [
             {"name": path.name, "state": "uploaded", "size": path.stat().st_size,
+             "browser_download_url": f"{module.RELEASE_URL}/v1.2.3/{path.name}",
              "digest": "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()}
             for path in self.files
         ]}
@@ -38,6 +39,11 @@ class VerifyReleaseTest(unittest.TestCase):
     def test_missing_digest_is_rejected(self):
         self.release["assets"][0]["digest"] = None
         with self.assertRaisesRegex(ValueError, "digest"):
+            self.check()
+
+    def test_download_url_must_match_the_exact_released_asset(self):
+        self.release["assets"][0]["browser_download_url"] = self.release["assets"][1]["browser_download_url"]
+        with self.assertRaisesRegex(ValueError, "address"):
             self.check()
 
     def test_corrupt_or_unexpected_assets_are_rejected(self):

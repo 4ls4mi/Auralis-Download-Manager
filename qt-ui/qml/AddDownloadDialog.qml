@@ -159,6 +159,7 @@ DetachedDialogWindow {
             visible: root.confirming && !!root.requestInfo.info.error
             Layout.fillWidth: true
             text: root.confirming ? String(root.requestInfo.info.error || "") : ""
+            textFormat: Text.PlainText
             color: root.colors.caution
             wrapMode: Text.WordWrap
         },
@@ -233,6 +234,7 @@ DetachedDialogWindow {
             visible: root.errorMessage !== ""
             Layout.fillWidth: true
             text: root.errorMessage
+            textFormat: Text.PlainText
             wrapMode: Text.WordWrap
             color: root.colors.destructive
             Accessible.name: text

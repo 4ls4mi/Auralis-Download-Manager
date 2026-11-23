@@ -39,9 +39,9 @@ DetachedDialogWindow {
         Label {
             Layout.fillWidth: true
             text: root.message
+            textFormat: Text.PlainText
             wrapMode: Text.Wrap
             color: root.colors.ink
-            textFormat: Text.PlainText
         },
         CheckBox {
             id: option

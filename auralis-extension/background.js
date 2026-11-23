@@ -74,6 +74,10 @@ async function native(message, ms = HOST_WAIT) {
     if (target) return remoteSend(target, message);
   }
   const sent = await stamped(message);
+  if (wireSize(sent) > MESSAGE_MAX) {
+    await noteStatus("too-large");
+    return { ok: false, why: "too-large" };
+  }
   try {
     const reply = (await withTimeout(ext.runtime.sendNativeMessage(HOST, sent), ms)) || {};
     if (reply.version) {
@@ -453,9 +457,23 @@ async function noteLeft(why, name, url, incognito, told) {
 
 // ---- what the page told us: forms posted, links clicked with Alt -------------------------
 
-// Forms posted in a page or frame, by address: a download they lead to is posted again by the
-// app, with the same body (it can't be sent as a GET). Kept two minutes.
+// Only a browser response carrying the same request ID can use a stored form body.
+// Download events without a request ID leave possibly posted URLs to the browser.
 const posts = new Map();
+const postedUrls = new Map();
+const NAVIGATION_TTL = 120000;
+
+function rememberNavigation(map, key, value, limit = 512) {
+  forget(map, NAVIGATION_TTL);
+  map.delete(key);
+  map.set(key, { ...value, at: Date.now() });
+  while (map.size > limit) map.delete(map.keys().next().value);
+}
+
+function recentNavigation(map, key) {
+  const entry = map.get(key);
+  return entry && Date.now() - entry.at <= NAVIGATION_TTL ? entry : undefined;
+}
 const BODY_LIMIT = 512 * 1024;
 // The Referer each page load was sent with, by request (Firefox, two minutes).
 const referrers = new Map();
@@ -499,23 +517,26 @@ function formBody(details) {
 // page shows in one is taken as one the tab goes to is).
 const PAGE_LOADS = ["main_frame", "sub_frame", "object"];
 
-// The page each page load was started from, by address (two minutes, #607): Firefox names it
-// (`originUrl`: the page whose link, form or script asked for it); Chromium gives the tab it loads
-// in, whose address stays the page's while the answer turns out to be a download (`pageOf`).
+// Firefox's response hook can recover its own request's originating page. A download event
+// without a request ID instead uses the browser's tab metadata (`pageOf`).
 const startedFrom = new Map();
 
 if (ext.webRequest) {
   const navigations = { urls: ["<all_urls>"], types: PAGE_LOADS };
   ext.webRequest.onBeforeRequest.addListener(
     (d) => {
-      forget(startedFrom, 120000);
-      if (!startedFrom.has(d.url)) startedFrom.set(d.url, { page: d.originUrl || d.documentUrl || "", tabId: d.tabId, at: Date.now() });
+      if (!d.requestId) return;
+      if (FIREFOX && !recentNavigation(startedFrom, d.requestId)) {
+        rememberNavigation(startedFrom, d.requestId, { page: d.originUrl || d.documentUrl || "", tabId: d.tabId });
+      }
       if (d.method !== "POST") return;
-      forget(posts, 120000);
-      posts.set(d.url, { ...formBody(d), at: Date.now(), id: d.requestId });
+      rememberNavigation(postedUrls, d.url, {});
+      if (FIREFOX && !recentNavigation(posts, d.requestId)) {
+        rememberNavigation(posts, d.requestId, { ...formBody(d), tabId: d.tabId }, 64);
+      }
     },
     navigations,
-    ["requestBody"],
+    FIREFOX ? ["requestBody"] : [],
   );
   // The Content-Type the form went with (a multipart boundary must stay the same), and (Firefox)
   // the page a load came from, for a download caught from its answer (`headersReceived`).
@@ -528,21 +549,28 @@ if (ext.webRequest) {
         if (ref && ref.value) referrers.set(d.requestId, { url: ref.value, at: Date.now() });
       }
       if (d.method !== "POST") return;
-      const p = posts.get(d.url);
+      const p = recentNavigation(posts, d.requestId);
       const ct = header("content-type");
-      if (p && p.id === d.requestId && ct && ct.value) p.type = ct.value;
+      if (p && p.tabId === d.tabId && !p.gotHeaders && ct && ct.value) {
+        p.type = ct.value;
+        p.gotHeaders = true;
+      }
     },
     navigations,
     ["requestHeaders"],
   );
 }
 
-// The form posted to `url` (within two minutes), as the app sends it again: urlencoded fields,
-// or a raw text body with its own type. null: it can't be sent again (a file in it; a multipart
-// form, whose fields the browser gives without its files): the browser keeps the download.
-function postOf(url) {
-  const p = posts.get(url);
-  if (!p || Date.now() - p.at > 120000) return undefined;
+// A response hook knows which request it belongs to. An unrelated download event has only
+// URLs; a matching recent form URL makes the transfer ambiguous and the browser keeps it.
+function postOf(item, urls, clicked) {
+  if (clicked) return undefined; // Safari's watcher was called for a plain link click.
+  const p = recentNavigation(posts, item.requestId);
+  if (!p || p.tabId !== item.tabId) {
+    if (item.requestMethod === "POST" || recentNavigation(redirected, item.requestId)?.posted
+      || (!item.requestId && urls.some((url) => recentNavigation(postedUrls, url)))) return null;
+    return undefined;
+  }
   if (p.body === null || (p.fields && /multipart/i.test(p.type || ""))) return null;
   if (!p.fields) return { body: p.body, type: p.type };
   const params = new URLSearchParams();
@@ -550,16 +578,18 @@ function postOf(url) {
   return { body: params.toString(), type: "application/x-www-form-urlencoded" };
 }
 
-// Where page loads' redirects started, by where they ended (two minutes): Firefox names a
-// download by its last address only, and the app keeps the first (an expired signed link is
-// renewed from it).
+// Where each response hook's redirect chain started (an expired signed link is renewed
+// from there). A URL shared by several tabs is insufficient evidence of that chain.
 const redirected = new Map();
 if (ext.webRequest && ext.webRequest.onBeforeRedirect) {
   ext.webRequest.onBeforeRedirect.addListener(
     (d) => {
-      forget(redirected, 120000);
-      const first = (redirected.get(d.url) || {}).from || d.url;
-      redirected.set(d.redirectUrl, { from: first, at: Date.now() });
+      if (!d.requestId) return;
+      const previous = recentNavigation(redirected, d.requestId);
+      const from = previous ? previous.from : d.url;
+      const posted = d.method === "POST" || previous?.posted === true;
+      if (posted) rememberNavigation(postedUrls, d.redirectUrl, {});
+      rememberNavigation(redirected, d.requestId, { from, posted, tabId: d.tabId });
     },
     { urls: ["<all_urls>"], types: PAGE_LOADS },
   );
@@ -577,8 +607,8 @@ function firstUrl(item) {
     const page = loadedPages.get(item.url);
     return page && Date.now() - page.at < 120000 ? item.finalUrl : item.url;
   }
-  const r = redirected.get(item.url);
-  return r && Date.now() - r.at < 120000 ? r.from : item.url;
+  const r = recentNavigation(redirected, item.requestId);
+  return r && r.tabId === item.tabId ? r.from : item.url;
 }
 
 // Links clicked with Alt (Option on a Mac) held (page.js): the browser keeps their download. By
@@ -720,23 +750,25 @@ function folderOf(url) {
   return /^https?:\/\/[^/]+\/.+/i.test(dir) ? dir : null;
 }
 
+const sameMediaRequest = (a, b) => a.url === b.url && (a.frameId || 0) === (b.frameId || 0);
+
 function noteMedia(d, found, sent) {
   const tab = media.get(d.tabId) || { page: null, items: [] };
   const list = found.ranged ? (tab.ranged = tab.ranged || []) : tab.items;
-  const old = list.find((it) => it.url === d.url);
+  const old = list.find((it) => sameMediaRequest(it, d));
   if (old) {
     if (found.size && !old.size) old.size = found.size;
     if (sent) old.sent = sent;
     return;
   }
   // A file in a stream's own folder is one of its pieces (a DASH init segment, a fragment).
-  const inStream = (it) => isStream(it) && folderOf(it.url) && d.url.startsWith(folderOf(it.url));
+  const inStream = (it) => (d.frameId || 0) === it.frameId && isStream(it) && folderOf(it.url) && d.url.startsWith(folderOf(it.url));
   if (!isStream(found) && tab.items.some(inStream)) return;
   // `at`: when the tab first got it (#1092: what a feed's player loaded while a video played).
   const item = { url: d.url, kind: found.kind, frameId: d.frameId || 0, mime: found.mime, size: found.size, at: Date.now(), ...(sent ? { sent } : {}) };
   if (found.ranged) {
     // The newest RANGED_MAX, apart from the list (a feed's player fetches many).
-    if (tab.items.some((it) => it.url === d.url)) return;
+    if (tab.items.some((it) => sameMediaRequest(it, d))) return;
     list.push(item);
     if (list.length > RANGED_MAX) list.splice(0, list.length - RANGED_MAX);
     if (!media.has(d.tabId)) {
@@ -773,8 +805,8 @@ function noteMedia(d, found, sent) {
 // A response that may be a manifest (#171), noted apart: the newest MAYBE_MAX of the tab.
 function noteMaybe(d, found, sent) {
   const tab = media.get(d.tabId) || { page: null, items: [] };
-  if (tab.items.some((it) => it.url === d.url)) return;
-  tab.maybe = (tab.maybe || []).filter((m) => m.url !== d.url);
+  if (tab.items.some((it) => sameMediaRequest(it, d))) return;
+  tab.maybe = (tab.maybe || []).filter((m) => !sameMediaRequest(m, d));
   tab.maybe.push({ url: d.url, frameId: d.frameId || 0, mime: found.mime, ...(sent ? { sent } : {}) });
   if (tab.maybe.length > MAYBE_MAX) tab.maybe.splice(0, tab.maybe.length - MAYBE_MAX);
   if (!media.has(d.tabId)) {
@@ -863,6 +895,8 @@ if (ext.webRequest && ext.webRequest.onSendHeaders) {
       (d) => {
         if (d.tabId < 0) return;
         const sent = {};
+        // With the browser's full request headers, an absent Cookie header is also evidence.
+        if (!SAFARI && Array.isArray(d.requestHeaders)) sent.cookie = "";
         for (const h of d.requestHeaders || []) {
           const name = String(h.name).toLowerCase();
           if (SENT_HEADERS.includes(name) && typeof h.value === "string" && h.value) sent[name] = h.value;
@@ -946,9 +980,9 @@ const mediaBack = session
       .then((v) => {
         for (const [id, kept] of v.media || []) {
           const now = media.get(id);
-          const fresh = ((now && now.items) || []).filter((s) => !kept.items.some((o) => o.url === s.url));
-          const maybe = [...(kept.maybe || []), ...((now && now.maybe) || [])].filter((m, i, all) => all.findIndex((o) => o.url === m.url) === i);
-          const ranged = [...(kept.ranged || []), ...((now && now.ranged) || [])].filter((m, i, all) => all.findIndex((o) => o.url === m.url) === i);
+          const fresh = ((now && now.items) || []).filter((s) => !kept.items.some((o) => sameMediaRequest(o, s)));
+          const maybe = [...(kept.maybe || []), ...((now && now.maybe) || [])].filter((m, i, all) => all.findIndex((o) => sameMediaRequest(o, m)) === i);
+          const ranged = [...(kept.ranged || []), ...((now && now.ranged) || [])].filter((m, i, all) => all.findIndex((o) => sameMediaRequest(o, m)) === i);
           media.set(id, {
             ...kept,
             page: (now && now.page) || kept.page,
@@ -1133,6 +1167,7 @@ async function mediaList(tabId) {
   const out = [];
   const shown = [];
   for (const it of tab.items) {
+    if (shown.some((existing) => existing.url === it.url)) continue;
     // A variant of a master playlist listed already: it names it, or (unread) the variant is in
     // its folder or below.
     const p = pathOf(it.url);
@@ -1653,7 +1688,7 @@ async function mediaDownload(tabId, url) {
       src: it.url,
       title: tabTitle(tab),
       referrer: tab.url && tab.url !== page ? tab.url : "",
-      ...(await streamContext(tabId, it.url, ctx)),
+      ...(await streamContext(tabId, it.url, ctx, it.frameId)),
       ...(ctx.incognito ? { private: true } : {}),
     });
   }
@@ -1705,40 +1740,37 @@ async function videoCookies(url, ctx) {
   return { cookies: header(list), cookieJar };
 }
 
-// The cookies of a tab's stream (`videoCookies`) and what the browser sent with it (#900): the
-// Referer and Origin its player asked for it with (`fetchedWith`: the app sends them again with
-// its playlists and pieces), and the cookies that went with it that no store lists (a frame's
-// own, kept for its page only), added for its host. Nothing more for an address the tab didn't
-// load (a page's).
-async function streamContext(tabId, url, ctx) {
+// Reuse what the browser sent for this request, in its own frame only. The store can contain
+// cookies withheld from the request by SameSite or partition rules. Cookies with no matching
+// store entry are restricted to the host and path on which we actually observed them.
+async function streamContext(tabId, url, ctx, frameId = 0) {
   const c = await videoCookies(url, ctx);
   const tab = media.get(tabId);
-  const it = tab && [...tab.items, ...(tab.ranged || []), ...(tab.maybe || [])].find((x) => x.url === url);
+  const it = tab && [...tab.items, ...(tab.ranged || []), ...(tab.maybe || [])]
+    .find((x) => sameMediaRequest(x, { url, frameId }));
   const sent = (it && it.sent) || {};
   const web = (v) => typeof v === "string" && /^https?:\/\/\S+$/i.test(v) && v.length <= URL_MAX;
   const fetchedWith = {
     ...(web(sent.referer) ? { referer: sent.referer } : {}),
     ...(web(sent.origin) ? { origin: sent.origin } : {}),
   };
-  if (typeof sent.cookie === "string" && sent.cookie) {
-    let host = "";
-    let secure = false;
-    try {
-      const u = new URL(url);
-      host = u.hostname;
-      secure = u.protocol === "https:";
-    } catch {
-      // Not an address: no cookie of its own.
-    }
-    const known = new Set(c.cookieJar.map((x) => x.name));
+  if (typeof sent.cookie === "string") {
+    const address = new URL(url);
+    const observed = new Map();
+    const key = (name, value) => `${name}\0${value}`;
     for (const pair of sent.cookie.split(/;\s*/)) {
       const at = pair.indexOf("=");
       const name = at > 0 ? pair.slice(0, at).trim() : "";
-      if (!host || !name || known.has(name)) continue;
-      known.add(name);
-      c.cookieJar.push({ name, value: pair.slice(at + 1), domain: host, hostOnly: true, path: "/", secure });
+      if (name) {
+        const value = pair.slice(at + 1);
+        observed.set(key(name, value), { name, value });
+      }
     }
-    // The header the browser sent for this very address.
+    c.cookieJar = c.cookieJar.filter(({ name, value }) => observed.delete(key(name, value)));
+    for (const pair of observed.values()) {
+      c.cookieJar.push({ ...pair, domain: address.hostname, hostOnly: true,
+        path: address.pathname || "/", secure: address.protocol === "https:" });
+    }
     c.cookies = sent.cookie;
   }
   return Object.keys(fetchedWith).length ? { ...c, fetchedWith } : c;
@@ -2000,11 +2032,11 @@ async function browserProxy(url, incognito) {
 // window (private or not). "" when none is a web page other than the file itself.
 async function pageOf(item, urls) {
   const web = (u) => typeof u === "string" && /^https?:\/\//i.test(u) && u.length <= URL_MAX && !urls.includes(u);
-  forget(startedFrom, 120000);
-  const seen = urls.map((u) => startedFrom.get(u)).find(Boolean);
-  if (seen && web(seen.page)) return seen.page;
-  const tabId = item.tabId >= 0 ? item.tabId : seen && seen.tabId >= 0 ? seen.tabId : -1;
-  const same = (tab) => tab && Boolean(tab.incognito) === Boolean(item.incognito);
+  const seen = recentNavigation(startedFrom, item.requestId);
+  if (seen && seen.tabId === item.tabId && web(seen.page)) return seen.page;
+  const tabId = item.tabId >= 0 ? item.tabId : -1;
+  const same = (tab) => tab && Boolean(tab.incognito) === Boolean(item.incognito)
+    && (!item.cookieStoreId || tab.cookieStoreId === item.cookieStoreId);
   try {
     let tab = tabId >= 0 ? await ext.tabs.get(tabId) : (await ext.tabs.query({ active: true, lastFocusedWindow: true }))[0];
     if (same(tab) && !web(tab.url) && tab.openerTabId >= 0) tab = await ext.tabs.get(tab.openerTabId);
@@ -2068,10 +2100,12 @@ function colabRuntimeProxy(...urls) {
 // `clicked`: a link just clicked without Alt (Safari's `link`, see `altClicked`).
 async function candidate(item, url, clicked = false) {
   if (!/^https?:/i.test(url)) return null; // blob:, data:, file: stay the browser's
+  if (item.danger && item.danger !== "safe") return null;
   const { paused } = await ext.storage.local.get({ paused: false });
   if (paused) return null;
   const first = firstUrl(item);
-  if (altClicked(item, url, first, clicked) || postOf(first) === null) return null; // Alt; a form not to post again
+  const post = postOf(item, [first, url, item.url], clicked);
+  if (altClicked(item, url, first, clicked) || post === null) return null;
   if (colabRuntimeProxy(first, url)) return null;
   const r = await currentRules();
   if (!r) return null;
@@ -2088,7 +2122,7 @@ async function candidate(item, url, clicked = false) {
   const size = item.totalBytes > 0 ? item.totalBytes : item.fileSize;
   if (r.minKb > 0 && size > 0 && size < r.minKb * 1024) return left("small");
   if (!(await siteAccess(first))) return left("site-access");
-  return { name };
+  return { name, post };
 }
 
 // Why it stays with the browser, said (the popup, MDM's log).
@@ -2098,7 +2132,7 @@ function leftAlone(c, item, url) {
 
 // Offer the download to the app under `name`; true if it took it. `nameGuessed`: `name` is only
 // its address's (`addressNamed`).
-async function offer(item, url, name, nameGuessed = false) {
+async function offer(item, url, { name, post }, nameGuessed = false) {
   const first = firstUrl(item);
   const reply = await handOff({
     url: first,
@@ -2109,7 +2143,7 @@ async function offer(item, url, name, nameGuessed = false) {
     nameGuessed,
     size: item.totalBytes > 0 ? item.totalBytes : item.fileSize,
     mime: item.mime,
-    post: postOf(first),
+    post,
     incognito: item.incognito,
     storeId: item.cookieStoreId,
   });
@@ -2153,7 +2187,7 @@ async function link(url, referrer, incognito, name) {
     leftAlone(c, item, url);
     return { taken: false };
   }
-  return { taken: await offer(item, url, c.name).catch(() => false) };
+  return { taken: await offer(item, url, c).catch(() => false) };
 }
 
 // Tabs opened in the last seconds: one the download was opened in (a link opened in a new tab
@@ -2240,7 +2274,7 @@ if (SAFARI) {
     candidate(item, url)
       .then(async (c) => {
         const taken =
-          Boolean(c && c.name && !c.left) && (await offer(item, url, c.name, addressNamed(item, url, c.name)));
+          Boolean(c && c.name && !c.left) && (await offer(item, url, c, addressNamed(item, url, c.name)));
         if (taken) return drop(item);
         // The browser goes on first; why is said after.
         noName(suggest);
@@ -2262,7 +2296,6 @@ if (SAFARI) {
     if (decided.has(url) || decided.has(firstUrl(item))) return;
     const c = await candidate(item, url).catch(() => null);
     if (!c || c.left) return leftAlone(c, item, url);
-    const name = c.name;
     let paused = false;
     try {
       await ext.downloads.pause(item.id);
@@ -2270,7 +2303,7 @@ if (SAFARI) {
     } catch {
       // Not pausable (no resume support), or finished already.
     }
-    const taken = await offer(item, url, name).catch(() => false);
+    const taken = await offer(item, url, c).catch(() => false);
     if (taken) drop(item);
     else if (paused) ext.downloads.resume(item.id).catch(() => {});
   });
@@ -2478,6 +2511,8 @@ async function headersReceived(d) {
   const item = {
     url: d.url,
     tabId: d.tabId,
+    requestId: d.requestId,
+    requestMethod: d.method,
     filename: file.name,
     totalBytes: file.size,
     fileSize: file.size,
@@ -2500,7 +2535,7 @@ async function headersReceived(d) {
     if (!file.opened) leftAlone(c, item, d.url);
     return {};
   }
-  const taken = await offer(item, d.url, c.name).catch(() => false);
+  const taken = await offer(item, d.url, c).catch(() => false);
   if (!taken) return {};
   // A frame's or an <embed>'s file leaves its page where it is.
   if (d.type === "main_frame") closeDownloadTab(d.tabId, [first, d.url]).catch(() => {});
@@ -2657,7 +2692,7 @@ async function menuClicked(info, tab) {
     // The manifest's own cookies (its server may not be the page's), as the media list sends.
     if (url && MANIFEST.test(url)) {
       await mediaBack;
-      const reply = await native({ video: true, explicit: true, url: info.pageUrl, src: url, title, ...(await streamContext(tab && tab.id, url, { incognito, storeId })), private: incognito });
+      const reply = await native({ video: true, explicit: true, url: info.pageUrl, src: url, title, ...(await streamContext(tab && tab.id, url, { incognito, storeId }, info.frameId || 0)), private: incognito });
       if (!reply.ok && reply.why !== "options") explain(reply.why);
       return;
     }
@@ -2677,7 +2712,7 @@ async function menuClicked(info, tab) {
         ...(src ? { src } : {}),
         ...(title ? { title } : {}),
         referrer: info.pageUrl && info.pageUrl !== page ? info.pageUrl : "",
-        ...(await streamContext(tab && tab.id, src || page, { incognito, storeId })),
+        ...(await streamContext(tab && tab.id, src || page, { incognito, storeId }, info.frameId || 0)),
         private: incognito,
       });
       if (!reply.ok && reply.why !== "options") explain(reply.why);
@@ -2922,7 +2957,7 @@ async function videoTarget(m, page, sender) {
     // The cookies of what yt-dlp is given (the app files them under its host): the stream's
     // own server may not be the page's, and the page's cookies are not for it. With a stream's,
     // what the browser sent with it (#900).
-    ...(await streamContext(tab.id, src || own, { incognito: tab.incognito, storeId: tab.cookieStoreId })),
+    ...(await streamContext(tab.id, src || own, { incognito: tab.incognito, storeId: tab.cookieStoreId }, sender.frameId || 0)),
   };
 }
 
@@ -3066,7 +3101,7 @@ async function pageMessage(m, sender) {
     const top = tab.url && /^https?:/i.test(tab.url) ? tab.url : "";
     return { on: page ? await panelOn(page, top) : false };
   }
-  if (m.type === "link" && typeof m.url === "string") {
+  if (SAFARI && m.type === "link" && isWeb(m.url)) {
     const name = typeof m.name === "string" ? m.name.split(/[\\/]/).pop().slice(0, 255) : "";
     return link(m.url, page || "", Boolean(tab.incognito), name);
   }
@@ -3145,10 +3180,7 @@ async function pageMessage(m, sender) {
 }
 
 async function popupMessage(m, sender) {
-  if (m.type === "desktop-appearance") {
-    return String(sender.url || "").startsWith(ext.runtime.getURL(""))
-      ? desktopAppearance() : { ok: false };
-  }
+  if (m.type === "desktop-appearance") return desktopAppearance();
   if(m.type === "youtube-sign-in") return youtubeSignIn(sender);
   if (m.type === "state") {
     const r = await refreshRules();
@@ -3219,17 +3251,20 @@ async function popupMessage(m, sender) {
 }
 
 ext.runtime.onMessage.addListener((m, sender, sendResponse) => {
-  // Only our own scripts (pages can't message an extension without being allowed to).
   if (!m || typeof m.type !== "string" || sender.id !== ext.runtime.id) return false;
-  // The popup, or its page opened in a tab (popup.html?page=), is one of the extension's own
-  // pages; content scripts send from the web page they are in.
-  const own = String(sender.url || "").startsWith(ext.runtime.getURL(""));
-  const fromPage = Boolean(sender.tab) && !own;
-  const response = m.type === "companion-appearance"
-    ? (fromPage && isWeb(sender.url || "") ? companionAppearance() : Promise.resolve({ ok: false }))
-    : fromPage ? pageMessage(m, sender) : popupMessage(m, sender);
+  // Browser metadata distinguishes our UI from scripts running inside web pages. An
+  // absent tab or unknown sender URL never grants the popup's settings or remote actions.
+  const source = String(sender.url || "").split(/[?#]/, 1)[0];
+  const popup = source === ext.runtime.getURL("popup.html");
+  const options = source === ext.runtime.getURL("options.html");
+  const fromPage = Number.isInteger(sender.tab?.id) && sender.tab.id >= 0 && isWeb(sender.url);
+  let response;
+  if (m.type === "companion-appearance" && fromPage) response = companionAppearance();
+  else if (popup || (options && m.type === "desktop-appearance")) response = popupMessage(m, sender);
+  else if (fromPage) response = pageMessage(m, sender);
+  else return false;
   response.then(sendResponse, () => sendResponse({ ok: false }));
-  return true; // answered later
+  return true;
 });
 
 const appearanceModel = globalThis.__auralisAppearanceProfile;

@@ -5,13 +5,17 @@ import hashlib
 import json
 import sys
 from pathlib import Path
+from urllib.parse import quote
+
+
+RELEASE_URL = "https://github.com/4ls4mi/Auralis-Download-Manager/releases/download"
 
 
 def verify(release, version, commit, files, *, draft=True, partial=False):
     if release.get("draft") is not draft:
         raise ValueError("release is not a draft" if draft else "release is not public")
-    if release.get("prerelease") is True:
-        raise ValueError("release is a prerelease")
+    if release.get("prerelease") is not False:
+        raise ValueError("release status is not stable")
     if release.get("tag_name") != f"v{version}":
         raise ValueError("release tag does not match the build version")
     if release.get("target_commitish") != commit:
@@ -28,9 +32,12 @@ def verify(release, version, commit, files, *, draft=True, partial=False):
             continue
         if asset.get("state") != "uploaded":
             raise ValueError(f"{path.name}: upload is not complete")
+        if asset.get("browser_download_url") != f"{RELEASE_URL}/v{version}/{quote(path.name, safe='')}":
+            raise ValueError(f"{path.name}: release download address does not match the asset")
         if asset.get("size") != path.stat().st_size:
             raise ValueError(f"{path.name}: size mismatch")
-        digest = "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+        with path.open("rb") as artifact:
+            digest = "sha256:" + hashlib.file_digest(artifact, "sha256").hexdigest()
         if asset.get("digest") != digest:
             raise ValueError(f"{path.name}: SHA-256 digest missing or mismatched")
 

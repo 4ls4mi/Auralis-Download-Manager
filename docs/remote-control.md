@@ -46,10 +46,10 @@ another. To keep the page one tap away, add it to the phone's home screen (the b
 - **Add**: a download's address or a magnet link, or a `.torrent` file from the phone. Pick a
   **Category** (or let the file's type pick it), and **When**: **Start now**, or wait in a queue.
   A torrent is added with all its files, once MDM has read them (a magnet link can take a moment).
-- **The list**: every download with its progress, speed and size, with **All**, **Unfinished**
+- **The list**: non-private downloads with their progress, speed and size, with **All**, **Unfinished**
   and **Finished**. **Pause** and **Start** each one; **×** removes it from the list, and with
   **Delete the file too**, deletes its file from the computer.
-- **The queues**: start and stop each one.
+- **The queues**: start and stop queues that contain only non-private downloads.
 - The bar at the top shows the total speed and the free space where your downloads go.
 
 Downloads added from the phone are like the ones you add on the computer: they go into the
@@ -92,8 +92,8 @@ What keeps the remote control safe, in short:
   Options, to compare with the one the phone's browser shows.
 - **Web pages can't use it**: requests must name MDM's own address, come from its own page, and
   carry the token; MDM's page can't be shown inside another site.
-- **Only downloads**: a paired device lists, adds, pauses, starts and removes downloads, and
-  starts and stops queues. It can't change settings, open windows on the computer, or see
-  folders (the list it gets has no paths).
+- **Download access**: a paired device can manage non-private downloads and their queues.
+  The list shares file names, progress, sizes and status. Source addresses, local paths,
+  detailed failure messages and private downloads stay on the computer.
 
 Found a problem? Please report it privately, as [SECURITY.md](../SECURITY.md) says.

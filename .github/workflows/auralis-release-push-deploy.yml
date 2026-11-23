@@ -16,18 +16,28 @@ jobs:
       run:
         working-directory: release-push
     env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      GITHUB_WEBHOOK_SECRET: ${{ secrets.AURALIS_WEBHOOK_SECRET }}
+      WRANGLER_VERSION: '4.166.0'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          node-version: '22'
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22.23.5'
       - name: Test release signal
         run: node --test worker.test.mjs
+      - name: Install the pinned deployment tool
+        run: npm install --no-audit --no-fund --prefix "$RUNNER_TEMP/auralis-wrangler" "wrangler@$WRANGLER_VERSION"
+      - name: Confirm the webhook secret is configured
+        shell: bash
+        env:
+          GITHUB_WEBHOOK_SECRET: ${{ secrets.AURALIS_WEBHOOK_SECRET }}
+        run: test -n "$GITHUB_WEBHOOK_SECRET"
       - name: Check basic Worker deployment permissions
         shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
           test -n "$CLOUDFLARE_API_TOKEN" && test -n "$CLOUDFLARE_ACCOUNT_ID"
@@ -35,11 +45,20 @@ jobs:
           probe_dir="$(mktemp -d)"
           printf 'export default { fetch() { return new Response("ok") } };\n' > "$probe_dir/worker.mjs"
           printf 'name = "%s"\nmain = "worker.mjs"\ncompatibility_date = "2025-01-01"\n' "$probe_name" > "$probe_dir/wrangler.toml"
-          npx --yes wrangler@4 deploy --config "$probe_dir/wrangler.toml"
-          npx --yes wrangler@4 delete --force --config "$probe_dir/wrangler.toml"
-      - name: Deploy Worker and securely configure webhook secret
+          wrangler="$RUNNER_TEMP/auralis-wrangler/node_modules/.bin/wrangler"
+          "$wrangler" deploy --config "$probe_dir/wrangler.toml"
+          "$wrangler" delete --force --config "$probe_dir/wrangler.toml"
+      - name: Deploy Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: '"$RUNNER_TEMP/auralis-wrangler/node_modules/.bin/wrangler" deploy'
+      - name: Configure the Worker webhook secret
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          GITHUB_WEBHOOK_SECRET: ${{ secrets.AURALIS_WEBHOOK_SECRET }}
         run: |
-          set -euo pipefail
-          test -n "$CLOUDFLARE_API_TOKEN" && test -n "$CLOUDFLARE_ACCOUNT_ID" && test -n "$GITHUB_WEBHOOK_SECRET"
-          npx --yes wrangler@4 deploy
-          printf '%s' "$GITHUB_WEBHOOK_SECRET" | npx --yes wrangler@4 secret put GITHUB_WEBHOOK_SECRET
+          printf '%s' "$GITHUB_WEBHOOK_SECRET" |
+            env -u GITHUB_WEBHOOK_SECRET "$RUNNER_TEMP/auralis-wrangler/node_modules/.bin/wrangler" secret put GITHUB_WEBHOOK_SECRET

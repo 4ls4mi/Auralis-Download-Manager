@@ -1,5 +1,6 @@
 Unicode true
 RequestExecutionLevel user
+CRCCheck force
 SetCompressor /SOLID lzma
 SetCompressorDictSize 16
 

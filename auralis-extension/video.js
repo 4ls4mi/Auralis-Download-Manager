@@ -1185,6 +1185,7 @@ button:focus-visible { outline: none; }
   for(const choice of cookieChoices)choice.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();cookieMode.value=choice.dataset.value;syncCookieMode();closeCookieOptions();cookieTrigger.focus()});
   $(".cookie-combo").addEventListener("keydown",e=>{if(e.key==="Escape"&&!cookieOptions.hidden){e.preventDefault();e.stopPropagation();closeCookieOptions();cookieTrigger.focus()}else if(e.key==="ArrowDown"||e.key==="ArrowUp"){e.preventDefault();e.stopPropagation();cookieOptions.hidden=false;cookieTrigger.setAttribute("aria-expanded","true");const index=cookieChoices.indexOf(shadow.activeElement);cookieChoices[(index+(e.key==="ArrowDown"?1:cookieChoices.length-1))%cookieChoices.length].focus()}else if((e.key==="Enter"||e.key===" ")&&shadow.activeElement===cookieTrigger){e.preventDefault();e.stopPropagation();cookieTrigger.click()}});
   cookieFetch.addEventListener("click", async e => {
+    if (!e.isTrusted) return;
     e.stopPropagation();
     const file=cookieHeader.files?.[0];
     if (cookieMode.value === "file" && (!file || file.size > 262144)) { say("Choose a cookies.txt file under 256 KB."); return; }

@@ -93,18 +93,20 @@ $denoLicense = Join-Path $deno 'deno-LICENSE.md'
 Receive-Pinned 'https://raw.githubusercontent.com/denoland/deno/v2.9.8/LICENSE.md' $denoLicense 'f62497fffecc0852960c8d3e6934b9db86d16396e9b604072e923892cae3a588'
 
 # Exact package names and SHA-256 values from the official Qt repository.
-$qtVersion = '6.11.2'
-$qtBase = 'https://download.qt.io/online/qtsdkrepository/windows_x86/desktop/qt6_6112/qt6_6112_msvc2022_64'
+$qtVersion = '6.11.3'
+$qtSeries = '6113'
+$qtBuild = '6.11.3-0-202610220312'
+$qtBase = "https://download.qt.io/online/qtsdkrepository/windows_x86/desktop/qt6_$qtSeries/qt6_${qtSeries}_msvc2022_64"
 $qtArchives = @(
-    @{ Module='qtbase'; Sha='fd984b7264361b4dd3fd2a417702ca1258e4086268f2ee6a69b9a393d9c3f6bb' },
-    @{ Module='qtdeclarative'; Sha='5591ca564c1a9299a45a15b6b1d324c86e0aaed7cf6c47b7e6fe464aecae2587' },
-    @{ Module='qttools'; Sha='5f2b387a1f8055102b1388ff4ea743124ed6389d442f75c659728bb5c2a56946' },
-    @{ Module='qtsvg'; Sha='417f44499c835b2303f3ff78043179bb23442f33d5d2816fbf7e8dbf275b1c89' },
-    @{ Module='qtshadertools'; Addon=$true; Sha='d434c320f5788cf54c71e68ab28488ceb2f1ba725e63241530155347a4c5081e' },
-    @{ Module='qtquicktimeline'; Addon=$true; Sha='cca45ce1783814b47768f576828c292b89f164905bff92c5adb87c97e74ddea6' },
-    @{ Module='qtquick3d'; Addon=$true; Sha='39781144a0712d710c4635208f4e50f9c26c1af8b7736bd4ae4689a076241d06' },
-    @{ Module='qtmultimedia'; Addon=$true; Sha='24d73c45fefe5e260aa9a99eea1aea48adcad54f93bddaa3ec5b0574b55f57c7' },
-    @{ Module='d3dcompiler'; Archive='d3dcompiler_47-x64.7z'; Sha='b1c379f739fa59a495a388c0878757e3d90fb72e0df771237a1ee4a2c1675d15' }
+    @{ Module='qtbase'; Sha='68be61b613b963daf206834fdcc57dd3b84baff3082e50679e5846ca4a7a8b86' },
+    @{ Module='qtdeclarative'; Sha='7c1bb872495144f154d24931b0b58f817defbfd4099b0ac99372062bdfd2ac81' },
+    @{ Module='qttools'; Sha='b519f552424d8c748ed37c6b3a7615d29a1e3920383ee8ccf9b2066998341c2c' },
+    @{ Module='qtsvg'; Sha='e8c789e1a059601dd82114dd9560952891e7c8e94e1cb291166eb61d74800353' },
+    @{ Module='qtshadertools'; Addon=$true; Sha='dd2bfa173037be6c1c5b6e4a3c1b27b19c2c3422b21ff0addc625f5c21cd407f' },
+    @{ Module='qtquicktimeline'; Addon=$true; Sha='6bf980bd3c1c4158d830fb703deff22335f7a5c11d930a302d6c126909e351c3' },
+    @{ Module='qtquick3d'; Addon=$true; Sha='231fdc53ec2fe3c4c5d6c394862f44fa76df6a095a2da33118189c95e5fde5f6' },
+    @{ Module='qtmultimedia'; Addon=$true; Sha='344fb1b0185ab810cfc247dabd1470d14e23999e6861f3a7e62d217fa6ec5fc5' },
+    @{ Module='d3dcompiler'; Archive='d3dcompiler_47-x64.7z'; Sha='be4292719fe0930c988236972bca7f5926db1342e1c85b247e1cef87b903fc9a' }
 )
 $sdk = Join-Path $qtCache "$qtVersion/msvc2022_64"
 $archiveCache = Join-Path $qtCache 'archives'
@@ -113,9 +115,9 @@ foreach ($package in $qtArchives) {
     $mark = Join-Path $sdk ".auralis-$($package.Module)-$($package.Sha)"
     if (Test-Path $mark) { continue }
     $module = $package.Module
-    $component = if ($package.Addon) { "qt.qt6.6112.addons.$module.win64_msvc2022_64" } else { 'qt.qt6.6112.win64_msvc2022_64' }
+    $component = if ($package.Addon) { "qt.qt6.$qtSeries.addons.$module.win64_msvc2022_64" } else { "qt.qt6.$qtSeries.win64_msvc2022_64" }
     $archiveName = if ($package.Archive) { $package.Archive } else { "$module-Windows-Windows_11_24H2-MSVC2022-Windows-Windows_11_24H2-X86_64.7z" }
-    $archiveName = "6.11.2-0-202608131017$archiveName"
+    $archiveName = "$qtBuild$archiveName"
     $archive = Join-Path $archiveCache $archiveName
     Receive-Pinned "$qtBase/$component/$archiveName" $archive $package.Sha
     Push-Location $sdk

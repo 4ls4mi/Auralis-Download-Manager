@@ -1,10 +1,10 @@
 Auralis Download Manager is distributed under the terms of the license in LICENSE.txt.
 Sources https://github.com/4ls4mi/Auralis-Download-Manager
 
-This package uses Qt 6.11.2 and Qt Quick 3D under their open-source licenses.
+This package uses Qt 6.11.3 and Qt Quick 3D under their open-source licenses.
 Qt open-source licensing https://www.qt.io/licensing/open-source-lgpl-obligations
 Corresponding Qt sources and module license notices
-https://download.qt.io/archive/qt/6.11/6.11.2/submodules/
+https://download.qt.io/archive/qt/6.11/6.11.3/submodules/
 
 The app can use Qt Multimedia for video. Its open-source backend uses FFmpeg.
 Sources and licensing https://ffmpeg.org/legal.html

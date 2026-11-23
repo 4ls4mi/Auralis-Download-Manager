@@ -38,6 +38,9 @@ jobs:
       (github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[build-auralis-qt]'))
     runs-on: [self-hosted, Windows, X64, auralis]
     timeout-minutes: 180
+    defaults:
+      run:
+        working-directory: auralis-qt-source
     outputs:
       installer-id: ${{ steps.installer.outputs.artifact-id }}
       installer-digest: ${{ steps.installer.outputs.artifact-digest }}
@@ -46,14 +49,19 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
+          ref: ${{ github.sha }}
+          # Keep the clean source checkout separate from the legacy build and shared caches.
+          path: auralis-qt-source
           persist-credentials: false
           fetch-depth: 0
-          clean: false
+          clean: true
 
       - name: Validate Windows packaging scripts
         shell: pwsh
         run: |
-          Get-ChildItem -LiteralPath qt-ui/packaging -Filter '*.ps1' -File | ForEach-Object {
+          $scripts = @(Get-ChildItem -LiteralPath qt-ui/packaging -Filter '*.ps1' -File)
+          $scripts += Get-Item -LiteralPath crates/auralis-qt-engine/src/install-update.ps1
+          $scripts | ForEach-Object {
             $parseErrors = $null
             [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$null, [ref]$parseErrors) | Out-Null
             if ($parseErrors) { throw ($parseErrors | Out-String) }
@@ -81,14 +89,17 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Qt engine bridge tests failed.' }
           cargo test --locked --target x86_64-pc-windows-msvc -p mdm-app --test embedded_service
           if ($LASTEXITCODE -ne 0) { throw 'Embedded downloader tests failed.' }
-          cargo test --locked --target x86_64-pc-windows-msvc -p mdm-app --lib -- backup_snapshot:: automatic_torrent_choice_tests
+          cargo test --locked --target x86_64-pc-windows-msvc -p mdm-app --lib -- backup_snapshot:: automatic_torrent_choice_tests paired_api_omits_private_downloads_and_sensitive_details
           if ($LASTEXITCODE -ne 0) { throw 'Backup or automatic torrent recovery tests failed.' }
           cargo test --locked --target x86_64-pc-windows-msvc -p mdm-app --lib torrent_recovery_handoff_tests
           if ($LASTEXITCODE -ne 0) { throw 'Torrent recovery handoff tests failed.' }
 
       - name: Package the browser extensions
         shell: pwsh
-        run: ./qt-ui/packaging/pack-extensions.ps1
+        run: |
+          node --test .github/scripts/test_auralis_extension_boundary.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Browser handoff security tests failed.' }
+          ./qt-ui/packaging/pack-extensions.ps1
 
       - name: Upload the verified installer
         id: installer

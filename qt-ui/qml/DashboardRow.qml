@@ -128,6 +128,7 @@ Item {
                 id: fileNameLabel
                 Layout.fillWidth: true
                 text: row.fileName
+                textFormat: Text.PlainText
                 elide: Text.ElideMiddle
                 color: row.chosen ? row.colors.rowSelectionInk || row.colors.ink : row.colors.ink
                 font.weight: Font.DemiBold
@@ -280,8 +281,11 @@ Item {
         color: (row.studioChrome && row.colors.surfaceLine) || row.colors.divider
     }
 
-    ToolTip.visible: pointer.containsMouse && (fileNameLabel.truncated || torrent || recoveryLabel.length > 0)
-    ToolTip.delay: 650
-    ToolTip.text: fileName + (mixed ? "\n" + qsTr("Started directly and continued via BitTorrent") : torrent ? "\n" + qsTr("BitTorrent download") : "")
-        + (recoveryLabel.length ? "\n" + recoveryLabel : "")
+    PlainTextToolTip {
+        visible: pointer.containsMouse && (fileNameLabel.truncated || row.torrent || row.recoveryLabel.length > 0)
+        delay: 650
+        text: row.fileName + (row.mixed ? "\n" + qsTr("Started directly and continued via BitTorrent")
+            : row.torrent ? "\n" + qsTr("BitTorrent download") : "")
+            + (row.recoveryLabel.length ? "\n" + row.recoveryLabel : "")
+    }
 }

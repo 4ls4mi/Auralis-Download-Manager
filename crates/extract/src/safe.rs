@@ -12,6 +12,8 @@ use std::io::{self, Read, Write};
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
+use mdm_engine::safe_move::{is_link_or_reparse, rename_no_replace};
+
 use crate::{Error, Report, Subfolder};
 
 /// What an extraction may write.
@@ -83,20 +85,34 @@ pub fn rel_path(name: &str, depth: usize) -> Result<PathBuf, &'static str> {
 
 /// Whether a folder on the way from `root` to `path` (or `path` itself) is a link: nothing is
 /// written through one (a junction or symlink made by an archive, or by anyone).
-fn through_link(root: &Path, path: &Path) -> bool {
+fn through_link(root: &Path, path: &Path) -> io::Result<bool> {
     let Ok(rel) = path.strip_prefix(root) else {
-        return true;
+        return Ok(true);
     };
+    require_directory(root)?;
     let mut at = root.to_path_buf();
     for c in rel.components() {
         at.push(c);
         match fs::symlink_metadata(&at) {
-            Ok(m) if m.file_type().is_symlink() => return true,
+            Ok(m) if is_link_or_reparse(&m) => return Ok(true),
             Ok(_) => {}
-            Err(_) => break,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => break,
+            Err(e) => return Err(e),
         }
     }
-    false
+    Ok(false)
+}
+
+pub fn require_directory(path: &Path) -> io::Result<()> {
+    let metadata = fs::symlink_metadata(path)?;
+    if metadata.is_dir() && !is_link_or_reparse(&metadata) {
+        Ok(())
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "extraction output must be a plain directory",
+        ))
+    }
 }
 
 /// Writes entries into the staging folder, counting what it reads against the limits (an entry
@@ -206,7 +222,7 @@ impl<'a> Writer<'a> {
             }
         };
         let path = self.root.join(rel);
-        if through_link(&self.root, &path) {
+        if through_link(&self.root, &path)? {
             self.skip(name, "through a link");
             return Ok(());
         }
@@ -232,22 +248,21 @@ impl<'a> Writer<'a> {
                 return self.drain(name, size, data);
             }
         };
-        let mut path = self.root.join(&rel);
+        let path = self.root.join(&rel);
         if let Some(parent) = path.parent() {
-            if through_link(&self.root, parent) {
+            if through_link(&self.root, parent)? {
                 self.skip(name, "through a link");
                 return self.drain(name, size, data);
             }
             fs::create_dir_all(parent)?;
         }
         // Two entries of one name (an archive can hold that): the second is numbered.
-        if fs::symlink_metadata(&path).is_ok() {
-            path = numbered(&path);
-        }
-        let mut out = fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&path)?;
+        let (_, mut out) = reserve_numbered(&path, |candidate| {
+            fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(candidate)
+        })?;
         let entry_cap = size.map(|s| s.saturating_add(1 << 20));
         let mut buf = vec![0u8; 256 * 1024];
         let mut this = 0u64;
@@ -268,8 +283,7 @@ impl<'a> Writer<'a> {
             }
         }
         out.flush()?;
-        drop(out);
-        set_mode(&path, mode);
+        set_mode(&out, mode);
         Ok(())
     }
 }
@@ -297,20 +311,24 @@ fn read_error(e: io::Error) -> Error {
 
 /// Unix: only the execute bits are kept (never setuid, setgid or sticky). Elsewhere nothing.
 #[cfg(unix)]
-fn set_mode(path: &Path, mode: Option<u32>) {
+fn set_mode(file: &fs::File, mode: Option<u32>) {
     use std::os::unix::fs::PermissionsExt;
     if let Some(m) = mode {
         let keep = if m & 0o111 != 0 { 0o755 } else { 0o644 };
-        let _ = fs::set_permissions(path, fs::Permissions::from_mode(keep));
+        let _ = file.set_permissions(fs::Permissions::from_mode(keep));
     }
 }
 
 /// Windows has no permission bits for an archive to carry.
 #[cfg(not(unix))]
-fn set_mode(_path: &Path, _mode: Option<u32>) {}
+fn set_mode(_file: &fs::File, _mode: Option<u32>) {}
 
-/// `name (1).ext`, `name (2).ext`… the first free one beside `path`.
-pub fn numbered(path: &Path) -> PathBuf {
+/// Create or move into `path`, trying `name (1).ext` and so on when a name is taken.
+/// The supplied operation must refuse to replace existing entries atomically.
+pub fn reserve_numbered<T>(
+    path: &Path,
+    mut reserve: impl FnMut(&Path) -> io::Result<T>,
+) -> io::Result<(PathBuf, T)> {
     let parent = path.parent().unwrap_or(Path::new(""));
     let file = path
         .file_name()
@@ -320,16 +338,31 @@ pub fn numbered(path: &Path) -> PathBuf {
         Some(i) if i > 0 => (&file[..i], &file[i..]),
         _ => (file.as_str(), ""),
     };
-    (1..)
-        .map(|n| parent.join(format!("{stem} ({n}){ext}")))
-        .find(|p| fs::symlink_metadata(p).is_err())
-        .expect("a free name")
+    for candidate in std::iter::once(path.to_owned())
+        .chain((1..).map(|n| parent.join(format!("{stem} ({n}){ext}"))))
+    {
+        match reserve(&candidate) {
+            Ok(value) => return Ok((candidate, value)),
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
+            // Windows can report access denied for an existing directory.
+            Err(e)
+                if cfg!(windows)
+                    && e.kind() == io::ErrorKind::PermissionDenied
+                    && fs::symlink_metadata(&candidate).is_ok() =>
+            {
+                continue;
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    unreachable!("there is always another candidate")
 }
 
 /// An empty folder beside the destination that the archive is extracted into; removed with
 /// whatever is left in it when dropped (after a failure, everything).
 pub struct Staging {
     dest: PathBuf,
+    container: PathBuf,
     path: PathBuf,
 }
 
@@ -338,16 +371,28 @@ static NEXT: AtomicU64 = AtomicU64::new(0);
 impl Staging {
     pub fn new(dest: &Path) -> Result<Staging, Error> {
         fs::create_dir_all(dest)?;
-        let n = NEXT.fetch_add(1, Ordering::Relaxed);
-        let path = dest.join(format!(".mdm-extract-{}-{n}", std::process::id()));
-        if fs::symlink_metadata(&path).is_ok() {
-            fs::remove_dir_all(&path)?;
+        let mut builder = fs::DirBuilder::new();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::DirBuilderExt;
+            builder.mode(0o700);
         }
-        fs::create_dir(&path)?;
-        Ok(Staging {
+        let container = loop {
+            let n = NEXT.fetch_add(1, Ordering::Relaxed);
+            let candidate = dest.join(format!(".mdm-extract-{}-{n}", std::process::id()));
+            match builder.create(&candidate) {
+                Ok(()) => break candidate,
+                Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
+                Err(e) => return Err(e.into()),
+            }
+        };
+        let staging = Staging {
             dest: dest.to_path_buf(),
-            path,
-        })
+            path: container.join("contents"),
+            container,
+        };
+        fs::create_dir(&staging.path)?;
+        Ok(staging)
     }
 
     pub fn path(&self) -> &Path {
@@ -362,9 +407,10 @@ impl Staging {
         subfolder: Subfolder,
         on_file: &mut dyn FnMut(&Path),
     ) -> Result<(Report, u64), Error> {
-        let tops: Vec<PathBuf> = fs::read_dir(&self.path)?
-            .filter_map(|e| e.ok().map(|e| e.path()))
-            .collect();
+        require_directory(&self.path)?;
+        let tops = fs::read_dir(&self.path)?
+            .map(|entry| entry.map(|e| e.path()))
+            .collect::<io::Result<Vec<_>>>()?;
         let together = match subfolder {
             Subfolder::Always => true,
             Subfolder::Never => false,
@@ -379,12 +425,11 @@ impl Staging {
             } else {
                 name
             };
-            let mut folder = self.dest.join(&name);
-            if fs::symlink_metadata(&folder).is_ok() {
-                folder = numbered(&folder);
-                report.renamed += 1;
-            }
-            fs::rename(&self.path, &folder)?;
+            let target = self.dest.join(name);
+            let (folder, ()) = reserve_numbered(&target, |candidate| {
+                rename_no_replace(&self.path, candidate)
+            })?;
+            report.renamed += u64::from(folder != target);
             placed += mark_all(&folder, on_file)?;
             report.folder = folder;
         } else {
@@ -392,13 +437,11 @@ impl Staging {
                 let Some(name) = top.file_name() else {
                     continue;
                 };
-                let mut to = self.dest.join(name);
-                if fs::symlink_metadata(&to).is_ok() {
-                    to = numbered(&to);
-                    report.renamed += 1;
-                }
-                fs::rename(&top, &to)?;
-                placed += if to.is_dir() {
+                let target = self.dest.join(name);
+                let (to, ()) =
+                    reserve_numbered(&target, |candidate| rename_no_replace(&top, candidate))?;
+                report.renamed += u64::from(to != target);
+                placed += if fs::symlink_metadata(&to)?.is_dir() {
                     mark_all(&to, on_file)?
                 } else {
                     on_file(&to);
@@ -413,8 +456,8 @@ impl Staging {
 
 impl Drop for Staging {
     fn drop(&mut self) {
-        if fs::symlink_metadata(&self.path).is_ok() {
-            let _ = fs::remove_dir_all(&self.path);
+        if require_directory(&self.container).is_ok() {
+            let _ = fs::remove_dir_all(&self.container);
         }
     }
 }
@@ -425,15 +468,16 @@ fn mark_all(dir: &Path, on_file: &mut dyn FnMut(&Path)) -> io::Result<u64> {
     let mut n = 0;
     let mut todo = vec![dir.to_path_buf()];
     while let Some(d) = todo.pop() {
+        require_directory(&d)?;
         for e in fs::read_dir(&d)? {
             let e = e?;
-            let t = e.file_type()?;
-            if t.is_symlink() {
+            let metadata = fs::symlink_metadata(e.path())?;
+            if is_link_or_reparse(&metadata) {
                 continue;
             }
-            if t.is_dir() {
+            if metadata.is_dir() {
                 todo.push(e.path());
-            } else {
+            } else if metadata.is_file() {
                 on_file(&e.path());
                 n += 1;
             }
@@ -448,14 +492,32 @@ fn mark_all(dir: &Path, on_file: &mut dyn FnMut(&Path)) -> io::Result<u64> {
 pub fn check_tree(root: &Path, depth: usize) -> io::Result<Vec<(String, &'static str)>> {
     let bad = scan(root, depth)?;
     for (path, _, _) in &bad {
-        let t = fs::symlink_metadata(path)?.file_type();
-        if t.is_dir() {
-            let _ = fs::remove_dir_all(path);
+        let metadata = fs::symlink_metadata(path)?;
+        if is_link_or_reparse(&metadata) {
+            remove_alias(path, &metadata)?;
+        } else if metadata.is_dir() {
+            fs::remove_dir_all(path)?;
         } else {
-            let _ = fs::remove_file(path).or_else(|_| fs::remove_dir(path));
+            fs::remove_file(path)?;
         }
     }
     Ok(bad.into_iter().map(|(_, rel, why)| (rel, why)).collect())
+}
+
+#[cfg(windows)]
+fn remove_alias(path: &Path, metadata: &fs::Metadata) -> io::Result<()> {
+    use std::os::windows::fs::MetadataExt;
+    const DIRECTORY: u32 = 0x10;
+    if metadata.file_attributes() & DIRECTORY != 0 {
+        fs::remove_dir(path)
+    } else {
+        fs::remove_file(path)
+    }
+}
+
+#[cfg(not(windows))]
+fn remove_alias(path: &Path, _: &fs::Metadata) -> io::Result<()> {
+    fs::remove_file(path)
 }
 
 /// What under `root` breaks the rules (a link, not a plain file or folder, a name that isn't
@@ -465,15 +527,17 @@ fn scan(root: &Path, depth: usize) -> io::Result<Vec<(PathBuf, String, &'static 
     let mut out = Vec::new();
     let mut todo = vec![root.to_path_buf()];
     while let Some(d) = todo.pop() {
+        require_directory(&d)?;
         for e in fs::read_dir(&d)? {
             let e = e?;
             let path = e.path();
-            let t = fs::symlink_metadata(&path)?.file_type();
+            let metadata = fs::symlink_metadata(&path)?;
+            let t = metadata.file_type();
             let rel = path
                 .strip_prefix(root)
                 .map(|r| r.to_string_lossy().into_owned())
                 .unwrap_or_default();
-            let bad = if t.is_symlink() {
+            let bad = if is_link_or_reparse(&metadata) {
                 Some("link")
             } else if !t.is_dir() && !t.is_file() {
                 Some("not a file")
@@ -540,9 +604,10 @@ pub fn move_out(
     // By name: the same order every time.
     let mut tops: Vec<PathBuf> = fs::read_dir(from)
         .map_err(unread)?
-        .filter_map(|e| e.ok().map(|e| e.path()))
-        .filter(|p| !bad_paths.contains(p))
-        .collect();
+        .map(|entry| entry.map(|e| e.path()))
+        .collect::<io::Result<_>>()
+        .map_err(unread)?;
+    tops.retain(|path| !bad_paths.contains(path));
     tops.sort();
     let together = match subfolder {
         Subfolder::Always => true,
@@ -563,8 +628,9 @@ pub fn move_out(
             } else {
                 name
             };
-            let folder = m.free(dest.join(&name));
-            fs::create_dir(&folder)?;
+            let target = dest.join(name);
+            let (folder, ()) = reserve_numbered(&target, |candidate| fs::create_dir(candidate))?;
+            m.report.renamed += u64::from(folder != target);
             m.report.folder = folder.clone();
             folder
         } else {
@@ -608,23 +674,14 @@ struct Mover<'a> {
 }
 
 impl Mover<'_> {
-    /// `to`, or the first numbered name beside it when it is taken.
-    fn free(&mut self, to: PathBuf) -> PathBuf {
-        if fs::symlink_metadata(&to).is_ok() {
-            self.report.renamed += 1;
-            numbered(&to)
-        } else {
-            to
-        }
-    }
-
     /// Move `from` to `to` (numbered when taken): whole, unless it is a folder holding an entry
     /// that breaks the rules; then its folder is made and what is safe in it moved, one by one.
     fn entry(&mut self, from: &Path, to: PathBuf) -> io::Result<()> {
-        let to = self.free(to);
         let holds_bad = self.bad.iter().any(|b| b.starts_with(from));
         if holds_bad {
-            fs::create_dir(&to)?;
+            require_directory(from)?;
+            let (folder, ()) = reserve_numbered(&to, |candidate| fs::create_dir(candidate))?;
+            self.report.renamed += u64::from(folder != to);
             let mut inside = fs::read_dir(from)?
                 .map(|e| e.map(|e| e.path()))
                 .collect::<io::Result<Vec<_>>>()?;
@@ -634,16 +691,17 @@ impl Mover<'_> {
                     continue;
                 }
                 if let Some(name) = path.file_name() {
-                    self.entry(&path, to.join(name))?;
+                    self.entry(&path, folder.join(name))?;
                 }
             }
             return Ok(());
         }
-        fs::rename(from, &to)?;
-        self.report.files += if fs::symlink_metadata(&to)?.is_dir() {
-            mark_all(&to, self.on_file)?
+        let (moved, ()) = reserve_numbered(&to, |candidate| rename_no_replace(from, candidate))?;
+        self.report.renamed += u64::from(moved != to);
+        self.report.files += if fs::symlink_metadata(&moved)?.is_dir() {
+            mark_all(&moved, self.on_file)?
         } else {
-            (self.on_file)(&to);
+            (self.on_file)(&moved);
             1
         };
         Ok(())
@@ -656,9 +714,9 @@ fn prune(root: &Path) {
     let mut dirs = vec![root.to_path_buf()];
     let mut i = 0;
     while i < dirs.len() {
-        if let Ok(rd) = fs::read_dir(&dirs[i]) {
+        if let Ok(rd) = require_directory(&dirs[i]).and_then(|()| fs::read_dir(&dirs[i])) {
             for e in rd.flatten() {
-                if e.file_type().is_ok_and(|t| t.is_dir()) {
+                if require_directory(&e.path()).is_ok() {
                     dirs.push(e.path());
                 }
             }

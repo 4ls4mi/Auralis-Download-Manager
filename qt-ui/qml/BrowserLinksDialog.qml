@@ -171,6 +171,7 @@ Dialog {
             visible: root.failure !== ""
             Layout.fillWidth: true
             text: root.failure
+            textFormat: Text.PlainText
             wrapMode: Text.WordWrap
             color: root.colors.destructive
         }

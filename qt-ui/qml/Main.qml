@@ -1199,8 +1199,24 @@ ApplicationWindow {
             Layout.preferredHeight: 51
             Item {
                 id: actionPanel
+                property real reflectionPosition: -2
                 parent: root.materialDashboard ? workspaceActionDock : topActionDock
                 anchors.fill: parent
+
+                SequentialAnimation on reflectionPosition {
+                    running: actionPanel.visible && root.active && root.visibility !== Window.Minimized
+                        && !MaterialTheme.reducedMotion
+                    loops: Animation.Infinite
+                    onRunningChanged: if (!running) actionPanel.reflectionPosition = -2
+                    PauseAnimation { duration: 3200 }
+                    NumberAnimation {
+                        from: -2
+                        to: 12
+                        duration: 1450
+                        easing.type: Easing.InOutSine
+                    }
+                }
+
                 GlassSurface { anchors.fill: parent; role: "toolbar" }
                 RowLayout {
                     id: actionControls
@@ -1224,6 +1240,7 @@ ApplicationWindow {
                         ]
                         delegate: GlassButton {
                             id: actionButton
+                            required property int index
                             required property var modelData
                             readonly property bool primaryCommand: modelData.command === addUrl
                             readonly property bool fogResume: root.fogSlate && modelData.command === resumeTransfers
@@ -1233,7 +1250,6 @@ ApplicationWindow {
                             readonly property bool showLabel: (primaryCommand && root.materialDashboard
                                 && actionControls.width >= 640)
                                 || ((fogResume || fogPause) && actionControls.width >= 730)
-                            readonly property color commandInk: accentFill ? fillInk : displayAccent
                             Layout.preferredWidth: root.materialDashboard
                                 ? (showLabel ? Math.max(102, buttonLabel.implicitWidth + 40)
                                     : Math.min(43, Math.floor((actionControls.width - 48) / 11)))
@@ -1241,28 +1257,36 @@ ApplicationWindow {
                             Layout.preferredHeight: root.fogSlate ? 39 : 36
                             action: modelData.command
                             filled: (root.materialDashboard && primaryCommand) || fogResume
-                            leftPadding: root.materialDashboard && !showLabel ? 5 : 13
+                            leftPadding: showLabel ? 13 : 4
                             rightPadding: leftPadding
+                            topPadding: 4
+                            bottomPadding: 5
                             accent: fogResume ? root.colors.positive
                                 : root.materialDashboard && primaryCommand ? root.colors.accent
                                 : MaterialTheme.actionColor(modelData.accentKey || modelData.icon, root.colors.light)
                             contentItem: RowLayout {
                                 spacing: 5
+                                transform: Translate { y: actionButton.faceOffset }
                                 DashboardIcon {
                                     Layout.fillWidth: !actionButton.showLabel
-                                    Layout.fillHeight: true
-                                    Layout.preferredWidth: 19
+                                    Layout.preferredWidth: 24
+                                    Layout.preferredHeight: 24
                                     symbol: actionButton.modelData.icon
                                     bold: true
                                     solid: symbol === "start" || symbol === "stop"
-                                    ink: actionButton.commandInk
+                                    relief: actionButton.enabled
+                                    ink: actionButton.iconInk
+                                    surface: actionButton.faceColor
+                                    sheen: actionButton.enabled && !actionButton.down && !actionButton.hovered
+                                        ? Math.max(0, 1 - Math.abs(actionPanel.reflectionPosition - actionButton.index))
+                                        : 0
                                 }
                                 Label {
                                     id: buttonLabel
                                     visible: actionButton.showLabel
                                     Layout.fillWidth: true
                                     text: actionButton.label
-                                    color: actionButton.commandInk
+                                    color: actionButton.buttonInk
                                     font.weight: Font.DemiBold
                                 }
                             }
@@ -1844,13 +1868,17 @@ ApplicationWindow {
                     Accessible.name: qsTr("Recent total transfer speed")
                 }
                 Label {
+                    id: statusMessage
                     Layout.preferredWidth: Math.min(240, Math.ceil(implicitWidth))
                     text: root.actionError || (root.online ? qsTr("Auralis %1").arg(engine.version) : engine.status || qsTr("Offline"))
+                    textFormat: Text.PlainText
                     color: root.actionError ? root.colors.destructive : root.colors.muted
                     elide: Text.ElideRight
                     font.pixelSize: 11
-                    ToolTip.visible: statusHover.hovered && text.length > 20
-                    ToolTip.text: text
+                    PlainTextToolTip {
+                        visible: statusHover.hovered && statusMessage.text.length > 20
+                        text: statusMessage.text
+                    }
                     HoverHandler { id: statusHover }
                 }
             }

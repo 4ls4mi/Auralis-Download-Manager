@@ -908,9 +908,8 @@ fn verdict(
     }
 }
 
-/// Read one native message; None at end of input.
-/// Read one native message; None at end of input. `Err` inside: a message over the limit (its
-/// size), read past and dropped, to be answered "too-large".
+/// Read one native message, or `None` at end of input. An oversized length is terminal:
+/// the caller can report it promptly without waiting for an untrusted body.
 fn read_message(r: &mut impl Read) -> io::Result<Option<Result<Vec<u8>, usize>>> {
     let mut len = [0u8; 4];
     match r.read_exact(&mut len) {
@@ -919,11 +918,7 @@ fn read_message(r: &mut impl Read) -> io::Result<Option<Result<Vec<u8>, usize>>>
         Err(e) => return Err(e),
     }
     let len = u32::from_le_bytes(len) as usize;
-    // Browsers send at most 4 GB, but a download request is small: refuse anything silly (the
-    // app's channel takes this much, so whatever is read here reaches it). Read past it, so
-    // the extension hears why instead of a closed host.
     if len > mdm_ipc::MAX_MESSAGE {
-        io::copy(&mut r.take(len as u64), &mut io::sink())?;
         return Ok(Some(Err(len)));
     }
     let mut buf = vec![0u8; len];
@@ -1166,7 +1161,8 @@ fn serve() -> io::Result<()> {
                     &mut stdout,
                     &serde_json::to_vec(&reply).map_err(io::Error::other)?,
                 )?;
-                continue;
+                // A new connection is needed because the rejected body is still on stdin.
+                break;
             }
         };
         let reply = match serde_json::from_slice::<Message>(&raw) {
@@ -1267,9 +1263,17 @@ fn origin(id: &str) -> String {
 /// Is this the caller the browsers start us for? Chromium passes the extension's origin first
 /// (unpacked or from the store); Firefox passes the manifest's path, then the add-on ID.
 fn our_caller(args: &[String]) -> bool {
-    args.first()
-        .is_some_and(|a| chromium_ids().iter().any(|id| *a == origin(id)))
-        || args.get(1).is_some_and(|a| a == FIREFOX_ID || a == AURALIS_FIREFOX_ID)
+    let Some(first) = args.first() else { return false };
+    if first.starts_with("chrome-extension://") {
+        return chromium_ids().iter().any(|id| *first == origin(id));
+    }
+    let manifest = std::path::Path::new(first);
+    manifest.is_absolute()
+        && manifest.file_name().is_some_and(|name| {
+            name == std::ffi::OsStr::new(&format!("{HOST_NAME}.json"))
+                || name == std::ffi::OsStr::new(&format!("{HOST_NAME}.firefox.json"))
+        })
+        && args.get(1).is_some_and(|id| id == FIREFOX_ID || id == AURALIS_FIREFOX_ID)
 }
 
 /// Windows: the manifest beside this exe that a browser of `family` reads, written when it isn't
@@ -1627,6 +1631,7 @@ fn main() {
         "--package-manifests" => package_manifests(args.get(1).map(String::as_str)),
         // Safari's extension has no host manifest: its app extension (tools/safari) starts this
         // program from inside the app, which is the only caller there is.
+        #[cfg(target_os = "macos")]
         "--safari" => {
             SAFARI.store(true, std::sync::atomic::Ordering::Relaxed);
             serve().map_err(|e| e.to_string())
@@ -1708,9 +1713,12 @@ mod tests {
         for id in chromium_ids() {
             assert!(our_caller(&s(&[&format!("chrome-extension://{id}/")])));
         }
-        assert!(our_caller(&s(&[r"C:\x\host.firefox.json", FIREFOX_ID])));
+        let manifest = std::env::current_dir().unwrap().join(format!("{HOST_NAME}.firefox.json"));
+        assert!(our_caller(&s(&[manifest.to_str().unwrap(), FIREFOX_ID])));
+        assert!(our_caller(&s(&[manifest.to_str().unwrap(), AURALIS_FIREFOX_ID])));
         assert!(!our_caller(&s(&["chrome-extension://someoneelse/"])));
-        assert!(!our_caller(&s(&[r"C:\x\host.json", "evil@example.com"])));
+        assert!(!our_caller(&s(&["chrome-extension://someoneelse/", AURALIS_FIREFOX_ID])));
+        assert!(!our_caller(&s(&[manifest.to_str().unwrap(), "other@example.com"])));
         assert!(!our_caller(&[]));
     }
 
@@ -2662,17 +2670,13 @@ mod tests {
     }
 
     #[test]
-    fn huge_messages_are_read_past_and_said() {
-        let big = 2usize << 20;
+    fn oversized_frames_are_rejected_without_reading_the_body() {
+        let big = mdm_ipc::MAX_MESSAGE + 1;
         let mut input = (big as u32).to_le_bytes().to_vec();
-        input.extend(vec![b'x'; big]);
-        write_message(&mut input, br#"{"rules":true}"#).unwrap();
-        let mut r = &input[..];
-        assert_eq!(read_message(&mut r).unwrap(), Some(Err(big)));
-        assert!(
-            matches!(read_message(&mut r).unwrap(), Some(Ok(_))),
-            "the next one reads"
-        );
+        input.extend(b"body");
+        let mut reader = input.as_slice();
+        assert_eq!(read_message(&mut reader).unwrap(), Some(Err(big)));
+        assert_eq!(reader, b"body");
     }
 
     /// A message exactly as large as the host takes is read; one byte more is refused (the

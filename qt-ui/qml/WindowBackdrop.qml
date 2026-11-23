@@ -15,7 +15,7 @@ Item {
     readonly property bool desktopGlass: transparentBackground && selection.mode === "desktop"
         && !MaterialTheme.palette.opaque
     readonly property bool backdropAvailable: transparentBackground || pictureReady || movieReady
-    readonly property string media: selection.mode === "wallpaper" ? selection.media : ""
+    readonly property string media: selection.mode === "wallpaper" ? WindowAppearance.fileUrl(selection.media) : ""
     readonly property bool video: /\.(mp4|webm|mov|m4v)(?:$|[?#])/i.test(media)
     readonly property bool pictureReady: !video && image.status === Image.Ready && Boolean(media)
     readonly property bool movieReady: video && player.hasVideo && player.error === MediaPlayer.NoError

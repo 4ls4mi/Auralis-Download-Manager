@@ -26,6 +26,7 @@
 #include <QSettings>
 #include <QStandardPaths>
 #include <QSystemTrayIcon>
+#include <QTimer>
 
 #include <cstring>
 #include <functional>
@@ -39,6 +40,10 @@
 #endif
 
 namespace {
+constexpr auto InstanceMessageLimit = 64;
+constexpr auto InstanceConnectionLimit = 16;
+constexpr auto InstanceReadTimeoutMs = 3000;
+
 #ifdef Q_OS_WIN
 void refreshTaskbarIcon()
 {
@@ -407,8 +412,10 @@ int main(int argc, char **argv)
     if (exitRequest)
         return 0;
 
+    int activeInstanceConnections = 0;
     QLocalServer local;
     local.setSocketOptions(QLocalServer::UserAccessOption);
+    local.setMaxPendingConnections(InstanceConnectionLimit);
     QLocalServer::removeServer(serverName);
     if (!local.listen(serverName))
         return 1;
@@ -431,16 +438,30 @@ int main(int argc, char **argv)
         window->raise();
         window->requestActivate();
     };
-    QObject::connect(&local, &QLocalServer::newConnection, &app, [&local, &engine, activate] {
+    QObject::connect(&local, &QLocalServer::newConnection, &app, [&local, &engine, &activeInstanceConnections, activate] {
         while (auto *socket = local.nextPendingConnection()) {
+            if (activeInstanceConnections >= InstanceConnectionLimit) {
+                socket->abort();
+                socket->deleteLater();
+                continue;
+            }
+            ++activeInstanceConnections;
+            socket->setReadBufferSize(InstanceMessageLimit);
+            QObject::connect(socket, &QObject::destroyed, &local, [&activeInstanceConnections] {
+                --activeInstanceConnections;
+            });
             QObject::connect(socket, &QLocalSocket::disconnected, socket, &QLocalSocket::deleteLater);
+            QTimer::singleShot(InstanceReadTimeoutMs, socket, [socket] {
+                socket->abort();
+                socket->deleteLater();
+            });
             const auto handle = [socket, &engine, activate] {
                 if (!socket->canReadLine()) {
-                    if (socket->bytesAvailable() > 64)
+                    if (socket->bytesAvailable() >= InstanceMessageLimit)
                         socket->disconnectFromServer();
                     return;
                 }
-                const auto command = socket->readLine(64).trimmed();
+                const auto command = socket->readLine(InstanceMessageLimit + 1).trimmed();
                 if (command == "exit")
                     engine.requestQuit();
                 else if (command == "activate")

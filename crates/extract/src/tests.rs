@@ -53,6 +53,51 @@ fn no_staging(dest: &Path) {
 }
 
 #[test]
+fn staging_placement_keeps_existing_entries() {
+    let temp = tempfile::tempdir().unwrap();
+    let dest = temp.path();
+    let original = dest.join("report.txt");
+    let prior_numbered = dest.join("report (1).txt");
+    std::fs::write(&original, b"original").unwrap();
+    std::fs::create_dir(&prior_numbered).unwrap();
+    let staging = safe::Staging::new(dest).unwrap();
+    std::fs::write(staging.path().join("report.txt"), b"new").unwrap();
+
+    let (report, count) = staging
+        .place("archive", Subfolder::Never, &mut |_| {})
+        .unwrap();
+    assert_eq!((report.renamed, count), (1, 1));
+    assert_eq!(std::fs::read(original).unwrap(), b"original");
+    assert!(prior_numbered.is_dir());
+    assert_eq!(std::fs::read(dest.join("report (2).txt")).unwrap(), b"new");
+    no_staging(dest);
+}
+
+#[cfg(unix)]
+#[test]
+fn external_tree_rejects_directory_aliases() {
+    use std::os::unix::fs::symlink;
+
+    let temp = tempfile::tempdir().unwrap();
+    let fixture = temp.path().join("fixture");
+    std::fs::create_dir(&fixture).unwrap();
+    let file = fixture.join("sample.txt");
+    std::fs::write(&file, b"sample").unwrap();
+
+    let output = temp.path().join("output");
+    std::fs::create_dir(&output).unwrap();
+    let alias = output.join("alias");
+    symlink(&fixture, &alias).unwrap();
+    assert!(safe::check_tree(&alias, 64).is_err());
+    assert_eq!(
+        safe::check_tree(&output, 64).unwrap(),
+        [("alias".into(), "link")]
+    );
+    assert!(std::fs::symlink_metadata(alias).is_err());
+    assert_eq!(std::fs::read(file).unwrap(), b"sample");
+}
+
+#[test]
 fn entry_paths_stay_inside() {
     let d = 64;
     assert_eq!(

@@ -2232,12 +2232,8 @@ async fn open_destination(
     let (dest, reservation, file) = match dest {
         Destination::File(p) => {
             let r = naming::reserve(p).ok_or_else(|| Error::InUse(p.clone()))?;
-            let file = std::fs::OpenOptions::new()
-                .read(true)
-                .write(true)
-                .create(true)
-                .truncate(true)
-                .open(naming::part_path(p))?;
+            let file = crate::safe_move::open_download_file(&naming::part_path(p), true)?;
+            file.set_len(0)?;
             (p.clone(), r, file)
         }
         Destination::Dir(dir) => {
@@ -2430,7 +2426,11 @@ async fn run_resume(
         naming::reserve(&saved.dest).ok_or_else(|| Error::InUse(saved.dest.clone()))?;
     let part = naming::part_path(&saved.dest);
     // A crash between the final rename and removing the state file: the download is complete.
-    if !part.exists() && std::fs::metadata(&saved.dest).is_ok_and(|m| m.len() == saved.size) {
+    if std::fs::symlink_metadata(&part).is_err_and(|e| e.kind() == io::ErrorKind::NotFound)
+        && std::fs::symlink_metadata(&saved.dest).is_ok_and(|m| {
+            m.is_file() && !crate::safe_move::is_link_or_reparse(&m) && m.len() == saved.size
+        })
+    {
         let _ = std::fs::remove_file(&state_file);
         shared.set_state(State::Completing);
         return Ok(Outcome {
@@ -2488,11 +2488,8 @@ async fn run_resume(
     // them as it went).
     headers = refreshed_headers.unwrap_or_else(|| scoped_headers(&headers, &saved.url, &url));
     let post = post_for(&opts, final_get, &mut headers);
-    let file = std::fs::OpenOptions::new()
-        .read(true)
-        .write(true)
-        .open(&part)
-        .map_err(|e| bad(&format!("part file: {e}")))?;
+    let file =
+        crate::safe_move::open_download_file(&part, false).map_err(|e| bad(&format!("part file: {e}")))?;
     if file.metadata()?.len() != saved.size {
         return Err(bad("part file has the wrong size"));
     }
@@ -2719,23 +2716,41 @@ fn finish(
     }
     drop(file);
     let part = naming::part_path(dest);
-    // Never replace a file that appeared at the destination meanwhile (rename replaces on
-    // Windows): take the next free numbered name instead.
+    let metadata = std::fs::symlink_metadata(&part)?;
+    if !metadata.is_file() || crate::safe_move::is_link_or_reparse(&metadata) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "partial file changed before completion",
+        )
+        .into());
+    }
+    // Take a numbered name whenever another process got to the destination first.
     let original = dest;
-    let dest = if dest.exists() {
-        let dir = dest.parent().unwrap_or(Path::new("."));
-        let name = dest
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("download");
+    let dir = original.parent().unwrap_or(Path::new("."));
+    let name = original
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("download");
+    let mut dest = if std::fs::symlink_metadata(original).is_ok() {
         naming::unique_path(dir, name)
     } else {
-        dest.to_owned()
+        original.to_owned()
     };
-    // Antivirus scanners and indexers briefly lock new files on Windows: retry the rename.
-    craft_atomic::retry_rename(craft_atomic::RenameRetry::platform(), || {
-        std::fs::rename(&part, &dest)
-    })?;
+    let mut collisions = 0;
+    loop {
+        // Antivirus scanners can briefly lock new files on Windows. The atomic move
+        // also protects independently created files between the name check and the move.
+        match craft_atomic::retry_rename(craft_atomic::RenameRetry::platform(), || {
+            crate::safe_move::rename_no_replace(&part, &dest)
+        }) {
+            Ok(()) => break,
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists && collisions < 100 => {
+                collisions += 1;
+                dest = naming::unique_path(dir, name);
+            }
+            Err(error) => return Err(error.into()),
+        }
+    }
     // Only now is the resume state obsolete.
     let _ = std::fs::remove_file(state_path(original));
     Ok(Outcome { path: dest, size })

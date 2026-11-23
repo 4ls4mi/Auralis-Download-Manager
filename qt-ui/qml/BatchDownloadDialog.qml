@@ -100,6 +100,7 @@ Dialog {
             Layout.fillWidth: true
             visible: root.preview !== null
             text: root.preview ? qsTr("%1 URLs").arg(root.preview.count) + "\n" + (root.preview.preview || []).join("\n") : ""
+            textFormat: Text.PlainText
             color: root.colors.muted
             elide: Text.ElideRight
         }
@@ -107,6 +108,7 @@ Dialog {
             Layout.fillWidth: true
             visible: root.failure !== ""
             text: root.failure
+            textFormat: Text.PlainText
             color: root.colors.destructive
             wrapMode: Text.WordWrap
         }

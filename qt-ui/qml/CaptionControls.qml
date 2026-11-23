@@ -38,14 +38,17 @@ RowLayout {
         ToolTip.text: text
 
         contentItem: Item {
-            implicitWidth: 21
-            implicitHeight: 21
+            implicitWidth: 22
+            implicitHeight: 22
+            transform: Translate { y: button.faceOffset }
             DashboardIcon {
                 anchors.centerIn: parent
-                width: 21
-                height: 21
+                width: 22
+                height: 22
                 symbol: button.symbol
-                ink: button.accentFill ? button.fillInk : button.displayAccent
+                relief: button.enabled
+                ink: button.iconInk
+                surface: button.faceColor
             }
         }
     }

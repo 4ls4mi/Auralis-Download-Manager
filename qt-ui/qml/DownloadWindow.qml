@@ -614,6 +614,7 @@ ApplicationWindow {
                         Label {
                             Layout.fillWidth: true
                             text: root.item ? root.item.file : ""
+                            textFormat: Text.PlainText
                             elide: Text.ElideMiddle
                             color: root.summaryInk
                             font.pixelSize: 19
@@ -623,6 +624,7 @@ ApplicationWindow {
                             id: transferSource
                             Layout.fillWidth: true
                             text: root.item ? root.item.url : ""
+                            textFormat: Text.PlainText
                             elide: Text.ElideMiddle
                             color: root.colors.muted
                         }
@@ -660,7 +662,7 @@ ApplicationWindow {
                                     Layout.preferredWidth: root.sideTabs ? 132 : 116
                                     elide: Text.ElideRight
                                 }
-                                    Label { text: measurement.cell.value; color: root.summaryInk; elide: Text.ElideRight; Layout.fillWidth: true }
+                                    Label { text: measurement.cell.value; textFormat: Text.PlainText; color: root.summaryInk; elide: Text.ElideRight; Layout.fillWidth: true }
                                 }
                             }
                         }
@@ -702,11 +704,13 @@ ApplicationWindow {
                             wrapMode: Text.WordWrap
                             text: root.mixed && root.telemetry.original_partial
                                   ? qsTr("Original direct partial kept at %1").arg(root.telemetry.original_partial) : ""
+                            textFormat: Text.PlainText
                         }
                         Label {
                             visible: !!(root.item && root.item.error)
                             Layout.fillWidth: true
                             text: root.item && root.item.error || ""
+                            textFormat: Text.PlainText
                             color: root.colors.destructive
                             wrapMode: Text.WordWrap
                         }
@@ -1043,6 +1047,7 @@ ApplicationWindow {
                     visible: root.message !== "" && root.activeTab !== root.recoveryTab
                     Layout.fillWidth: true
                     text: root.message
+                    textFormat: Text.PlainText
                     color: root.error ? root.colors.destructive : root.colors.text
                     wrapMode: Text.WordWrap
                 }

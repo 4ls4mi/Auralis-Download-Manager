@@ -357,6 +357,20 @@ QString Engine::localPath(const QUrl &url) const
     return url.isLocalFile() ? QDir::toNativeSeparators(url.toLocalFile()) : QString();
 }
 
+QUrl Engine::localMediaUrl(const QUrl &url) const
+{
+    if (!url.isLocalFile() || !url.host().isEmpty())
+        return {};
+    const auto path = QDir::fromNativeSeparators(url.toLocalFile());
+    if (!QDir::isAbsolutePath(path) || path.startsWith(QStringLiteral("//")) || path.contains(QChar::Null))
+        return {};
+#ifdef Q_OS_WIN
+    if (path.size() < 3 || !path.at(0).isLetter() || path.at(1) != u':' || path.at(2) != u'/')
+        return {};
+#endif
+    return QUrl::fromLocalFile(path);
+}
+
 QUrl Engine::localFileUrl(const QString &path) const
 {
     return QFileInfo(path).isAbsolute() ? QUrl::fromLocalFile(path) : QUrl();
