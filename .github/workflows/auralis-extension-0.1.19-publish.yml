@@ -1,0 +1,69 @@
+name: Publish verified Auralis browser extension 0.1.19
+on:
+  push:
+    branches: [release/auralis-extension-v0.1.19]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: auralis-extension-v0.1.19
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == '4ls4mi/Auralis-Download-Manager'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify the source and two browser packages
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD^)" = '419311799cfd483a2aa87b408fc1abd9143aa81a'
+          test "$(git ls-remote origin 'refs/tags/auralis-extension-v0.1.19^{}' | cut -f1)" = '419311799cfd483a2aa87b408fc1abd9143aa81a'
+          cd browser-release-assets
+          sha256sum -c <<'SHA256'
+          cba984a245559be30f47e9170e4bdb03e1f97d4158ecfd7c40c8f924e40c684b  auralis-chromium.zip
+          8ca6fd69bfa5bbf9f5ae916603ff998ecc373874069157772e6a0bf6575443df  auralis-firefox.zip
+          SHA256
+      - name: Upload and publish the verified browser packages
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          tag=auralis-extension-v0.1.19
+          release="repos/$GH_REPO/releases/455088999"
+          chromium=sha256:cba984a245559be30f47e9170e4bdb03e1f97d4158ecfd7c40c8f924e40c684b
+          firefox=sha256:8ca6fd69bfa5bbf9f5ae916603ff998ecc373874069157772e6a0bf6575443df
+          check_release() {
+            jq -e --arg tag "$tag" --arg chromium "$chromium" --arg firefox "$firefox" '
+              .tag_name == $tag and (.prerelease == false) and
+              all(.assets[]; .state == "uploaded" and
+                ((.name == "auralis-chromium.zip" and .digest == $chromium) or
+                 (.name == "auralis-firefox.zip" and .digest == $firefox)))
+            ' >/dev/null
+          }
+          draft=$(gh api "$release")
+          printf '%s' "$draft" | check_release
+          if jq -e '.draft' <<< "$draft" >/dev/null; then
+            for asset in auralis-chromium.zip auralis-firefox.zip; do
+              if ! jq -e --arg asset "$asset" 'any(.assets[]; .name == $asset)' <<< "$draft" >/dev/null; then
+                gh release upload "$tag" "browser-release-assets/$asset" --repo "$GH_REPO"
+              fi
+            done
+            staged=$(gh api "$release")
+            printf '%s' "$staged" | check_release
+            jq -e '.draft and (.assets | length == 2)' <<< "$staged" >/dev/null
+            gh release edit "$tag" --repo "$GH_REPO" --draft=false --latest=false
+          fi
+          public=$(gh api "$release")
+          printf '%s' "$public" | check_release
+          jq -e '(.draft == false) and (.assets | length == 2)' <<< "$public" >/dev/null
