@@ -175,7 +175,11 @@ fn initialize(args: Vec<String>) -> Result<HeadlessService, ExitCode> {
     }
 
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-    let mut loaded = crate::store::load();
+    let mut loaded = if embedded() {
+        crate::store::load_embedded()
+    } else {
+        crate::store::load()
+    };
     let s = &mut loaded.settings;
     // Glass owns all visible windows and the only tray icon. The backend
     // must never expose the NAS/remote-control server on the network.

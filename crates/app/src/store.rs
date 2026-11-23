@@ -51,7 +51,17 @@ pub fn path() -> Option<PathBuf> {
 
 /// Load the list; a missing file gives an empty list, a damaged one is kept aside.
 pub fn load() -> Loaded {
-    let empty = Loaded {
+    load_profile(false)
+}
+
+/// Auralis offers clipboard prefill and opens completed files on double-click
+/// by default in a new download profile. Existing profile choices take priority.
+pub fn load_embedded() -> Loaded {
+    load_profile(true)
+}
+
+fn load_profile(auralis: bool) -> Loaded {
+    let mut empty = Loaded {
         next_id: 1,
         items: Vec::new(),
         columns: None,
@@ -59,7 +69,25 @@ pub fn load() -> Loaded {
         queues: Vec::new(),
     };
     let Some(p) = path() else { return empty };
+    if auralis && first_auralis_profile(&p) {
+        empty.settings.clipboard_autostart = true;
+        empty.settings.glass_clipboard_auto_download = false;
+        empty.settings.double_click_open = true;
+    }
     load_from(&p, empty)
+}
+
+fn first_auralis_profile(downloads: &Path) -> bool {
+    let Some(profile) = downloads.parent() else { return false };
+    [
+        downloads.to_owned(),
+        backup_path(downloads),
+        generation_path(downloads, 1),
+        generation_path(downloads, 2),
+        profile.join("auralis-interface-version"),
+    ]
+    .iter()
+    .all(|path| matches!(path.symlink_metadata(), Err(error) if error.kind() == std::io::ErrorKind::NotFound))
 }
 
 /// Only the settings, read without touching anything (the command line's debrid accounts,

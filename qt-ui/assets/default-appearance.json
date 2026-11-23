@@ -1,0 +1,21 @@
+{
+  "mh-glass-back-details": "desktop",
+  "mh-glass-back-main": "desktop",
+  "mh-glass-connection-indicator": "ocean",
+  "mh-glass-connection-material": "liquid-glass",
+  "mh-glass-connection-shape": "rounded",
+  "mh-glass-custom-materials": "[]",
+  "mh-glass-glass-translucency": "13",
+  "mh-glass-graph-indicator": "blue-purple",
+  "mh-glass-graph-shape": "area",
+  "mh-glass-indicator": "blue-purple",
+  "mh-glass-material": "violet-rail",
+  "mh-glass-progress-material": "liquid-glass",
+  "mh-glass-progress-shape": "rounded",
+  "mh-glass-qt-appearance": "{\"mainMode\":\"desktop\",\"detailsMode\":\"desktop\",\"mainMedia\":\"\",\"detailsMedia\":\"\",\"mainColor\":\"\",\"detailsColor\":\"\",\"progressShape\":\"round\",\"progressAnimation\":\"jelly\",\"progressLighting\":\"pinpoint\",\"progressPalette\":\"blue-purple\",\"connectionShape\":\"round\",\"connectionAnimation\":\"jelly\",\"connectionLighting\":\"frost\",\"connectionPalette\":\"ocean\",\"graphShape\":\"area\",\"graphAnimation\":\"jelly\",\"graphLighting\":\"polished\",\"graphPalette\":\"blue-purple\",\"tint\":\"#7298bc\",\"forcedAccent\":\"\",\"reducedMotion\":false,\"colorTheme\":null}",
+  "mh-glass-solid-details": "",
+  "mh-glass-solid-main": "",
+  "mh-glass-tint-strength": "21",
+  "mh-glass-wall-detail": "",
+  "mh-glass-wall-main": ""
+}

@@ -1796,6 +1796,10 @@ Identificador del torrent %3</translation>
             <translation>Gestor de descargas</translation>
         </message>
         <message>
+            <source>Donate on Patreon</source>
+            <translation>Donar en Patreon</translation>
+        </message>
+        <message>
             <source>Connected</source>
             <translation>Conectado</translation>
         </message>

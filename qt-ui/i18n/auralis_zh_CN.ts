@@ -1796,6 +1796,10 @@ Info hash %3</source>
             <translation>下载管理器</translation>
         </message>
         <message>
+            <source>Donate on Patreon</source>
+            <translation>在 Patreon 上捐赠</translation>
+        </message>
+        <message>
             <source>Connected</source>
             <translation>已连接</translation>
         </message>

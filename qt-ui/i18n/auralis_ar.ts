@@ -1796,6 +1796,10 @@ Info hash %3</source>
             <translation>مدير التنزيلات</translation>
         </message>
         <message>
+            <source>Donate on Patreon</source>
+            <translation>تبرّع على Patreon</translation>
+        </message>
+        <message>
             <source>Connected</source>
             <translation>متصل</translation>
         </message>

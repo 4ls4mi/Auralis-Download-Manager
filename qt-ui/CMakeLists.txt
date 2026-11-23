@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(AuralisQt VERSION 0.3.74 LANGUAGES CXX)
+project(AuralisQt VERSION 0.3.75 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -55,6 +55,7 @@ qt_add_resources(auralis-download-manager "branding"
         assets/auralis.png
         assets/auralis.ico
         assets/auralis-progress.png
+        assets/default-appearance.json
         assets/sounds/auralis-download-complete.wav
         assets/sounds/auralis-download-failed.wav
         assets/sounds/auralis-queue-started.wav

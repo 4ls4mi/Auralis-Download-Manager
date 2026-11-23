@@ -908,10 +908,22 @@ AuralisWindow {
         AppMenuItem { symbol: "remove"; action: removeSelection; destructive: true }
     }
 
-    function openPicked(folder) {
-        if (!currentItem || (!folder && currentItem.status !== "Complete"))
+    function openRow(id, status) {
+        if (status !== "Complete") {
+            showDownload(id)
             return
-        const item = currentItem
+        }
+        request({query: "glass-settings"}, false, settings => {
+            if (settings?.double_click_open === true)
+                openPicked(false, {id, status})
+            else
+                showDownload(id)
+        })
+    }
+
+    function openPicked(folder, item = currentItem) {
+        if (!item || (!folder && item.status !== "Complete"))
+            return
         request({query: "glass-move-status", ids: [Number(item.id)]}, false, result => {
             if (!result || result.moved_away || !result.path) {
                 actionError = qsTr("The downloaded file could not be located.")
@@ -1039,7 +1051,7 @@ AuralisWindow {
                 objectName: "titleDragArea"
                 hostWindow: root
                 anchors.fill: parent
-                anchors.rightMargin: captionActions.width + 6
+                anchors.rightMargin: titleActions.width + 6
                 z: 1
                 onDoubleClickRequested: root.toggleMaximized()
             }
@@ -1082,16 +1094,29 @@ AuralisWindow {
                     color: root.colors.muted
                     font.pixelSize: TypographyScale.pixels(12)
                 }
-                CaptionControls {
-                    id: captionActions
-                    trayEnabled: Boolean(engine.trayAvailable)
-                    maximized: root.visibility === Window.Maximized
-                    minimizeLabel: root.minimizeToTray && engine.trayAvailable ? qsTr("Minimize to system tray") : qsTr("Minimize")
-                    closeLabel: root.closeToTray ? qsTr("Keep Auralis running") : qsTr("Exit Auralis")
-                    onHideRequested: root.hideMainToTray()
-                    onMinimizeRequested: root.minimizeMain()
-                    onMaximizeRequested: root.toggleMaximized()
-                    onCloseRequested: root.close()
+                RowLayout {
+                    id: titleActions
+                    spacing: 8
+
+                    GlassButton {
+                        objectName: "mainDonatePatreon"
+                        Layout.preferredHeight: 34
+                        text: qsTr("Donate on Patreon")
+                        filled: true
+                        accent: root.colors.light ? "#a64f25" : "#ffbd7d"
+                        font.weight: Font.DemiBold
+                        onClicked: Qt.openUrlExternally("https://www.patreon.com/c/Alsamii")
+                    }
+                    CaptionControls {
+                        trayEnabled: Boolean(engine.trayAvailable)
+                        maximized: root.visibility === Window.Maximized
+                        minimizeLabel: root.minimizeToTray && engine.trayAvailable ? qsTr("Minimize to system tray") : qsTr("Minimize")
+                        closeLabel: root.closeToTray ? qsTr("Keep Auralis running") : qsTr("Exit Auralis")
+                        onHideRequested: root.hideMainToTray()
+                        onMinimizeRequested: root.minimizeMain()
+                        onMaximizeRequested: root.toggleMaximized()
+                        onCloseRequested: root.close()
+                    }
                 }
             }
         }
@@ -1756,7 +1781,7 @@ AuralisWindow {
                             telemetry: visual
                             speedSamples: root.transferSpeedHistory[transferId] || []
                             onSelected: modifiers => root.selectRow(index, modifiers)
-                            onOpened: root.showDownload(transferId)
+                            onOpened: root.openRow(transferId, status)
                             onOptionsRequested: {
                                 if (root.chosenSet.has(transferId))
                                     root.focusRow(index)

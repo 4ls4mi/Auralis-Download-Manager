@@ -576,6 +576,27 @@ int main(int argc, char **argv)
 }
 
 namespace {
+void seedFreshAppearance(const QString &profile)
+{
+    const QDir directory(profile);
+    for (const auto &history : {QStringLiteral("auralis-interface-version"), QStringLiteral("downloads.json"),
+                                QStringLiteral("downloads.json.bak"), QStringLiteral("downloads.json.1.bak"),
+                                QStringLiteral("downloads.json.2.bak")}) {
+        const QFileInfo entry(directory.filePath(history));
+        if (entry.exists() || entry.isSymLink())
+            return;
+    }
+
+    QSettings settings;
+    if (!settings.allKeys().isEmpty() || settings.status() != QSettings::NoError)
+        return;
+    QFile appearance(QStringLiteral(":/auralis/default-appearance.json"));
+    if (!appearance.open(QIODevice::ReadOnly))
+        return;
+    settings.setValue(QStringLiteral("WindowAppearance/saved"), QString::fromUtf8(appearance.readAll()));
+    settings.sync();
+}
+
 int runDesktop(QApplication &app, int activeInterfaceScale, bool startHidden, bool exitRequest, bool smoke,
                QString &restartError)
 {
@@ -627,6 +648,7 @@ int runDesktop(QApplication &app, int activeInterfaceScale, bool startHidden, bo
     if (!local.listen(serverName))
         return 1;
 
+    seedFreshAppearance(engine.dataDirectory());
     engine.initializeInterfaceLanguage();
     qml.rootContext()->setContextProperty(QStringLiteral("engine"), &engine);
     qml.rootContext()->setContextProperty(QStringLiteral("typography"), &typography);
