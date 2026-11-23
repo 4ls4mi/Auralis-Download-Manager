@@ -78,11 +78,12 @@ jobs:
                 } else {
                   $process = Start-Process -FilePath $idm -ArgumentList @('/d', $url, '/p', $dest, '/f', $filename, '/n') -PassThru
                 }
-                $deadline = [DateTime]::UtcNow.AddMinutes(3)
+                $deadline = [DateTime]::UtcNow.AddSeconds(20)
                 while ([DateTime]::UtcNow -lt $deadline) {
                   if ((Test-Path -LiteralPath $path) -and (Get-Item -LiteralPath $path).Length -eq 104857600) { break }
                   Start-Sleep -Milliseconds 100
                 }
+                Write-Host ("FINAL STATE " + ((Invoke-Auralis @{query="list"}) | ConvertTo-Json -Depth 8 -Compress))
                 $clock.Stop()
                 if (!(Test-Path -LiteralPath $path) -or (Get-Item -LiteralPath $path).Length -ne 104857600) { throw "$program trial $trial did not finish the expected file." }
                 $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
