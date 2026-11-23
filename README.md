@@ -6,38 +6,23 @@ Auralis is a free Windows x64 download manager with a glass-inspired interface, 
 
 [Download Auralis for Windows](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest) · [Download the Auralis browser extension](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest) · [Release notes](https://github.com/4ls4mi/Auralis-Download-Manager/releases)
 
-## Screenshots
+[![Donate on Patreon](https://img.shields.io/badge/Donate%20on-Patreon-C83740?style=for-the-badge&logo=patreon&logoColor=white)](https://www.patreon.com/c/Alsamii)
+
+Your support helps Alsami build new apps and tools and localize games into Arabic.
+
+## Auralis in action
 
 ### Download manager
 
-![Download manager](docs/images/auralis/user-picture-1.png)
+![Auralis download queue in the default Violet Rail material, with the Patreon button in the title bar](docs/images/auralis/violet-rail-downloads.png)
 
-### Auralis download manager demonstration
+### Current download
 
-![Auralis download manager demonstration](docs/images/auralis/manager-demonstration.gif)
-
-### Browser extension demonstration
-
-![Browser extension demonstration](docs/images/auralis/extension-demonstration.gif)
-
-### Live download
-
-![Live download](docs/images/auralis/user-picture-2.png)
-
-![▶ Watch the download video (muted)](docs/images/auralis/download-demo.gif)
-
-### Download file information
-
-![Download file information](docs/images/auralis/user-picture-3.png)
-
-### Download completed
-
-![Download completed](docs/images/auralis/user-picture-4.png)
+![Auralis showing animated liquid progress, connection activity, and a transfer speed graph](docs/images/auralis/violet-rail-transfer.gif)
 
 ### Appearance settings
 
-![Appearance settings](docs/images/auralis/user-picture-5.png)
-
+![Auralis Settings showing the Violet Rail material and its appearance controls](docs/images/auralis/violet-rail-appearance.png)
 
 ## What you can do with Auralis
 
