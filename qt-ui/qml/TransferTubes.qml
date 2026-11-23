@@ -8,7 +8,10 @@ Canvas {
     property Item gridItem
     property Repeater workers
     property bool flowing: false
+    property string progressAnimation: "classic"
+    property string connectionAnimation: "classic"
     property real phase: 0
+    property real slowPhase: phase
     property bool paintingPaused: false
     property color progressStart: MaterialTheme.palette.accent
     property color progressEnd: MaterialTheme.palette.secondary
@@ -33,7 +36,12 @@ Canvas {
     onGridItemChanged: requestPaint()
     onWorkersChanged: requestPaint()
     onFlowingChanged: requestPaint()
-    onPhaseChanged: if (flowing && !MaterialTheme.reducedMotion) requestPaint()
+    onPhaseChanged: if (flowing && !MaterialTheme.reducedMotion && (["classic", "water"].includes(progressAnimation)
+                       || ["classic", "water"].includes(connectionAnimation))) requestPaint()
+    onSlowPhaseChanged: if (flowing && !MaterialTheme.reducedMotion && (progressAnimation === "jelly"
+                           || connectionAnimation === "jelly")) requestPaint()
+    onProgressAnimationChanged: requestPaint()
+    onConnectionAnimationChanged: requestPaint()
     onProgressStartChanged: requestPaint()
     onProgressEndChanged: requestPaint()
     onConnectionStartChanged: requestPaint()
@@ -54,6 +62,23 @@ Canvas {
         ctx.moveTo(points[0].x, points[0].y)
         for (let index = 1; index < points.length; ++index)
             ctx.lineTo(points[index].x, points[index].y)
+    }
+
+    function rail(ctx, points, offset) {
+        ctx.beginPath()
+        for (let index = 0; index < points.length; ++index) {
+            const point = points[index]
+            const before = points[index - 1]
+            const after = points[index + 1]
+            const normalX = (before ? Math.sign(before.y - point.y) : 0) + (after ? Math.sign(point.y - after.y) : 0)
+            const normalY = (before ? Math.sign(point.x - before.x) : 0) + (after ? Math.sign(after.x - point.x) : 0)
+            const x = point.x + offset * Math.sign(normalX)
+            const y = point.y + offset * Math.sign(normalY)
+            if (index === 0)
+                ctx.moveTo(x, y)
+            else
+                ctx.lineTo(x, y)
+        }
     }
 
     function pipeGradient(ctx, first, last, fromColor, toColor, alpha) {
@@ -84,7 +109,50 @@ Canvas {
         return fluid
     }
 
-    function pipe(ctx, points, firstTone, lastTone, active, offset) {
+    function flowingPulse(ctx, points, total, firstTone, lastTone, style, offset) {
+        const water = style === "water"
+        const jelly = style === "jelly"
+        const cycle = (jelly ? slowPhase : phase) / (Math.PI * 2)
+        const pulseCount = water && total >= 60 ? 3 : 1
+        const span = Math.min(total, water ? 22 : jelly ? 44 + 6 * Math.sin(slowPhase) : 30)
+        for (let index = 0; index < pulseCount; ++index) {
+            const position = ((cycle * (water ? 2 : 1) + index / pulseCount + 1 - offset / 100) % 1)
+                * (total + span)
+            let distance = 0
+            for (let edge = 1; edge < points.length; ++edge) {
+                const first = points[edge - 1]
+                const last = points[edge]
+                const dx = last.x - first.x
+                const dy = last.y - first.y
+                const spanLength = Math.hypot(dx, dy)
+                const start = Math.max(0, position - span - distance)
+                const end = Math.min(spanLength, position - distance)
+                distance += spanLength
+                if (end - start < .2)
+                    continue
+                const startX = first.x + dx * start / spanLength
+                const startY = first.y + dy * start / spanLength
+                const endX = first.x + dx * end / spanLength
+                const endY = first.y + dy * end / spanLength
+                ctx.beginPath()
+                ctx.moveTo(startX, startY)
+                ctx.lineTo(endX, endY)
+                ctx.lineCap = "round"
+                ctx.lineWidth = jelly ? 4.1 : 3.1
+                const gradient = ctx.createLinearGradient(startX, startY, endX, endY)
+                gradient.addColorStop(0, MaterialTheme.rgba(firstTone.glow, 0))
+                gradient.addColorStop(jelly ? .43 : .72, MaterialTheme.rgba(lastTone.glow, jelly ? .72 : .61))
+                gradient.addColorStop(1, MaterialTheme.rgba(lastTone.glow, .08))
+                ctx.strokeStyle = gradient
+                ctx.stroke()
+                ctx.lineWidth = jelly ? 1.5 : 1.2
+                gradient.addColorStop(jelly ? .59 : .84, MaterialTheme.rgba(lastTone.edge, .95))
+                ctx.stroke()
+            }
+        }
+    }
+
+    function pipe(ctx, points, firstTone, lastTone, active, offset, style) {
         const first = points[0]
         const last = points[points.length - 1]
         const total = points.slice(1).reduce((length, point, index) =>
@@ -96,25 +164,39 @@ Canvas {
         ctx.lineJoin = "round"
         ctx.lineCap = "butt"
 
-        ctx.lineWidth = 8.1
-        ctx.strokeStyle = pipeGradient(ctx, first, last, firstTone.glow, lastTone.glow, active ? .13 : .045)
+        ctx.lineWidth = 8.8
+        ctx.strokeStyle = pipeGradient(ctx, first, last, firstTone.glow, lastTone.glow, active ? .23 : .07)
         ctx.stroke()
-        ctx.lineWidth = 5.6
+        ctx.lineWidth = 6.4
         ctx.strokeStyle = MaterialTheme.mix(firstTone.core, lastTone.core, .5, .89)
         ctx.stroke()
-        ctx.lineWidth = 3.65
-        ctx.strokeStyle = pipeGradient(ctx, first, last, firstTone.glow, lastTone.glow, active ? .48 : .19)
+        ctx.lineWidth = 4.9
+        ctx.strokeStyle = pipeGradient(ctx, first, last, firstTone.glow, lastTone.glow, active ? .55 : .24)
         ctx.stroke()
-        ctx.lineWidth = 2.1
-        ctx.strokeStyle = pipeGradient(ctx, first, last, firstTone.core, lastTone.core, active ? .90 : .93)
+        ctx.lineWidth = 3.15
+        ctx.strokeStyle = pipeGradient(ctx, first, last, firstTone.core, lastTone.core, .88)
         ctx.stroke()
-        ctx.lineWidth = .72
-        ctx.strokeStyle = currentGradient(ctx, first, last, firstTone, lastTone, total, active, offset)
+        ctx.lineWidth = 1.05
+        ctx.strokeStyle = style === "classic" ? currentGradient(ctx, first, last, firstTone, lastTone, total, active, offset)
+            : pipeGradient(ctx, first, last, firstTone.glow, lastTone.glow, active ? .72 : .23)
         ctx.stroke()
+
+        rail(ctx, points, -1.9)
+        ctx.lineWidth = .83
+        ctx.strokeStyle = pipeGradient(ctx, first, last, firstTone.edge, lastTone.edge, active ? .72 : .28)
+        ctx.stroke()
+        rail(ctx, points, 1.70)
+        ctx.lineWidth = .92
+        ctx.strokeStyle = pipeGradient(ctx, first, last, firstTone.glow, lastTone.glow, active ? .53 : .20)
+        ctx.stroke()
+        if (active && !MaterialTheme.reducedMotion && style !== "none")
+            flowingPulse(ctx, points, total, firstTone, lastTone, style, offset)
     }
 
     function droplet(ctx, outlet, surfaceY, cellWidth, index) {
-        const cycle = (phase / (Math.PI * 2) + index * .381966) % 1
+        const water = connectionAnimation === "water"
+        const jelly = connectionAnimation === "jelly"
+        const cycle = ((jelly ? slowPhase : phase) / (Math.PI * 2) * (water ? 2 : 1) + index * .381966) % 1
         const fall = surfaceY - outlet.y
         const radius = Math.min(2.3, cellWidth * .09)
         if (fall < 3 || radius < 1)
@@ -129,7 +211,7 @@ Canvas {
             const flight = cycle / .69
             const y = outlet.y + fall * flight * flight
             const x = outlet.x
-            const length = radius * (1.40 + flight * .75)
+            const length = radius * (jelly ? 2.2 + flight : 1.40 + flight * .75)
             const liquid = ctx.createLinearGradient(x - radius, y - radius, x + radius, y + radius)
             liquid.addColorStop(0, first.glow)
             liquid.addColorStop(.31, first.body)
@@ -189,7 +271,7 @@ Canvas {
 
         const upper = Qt.point(gutter, inlet.y)
         const split = Qt.point(gutter, outlet.y)
-        pipe(ctx, [inlet, upper, split, outlet], progressStartTone, progressEndTone, flowing, 0)
+        pipe(ctx, [inlet, upper, split, outlet], progressStartTone, progressEndTone, flowing, 0, progressAnimation)
 
         if (!gridItem || !workers || workers.count === 0 || gridItem.width <= 0)
             return
@@ -217,18 +299,18 @@ Canvas {
             return
 
         const active = flowing && rows.some(row => row.receiving)
-        pipe(ctx, [split, Qt.point(gutter, rows[rows.length - 1].y)], progressEndTone, connectionStartTone, active, 13)
+        pipe(ctx, [split, Qt.point(gutter, rows[rows.length - 1].y)], progressEndTone, connectionStartTone, active, 13, connectionAnimation)
 
         for (const row of rows) {
             const headerStart = Qt.point(gutter, row.y)
             const headerEnd = Qt.point(row.ports[row.ports.length - 1].point.x, row.y)
-            pipe(ctx, [headerStart, headerEnd], connectionStartTone, connectionEndTone, flowing && row.receiving, 20)
+            pipe(ctx, [headerStart, headerEnd], connectionStartTone, connectionEndTone, flowing && row.receiving, 20, connectionAnimation)
             for (let index = 0; index < row.ports.length; ++index) {
                 const port = row.ports[index]
                 const start = Qt.point(port.point.x, row.y)
                 const receiving = flowing && port.receiving
-                pipe(ctx, [start, port.point], connectionStartTone, connectionEndTone, receiving, 29 + index * 3)
-                if (receiving && !MaterialTheme.reducedMotion)
+                pipe(ctx, [start, port.point], connectionStartTone, connectionEndTone, receiving, 29 + index * 3, connectionAnimation)
+                if (receiving && connectionAnimation !== "none" && !MaterialTheme.reducedMotion)
                     droplet(ctx, port.point, port.surface, port.width, port.index)
             }
         }

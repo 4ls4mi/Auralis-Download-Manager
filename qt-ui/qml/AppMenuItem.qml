@@ -13,8 +13,9 @@ Basic.MenuItem {
     property bool destructive: false
     readonly property var colors: MaterialTheme.menuColors
     readonly property bool selected: enabled && (highlighted || hovered || activeFocus || down)
-    readonly property color face: MaterialTheme.controlHighlight(MaterialTheme.forcedAccent
-        || (destructive ? colors.danger : symbol.length ? commandColor : colors.highlight), down, hovered)
+    readonly property color actionAccent: MaterialTheme.vividControlAccent(MaterialTheme.forcedAccent
+        || (destructive ? colors.danger : symbol.length ? commandColor : colors.highlight), MaterialTheme.palette.light)
+    readonly property color face: MaterialTheme.controlHighlight(actionAccent, down, hovered)
     readonly property color activeInk: MaterialTheme.contrastInk(face)
     readonly property real glyphSpace: symbol.length ? 27 : 0
     readonly property string shortcutText: subMenu ? "" : menuShortcut.nativeText
@@ -31,7 +32,7 @@ Basic.MenuItem {
     font.weight: Font.Medium
     palette.windowText: foreground
     palette.text: foreground
-    icon.color: !enabled ? colors.muted : selected ? activeInk : item.commandColor
+    icon.color: !enabled ? colors.muted : selected ? activeInk : actionAccent
 
     Shortcut {
         id: menuShortcut
@@ -49,7 +50,11 @@ Basic.MenuItem {
             anchors.bottomMargin: 1
             radius: item.colors.studio ? 9 : 6
             visible: item.selected
-            color: item.face
+            gradient: Gradient {
+                GradientStop { position: 0; color: MaterialTheme.mix(item.face, item.actionAccent, .29, 1) }
+                GradientStop { position: .50; color: item.face }
+                GradientStop { position: 1; color: MaterialTheme.mix(item.face, "#111422", .14, 1) }
+            }
         }
 
         Loader {
@@ -137,8 +142,11 @@ Basic.MenuItem {
             anchors.verticalCenter: parent.verticalCenter
             symbol: item.symbol
             bold: true
-            ink: !item.enabled ? item.colors.muted : item.selected ? item.activeInk
-                : item.destructive ? item.colors.danger : item.commandColor
+            relief: item.enabled
+            surface: item.selected ? item.face : item.colors.surface
+            ink: !item.enabled ? item.colors.muted
+                : item.selected ? MaterialTheme.mix(item.activeInk, item.actionAccent, .16, 1)
+                : MaterialTheme.controlIconInk(item.actionAccent, item.colors.surface)
         }
     }
 }

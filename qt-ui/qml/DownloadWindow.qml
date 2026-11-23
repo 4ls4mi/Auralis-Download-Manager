@@ -39,8 +39,9 @@ ApplicationWindow {
     readonly property bool runningTransfer: !!(item && item.status === "Downloading")
     readonly property bool displayFlow: activeTab === 0 && !!item && !!item.url
     readonly property bool interactiveFrame: resizeHandles.resizing || downloadCaption.dragging
-    readonly property bool showWaterFlow: visible && visibility !== Window.Minimized && displayFlow
+    readonly property bool animateTransfer: visible && visibility !== Window.Minimized && activeTab === 0
         && runningTransfer && !interactiveFrame
+    readonly property bool showWaterFlow: displayFlow && animateTransfer
     readonly property var progressColors: MaterialTheme.progressColors
     readonly property var connectionColors: MaterialTheme.connectionColors
     readonly property bool finished: !!(item && item.status === "Complete")
@@ -508,10 +509,16 @@ ApplicationWindow {
     Timer {
         id: water
         property real phase: 0
-        interval: root.workerRows.length > 16 ? 96 : root.workerRows.length > 8 ? 64 : 48
+        property real slowPhase: 0
+        interval: root.workerRows.length > 16 ? 68 : root.workerRows.length > 8 ? 48 : 33
         repeat: true
-        running: root.showWaterFlow && !MaterialTheme.reducedMotion
-        onTriggered: phase = (phase + Math.PI * 2 * interval / 1120) % (Math.PI * 2)
+        running: root.animateTransfer && !MaterialTheme.reducedMotion
+            && (WindowAppearance.connectionAnimation !== "none" || (root.displayFlow && WindowAppearance.progressAnimation !== "none"))
+        onTriggered: {
+            phase = (phase + Math.PI * 2 * interval / 1120) % (Math.PI * 2)
+            if (WindowAppearance.connectionAnimation === "jelly" || WindowAppearance.progressAnimation === "jelly")
+                slowPhase = (slowPhase + Math.PI * 2 * interval / 2840) % (Math.PI * 2)
+        }
     }
 
     Pane {
@@ -678,7 +685,8 @@ ApplicationWindow {
                                     progressLine.width - progressPercent.width - progressPercent.anchors.leftMargin))
                                 height: 38
                                 value: Transfer.fraction(root.item)
-                                animated: root.runningTransfer && !root.interactiveFrame
+                                animated: root.animateTransfer
+                                animationStyle: WindowAppearance.progressAnimation
                                 shape: root.progressShape
                                 fillStyle: WindowAppearance.progressFill
                                 startColor: root.progressColors[0]
@@ -776,6 +784,7 @@ ApplicationWindow {
                                             material: root.material
                                             shape: root.connectionShape
                                             fillStyle: WindowAppearance.connectionFill
+                                            animationStyle: WindowAppearance.connectionAnimation
                                             value: worker.saved
                                             paintingPaused: root.interactiveFrame
                                             receiving: worker.receiving
@@ -827,6 +836,8 @@ ApplicationWindow {
                                 Layout.preferredHeight: root.transferLayout === "fogSlate" ? 92 : 106
                                 samples: root.speedSamples
                                 paintingPaused: root.interactiveFrame
+                                animationStyle: WindowAppearance.graphAnimation
+                                flowActive: root.animateTransfer
                                 lineColor: MaterialTheme.graphColors[0]
                                 endpointColor: MaterialTheme.graphColors[1]
                                 gridColor: root.colors.divider
@@ -1062,8 +1073,11 @@ ApplicationWindow {
                 gridItem: waterGrid
                 workers: waterWorkers
                 phase: water.phase
+                slowPhase: water.slowPhase
                 paintingPaused: root.interactiveFrame
                 flowing: root.showWaterFlow
+                progressAnimation: WindowAppearance.progressAnimation
+                connectionAnimation: WindowAppearance.connectionAnimation
                 progressStart: root.progressColors[0]
                 progressEnd: root.progressColors[1]
                 connectionStart: root.connectionColors[0]

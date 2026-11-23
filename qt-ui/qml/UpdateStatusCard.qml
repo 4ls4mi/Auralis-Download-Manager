@@ -34,10 +34,10 @@ Frame {
         : qsTr("Installed version %1").arg(installedVersion)
     readonly property string symbol: stage === "latest" ? "complete" : stage === "error" ? "details"
         : stage === "checking" || stage === "rechecking" ? "refresh" : "downloads"
-    readonly property color accent: MaterialTheme.actionColor(stage === "error" ? "pause"
-        : stage === "checking" || stage === "rechecking" || stage === "verifying" ? "clock" : "add", colors.light)
+    readonly property color accent: MaterialTheme.vividControlAccent(MaterialTheme.actionColor(stage === "error" ? "pause"
+        : stage === "checking" || stage === "rechecking" || stage === "verifying" ? "clock" : "add", colors.light), colors.light)
     readonly property color ground: MaterialTheme.mix(colors.background, colors.light ? "#ffffff" : "#050817", .22, 1)
-    readonly property color face: MaterialTheme.mix(ground, accent, colors.light ? .13 : .20, 1)
+    readonly property color face: MaterialTheme.mix(ground, accent, colors.light ? .17 : .25, 1)
     readonly property color ink: MaterialTheme.contrastInk(face)
     readonly property string attentionKey: stage + ":" + targetVersion
     property string lastAttentionKey
@@ -120,7 +120,11 @@ Frame {
             Layout.preferredWidth: 34
             Layout.preferredHeight: 34
             radius: 8
-            color: card.accent
+            gradient: Gradient {
+                GradientStop { position: 0; color: MaterialTheme.mix(card.accent, "#ffffff", .12, 1) }
+                GradientStop { position: .45; color: card.accent }
+                GradientStop { position: 1; color: MaterialTheme.mix(card.accent, "#152035", .24, 1) }
+            }
             Accessible.ignored: true
 
             DashboardIcon {
@@ -128,7 +132,9 @@ Frame {
                 width: 21
                 height: 21
                 symbol: card.symbol
-                ink: MaterialTheme.contrastInk(card.accent)
+                relief: card.enabled
+                surface: card.accent
+                ink: MaterialTheme.mix(MaterialTheme.contrastInk(card.accent), card.accent, .15, 1)
                 bold: true
             }
         }

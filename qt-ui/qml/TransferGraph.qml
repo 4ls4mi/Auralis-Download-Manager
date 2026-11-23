@@ -5,6 +5,8 @@ Canvas {
 
     property var samples: []
     property bool paintingPaused: false
+    property bool flowActive: false
+    property string animationStyle: "classic"
     property color lineColor: MaterialTheme.graphColors[0]
     property color endpointColor: MaterialTheme.graphColors[1]
     property color gridColor: MaterialTheme.palette.divider
@@ -12,6 +14,11 @@ Canvas {
     property string graphShape: WindowAppearance.graphShape
     readonly property var lineTone: MaterialTheme.neonTone(lineColor)
     readonly property var endpointTone: MaterialTheme.neonTone(endpointColor)
+    readonly property bool jellyFlow: animationStyle === "jelly"
+    readonly property bool flowEnabled: flowActive && visible && available && !paintingPaused
+        && !MaterialTheme.reducedMotion && samples.length > 1 && width >= 2 && height >= 3
+        && (animationStyle === "water" || jellyFlow)
+    property real flowPhase: 0
 
     renderTarget: Canvas.Image
     onSamplesChanged: requestPaint()
@@ -24,11 +31,61 @@ Canvas {
     onWidthChanged: requestPaint()
     onHeightChanged: requestPaint()
     onAvailableChanged: if (available) requestPaint()
+    onAnimationStyleChanged: {
+        flowPhase = 0
+        requestPaint()
+    }
+    onFlowEnabledChanged: {
+        if (!flowEnabled)
+            flowPhase = 0
+        requestPaint()
+    }
+    onFlowPhaseChanged: if (flowEnabled) requestPaint()
+
+    Timer {
+        interval: 40
+        repeat: true
+        running: root.flowEnabled
+        onTriggered: {
+            const duration = root.jellyFlow ? 2900 : 1200
+            root.flowPhase = (root.flowPhase + interval / duration) % 1
+        }
+    }
 
     function gradient(ctx, from, to) {
         const band = ctx.createLinearGradient(0, 0, width, 0)
         band.addColorStop(0, from)
         band.addColorStop(1, to)
+        return band
+    }
+
+    // The reflection moves across the measured path without moving any sample.
+    function flowGradient(ctx, first, last) {
+        const rebound = jellyFlow ? Math.sin(flowPhase * Math.PI * 7) * (1 - flowPhase) : 0
+        const spread = Math.max(3, width * (jellyFlow ? .28 + rebound * .06 : .16))
+        const travel = jellyFlow
+            ? flowPhase - Math.sin(flowPhase * Math.PI * 2) * .09 + rebound * .045
+            : flowPhase
+        const center = (width + spread * 2) * travel - spread
+        const fraction = Math.max(0, Math.min(1, center / width))
+        const glow = MaterialTheme.mix(first.glow, last.glow, fraction, 1)
+        const edge = MaterialTheme.mix(first.edge, last.edge, fraction, 1)
+        const shadow = MaterialTheme.mix(first.body, last.body, fraction, 1)
+        const band = ctx.createLinearGradient(center - spread, 0, center + spread, 0)
+        band.addColorStop(0, MaterialTheme.rgba(glow, 0))
+        if (jellyFlow) {
+            band.addColorStop(.20, MaterialTheme.rgba(shadow, .27))
+            band.addColorStop(.39, MaterialTheme.rgba(glow, .54))
+            band.addColorStop(.56 + rebound * .07, MaterialTheme.rgba(edge, .87))
+            band.addColorStop(.82, MaterialTheme.rgba(glow, .26))
+        } else {
+            band.addColorStop(.23, MaterialTheme.rgba(glow, .28))
+            band.addColorStop(.43, MaterialTheme.rgba(edge, .84))
+            band.addColorStop(.55, MaterialTheme.rgba(shadow, .58))
+            band.addColorStop(.68, MaterialTheme.rgba(edge, .68))
+            band.addColorStop(.83, MaterialTheme.rgba(glow, .28))
+        }
+        band.addColorStop(1, MaterialTheme.rgba(glow, 0))
         return band
     }
 
@@ -40,7 +97,7 @@ Canvas {
             ctx.lineTo(i * spacing, floor - samples[i] / peak * range)
     }
 
-    function drawBars(ctx, peak, floor, range, glow, core, edge) {
+    function drawBars(ctx, peak, floor, range, glow, core, edge, flow) {
         const stride = width / samples.length
         const gap = Math.min(3, stride * .27)
         const barWidth = Math.max(1, stride - gap)
@@ -64,6 +121,11 @@ Canvas {
             ctx.fillStyle = edge
             ctx.globalAlpha = .98
             ctx.fillRect(x, top, barWidth, Math.min(barHeight, height < 38 ? 1 : 1.35))
+            if (flow) {
+                ctx.fillStyle = flow
+                ctx.globalAlpha = light ? .66 : .84
+                ctx.fillRect(x, top, barWidth, barHeight)
+            }
         }
     }
 
@@ -99,8 +161,9 @@ Canvas {
         const glow = gradient(ctx, first.glow, last.glow)
         const core = gradient(ctx, first.core, last.core)
         const edge = gradient(ctx, first.edge, last.edge)
+        const flow = flowEnabled ? flowGradient(ctx, first, last) : null
         if (graphShape === "bars") {
-            drawBars(ctx, peak, floor, range, glow, core, edge)
+            drawBars(ctx, peak, floor, range, glow, core, edge, flow)
             ctx.globalAlpha = 1
             return
         }
@@ -119,6 +182,11 @@ Canvas {
             ctx.fillStyle = depth
             ctx.globalAlpha = 1
             ctx.fill()
+            if (flow) {
+                ctx.fillStyle = flow
+                ctx.globalAlpha = light ? .37 : .56
+                ctx.fill()
+            }
         }
 
         trace(ctx, peak, floor, range)
@@ -140,5 +208,11 @@ Canvas {
         ctx.lineWidth = compact ? .95 : 1.55
         ctx.globalAlpha = 1
         ctx.stroke()
+        if (flow) {
+            ctx.strokeStyle = flow
+            ctx.lineWidth = compact ? 1.3 : 2.1
+            ctx.globalAlpha = light ? .78 : .93
+            ctx.stroke()
+        }
     }
 }

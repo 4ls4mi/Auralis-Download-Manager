@@ -363,6 +363,24 @@ QtObject {
             : hovered ? mix(color, "#ffffff", .16, 1) : rgba(color, 1);
     }
 
+    function vividControlAccent(color, light) {
+        const value = rgba(color, 1);
+        return Qt.hsva(Math.max(0, value.hsvHue), Math.min(.94, value.hsvSaturation * 1.10),
+            Math.min(light ? .90 : .95, value.hsvValue), 1);
+    }
+
+    function controlIconInk(accent, face) {
+        const background = relativeLuminance(face);
+        const legible = color => {
+            const luminance = relativeLuminance(color);
+            return (Math.max(luminance, background) + .05) / (Math.min(luminance, background) + .05) >= 3;
+        };
+        if (legible(accent)) return accent;
+        const text = contrastInk(face);
+        const tinted = mix(text, accent, .66, 1);
+        return legible(tinted) ? tinted : mix(text, accent, .16, 1);
+    }
+
     function menuPalette(profile) {
         const pure = rgba(profile.accent, 1);
         const hue = pure.hsvSaturation > .12 ? pure.hsvHue : .62;

@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Window
 
 ColumnLayout {
     id: root
@@ -24,11 +25,19 @@ ColumnLayout {
     property bool loadingHelpers: false
     property bool helperRequest: false
     property bool browserRequest: false
+    property bool checkingChrome: false
+    property var chromeStatus: null
     property var release: null
     property string extensionMessage: ""
+    property string chromeProblem: ""
     property string helperProblem: ""
     readonly property bool browserSection: section === "Browser Integration"
     readonly property bool hasWindowsIntegration: Qt.platform.os === "windows"
+    readonly property bool browserSetupVisible: browserSection && hasWindowsIntegration && visible
+        && Boolean(Window.window?.visible) && Window.window.visibility !== Window.Minimized
+    readonly property bool chromeStoreAvailable: Boolean(chromeStatus?.storeUrl)
+    readonly property bool chromeVerifiedRecently: Boolean(chromeStatus?.connectedRecently)
+    readonly property bool chromeStoreUsed: Boolean(chromeVerifiedRecently || chromeStatus?.storePreviouslyConnected)
     readonly property bool installingHelper: Boolean(helpers && helpers.job && helpers.job.state === "installing")
     readonly property var colors: MaterialTheme.palette
 
@@ -71,22 +80,60 @@ ColumnLayout {
         extensionMessage = ""
         engine.request({local: action}, function(result, error) {
             browserRequest = false
-            extensionMessage = error || (!result || !result.ok ? qsTr("Browser setup did not complete.") : "") || (result && result.message)
-                || (action === "registerBrowserHost"
+            if (error || !result?.ok) {
+                extensionMessage = error || qsTr("Browser setup did not complete.")
+            } else if (action === "openChromeExtensionStore") {
+                extensionMessage = result.openedInChrome
+                    ? qsTr("Continue in Chrome to install or manage the extension.")
+                    : qsTr("The listing opened in your default browser. Use Google Chrome to install Auralis.")
+            } else if (action === "openChromeExtensions") {
+                extensionMessage = qsTr("In Chrome’s extension manager, turn on Developer mode and select Update to check for updates now.")
+            } else {
+                extensionMessage = result.message || (action === "registerBrowserHost"
                     ? qsTr("Browser connection registered. Restart the browser to reconnect.")
                     : qsTr("Choose the displayed Auralis folder when loading the unpacked extension."))
+            }
+            loadChromeStatus()
+        })
+    }
+
+    function loadChromeStatus() {
+        if (!browserSetupVisible || checkingChrome)
+            return
+        checkingChrome = true
+        engine.request({local: "chromeExtensionStatus"}, function(result, error) {
+            checkingChrome = false
+            if (!browserSetupVisible)
+                return
+            chromeStatus = error || !result ? null : result
+            chromeProblem = chromeStatus ? "" : error || qsTr("Could not check Chrome integration.")
         })
     }
 
     Component.onCompleted: if (visible) loadHelpers()
     onVisibleChanged: if (visible) loadHelpers()
     onSectionChanged: if (visible) loadHelpers()
+    onBrowserSetupVisibleChanged: {
+        if (browserSetupVisible) {
+            loadChromeStatus()
+        } else {
+            chromeStatus = null
+            chromeProblem = ""
+        }
+    }
 
     Timer {
         interval: 1500
         repeat: true
         running: root.visible && !root.browserSection
         onTriggered: root.loadHelpers()
+    }
+
+    Timer {
+        interval: 2500
+        repeat: true
+        running: root.browserSetupVisible
+        onTriggered: root.loadChromeStatus()
     }
 
     ColumnLayout {
@@ -106,23 +153,92 @@ ColumnLayout {
             Layout.fillWidth: true
             color: root.colors.muted
             wrapMode: Text.WordWrap
+            textFormat: Text.PlainText
             text: root.hasWindowsIntegration
-                ? qsTr("Open the bundled extension folder. In Chrome or Edge, go to Extensions, enable Developer mode, then choose Load unpacked. Register the browser connection if the extension cannot reach Auralis.")
-                : qsTr("Bundled browser connection registration is available on Windows.")
+                ? qsTr("Choose Add to Chrome on the listing, then open Auralis from Chrome’s Extensions menu to verify the connection. Chrome updates the store extension automatically.")
+                : qsTr("Chrome Web Store setup and bundled browser registration are available on Windows.")
         }
 
         Flow {
             Layout.fillWidth: true
+            visible: root.hasWindowsIntegration
+            spacing: 8
+
+            GlassButton {
+                objectName: "openChromeExtensionStore"
+                text: root.chromeStoreUsed ? qsTr("View in Chrome Web Store") : qsTr("Get from Chrome Web Store")
+                accent: root.colors.positive
+                filled: !root.chromeStoreUsed
+                enabled: root.chromeStoreAvailable && !root.browserRequest
+                onClicked: root.extensionAction("openChromeExtensionStore")
+            }
+
+            GlassButton {
+                objectName: "openChromeExtensions"
+                text: qsTr("Manage Chrome extensions")
+                enabled: Boolean(root.chromeStatus?.chromeDetected) && !root.browserRequest
+                onClicked: root.extensionAction("openChromeExtensions")
+            }
+        }
+
+        Label {
+            Layout.fillWidth: true
+            visible: root.hasWindowsIntegration
+            wrapMode: Text.WordWrap
+            textFormat: Text.PlainText
+            color: root.chromeProblem ? root.colors.destructive : root.colors.muted
+            text: root.chromeProblem || (!root.chromeStatus ? qsTr("Checking for Google Chrome…")
+                : root.chromeStatus.chromeDetected ? qsTr("Google Chrome detected.")
+                : qsTr("Auralis could not locate Chrome. You can still open the store listing."))
+        }
+
+        Label {
+            Layout.fillWidth: true
+            visible: root.chromeStoreAvailable || root.chromeVerifiedRecently
+            wrapMode: Text.WordWrap
+            textFormat: Text.PlainText
+            color: root.chromeVerifiedRecently ? root.colors.positive : root.colors.muted
+            text: {
+                if (root.chromeVerifiedRecently)
+                    return qsTr("Chrome Web Store extension connection verified recently.")
+                if (root.chromeStoreUsed)
+                    return qsTr("The store extension has connected before. Open Auralis in Chrome to verify the connection now.")
+                if (root.chromeStatus?.chromePreviouslyConnected)
+                    return qsTr("Chrome has connected before. The store extension connection is still unverified.")
+                return qsTr("Waiting for the Chrome Web Store extension to connect.")
+            }
+        }
+
+        Label {
+            Layout.fillWidth: true
+            Layout.topMargin: 6
+            visible: root.hasWindowsIntegration
+            color: root.colors.ink
+            font.weight: Font.DemiBold
+            text: qsTr("Manual setup and repair")
+        }
+
+        Label {
+            Layout.fillWidth: true
+            visible: root.hasWindowsIntegration
+            color: root.colors.muted
+            wrapMode: Text.WordWrap
+            text: qsTr("For the bundled extension, open Extensions in Chrome or Edge, enable Developer mode, and choose Load unpacked. Use Repair browser connection if the extension cannot reach Auralis.")
+        }
+
+        Flow {
+            Layout.fillWidth: true
+            visible: root.hasWindowsIntegration
             spacing: 8
 
             GlassButton {
                 text: qsTr("Open extension folder")
-                enabled: root.hasWindowsIntegration && !root.browserRequest
+                enabled: !root.browserRequest
                 onClicked: root.extensionAction("openExtensionFolder")
             }
             GlassButton {
-                text: qsTr("Register browser connection")
-                enabled: root.hasWindowsIntegration && !root.browserRequest
+                text: qsTr("Repair browser connection")
+                enabled: !root.browserRequest
                 onClicked: root.extensionAction("registerBrowserHost")
             }
         }
@@ -131,6 +247,7 @@ ColumnLayout {
             Layout.fillWidth: true
             visible: root.browserRequest || root.extensionMessage.length > 0
             text: root.browserRequest ? qsTr("Preparing browser integration…") : root.extensionMessage
+            textFormat: Text.PlainText
             color: root.colors.muted
             wrapMode: Text.WordWrap
         }

@@ -16,6 +16,7 @@ layout(std140, binding = 0) uniform ProgressUniforms {
     float polish;
     float flow;
     float contour;
+    float motionKind;
 } state;
 
 const float tau = 6.28318530718;
@@ -24,6 +25,11 @@ vec4 layer(vec4 below, vec3 light, float alpha)
 {
     alpha = clamp(alpha, 0.0, 1.0);
     return vec4(light * alpha, alpha) + below * (1.0 - alpha);
+}
+
+float band(float distance)
+{
+    return exp(-distance * distance);
 }
 
 void main()
@@ -79,9 +85,16 @@ void main()
     glass = layer(glass, vec3(0.84, 0.93, 1.0), specular * glint * 0.62);
 
     float fillEdge = clamp(state.amount, 0.0, 1.0);
+    bool water = state.motionKind > 0.5 && state.motionKind < 1.5;
+    bool jelly = state.motionKind > 1.5;
+    float phase = state.flow * state.phase;
     float frontSpan = min(height * 0.36, width * min(fillEdge, 1.0 - fillEdge));
     float curvature = frontSpan * (0.54 * (depth - 0.62)
                       + state.flow * 0.55 * sin(state.phase + curvedY * 2.6));
+    if (water)
+        curvature = frontSpan * (0.46 * (depth - 0.60) + state.flow * 0.31 * sin(phase * 2.0 + curvedY * 4.5));
+    if (jelly)
+        curvature = frontSpan * (0.98 * depth - 0.51 + state.flow * 0.34 * sin(phase - curvedY * 2.4));
     float frontDistance = (x - fillEdge) * width - curvature;
     float filled = 1.0 - smoothstep(-0.8, 0.8, frontDistance);
     filled *= step(0.001, fillEdge);
@@ -106,8 +119,31 @@ void main()
     float ripple = x * 3.0 - state.phase / tau;
     float lightWave = pow(0.5 + 0.5 * sin(tau * ripple + curvedY * 2.2), 12.0);
     float current = state.flow * lightWave * (0.25 + 0.75 * depth);
-    liquid = layer(liquid, luminous, current * (0.22 + 0.35 * shoulder));
-    liquid = layer(liquid, reflection, current * (0.12 + 0.24 * bounce));
+    if (water) {
+        // Narrow streams travel at different speeds inside the cylindrical profile.
+        float surge = 0.5 + 0.5 * cos(tau * 3.0 * x - phase);
+        float turbulence = sin(tau * 9.0 * x - phase * 2.0);
+        float upperStream = band((curvedY + 0.24 + 0.16 * turbulence) * 5.6);
+        float lowerStream = band((curvedY - 0.40 - 0.14 * cos(tau * 7.0 * x - phase * 3.0)) * 7.1);
+        float foam = pow(max(0.0, sin(tau * 19.0 * x - phase * 4.0 + curvedY * 6.0)), 10.0);
+        float inlet = band((pixel.x - 2.0) / max(3.0, height * 0.55));
+        liquid = layer(liquid, body * 0.64, 0.35 * depth * (1.0 - upperStream));
+        liquid = layer(liquid, reflection, (0.21 + 0.51 * surge) * upperStream + 0.41 * lowerStream);
+        liquid = layer(liquid, mix(reflection, vec3(0.94, 0.99, 1.0), 0.52),
+                       foam * (0.37 * upperStream + 0.22 * lowerStream) + 0.37 * inlet * depth);
+    } else if (jelly) {
+        // A rounded fold compresses and stretches as it moves through the thicker fill.
+        float fold = sin(tau * 1.9 * x - phase + 0.38 * sin(phase));
+        float slowRidge = band((curvedY + 0.45 + 0.28 * fold) * 4.3);
+        float lowerFold = band((curvedY - 0.51 + 0.20 * fold) * 3.0);
+        vec3 jellyBody = mix(body, emitter, 0.36 + 0.14 * fold);
+        liquid = layer(liquid, jellyBody, 0.54 * depth);
+        liquid = layer(liquid, reflection, 0.61 * slowRidge + 0.29 * lowerFold);
+        liquid = layer(liquid, body * 0.63, 0.28 * depth * band((curvedY - 0.14 + 0.18 * fold) * 3.4));
+    } else {
+        liquid = layer(liquid, luminous, current * (0.22 + 0.35 * shoulder));
+        liquid = layer(liquid, reflection, current * (0.12 + 0.24 * bounce));
+    }
     float meniscus = exp(-abs(frontDistance) / max(1.2, height * 0.13));
     liquid = layer(liquid, reflection, meniscus * 0.71 * depth);
 

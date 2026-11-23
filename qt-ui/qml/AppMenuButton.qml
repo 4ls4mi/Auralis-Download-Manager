@@ -13,8 +13,9 @@ Basic.Button {
     property color accent: colors.highlight
     readonly property var colors: MaterialTheme.menuColors
     readonly property bool emphasized: enabled && (hovered || visualFocus || down || menuOpen)
-    readonly property color face: MaterialTheme.controlHighlight(MaterialTheme.forcedAccent || accent, down,
-        hovered || visualFocus)
+    readonly property color actionAccent: MaterialTheme.vividControlAccent(MaterialTheme.forcedAccent || accent,
+        MaterialTheme.palette.light)
+    readonly property color face: MaterialTheme.controlHighlight(actionAccent, down, hovered || visualFocus)
     readonly property color activeInk: MaterialTheme.contrastInk(face)
 
     hoverEnabled: true
@@ -37,7 +38,11 @@ Basic.Button {
         height: 19
         visible: button.railIcon.length > 0
         symbol: button.railIcon
-        ink: button.emphasized ? button.activeInk : button.idleInk
+        relief: button.enabled
+        surface: button.emphasized ? button.face : button.colors.surface
+        ink: !button.enabled ? button.colors.muted
+            : button.emphasized ? MaterialTheme.mix(button.activeInk, button.actionAccent, .16, 1)
+            : MaterialTheme.controlIconInk(button.actionAccent, button.colors.surface)
     }
 
     background: Item {
@@ -47,7 +52,22 @@ Basic.Button {
             anchors.fill: parent
             anchors.margins: 1
             radius: 5
-            color: button.emphasized ? button.face : MaterialTheme.rgba(button.accent, .13)
+            gradient: Gradient {
+                GradientStop {
+                    position: 0
+                    color: button.emphasized ? MaterialTheme.mix(button.face, button.actionAccent, .25, 1)
+                        : MaterialTheme.rgba(button.actionAccent, .21)
+                }
+                GradientStop {
+                    position: .48
+                    color: button.emphasized ? button.face : MaterialTheme.rgba(button.actionAccent, .14)
+                }
+                GradientStop {
+                    position: 1
+                    color: button.emphasized ? MaterialTheme.mix(button.face, "#111422", .14, 1)
+                        : MaterialTheme.rgba(button.actionAccent, .10)
+                }
+            }
             border.width: button.visualFocus ? 1 : 0
             border.color: button.activeInk
         }

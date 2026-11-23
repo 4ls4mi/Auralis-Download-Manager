@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Shapes
+import QtQuick.Window
 
 Item {
     id: icon
@@ -11,7 +12,6 @@ Item {
     property bool relief: false
     property color ink: "#ffffff"
     property color surface: "#252a32"
-    property real sheen: 0
     implicitWidth: 22
     implicitHeight: 22
     readonly property real glyphScale: Math.min(width, height) / 24
@@ -19,6 +19,10 @@ Item {
     readonly property string glyph: paths[symbol] || ""
     readonly property color shadow: MaterialTheme.mix(ink, surface, .77, 1)
     readonly property color highlight: MaterialTheme.mix(ink, "#ffffff", .30, 1)
+    readonly property bool moveGlyph: relief && enabled && visible && glyph.length > 0
+        && Boolean(Window.window?.visible) && Window.window.visibility !== Window.Minimized
+        && !MaterialTheme.reducedMotion
+    readonly property int halfCycle: 920 + (symbol.length % 6) * 90
 
     readonly property var paths: ({
         app: "M4 4 H20 V20 H4 Z M12 6 V15 M8 11 L12 15 L16 11",
@@ -78,23 +82,6 @@ Item {
         }
     }
 
-    Shape {
-        anchors.centerIn: parent
-        width: 24
-        height: 24
-        scale: icon.glyphScale
-        preferredRendererType: Shape.CurveRenderer
-        ShapePath {
-            strokeColor: icon.ink
-            fillGradient: icon.relief && icon.solid ? icon.beveledFill : null
-            fillColor: icon.solid ? icon.ink : "transparent"
-            strokeWidth: icon.relief && icon.solid ? 1.4 : icon.lineWidth
-            capStyle: ShapePath.RoundCap
-            joinStyle: ShapePath.RoundJoin
-            PathSvg { path: icon.glyph }
-        }
-    }
-
     readonly property LinearGradient beveledFill: LinearGradient {
         x1: 6
         y1: 4
@@ -105,25 +92,69 @@ Item {
         GradientStop { position: 1; color: MaterialTheme.mix(icon.ink, icon.shadow, .43, 1) }
     }
 
-    Loader {
-        anchors.fill: parent
-        active: icon.relief
-        sourceComponent: Item {
-            Shape {
-                anchors.centerIn: parent
-                width: 24
-                height: 24
-                scale: icon.glyphScale
-                transform: Translate { x: -.16; y: -.42 }
-                opacity: .26 + .32 * icon.sheen
-                preferredRendererType: Shape.CurveRenderer
-                ShapePath {
-                    strokeColor: icon.highlight
-                    strokeWidth: .72
-                    fillColor: "transparent"
-                    capStyle: ShapePath.RoundCap
-                    joinStyle: ShapePath.RoundJoin
-                    PathSvg { path: icon.glyph }
+    Item {
+        id: glyphFace
+
+        width: icon.width
+        height: icon.height
+
+        // Only the face moves, so its stationary shadow gives the lift depth.
+        SequentialAnimation on y {
+            running: icon.moveGlyph
+            loops: Animation.Infinite
+            onRunningChanged: if (!running) glyphFace.y = 0
+
+            NumberAnimation {
+                from: 0
+                to: -1.15
+                duration: icon.halfCycle
+                easing.type: Easing.InOutSine
+            }
+            NumberAnimation {
+                from: -1.15
+                to: 0
+                duration: icon.halfCycle
+                easing.type: Easing.InOutSine
+            }
+        }
+
+        Shape {
+            anchors.centerIn: parent
+            width: 24
+            height: 24
+            scale: icon.glyphScale
+            preferredRendererType: Shape.CurveRenderer
+            ShapePath {
+                strokeColor: icon.ink
+                fillGradient: icon.relief && icon.solid ? icon.beveledFill : null
+                fillColor: icon.solid ? icon.ink : "transparent"
+                strokeWidth: icon.relief && icon.solid ? 1.4 : icon.lineWidth
+                capStyle: ShapePath.RoundCap
+                joinStyle: ShapePath.RoundJoin
+                PathSvg { path: icon.glyph }
+            }
+        }
+
+        Loader {
+            anchors.fill: parent
+            active: icon.relief
+            sourceComponent: Item {
+                Shape {
+                    anchors.centerIn: parent
+                    width: 24
+                    height: 24
+                    scale: icon.glyphScale
+                    transform: Translate { x: -.16; y: -.42 }
+                    opacity: .38
+                    preferredRendererType: Shape.CurveRenderer
+                    ShapePath {
+                        strokeColor: icon.highlight
+                        strokeWidth: .72
+                        fillColor: "transparent"
+                        capStyle: ShapePath.RoundCap
+                        joinStyle: ShapePath.RoundJoin
+                        PathSvg { path: icon.glyph }
+                    }
                 }
             }
         }

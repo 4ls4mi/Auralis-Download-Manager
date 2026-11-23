@@ -139,6 +139,8 @@ ApplicationWindow {
     }
 
     property var graphValues: []
+    readonly property bool animateThroughput: root.visible && root.visibility !== Window.Minimized
+        && root.online && Number(engine.dashboard.speed || 0) > 0
     property var transferSpeedHistory: ({})
     property var recoveryDismissed: ({})
     property bool busy: false
@@ -1199,23 +1201,8 @@ ApplicationWindow {
             Layout.preferredHeight: 51
             Item {
                 id: actionPanel
-                property real reflectionPosition: -2
                 parent: root.materialDashboard ? workspaceActionDock : topActionDock
                 anchors.fill: parent
-
-                SequentialAnimation on reflectionPosition {
-                    running: actionPanel.visible && root.active && root.visibility !== Window.Minimized
-                        && !MaterialTheme.reducedMotion
-                    loops: Animation.Infinite
-                    onRunningChanged: if (!running) actionPanel.reflectionPosition = -2
-                    PauseAnimation { duration: 3200 }
-                    NumberAnimation {
-                        from: -2
-                        to: 12
-                        duration: 1450
-                        easing.type: Easing.InOutSine
-                    }
-                }
 
                 GlassSurface { anchors.fill: parent; role: "toolbar" }
                 RowLayout {
@@ -1277,9 +1264,6 @@ ApplicationWindow {
                                     relief: actionButton.enabled
                                     ink: actionButton.iconInk
                                     surface: actionButton.faceColor
-                                    sheen: actionButton.enabled && !actionButton.down && !actionButton.hovered
-                                        ? Math.max(0, 1 - Math.abs(actionPanel.reflectionPosition - actionButton.index))
-                                        : 0
                                 }
                                 Label {
                                     id: buttonLabel
@@ -1311,6 +1295,11 @@ ApplicationWindow {
             actionLabel: updateNotice.updateInProgress ? qsTr("View update status") : qsTr("Review update")
             announceChanges: true
             onActionRequested: root.showUpdates()
+        }
+
+        ChromeExtensionOffer {
+            Layout.fillWidth: true
+            hostWindow: root
         }
 
         Frame {
@@ -1571,6 +1560,8 @@ ApplicationWindow {
                                     Layout.fillWidth: true
                                     Layout.fillHeight: true
                                     samples: root.graphValues
+                                    animationStyle: WindowAppearance.graphAnimation
+                                    flowActive: root.animateThroughput
                                     lineColor: MaterialTheme.graphColors[0]
                                     endpointColor: MaterialTheme.graphColors[1]
                                     gridColor: root.colors.divider
@@ -1747,6 +1738,8 @@ ApplicationWindow {
                             statusLabel: root.statusText(status)
                             statusInk: root.statusColor(status)
                             transferring: status === "Downloading"
+                            animationsAllowed: root.visibility !== Window.Minimized
+                                && y + height > list.contentY && y < list.contentY + list.height
                             speedLabel: transferring ? TransferData.rate(transferSpeed) : ""
                             timeLabel: TransferData.timeLeft({status: status, size: length, downloaded: bytes, speed: transferSpeed})
                             progress: status === "Complete" ? 1 : length > 0 ? Math.max(0, Math.min(1, bytes / length)) : 0
@@ -1862,6 +1855,8 @@ ApplicationWindow {
                     Layout.minimumWidth: 85
                     Layout.preferredHeight: 35
                     samples: root.graphValues
+                    animationStyle: WindowAppearance.graphAnimation
+                    flowActive: root.animateThroughput
                     lineColor: MaterialTheme.graphColors[0]
                     endpointColor: MaterialTheme.graphColors[1]
                     gridColor: root.colors.divider

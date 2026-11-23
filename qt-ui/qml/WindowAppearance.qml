@@ -10,9 +10,18 @@ QtObject {
     property var preferences: defaults()
     readonly property string progressShape: preferences.progressShape
     readonly property string progressFill: preferences.progressFill
+    readonly property string progressAnimation: preferences.progressAnimation
     readonly property string connectionShape: preferences.connectionShape
     readonly property string connectionFill: preferences.connectionFill
+    readonly property string connectionAnimation: preferences.connectionAnimation
     readonly property string graphShape: preferences.graphShape
+    readonly property string graphAnimation: preferences.graphAnimation
+    readonly property var animationChoices: [
+        {label: qsTr("Classic"), value: "classic"},
+        {label: qsTr("Normal (no motion)"), value: "none"},
+        {label: qsTr("Gushing water"), value: "water"},
+        {label: qsTr("Jelly"), value: "jelly"}
+    ]
 
     property Settings persistence: Settings {
         category: "WindowAppearance"
@@ -47,7 +56,8 @@ QtObject {
         return {
             mainMode: "desktop", detailsMode: "desktop", mainMedia: "", detailsMedia: "",
             mainColor: "", detailsColor: "", progressShape: "bubble", progressFill: "sculpted",
-            connectionShape: "material", connectionFill: "sculpted", graphShape: "area"
+            progressAnimation: "classic", connectionShape: "material", connectionFill: "sculpted",
+            connectionAnimation: "classic", graphShape: "area", graphAnimation: "classic"
         }
     }
 
@@ -107,6 +117,10 @@ QtObject {
     function indicatorShape(value, fallback) {
         const decoded = {rounded: "round", faceted: "prism", droplet: "bubble"}
         return validChoice(decoded[value] || value, ["material", "round", "square", "bubble", "prism", "ice"], fallback)
+    }
+
+    function indicatorAnimation(value, fallback) {
+        return animationChoices.some(choice => choice.value === value) ? value : fallback
     }
 
     function paletteFor(value, fallback) {
@@ -205,10 +219,13 @@ QtObject {
             progressShape: indicatorShape(saved.progressShape || data["mh-glass-progress-shape"], original.progressShape),
             progressFill: validChoice(saved.progressFill, ["default", "sculpted"],
                 data["mh-glass-progress-material"] === "gradient" ? "default" : original.progressFill),
+            progressAnimation: indicatorAnimation(saved.progressAnimation, original.progressAnimation),
             connectionShape: indicatorShape(saved.connectionShape || data["mh-glass-connection-shape"], original.connectionShape),
             connectionFill: validChoice(saved.connectionFill, ["default", "sculpted"],
                 data["mh-glass-connection-material"] === "gradient" ? "default" : original.connectionFill),
-            graphShape: validChoice(saved.graphShape || data["mh-glass-graph-shape"], ["area", "line", "bars"], original.graphShape)
+            connectionAnimation: indicatorAnimation(saved.connectionAnimation, original.connectionAnimation),
+            graphShape: validChoice(saved.graphShape || data["mh-glass-graph-shape"], ["area", "line", "bars"], original.graphShape),
+            graphAnimation: indicatorAnimation(saved.graphAnimation, original.graphAnimation)
         }
     }
 
@@ -238,7 +255,9 @@ QtObject {
             },
             qt: {
                 material: material, tint: colorText(MaterialTheme.tintColor), progressShape: progressShape,
-                connectionShape: connectionShape, reducedMotion: MaterialTheme.reducedMotion,
+                progressAnimation: progressAnimation, connectionShape: connectionShape,
+                connectionAnimation: connectionAnimation, graphAnimation: graphAnimation,
+                reducedMotion: MaterialTheme.reducedMotion,
                 forcedAccent: MaterialTheme.forcedAccent, colorTheme: MaterialTheme.colorTheme,
                 progressPalette: MaterialTheme.progressPalette, connectionPalette: MaterialTheme.connectionPalette,
                 graphPalette: MaterialTheme.graphPalette
@@ -277,11 +296,16 @@ QtObject {
             paletteFor(options.connectionIndicator, MaterialTheme.connectionPalette))
         MaterialTheme.graphPalette = paletteFor(value.qt?.graphPalette,
             paletteFor(options.graphIndicator, MaterialTheme.graphPalette))
-        set("progressShape", indicatorShape(value.qt?.progressShape || options.progressShape, progressShape))
-        set("connectionShape", indicatorShape(value.qt?.connectionShape || options.connectionShape, connectionShape))
-        set("progressFill", options.progressMaterial === "gradient" ? "default" : "sculpted")
-        set("connectionFill", options.connectionMaterial === "gradient" ? "default" : "sculpted")
-        set("graphShape", validChoice(options.graphShape, ["area", "line", "bars"], graphShape))
+        preferences = Object.assign({}, preferences, {
+            progressShape: indicatorShape(value.qt?.progressShape || options.progressShape, progressShape),
+            progressFill: options.progressMaterial === "gradient" ? "default" : "sculpted",
+            progressAnimation: indicatorAnimation(value.qt?.progressAnimation, progressAnimation),
+            connectionShape: indicatorShape(value.qt?.connectionShape || options.connectionShape, connectionShape),
+            connectionFill: options.connectionMaterial === "gradient" ? "default" : "sculpted",
+            connectionAnimation: indicatorAnimation(value.qt?.connectionAnimation, connectionAnimation),
+            graphShape: validChoice(options.graphShape, ["area", "line", "bars"], graphShape),
+            graphAnimation: indicatorAnimation(value.qt?.graphAnimation, graphAnimation)
+        })
         return true
     }
 }

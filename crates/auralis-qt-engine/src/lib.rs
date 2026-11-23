@@ -58,6 +58,15 @@ pub unsafe extern "C" fn auralis_engine_request(input: *const u8, length: usize)
             if action.starts_with("update-") {
                 return updater::dispatch(action, &request);
             }
+            if action == "chrome-extension-status" {
+                let status = mdm_ipc::extension::chrome_store_status();
+                return Ok(json!({
+                    "storeUrl": mdm_ipc::extension::store_page(),
+                    "connectedRecently": status.connected_recently,
+                    "storePreviouslyConnected": status.store_previously_connected,
+                    "chromePreviouslyConnected": status.chrome_previously_connected,
+                }));
+            }
             if action == "register-interface" {
                 ensure_owner()?;
                 let profile = mdm_ipc::data_dir().ok_or("The download profile is unavailable")?;

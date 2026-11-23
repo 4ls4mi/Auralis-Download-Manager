@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Window
 import "TransferData.js" as TransferData
 
 DetachedDialogWindow {
@@ -159,7 +160,13 @@ DetachedDialogWindow {
             Layout.preferredHeight: 24
             visible: update.stage === "downloading"
             value: update.completion
-            animated: visible
+            animated: visible && update.visibility !== Window.Minimized
+            animationStyle: WindowAppearance.progressAnimation
+            shape: WindowAppearance.progressShape === "material"
+                ? (["bubble", "prism", "ice"].includes(profile.shape) ? profile.shape : "round") : WindowAppearance.progressShape
+            fillStyle: WindowAppearance.progressFill
+            startColor: MaterialTheme.progressColors[0]
+            endColor: MaterialTheme.progressColors[1]
             showLabel: false
         },
         Label {

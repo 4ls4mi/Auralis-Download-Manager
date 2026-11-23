@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs
 import QtQuick.Layouts
+import QtQuick.Window
 
 GridLayout {
     id: root
@@ -18,13 +19,15 @@ GridLayout {
     property bool failed: false
     property bool busy: false
     property real previewPhase: 0
+    readonly property bool previewActive: visible && activeTab === 2
+        && Boolean(Window.window?.visible) && Window.window.visibility !== Window.Minimized
 
     NumberAnimation on previewPhase {
         from: 0
-        to: 1
+        to: Math.PI * 2
         duration: 1350
         loops: Animation.Infinite
-        running: root.visible && root.activeTab === 2 && !MaterialTheme.reducedMotion
+        running: root.previewActive && WindowAppearance.connectionAnimation !== "none" && !MaterialTheme.reducedMotion
     }
     readonly property var shapeChoices: [
         {label: qsTr("Material default"), value: "material"}, {label: qsTr("Rounded"), value: "round"},
@@ -432,12 +435,18 @@ GridLayout {
                     selection: WindowAppearance.progressFill
                     onChosen: value => WindowAppearance.set("progressFill", value)
                 }
-            }
-            IndicatorChoice {
-                label: qsTr("Progress colors")
-                model: MaterialTheme.indicatorChoices
-                selection: MaterialTheme.progressPalette
-                onChosen: value => MaterialTheme.progressPalette = value
+                IndicatorChoice {
+                    label: qsTr("Progress colors")
+                    model: MaterialTheme.indicatorChoices
+                    selection: MaterialTheme.progressPalette
+                    onChosen: value => MaterialTheme.progressPalette = value
+                }
+                IndicatorChoice {
+                    label: qsTr("Progress animation")
+                    model: WindowAppearance.animationChoices
+                    selection: WindowAppearance.progressAnimation
+                    onChosen: value => WindowAppearance.set("progressAnimation", value)
+                }
             }
             GlassProgress {
                 Layout.preferredWidth: parent.width * .53
@@ -446,10 +455,11 @@ GridLayout {
                 shape: WindowAppearance.progressShape === "material" ?
                     (["bubble", "prism", "ice"].includes(profile.shape) ? profile.shape : "round") : WindowAppearance.progressShape
                 fillStyle: WindowAppearance.progressFill
+                animationStyle: WindowAppearance.progressAnimation
                 startColor: MaterialTheme.progressColors[0]
                 endColor: MaterialTheme.progressColors[1]
                 showLabel: true
-                animated: visible
+                animated: visible && root.previewActive
             }
             Heading { text: qsTr("Connections") }
             GridLayout {
@@ -467,12 +477,18 @@ GridLayout {
                     selection: WindowAppearance.connectionFill
                     onChosen: value => WindowAppearance.set("connectionFill", value)
                 }
-            }
-            IndicatorChoice {
-                label: qsTr("Connection colors")
-                model: MaterialTheme.indicatorChoices
-                selection: MaterialTheme.connectionPalette
-                onChosen: value => MaterialTheme.connectionPalette = value
+                IndicatorChoice {
+                    label: qsTr("Connection colors")
+                    model: MaterialTheme.indicatorChoices
+                    selection: MaterialTheme.connectionPalette
+                    onChosen: value => MaterialTheme.connectionPalette = value
+                }
+                IndicatorChoice {
+                    label: qsTr("Connection animation")
+                    model: WindowAppearance.animationChoices
+                    selection: WindowAppearance.connectionAnimation
+                    onChosen: value => WindowAppearance.set("connectionAnimation", value)
+                }
             }
             RowLayout {
                 Layout.fillWidth: true
@@ -482,22 +498,33 @@ GridLayout {
                         required property real modelData
                         Layout.fillWidth: true
                         value: modelData
-                        receiving: visible
+                        receiving: visible && root.previewActive
                         phase: root.previewPhase
                         shape: WindowAppearance.connectionShape === "material" ?
                             (["bubble", "prism", "ice"].includes(profile.shape) ? profile.shape : "round") : WindowAppearance.connectionShape
                         fillStyle: WindowAppearance.connectionFill
+                        animationStyle: WindowAppearance.connectionAnimation
                         startColor: MaterialTheme.connectionColors[0]
                         endColor: MaterialTheme.connectionColors[1]
                     }
                 }
             }
             Heading { text: qsTr("Transfer speed graph") }
-            IndicatorChoice {
-                label: qsTr("Graph style")
-                model: [{label: qsTr("Area"), value: "area"}, {label: qsTr("Line"), value: "line"}, {label: qsTr("Bars"), value: "bars"}]
-                selection: WindowAppearance.graphShape
-                onChosen: value => WindowAppearance.set("graphShape", value)
+            GridLayout {
+                Layout.fillWidth: true
+                columns: !root.sideTabs || width >= 320 ? 2 : 1
+                IndicatorChoice {
+                    label: qsTr("Graph style")
+                    model: [{label: qsTr("Area"), value: "area"}, {label: qsTr("Line"), value: "line"}, {label: qsTr("Bars"), value: "bars"}]
+                    selection: WindowAppearance.graphShape
+                    onChosen: value => WindowAppearance.set("graphShape", value)
+                }
+                IndicatorChoice {
+                    label: qsTr("Graph animation")
+                    model: WindowAppearance.animationChoices
+                    selection: WindowAppearance.graphAnimation
+                    onChosen: value => WindowAppearance.set("graphAnimation", value)
+                }
             }
             IndicatorChoice {
                 label: qsTr("Graph colors")
@@ -509,6 +536,9 @@ GridLayout {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 68
                 samples: [2, 3, 6, 6, 4, 8, 12, 9, 13, 12, 14, 13, 11, 14, 17, 16]
+                graphShape: WindowAppearance.graphShape
+                animationStyle: WindowAppearance.graphAnimation
+                flowActive: visible && root.previewActive
                 lineColor: MaterialTheme.graphColors[0]
                 endpointColor: MaterialTheme.graphColors[1]
                 gridColor: root.colors.divider

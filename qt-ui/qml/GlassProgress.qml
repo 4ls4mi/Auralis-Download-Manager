@@ -10,6 +10,7 @@ Item {
     property real value: 0
     property string material: MaterialTheme.current
     property bool animated: false
+    property string animationStyle: "classic"
     property bool showLabel: false
     property string shape: ["bubble", "prism", "ice"].includes(profile.shape) ? profile.shape : "round"
     property string fillStyle: "sculpted"
@@ -26,7 +27,9 @@ Item {
         : ["square", "plain"].includes(shape) ? 3 : 0
     readonly property bool renderWithShader: width >= 12 && height >= 7
         && GraphicsInfo.api !== GraphicsInfo.Software && GraphicsInfo.api !== GraphicsInfo.Unknown
-    readonly property bool canAnimate: animated && visible && width >= 12 && height >= 7 && !MaterialTheme.reducedMotion
+    readonly property int motionKind: animationStyle === "water" ? 1 : animationStyle === "jelly" ? 2 : 0
+    readonly property bool canAnimate: animationStyle !== "none" && animated && visible
+        && width >= 12 && height >= 7 && !MaterialTheme.reducedMotion
     readonly property bool liquidMoving: canAnimate && amount > 0 && amount < 1
     readonly property real amount: Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0
     property real shownAmount: amount
@@ -40,13 +43,13 @@ Item {
 
     Behavior on shownAmount {
         enabled: progress.canAnimate
-        NumberAnimation { duration: 240; easing.type: Easing.OutCubic }
+        NumberAnimation { duration: progress.motionKind === 2 ? 380 : 240; easing.type: Easing.OutCubic }
     }
 
     NumberAnimation on wavePhase {
         from: 0
         to: Math.PI * 2
-        duration: 1850
+        duration: progress.motionKind === 1 ? 680 : progress.motionKind === 2 ? 2840 : 1850
         loops: Animation.Infinite
         running: progress.liquidMoving
     }
@@ -71,6 +74,7 @@ Item {
             property real polish: progress.sculpted ? 1 : 0.7
             property real flow: progress.liquidMoving ? 1 : 0
             property real contour: progress.contour
+            property real motionKind: progress.motionKind
             fragmentShader: "qrc:/auralis/shaders/bubble.frag.qsb"
         }
     }
@@ -85,7 +89,7 @@ Item {
 
             readonly property string trackPath: Geometry.barContour(width, height, progress.shape, 1, 0)
             readonly property string fillPath: Geometry.barContour(width, height, progress.shape, progress.shownAmount,
-                                                                   progress.liquidMoving ? progress.wavePhase : 0)
+                progress.liquidMoving ? progress.wavePhase : 0)
 
             Shape {
                 anchors.fill: parent
@@ -158,13 +162,14 @@ Item {
                     strokeWidth: -1
                     fillGradient: LinearGradient {
                         readonly property real sweep: -.4 + 1.8 * progress.wavePhase / (Math.PI * 2)
-                        x1: vessel.width * progress.shownAmount * (sweep - .31)
-                        x2: vessel.width * progress.shownAmount * (sweep + .31)
+                        readonly property real spread: progress.motionKind === 1 ? .18 : progress.motionKind === 2 ? .42 : .31
+                        x1: vessel.width * progress.shownAmount * (sweep - spread)
+                        x2: vessel.width * progress.shownAmount * (sweep + spread)
                         y1: vessel.height
-                        y2: 0
+                        y2: progress.motionKind === 2 ? vessel.height * .28 : 0
                         GradientStop { position: 0; color: "transparent" }
-                        GradientStop { position: .29; color: MaterialTheme.rgba(progress.firstTone.glow, .25) }
-                        GradientStop { position: .51; color: MaterialTheme.rgba(progress.firstTone.edge, .58) }
+                        GradientStop { position: .29; color: MaterialTheme.rgba(progress.firstTone.glow, progress.motionKind === 2 ? .46 : .25) }
+                        GradientStop { position: .51; color: MaterialTheme.rgba(progress.firstTone.edge, progress.motionKind === 1 ? .82 : .58) }
                         GradientStop { position: .67; color: MaterialTheme.rgba(progress.lastTone.glow, .29) }
                         GradientStop { position: 1; color: "transparent" }
                     }

@@ -23,6 +23,7 @@ Item {
     required property real timeWidth
     property bool cursorFocused: false
     property bool transferring: false
+    property bool animationsAllowed: true
     property real waterPhase: 0
     readonly property bool studioChrome: colors.cleanStudio === true
     readonly property string fileSymbol: mixed ? "mixed" : torrent ? "peers"
@@ -35,11 +36,11 @@ Item {
         .filter(connection => connection.state === "Receiving" || connection.state === "Connecting").slice(0, 4)
     NumberAnimation on waterPhase {
         from: 0
-        to: 1
+        to: Math.PI * 2
         duration: 1350
         loops: Animation.Infinite
-        running: row.visible && row.transferring && row.workers.some(worker => worker.state === "Receiving")
-            && !MaterialTheme.reducedMotion
+        running: row.visible && row.animationsAllowed && row.transferring && row.workers.some(worker => worker.state === "Receiving")
+            && !MaterialTheme.reducedMotion && WindowAppearance.connectionAnimation !== "none"
     }
 
     signal selected(int modifiers)
@@ -191,7 +192,8 @@ Item {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 22
                     value: row.progress
-                    animated: row.transferring
+                    animated: row.transferring && row.animationsAllowed
+                    animationStyle: WindowAppearance.progressAnimation
                     shape: WindowAppearance.progressShape === "material"
                         ? (["bubble", "prism", "ice"].includes(profile.shape) ? profile.shape : "round") : WindowAppearance.progressShape
                     fillStyle: WindowAppearance.progressFill
@@ -233,6 +235,7 @@ Item {
                             shape: WindowAppearance.connectionShape === "material"
                                 ? (["bubble", "prism", "ice"].includes(profile.shape) ? profile.shape : "round") : WindowAppearance.connectionShape
                             fillStyle: WindowAppearance.connectionFill
+                            animationStyle: WindowAppearance.connectionAnimation
                             startColor: MaterialTheme.connectionColors[0]
                             endColor: MaterialTheme.connectionColors[1]
                         }
@@ -254,6 +257,8 @@ Item {
                 active: row.speedSamples.length > 1 && row.speedSamples.some(sample => sample > 0)
                 sourceComponent: TransferGraph {
                     samples: row.speedSamples
+                    animationStyle: WindowAppearance.graphAnimation
+                    flowActive: row.transferring && row.animationsAllowed
                     lineColor: MaterialTheme.graphColors[0]
                     endpointColor: MaterialTheme.graphColors[1]
                     gridColor: row.colors.divider
