@@ -5,7 +5,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
-use mdm_engine::download::{MAX_CONNECTIONS_UNLOCKED, State};
+use mdm_engine::download::State;
+use mdm_engine::limiter::Limiter;
 use mdm_engine::naming::part_path;
 use mdm_engine::safe_move::open_download_file;
 use mdm_engine::state::{ResumeState, state_path};
@@ -15,7 +16,8 @@ use tokio::runtime::{Builder, Runtime};
 use tokio_util::sync::CancellationToken;
 use url::Url;
 
-const DEFAULT_CONNECTIONS: u32 = 8;
+const MAX_CONNECTIONS: u32 = 16;
+const MAX_RETRIES: u32 = 5;
 const MAX_CHECKPOINT_SIZE: u64 = 32 * 1024 * 1024;
 const SAMPLE_INTERVAL: Duration = Duration::from_millis(250);
 
@@ -63,6 +65,7 @@ pub(crate) struct Downloader {
     runtime: Runtime,
     files: PathBuf,
     transfers: Mutex<HashMap<String, Arc<Transfer>>>,
+    rate_limit: Arc<Limiter>,
 }
 
 impl Downloader {
@@ -81,6 +84,7 @@ impl Downloader {
             runtime,
             files,
             transfers: Mutex::new(HashMap::new()),
+            rate_limit: Arc::new(Limiter::new(None)),
         })
     }
 
@@ -90,6 +94,7 @@ impl Downloader {
         url: &str,
         target: &Path,
         connections: i32,
+        automatic_retries: i32,
     ) -> Result<(), String> {
         let target = self.destination(&id, target)?;
         let mut url = Url::parse(url.trim()).map_err(|_| "Enter a valid HTTP or HTTPS link.")?;
@@ -97,11 +102,7 @@ impl Downloader {
             return Err("Enter an HTTP or HTTPS link without embedded credentials.".into());
         }
         url.set_fragment(None);
-        let connections = match u32::try_from(connections) {
-            Ok(0) => DEFAULT_CONNECTIONS,
-            Ok(n @ 1..=MAX_CONNECTIONS_UNLOCKED) => n,
-            _ => return Err(format!("Use 1 to {MAX_CONNECTIONS_UNLOCKED} connections.")),
-        };
+        let options = self.options(connections, automatic_retries)?;
 
         let mut transfers = lock(&self.transfers);
         if transfers
@@ -115,7 +116,31 @@ impl Downloader {
             cancel: CancellationToken::new(),
         });
         transfers.insert(id, Arc::clone(&job));
-        self.runtime.spawn(run(job, url, target, connections));
+        self.runtime.spawn(run(job, url, target, options));
+        Ok(())
+    }
+
+    fn options(&self, connections: i32, automatic_retries: i32) -> Result<Options, String> {
+        let max_connections = match u32::try_from(connections) {
+            Ok(count @ 1..=MAX_CONNECTIONS) => count,
+            _ => return Err(format!("Use 1 to {MAX_CONNECTIONS} connections.")),
+        };
+        let max_retries = match u32::try_from(automatic_retries) {
+            Ok(count @ 0..=MAX_RETRIES) => count,
+            _ => return Err(format!("Use 0 to {MAX_RETRIES} automatic retries.")),
+        };
+        Ok(Options {
+            max_connections,
+            max_retries,
+            global: Some(Arc::clone(&self.rate_limit)),
+            ..Options::default()
+        })
+    }
+
+    pub(crate) fn set_rate_limit(&self, bytes_per_second: i64) -> Result<(), String> {
+        let rate =
+            u64::try_from(bytes_per_second).map_err(|_| "Speed limit cannot be negative.")?;
+        self.rate_limit.set((rate != 0).then_some(rate));
         Ok(())
     }
 
@@ -225,8 +250,8 @@ async fn read_checkpoint(target: &Path, url: &Url) -> Result<Option<ResumeState>
         .map_err(|_| "Could not read the saved download progress.")?
 }
 
-async fn run(job: Arc<Transfer>, url: Url, target: PathBuf, connections: u32) {
-    let result = run_download(&job, &url, &target, connections).await;
+async fn run(job: Arc<Transfer>, url: Url, target: PathBuf, options: Options) {
+    let result = run_download(&job, &url, &target, options).await;
     let terminal = match result {
         Ok(progress) => progress,
         Err(error) => {
@@ -249,17 +274,13 @@ async fn run_download(
     job: &Transfer,
     url: &Url,
     target: &Path,
-    connections: u32,
+    options: Options,
 ) -> Result<Progress, String> {
     let saved = read_checkpoint(target, url).await?;
     if job.cancel.is_cancelled() {
         return Ok(paused(saved.as_ref(), None));
     }
     ensure_not_completed(target)?;
-    let options = Options {
-        max_connections: connections,
-        ..Options::default()
-    };
     let download = if let Some(saved) = saved {
         {
             let mut progress = lock(&job.progress);
@@ -361,7 +382,7 @@ mod tests {
         fs::write(&target, b"completed").unwrap();
         assert!(
             engine
-                .start("first".into(), "https://example.com/file", &target, 8)
+                .start("first".into(), "https://example.com/file", &target, 8, 5)
                 .is_err()
         );
         assert_eq!(fs::read(&target).unwrap(), b"completed");
@@ -411,5 +432,31 @@ mod tests {
         lock(&job.progress).state = Status::Paused;
         engine.forget("first");
         assert!(engine.snapshot("first").is_none());
+    }
+
+    #[test]
+    fn valid_transfer_options_share_a_live_rate_limit() {
+        let files = tempfile::tempdir().unwrap();
+        let engine = Downloader::new(files.path()).unwrap();
+        let first = engine.options(1, 0).unwrap();
+        let second = engine.options(16, 5).unwrap();
+        assert_eq!((first.connections(), first.max_retries), (1, 0));
+        assert_eq!((second.connections(), second.max_retries), (16, 5));
+        assert!(engine.options(0, 5).is_err());
+        assert!(engine.options(17, 5).is_err());
+        assert!(engine.options(8, -1).is_err());
+        assert!(engine.options(8, 6).is_err());
+
+        let first = first.global.unwrap();
+        let second = second.global.unwrap();
+        assert!(Arc::ptr_eq(&first, &second));
+        assert_eq!(first.get(), None);
+        engine.set_rate_limit(128 * 1024).unwrap();
+        assert!(engine.set_rate_limit(-1).is_err());
+        assert_eq!(first.get(), Some(128 * 1024));
+        assert_eq!(second.get(), Some(128 * 1024));
+        engine.set_rate_limit(0).unwrap();
+        assert_eq!(first.get(), None);
+        assert_eq!(second.get(), None);
     }
 }

@@ -13,12 +13,36 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArraySet;
 
 public final class DownloadQueue extends SQLiteOpenHelper {
+    private static final int SCHEMA_VERSION = 2;
     private static final String TABLE = "downloads";
+    private static final String PRIORITY_COLUMN = "priority INTEGER NOT NULL DEFAULT 0 CHECK (priority BETWEEN -1 AND 1)";
+    private static final String QUEUE_ORDER = "priority DESC, sequence ASC";
+    private static final String LIST_ORDER = "CASE status WHEN 'downloading' THEN 0 WHEN 'queued' THEN 1 ELSE 2 END, "
+        + "CASE WHEN status IN ('downloading', 'queued') THEN priority END DESC, "
+        + "CASE WHEN status IN ('downloading', 'queued') THEN sequence END ASC, sequence DESC";
     private static DownloadQueue instance;
+
+    /** A download whose address and name have already been validated by the service. */
+    public static final class NewDownload {
+        final String url;
+        final String name;
+        final int priority;
+
+        public NewDownload(String url, String name) {
+            this(url, name, DownloadItem.PRIORITY_NORMAL);
+        }
+
+        public NewDownload(String url, String name, int priority) {
+            this.url = Objects.requireNonNull(url, "url");
+            this.name = Objects.requireNonNull(name, "name");
+            this.priority = checkedPriority(priority);
+        }
+    }
 
     public interface Listener {
         void onQueueChanged();
@@ -36,7 +60,7 @@ public final class DownloadQueue extends SQLiteOpenHelper {
     private boolean notificationPending;
 
     private DownloadQueue(Context context) {
-        super(context, "auralis-downloads.db", null, 1);
+        super(context, "auralis-downloads.db", null, SCHEMA_VERSION);
         staging = new File(context.getFilesDir(), "staging");
         // After a process restart wait for the user before resuming network work.
         getWritableDatabase().update(TABLE, state(DownloadItem.PAUSED, ""),
@@ -47,17 +71,26 @@ public final class DownloadQueue extends SQLiteOpenHelper {
         db.execSQL("CREATE TABLE downloads (sequence INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,"
             + " url TEXT NOT NULL, name TEXT NOT NULL, status TEXT NOT NULL, error TEXT NOT NULL DEFAULT '',"
             + " downloaded INTEGER NOT NULL DEFAULT 0, total INTEGER NOT NULL DEFAULT -1,"
-            + " rate INTEGER NOT NULL DEFAULT 0, media_uri TEXT, staged INTEGER NOT NULL DEFAULT 0)");
+            + " rate INTEGER NOT NULL DEFAULT 0, media_uri TEXT, staged INTEGER NOT NULL DEFAULT 0, "
+            + PRIORITY_COLUMN + ")");
+        createQueueIndex(db);
     }
 
     @Override public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        throw new IllegalStateException("Unsupported download queue schema");
+        if (oldVersion != 1 || newVersion != SCHEMA_VERSION)
+            throw new IllegalStateException("Unsupported download queue schema");
+        db.execSQL("ALTER TABLE downloads ADD COLUMN " + PRIORITY_COLUMN);
+        createQueueIndex(db);
+    }
+
+    private static void createQueueIndex(SQLiteDatabase db) {
+        db.execSQL("CREATE INDEX downloads_queue ON downloads (status, " + QUEUE_ORDER + ")");
     }
 
     public synchronized List<DownloadItem> list() {
         List<DownloadItem> items = new ArrayList<>();
         try (Cursor rows = getReadableDatabase().query(TABLE, null, null, null,
-                null, null, "sequence DESC")) {
+                null, null, LIST_ORDER)) {
             while (rows.moveToNext())
                 items.add(read(rows));
         }
@@ -73,14 +106,50 @@ public final class DownloadQueue extends SQLiteOpenHelper {
     }
 
     synchronized String add(String url, String name) {
+        return add(url, name, DownloadItem.PRIORITY_NORMAL);
+    }
+
+    synchronized String add(String url, String name, int priority) {
+        String id = insert(getWritableDatabase(), new NewDownload(url, name, priority));
+        changed();
+        return id;
+    }
+
+    synchronized List<String> addAll(List<NewDownload> downloads) {
+        if (downloads.isEmpty())
+            return Collections.emptyList();
+        List<String> ids = new ArrayList<>(downloads.size());
+        SQLiteDatabase db = getWritableDatabase();
+        db.beginTransaction();
+        try {
+            for (NewDownload download : downloads)
+                ids.add(insert(db, download));
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
+        changed();
+        return Collections.unmodifiableList(ids);
+    }
+
+    private static String insert(SQLiteDatabase db, NewDownload download) {
         String id = UUID.randomUUID().toString();
         ContentValues values = state(DownloadItem.QUEUED, "");
         values.put("id", id);
-        values.put("url", url);
-        values.put("name", name);
-        getWritableDatabase().insertOrThrow(TABLE, null, values);
-        changed();
+        values.put("url", download.url);
+        values.put("name", download.name);
+        values.put("priority", download.priority);
+        db.insertOrThrow(TABLE, null, values);
         return id;
+    }
+
+    public synchronized boolean setPriority(String id, int priority) {
+        ContentValues values = new ContentValues();
+        values.put("priority", checkedPriority(priority));
+        if (id == null)
+            return false;
+        return update(values, "id = ? AND status != ? AND priority != ?",
+            new String[]{id, DownloadItem.COMPLETED, Integer.toString(priority)});
     }
 
     synchronized boolean resume(String id) {
@@ -99,14 +168,25 @@ public final class DownloadQueue extends SQLiteOpenHelper {
     }
 
     synchronized DownloadItem claimNext() {
-        try (Cursor rows = getReadableDatabase().query(TABLE, null, "status = ?",
-                new String[]{DownloadItem.QUEUED}, null, null, "sequence ASC", "1")) {
-            if (!rows.moveToNext())
-                return null;
-            DownloadItem item = read(rows);
-            update(state(DownloadItem.DOWNLOADING, ""), "id = ?", new String[]{item.id});
-            return item;
+        SQLiteDatabase db = getWritableDatabase();
+        DownloadItem claimed = null;
+        db.beginTransaction();
+        try {
+            String id;
+            try (Cursor rows = db.query(TABLE, new String[]{"id"}, "status = ?",
+                    new String[]{DownloadItem.QUEUED}, null, null, QUEUE_ORDER, "1")) {
+                id = rows.moveToFirst() ? rows.getString(0) : null;
+            }
+            if (id != null && db.update(TABLE, state(DownloadItem.DOWNLOADING, ""),
+                    "id = ? AND status = ?", new String[]{id, DownloadItem.QUEUED}) == 1)
+                claimed = find(id);
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
         }
+        if (claimed != null)
+            changed();
+        return claimed;
     }
 
     synchronized DownloadItem find(String id) {
@@ -159,7 +239,23 @@ public final class DownloadQueue extends SQLiteOpenHelper {
     }
 
     synchronized void pauseWaiting() {
-        update(state(DownloadItem.PAUSED, ""), "status = ?", new String[]{DownloadItem.QUEUED});
+        pauseAllQueued();
+    }
+
+    synchronized int pauseAllQueued() {
+        return changeStatus(DownloadItem.QUEUED, DownloadItem.PAUSED);
+    }
+
+    // An explicit Resume all leaves failed jobs available for individual retry.
+    synchronized int resumePaused() {
+        return changeStatus(DownloadItem.PAUSED, DownloadItem.QUEUED);
+    }
+
+    private int changeStatus(String previous, String next) {
+        int count = getWritableDatabase().update(TABLE, state(next, ""), "status = ?", new String[]{previous});
+        if (count > 0)
+            changed();
+        return count;
     }
 
     synchronized DownloadItem remove(String id) {
@@ -204,12 +300,18 @@ public final class DownloadQueue extends SQLiteOpenHelper {
         return values;
     }
 
+    private static int checkedPriority(int priority) {
+        if (priority < DownloadItem.PRIORITY_LOW || priority > DownloadItem.PRIORITY_HIGH)
+            throw new IllegalArgumentException("Invalid download priority");
+        return priority;
+    }
+
     private static DownloadItem read(Cursor row) {
         final String media = string(row, "media_uri");
         return new DownloadItem(string(row, "id"), string(row, "url"), string(row, "name"),
             string(row, "status"), string(row, "error"), number(row, "downloaded"),
-            number(row, "total"), number(row, "rate"), media == null ? null : Uri.parse(media),
-            number(row, "staged") == 1);
+            number(row, "total"), number(row, "rate"), (int) number(row, "priority"),
+            media == null ? null : Uri.parse(media), number(row, "staged") == 1);
     }
 
     private static String string(Cursor row, String column) {

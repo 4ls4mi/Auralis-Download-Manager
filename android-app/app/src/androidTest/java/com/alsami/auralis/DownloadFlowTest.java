@@ -26,6 +26,10 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -38,6 +42,74 @@ import java.util.regex.Pattern;
 
 @RunWith(AndroidJUnit4.class)
 public final class DownloadFlowTest {
+    @Test public void opensBrowserAndDownloadSettings() {
+        Instrumentation instrumentation = InstrumentationRegistry.getInstrumentation();
+        Context context = instrumentation.getTargetContext();
+        Activity browser = instrumentation.startActivitySync(
+                new Intent(context, BrowserActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        instrumentation.runOnMainSync(browser::finish);
+        Activity settings = instrumentation.startActivitySync(
+                new Intent(context, DownloadSettingsActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        instrumentation.runOnMainSync(settings::finish);
+    }
+
+    @Test public void batchUsesTwoSlotsAndResumeAllHonorsPriority() throws Exception {
+        Instrumentation instrumentation = InstrumentationRegistry.getInstrumentation();
+        Context context = instrumentation.getTargetContext();
+        Activity activity = instrumentation.startActivitySync(
+                new Intent(context, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        DownloadQueue queue = DownloadQueue.get(context);
+        DownloadSettings settings = DownloadSettings.get(context);
+        int previousFiles = settings.concurrentFiles();
+        int previousConnections = settings.connectionsPerDownload();
+        int previousLimit = settings.rateLimitKiB();
+        int previousRetries = settings.automaticRetries();
+        boolean previousWifi = settings.wifiOnly();
+        boolean previousBattery = settings.pauseOnLowBattery();
+        instrumentation.runOnMainSync(() -> settings.save(2, 4, 0, 5, false, false));
+
+        try (RangeServer server = new RangeServer()) {
+            String primaryUrl = server.url("primary");
+            String parallelUrl = server.url("parallel");
+            String waitingUrl = server.url("waiting");
+            instrumentation.runOnMainSync(() -> assertEquals(3, DownloadService.enqueueBatch(context,
+                Arrays.asList(primaryUrl, parallelUrl, waitingUrl, primaryUrl, "invalid"))));
+            await(queue, primaryUrl, item -> DownloadItem.DOWNLOADING.equals(item.status)
+                && item.downloaded >= 128 * 1024);
+            await(queue, parallelUrl, item -> DownloadItem.DOWNLOADING.equals(item.status)
+                && item.downloaded >= 128 * 1024);
+            DownloadItem waiting = await(queue, waitingUrl, item -> DownloadItem.QUEUED.equals(item.status));
+            assertEquals("The third transfer waits until a slot frees up", 0, server.waiting.requests.get());
+
+            instrumentation.runOnMainSync(() -> DownloadService.pauseAll(context));
+            await(queue, primaryUrl, item -> DownloadItem.PAUSED.equals(item.status));
+            await(queue, parallelUrl, item -> DownloadItem.PAUSED.equals(item.status));
+            await(queue, waitingUrl, item -> DownloadItem.PAUSED.equals(item.status));
+            int previousRequests = server.requestPaths.size();
+            instrumentation.runOnMainSync(() -> {
+                settings.save(1, 8, 0, 5, false, false);
+                DownloadService.setPriority(context, waiting.id, DownloadItem.PRIORITY_HIGH);
+                DownloadService.resumeAll(context);
+            });
+            DownloadItem third = await(queue, waitingUrl, item -> DownloadItem.COMPLETED.equals(item.status));
+            assertEquals("High-priority downloads start first", "/waiting", server.requestPaths.get(previousRequests));
+            DownloadItem first = await(queue, primaryUrl, item -> DownloadItem.COMPLETED.equals(item.status));
+            DownloadItem second = await(queue, parallelUrl, item -> DownloadItem.COMPLETED.equals(item.status));
+            verifyBytes(context, first, server.primary);
+            verifyBytes(context, second, server.parallel);
+            verifyBytes(context, third, server.waiting);
+            for (DownloadItem item : new DownloadItem[]{first, second, third}) {
+                context.getContentResolver().delete(item.uri, null, null);
+                DownloadService.remove(context, item.id);
+            }
+        } finally {
+            instrumentation.runOnMainSync(() -> {
+                settings.save(previousFiles, previousConnections, previousLimit, previousRetries, previousWifi, previousBattery);
+                activity.finish();
+            });
+        }
+    }
+
     @Test public void segmentsPausesResumesAndRunsQueueInOrder() throws Exception {
         Instrumentation instrumentation = InstrumentationRegistry.getInstrumentation();
         Context context = instrumentation.getTargetContext();
@@ -134,7 +206,9 @@ public final class DownloadFlowTest {
     private static final class RangeServer implements AutoCloseable {
         private static final Pattern RANGE = Pattern.compile("bytes=(\\d+)-(\\d*)", Pattern.CASE_INSENSITIVE);
         final Fixture primary = new Fixture(24 * 1024 * 1024 + 109, 28);
+        final Fixture parallel = new Fixture(12 * 1024 * 1024 + 91, 35);
         final Fixture waiting = new Fixture(192 * 1024 + 31, 0);
+        final List<String> requestPaths = Collections.synchronizedList(new ArrayList<>());
         private final ServerSocket listener;
         private final ExecutorService workers = Executors.newCachedThreadPool(task -> {
             Thread thread = new Thread(task, "auralis-test-http");
@@ -169,7 +243,8 @@ public final class DownloadFlowTest {
                 if (request == null) return;
                 String[] parts = request.split(" ", 3);
                 if (parts.length != 3) return;
-                Fixture fixture = "/primary".equals(parts[1]) ? primary : waiting;
+                requestPaths.add(parts[1]);
+                Fixture fixture = "/primary".equals(parts[1]) ? primary : "/parallel".equals(parts[1]) ? parallel : waiting;
                 fixture.requests.incrementAndGet();
 
                 int start = 0;

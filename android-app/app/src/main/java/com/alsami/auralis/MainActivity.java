@@ -41,9 +41,17 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Matcher;
 
@@ -60,7 +68,26 @@ public final class MainActivity extends Activity implements DownloadQueue.Listen
     private static final int PAUSED = 0xffffd088;
     private static final int ERROR = 0xffffa9b7;
     private static final int REQUEST_NOTIFICATIONS = 1;
+    private static final int REQUEST_LINK_DOCUMENT = 2;
+    private static final int MAX_BATCH_SIZE = 256 * 1024;
+    private static final int MAX_BATCH_LINKS = 200;
     private static final String DRAFT_URL = "draftUrl";
+    private static final String BATCH_DRAFT = "batchDraft";
+    private static final String STATUS_FILTER = "statusFilter";
+    private static final String[] FILTERS = {
+            "", DownloadItem.DOWNLOADING, DownloadItem.QUEUED, DownloadItem.PAUSED,
+            DownloadItem.COMPLETED, DownloadItem.ERROR
+    };
+    private static final int[] FILTER_LABELS = {
+            R.string.main_filter_all, R.string.main_downloading, R.string.main_queued,
+            R.string.main_paused, R.string.main_complete, R.string.main_failed
+    };
+    private static final int[] PRIORITIES = {
+            DownloadItem.PRIORITY_HIGH, DownloadItem.PRIORITY_NORMAL, DownloadItem.PRIORITY_LOW
+    };
+    private static final int[] PRIORITY_LABELS = {
+            R.string.main_priority_high, R.string.main_priority_normal, R.string.main_priority_low
+    };
 
     private DownloadQueue queue;
     private DownloadsAdapter adapter;
@@ -68,16 +95,29 @@ public final class MainActivity extends Activity implements DownloadQueue.Listen
     private EditText urlInput;
     private TextView urlProblem;
     private TextView queueSummary;
+    private Button filterButton;
+    private Button pauseAll;
+    private Button resumeAll;
+    private int filterSelection;
+    private AlertDialog batchDialog;
+    private EditText batchInput;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         queue = DownloadQueue.get(this);
+        if (savedInstanceState != null) {
+            filterSelection = Math.max(0, Math.min(FILTERS.length - 1, savedInstanceState.getInt(STATUS_FILTER)));
+        }
         setContentView(createContent());
         if (savedInstanceState == null) {
             prefillFromShare(getIntent());
         } else {
             urlInput.setText(savedInstanceState.getString(DRAFT_URL, ""));
+            if (savedInstanceState.containsKey(BATCH_DRAFT)) {
+                String draft = savedInstanceState.getString(BATCH_DRAFT, "");
+                downloads.post(() -> showBatchEditor(draft));
+            }
         }
     }
 
@@ -104,31 +144,40 @@ public final class MainActivity extends Activity implements DownloadQueue.Listen
     @Override
     protected void onSaveInstanceState(Bundle state) {
         state.putString(DRAFT_URL, urlInput.getText().toString());
+        state.putInt(STATUS_FILTER, filterSelection);
+        if (batchInput != null) {
+            String draft = batchInput.getText().toString();
+            state.putString(BATCH_DRAFT, draft.length() <= MAX_BATCH_SIZE ? draft : "");
+        }
         super.onSaveInstanceState(state);
     }
 
     @Override
     public void onQueueChanged() {
-        List<DownloadItem> ordered = new ArrayList<>();
-        List<DownloadItem> waiting = new ArrayList<>();
-        List<DownloadItem> previous = new ArrayList<>();
+        List<DownloadItem> visible = new ArrayList<>();
+        int active = 0;
+        int waiting = 0;
+        boolean resumable = false;
+        String filter = FILTERS[filterSelection];
         for (DownloadItem item : queue.list()) {
             if (DownloadItem.DOWNLOADING.equals(item.status)) {
-                ordered.add(item);
+                active++;
             } else if (DownloadItem.QUEUED.equals(item.status)) {
-                waiting.add(item);
-            } else {
-                previous.add(item);
+                waiting++;
+            } else if (DownloadItem.PAUSED.equals(item.status)) {
+                resumable = true;
+            }
+            if (filter.isEmpty() || filter.equals(item.status)) {
+                visible.add(item);
             }
         }
-        int active = ordered.size();
-        // The queue's history is newest first. Pending transfers run oldest first.
-        Collections.reverse(waiting);
-        ordered.addAll(waiting);
-        ordered.addAll(previous);
-        adapter.update(ordered);
-        queueSummary.setText(getString(R.string.main_queue_summary, active, waiting.size()));
-        queueSummary.setVisibility(active + waiting.size() > 0 ? View.VISIBLE : View.GONE);
+        adapter.update(visible);
+        queueSummary.setText(getString(R.string.main_queue_summary, active, waiting));
+        queueSummary.setVisibility(active + waiting > 0 ? View.VISIBLE : View.GONE);
+        pauseAll.setEnabled(active + waiting > 0);
+        resumeAll.setEnabled(resumable);
+        pauseAll.setAlpha(pauseAll.isEnabled() ? 1f : .52f);
+        resumeAll.setAlpha(resumeAll.isEnabled() ? 1f : .52f);
     }
 
     private View createContent() {
@@ -146,10 +195,18 @@ public final class MainActivity extends Activity implements DownloadQueue.Listen
         brand.addView(mark, new LinearLayout.LayoutParams(dp(35), dp(35)));
         TextView title = label(23, TEXT, true);
         title.setText(R.string.main_brand);
+        title.setSingleLine(true);
+        title.setEllipsize(TextUtils.TruncateAt.END);
         title.setAccessibilityHeading(true);
         LinearLayout.LayoutParams titleSize = rowWeight();
         titleSize.setMarginStart(dp(11));
         brand.addView(title, titleSize);
+        Button browser = button(R.string.main_browser, false);
+        browser.setOnClickListener(view -> BrowserActivity.open(this));
+        addBeside(brand, browser, 6);
+        Button settings = button(R.string.main_settings, false);
+        settings.setOnClickListener(view -> startActivity(new Intent(this, DownloadSettingsActivity.class)));
+        addBeside(brand, settings, 6);
         content.addView(brand, fullWidth());
 
         downloads = new ListView(this);
@@ -234,7 +291,9 @@ public final class MainActivity extends Activity implements DownloadQueue.Listen
 
         Button add = button(R.string.main_add, true);
         add.setOnClickListener(view -> enqueueDraft());
-        addBelow(form, add, 10);
+        Button batch = button(R.string.main_add_links, false);
+        batch.setOnClickListener(view -> showBatchEditor(""));
+        addBelow(form, buttonPair(add, batch), 10);
         header.addView(form, fullWidth());
 
         LinearLayout queueHeading = row();
@@ -251,7 +310,250 @@ public final class MainActivity extends Activity implements DownloadQueue.Listen
         headingSpace.topMargin = dp(20);
         headingSpace.bottomMargin = dp(8);
         header.addView(queueHeading, headingSpace);
+        filterButton = button(FILTER_LABELS[filterSelection], false);
+        updateFilterLabel();
+        filterButton.setOnClickListener(view -> showFilterChoices());
+        header.addView(filterButton, fullWidth());
+        pauseAll = button(R.string.main_pause_all, false);
+        pauseAll.setOnClickListener(view -> performDownloadAction(() -> DownloadService.pauseAll(this)));
+        resumeAll = button(R.string.main_resume_all, false);
+        resumeAll.setOnClickListener(view -> performDownloadAction(() -> DownloadService.resumeAll(this)));
+        LinearLayout.LayoutParams controls = fullWidth();
+        controls.topMargin = dp(7);
+        controls.bottomMargin = dp(10);
+        header.addView(buttonPair(pauseAll, resumeAll), controls);
         return header;
+    }
+
+    private void updateFilterLabel() {
+        String label = getString(FILTER_LABELS[filterSelection]);
+        filterButton.setText(label);
+        filterButton.setContentDescription(getString(R.string.main_filter_current, label));
+    }
+
+    private void showFilterChoices() {
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.main_filter_downloads)
+                .setSingleChoiceItems(choiceLabels(FILTER_LABELS), filterSelection, (dialog, index) -> {
+                    filterSelection = index;
+                    updateFilterLabel();
+                    onQueueChanged();
+                    dialog.dismiss();
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    private void showPriorityChoices(DownloadItem item) {
+        int selected = 1;
+        for (int index = 0; index < PRIORITIES.length; index++) {
+            if (PRIORITIES[index] == item.priority) {
+                selected = index;
+                break;
+            }
+        }
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.main_queue_priority)
+                .setSingleChoiceItems(choiceLabels(PRIORITY_LABELS), selected, (dialog, index) -> {
+                    performDownloadAction(() -> DownloadService.setPriority(this, item.id, PRIORITIES[index]));
+                    dialog.dismiss();
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    private String[] choiceLabels(int[] resourceIds) {
+        String[] labels = new String[resourceIds.length];
+        for (int index = 0; index < labels.length; index++) {
+            labels[index] = getString(resourceIds[index]);
+        }
+        return labels;
+    }
+
+    private void showBatchEditor(String draft) {
+        if (batchDialog != null || isFinishing()) {
+            return;
+        }
+        LinearLayout form = column();
+        form.setPadding(dp(22), dp(14), dp(22), 0);
+        EditText input = new EditText(this);
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        input.setMinLines(5);
+        input.setMaxLines(8);
+        input.setTextSize(15);
+        input.setGravity(Gravity.TOP | Gravity.START);
+        input.setTextColor(TEXT);
+        input.setHintTextColor(MUTED);
+        input.setHint(R.string.main_batch_hint);
+        input.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
+        input.setBackground(shape(FIELD, 12, BORDER));
+        input.setPadding(dp(12), dp(10), dp(12), dp(10));
+        input.setText(draft);
+        form.addView(input, fullWidth());
+
+        AlertDialog editor = new AlertDialog.Builder(this)
+                .setTitle(R.string.main_add_links_title)
+                .setView(form)
+                .setNeutralButton(R.string.main_import_links, null)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(R.string.main_review_links, null)
+                .create();
+        batchInput = input;
+        batchDialog = editor;
+        editor.setOnShowListener(ignored -> {
+            editor.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(view -> chooseLinkDocument(input));
+            editor.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> reviewBatch(input));
+        });
+        editor.setOnDismissListener(ignored -> {
+            batchInput = null;
+            batchDialog = null;
+        });
+        editor.show();
+    }
+
+    private void chooseLinkDocument(EditText input) {
+        Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT)
+                .setType("text/*")
+                .addCategory(Intent.CATEGORY_OPENABLE);
+        try {
+            startActivityForResult(picker, REQUEST_LINK_DOCUMENT);
+        } catch (ActivityNotFoundException error) {
+            input.setError(getString(R.string.main_batch_read_failed));
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != REQUEST_LINK_DOCUMENT || resultCode != RESULT_OK || data == null || data.getData() == null) {
+            return;
+        }
+        if (batchDialog == null) {
+            showBatchEditor("");
+        }
+        if (batchInput == null) {
+            return;
+        }
+        EditText input = batchInput;
+        Uri document = data.getData();
+        new Thread(() -> importLinkDocument(document, input), "Auralis link import").start();
+    }
+
+    private void importLinkDocument(Uri document, EditText input) {
+        String text = null;
+        int failure = 0;
+        try (InputStream stream = getContentResolver().openInputStream(document)) {
+            if (stream == null) {
+                throw new IOException("The document has no content stream");
+            }
+            ByteArrayOutputStream contents = new ByteArrayOutputStream();
+            byte[] buffer = new byte[8192];
+            int count;
+            while ((count = stream.read(buffer)) != -1) {
+                if (contents.size() + count > MAX_BATCH_SIZE) {
+                    failure = R.string.main_batch_too_large;
+                    break;
+                }
+                contents.write(buffer, 0, count);
+            }
+            if (failure == 0) {
+                text = new String(contents.toByteArray(), StandardCharsets.UTF_8);
+            }
+        } catch (IOException | SecurityException error) {
+            failure = R.string.main_batch_read_failed;
+        }
+        String imported = text;
+        int issue = failure;
+        runOnUiThread(() -> {
+            if (isDestroyed() || batchInput != input) {
+                return;
+            }
+            if (issue != 0) {
+                input.setError(getString(issue));
+            } else {
+                input.setError(null);
+                input.setText(imported);
+            }
+        });
+    }
+
+    private void reviewBatch(EditText input) {
+        String draft = input.getText().toString();
+        if (draft.length() > MAX_BATCH_SIZE || draft.getBytes(StandardCharsets.UTF_8).length > MAX_BATCH_SIZE) {
+            input.setError(getString(R.string.main_batch_too_large));
+            return;
+        }
+        if (draft.startsWith("\ufeff")) {
+            draft = draft.substring(1);
+        }
+        Set<String> links = new LinkedHashSet<>();
+        int skipped = 0;
+        for (String line : draft.split("\\R")) {
+            String url = line.trim();
+            if (url.isEmpty()) {
+                continue;
+            }
+            if (!validUrl(url) || !links.add(url)) {
+                skipped++;
+            }
+            if (links.size() > MAX_BATCH_LINKS) {
+                input.setError(getString(R.string.main_batch_too_many, MAX_BATCH_LINKS));
+                return;
+            }
+        }
+        if (links.isEmpty()) {
+            input.setError(getString(R.string.main_batch_no_links));
+            return;
+        }
+        input.setError(null);
+        List<String> accepted = new ArrayList<>(links);
+        AlertDialog editor = batchDialog;
+        new AlertDialog.Builder(this)
+                .setTitle(getResources().getQuantityString(R.plurals.main_batch_confirm, accepted.size(), accepted.size()))
+                .setMessage(batchPreview(accepted, skipped))
+                .setNegativeButton(R.string.main_edit_links, null)
+                .setPositiveButton(R.string.main_add, (dialog, which) -> enqueueReviewedBatch(editor, input, accepted))
+                .show();
+    }
+
+    private String batchPreview(List<String> urls, int skipped) {
+        StringBuilder preview = new StringBuilder();
+        if (skipped > 0) {
+            preview.append(getResources().getQuantityString(R.plurals.main_batch_skipped, skipped, skipped));
+            preview.append("\n\n");
+        }
+        int shown = Math.min(8, urls.size());
+        for (int index = 0; index < shown; index++) {
+            String url = urls.get(index);
+            if (index > 0) {
+                preview.append('\n');
+            }
+            preview.append(url.length() > 100 ? url.substring(0, 100) + "…" : url);
+        }
+        int remaining = urls.size() - shown;
+        if (remaining > 0) {
+            preview.append('\n');
+            preview.append(getResources().getQuantityString(R.plurals.main_batch_more, remaining, remaining));
+        }
+        return preview.toString();
+    }
+
+    private void enqueueReviewedBatch(AlertDialog editor, EditText input, List<String> urls) {
+        int added;
+        try {
+            added = DownloadService.enqueueBatch(this, urls);
+        } catch (IllegalArgumentException error) {
+            input.setError(getString(R.string.main_batch_no_links));
+            return;
+        } catch (IllegalStateException | SecurityException error) {
+            input.setError(getString(R.string.main_queue_failed));
+            return;
+        }
+        editor.dismiss();
+        Toast.makeText(this, getResources().getQuantityString(R.plurals.main_batch_added, added, added),
+                Toast.LENGTH_SHORT).show();
+        requestNotificationAccess();
     }
 
     private void prefillFromShare(Intent intent) {
@@ -285,13 +587,17 @@ public final class MainActivity extends Activity implements DownloadQueue.Listen
     }
 
     private static boolean validUrl(String text) {
-        if (text.isEmpty() || text.chars().anyMatch(Character::isWhitespace)) {
+        if (text.isEmpty() || text.length() > 16_384) {
             return false;
         }
-        Uri parsed = Uri.parse(text);
-        String scheme = parsed.getScheme();
-        return ("https".equalsIgnoreCase(scheme) || "http".equalsIgnoreCase(scheme))
-                && !TextUtils.isEmpty(parsed.getHost()) && parsed.getUserInfo() == null;
+        try {
+            URI parsed = new URI(text);
+            String scheme = parsed.getScheme();
+            return ("https".equalsIgnoreCase(scheme) || "http".equalsIgnoreCase(scheme))
+                    && parsed.getHost() != null && parsed.getUserInfo() == null && parsed.getPort() <= 65_535;
+        } catch (URISyntaxException invalid) {
+            return false;
+        }
     }
 
     private void enqueueDraft() {
@@ -419,13 +725,12 @@ public final class MainActivity extends Activity implements DownloadQueue.Listen
         public View getView(int position, View recycled, ViewGroup parent) {
             DownloadItem item = getItem(position);
             if (item == null) {
-                if (recycled != null) {
-                    return recycled;
+                TextView empty = recycled == null ? label(15, MUTED, false) : (TextView) recycled;
+                if (recycled == null) {
+                    empty.setGravity(Gravity.CENTER);
+                    empty.setPadding(dp(12), dp(29), dp(12), dp(29));
                 }
-                TextView empty = label(15, MUTED, false);
-                empty.setText(R.string.main_empty);
-                empty.setGravity(Gravity.CENTER);
-                empty.setPadding(dp(12), dp(29), dp(12), dp(29));
+                empty.setText(filterSelection == 0 ? R.string.main_empty : R.string.main_empty_filter);
                 return empty;
             }
             DownloadRow row = recycled == null ? new DownloadRow() : (DownloadRow) recycled.getTag();
@@ -441,6 +746,7 @@ public final class MainActivity extends Activity implements DownloadQueue.Listen
         final TextView details = label(13, MUTED, false);
         final TextView error = label(13, ERROR, false);
         final ProgressBar progress = new ProgressBar(MainActivity.this, null, android.R.attr.progressBarStyleHorizontal);
+        final Button priority = button(R.string.main_queue_priority, false);
         final Button action = button(R.string.main_pause, true);
         final Button remove = button(R.string.main_remove, false);
 
@@ -453,7 +759,10 @@ public final class MainActivity extends Activity implements DownloadQueue.Listen
             name.setMaxLines(2);
             name.setEllipsize(TextUtils.TruncateAt.END);
             card.addView(name, fullWidth());
-            addBelow(card, status, 4);
+            LinearLayout state = row();
+            state.addView(status, rowWeight());
+            addBeside(state, priority, 7);
+            addBelow(card, state, 4);
             addBelow(card, details, 4);
             progress.setMax(1000);
             progress.setProgressBackgroundTintList(ColorStateList.valueOf(BORDER));
@@ -481,6 +790,11 @@ public final class MainActivity extends Activity implements DownloadQueue.Listen
             status.setTextColor(color);
             status.setText(complete ? R.string.main_complete : failed ? R.string.main_failed
                     : paused ? R.string.main_paused : active ? R.string.main_downloading : R.string.main_queued);
+            priority.setVisibility(complete ? View.GONE : View.VISIBLE);
+            int priorityLabel = item.priority == DownloadItem.PRIORITY_HIGH ? R.string.main_priority_high
+                    : item.priority == DownloadItem.PRIORITY_LOW ? R.string.main_priority_low : R.string.main_priority_normal;
+            priority.setText(getString(R.string.main_priority_current, getString(priorityLabel)));
+            priority.setOnClickListener(view -> showPriorityChoices(item));
 
             long received = Math.max(0, item.downloaded);
             boolean known = item.total > 0;
@@ -591,6 +905,22 @@ public final class MainActivity extends Activity implements DownloadQueue.Listen
 
     private static LinearLayout.LayoutParams rowWeight() {
         return new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+    }
+
+    private LinearLayout buttonPair(Button first, Button second) {
+        LinearLayout layout = row();
+        layout.addView(first, rowWeight());
+        LinearLayout.LayoutParams placement = rowWeight();
+        placement.setMarginStart(dp(7));
+        layout.addView(second, placement);
+        return layout;
+    }
+
+    private void addBeside(LinearLayout layout, View view, int spacing) {
+        LinearLayout.LayoutParams placement = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        placement.setMarginStart(dp(spacing));
+        layout.addView(view, placement);
     }
 
     private void addBelow(LinearLayout layout, View view, int spacing) {

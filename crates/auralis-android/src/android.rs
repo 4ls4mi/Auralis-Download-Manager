@@ -8,7 +8,8 @@ use std::sync::{Mutex, OnceLock, PoisonError};
 
 use jni::errors::{Result as JniResult, ThrowRuntimeExAndDefault};
 use jni::objects::{JClass, JObject, JString};
-use jni::{Env, EnvUnowned, jni_sig, jni_str, sys::jint};
+use jni::sys::{jint, jlong};
+use jni::{Env, EnvUnowned, jni_sig, jni_str};
 
 use crate::downloader::Downloader;
 
@@ -98,6 +99,7 @@ pub extern "system" fn Java_com_alsami_auralis_NativeDownloader_start<'local>(
     url: JString<'local>,
     target: JString<'local>,
     connections: jint,
+    automatic_retries: jint,
 ) -> JString<'local> {
     unowned
         .with_env(|env| -> JniResult<_> {
@@ -107,9 +109,26 @@ pub extern "system" fn Java_com_alsami_auralis_NativeDownloader_start<'local>(
             let id = id.try_to_string(env)?;
             let url = url.try_to_string(env)?;
             let target = target.try_to_string(env)?;
-            let result = downloader()
-                .and_then(|engine| engine.start(id, &url, Path::new(&target), connections));
+            let result = downloader().and_then(|engine| {
+                engine.start(id, &url, Path::new(&target), connections, automatic_retries)
+            });
             reply(env, result)
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_alsami_auralis_NativeDownloader_setRateLimit<'local>(
+    mut unowned: EnvUnowned<'local>,
+    _class: JClass<'local>,
+    bytes_per_second: jlong,
+) -> JString<'local> {
+    unowned
+        .with_env(|env| -> JniResult<_> {
+            reply(
+                env,
+                downloader().and_then(|engine| engine.set_rate_limit(bytes_per_second)),
+            )
         })
         .resolve::<ThrowRuntimeExAndDefault>()
 }

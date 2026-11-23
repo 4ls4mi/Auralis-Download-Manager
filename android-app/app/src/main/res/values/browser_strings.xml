@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="browser_title">Auralis Browser</string>
+    <string name="browser_done">Done</string>
+    <string name="browser_tabs">Tabs</string>
+    <string name="browser_tabs_count">Tabs (%1$d)</string>
+    <string name="browser_url">Web address</string>
+    <string name="browser_go">Go</string>
+    <string name="browser_back">Back</string>
+    <string name="browser_forward">Forward</string>
+    <string name="browser_bookmark">Save page</string>
+    <string name="browser_library">Library</string>
+    <string name="browser_start">Enter a web address to browse</string>
+    <string name="browser_tab_limit">Close a tab before opening another</string>
+    <string name="browser_invalid_url">Enter a valid web address</string>
+    <string name="browser_new_tab">New tab</string>
+    <string name="browser_close_tab">Close tab</string>
+    <string name="browser_invalid_download">Auralis can queue direct HTTP and HTTPS links</string>
+    <string name="browser_download_title">Queue this download?</string>
+    <string name="browser_download_prompt">%1$s\n%2$s</string>
+    <string name="browser_add_download">Add to queue</string>
+    <string name="browser_download_queued">Added to your download queue</string>
+    <string name="browser_bookmark_saved">Bookmark saved</string>
+    <string name="browser_bookmark_removed">Bookmark removed</string>
+    <string name="browser_bookmarks">Bookmarks</string>
+    <string name="browser_history">History</string>
+    <string name="browser_no_sites">No saved pages</string>
+    <string name="browser_clear_history">Clear history</string>
+</resources>

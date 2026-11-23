@@ -1,6 +1,10 @@
 # Auralis for Android
 
-A standalone Android app for direct HTTP and HTTPS downloads. Share a link to Auralis or paste it in the app, then add it to the download queue. The Rust engine uses multiple connections when the source supports byte ranges. Paused downloads keep their partial data, and completed files are saved to Android Downloads.
+A standalone Android app for direct HTTP and HTTPS downloads. Paste or share a link, or review a batch of links pasted into the app or imported from a text file. The queue supports priorities, status filters, and bulk pause and resume. Finished files are saved to Android Downloads.
+
+Settings allow up to five active files and sixteen connections per transfer when the server supports byte ranges. A shared speed limit applies immediately. Connections and retry settings apply on the next start or resume. Wi-Fi and low-battery settings pause transfers until the conditions clear while the download service is running.
+
+Open Browser for tabs, bookmarks, history, and confirmed handoff of direct download links to the queue.
 
 The APK supports Android 10 and later on ARM64 and x86-64. Open Auralis and resume interrupted downloads after a system restart.
 
@@ -16,4 +20,4 @@ cd android-app
 ./gradlew assembleDebug
 ```
 
-The debug APK is at `app/build/outputs/apk/debug/app-debug.apk`. Run `./gradlew connectedDebugAndroidTest` with an Android emulator or device attached to exercise a segmented download, pause and resume, and queue order.
+The debug APK is at `app/build/outputs/apk/debug/app-debug.apk`. Run `./gradlew connectedDebugAndroidTest` with an Android emulator or device attached to exercise segmentation, pause and resume, concurrent transfers, and queue priority.

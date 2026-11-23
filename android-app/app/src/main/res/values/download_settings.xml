@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="download_settings_title">Download settings</string>
+    <string name="download_settings_transfer">Transfer limits</string>
+    <string name="download_settings_files">Concurrent downloads</string>
+    <string name="download_settings_files_help">Run up to 5 downloads at once.</string>
+    <string name="download_settings_connections">Connections per download</string>
+    <string name="download_settings_connections_help">Use up to 16 connections when the server supports file ranges.</string>
+    <string name="download_settings_rate">Total speed limit (KiB/s)</string>
+    <string name="download_settings_rate_help">Enter 0 for unlimited speed. The limit applies to all active downloads together.</string>
+    <string name="download_settings_retries">Retries per connection</string>
+    <string name="download_settings_retries_help">Retry temporary connection errors up to 5 times. Enter 0 to disable retries.</string>
+    <string name="download_settings_conditions">Network and battery</string>
+    <string name="download_settings_wifi">Wi-Fi only</string>
+    <string name="download_settings_wifi_help">Pause transfers when Wi-Fi is unavailable.</string>
+    <string name="download_settings_battery">Pause on low battery</string>
+    <string name="download_settings_battery_help" formatted="false">Pause below 15% while unplugged. Resume when battery conditions recover.</string>
+    <string name="download_settings_cancel">Cancel</string>
+    <string name="download_settings_save">Save settings</string>
+    <string name="download_settings_invalid_number">Enter a number between %1$d and %2$d.</string>
+    <item type="id" name="download_settings_scroll" />
+    <item type="id" name="download_settings_files" />
+    <item type="id" name="download_settings_connections" />
+    <item type="id" name="download_settings_rate" />
+    <item type="id" name="download_settings_retries" />
+    <item type="id" name="download_settings_wifi" />
+    <item type="id" name="download_settings_battery" />
+    <item type="id" name="download_settings_save" />
+</resources>
