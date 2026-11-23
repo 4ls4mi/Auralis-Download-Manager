@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="main_brand">Auralis</string>
+    <string name="main_url">Download link</string>
+    <string name="main_url_hint">Paste an HTTP or HTTPS link</string>
+    <string name="main_add">Add to queue</string>
+    <string name="main_downloads">Downloads</string>
+    <string name="main_download">Download</string>
+    <string name="main_queue_summary">%1$d active · %2$d queued</string>
+    <string name="main_empty">No downloads yet</string>
+    <string name="main_link_needed">Enter a valid HTTP or HTTPS link without sign-in details.</string>
+    <string name="main_queue_failed">Could not add this download. Try again.</string>
+    <string name="main_action_failed">Could not update this download. Try again.</string>
+    <string name="main_queued">Queued</string>
+    <string name="main_downloading">Downloading</string>
+    <string name="main_paused">Paused</string>
+    <string name="main_complete">Completed</string>
+    <string name="main_failed">Failed</string>
+    <string name="main_progress">Download progress for %1$s</string>
+    <string name="main_transfer_amount">%1$s of %2$s</string>
+    <string name="main_transfer_rate">%1$s · %2$s/s</string>
+    <string name="main_pause">Pause</string>
+    <string name="main_resume">Resume</string>
+    <string name="main_retry">Retry</string>
+    <string name="main_open">Open</string>
+    <string name="main_open_failed">Could not open this file. Look for it in Android Downloads.</string>
+    <string name="main_remove">Remove</string>
+    <string name="main_remove_entry">Remove entry</string>
+    <string name="main_remove_download">Remove this download?</string>
+    <string name="main_remove_partial">Any saved progress will be deleted.</string>
+    <string name="main_cancel">Cancel</string>
+    <string name="main_cancel_download">Cancel this download?</string>
+    <string name="main_keep_downloading">Keep downloading</string>
+</resources>

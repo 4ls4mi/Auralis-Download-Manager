@@ -1,0 +1,109 @@
+name: Auralis Android build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [wip/auralis-android]
+    paths:
+      - android-app/**
+      - crates/auralis-android/**
+      - crates/engine/**
+      - Cargo.toml
+      - Cargo.lock
+      - .github/workflows/auralis-android.yml
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    name: Build and verify the Android APK
+    if: github.repository == '4ls4mi/Auralis-Download-Manager' && github.ref == 'refs/heads/wip/auralis-android'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+          cache-dependency-path: |
+            android-app/**/*.gradle
+            android-app/gradle/wrapper/gradle-wrapper.properties
+
+      - name: Prepare the native toolchain
+        id: rust
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup target add aarch64-linux-android x86_64-linux-android
+          rustc -Vv | sha256sum | cut -c1-16 | sed 's/^/version=/' >> "$GITHUB_OUTPUT"
+          sdkmanager --install 'platforms;android-35' 'build-tools;35.0.0' 'ndk;29.0.14206865'
+          if ! ldconfig -p | grep -F 'libclang.so' >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y libclang-dev
+          fi
+
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: |
+            ~/.cargo/git/db
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/index
+            ~/.cargo/bin/cargo-ndk
+            ~/.cargo/bin/cargo-ndk-ndk
+            target/aarch64-linux-android/release
+            target/x86_64-linux-android/release
+          key: auralis-android-ndk29-${{ steps.rust.outputs.version }}-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'crates/engine/Cargo.toml', 'crates/auralis-android/Cargo.toml') }}
+
+      - name: Build the Auralis engine for Android
+        shell: bash
+        run: |
+          if ! command -v cargo-ndk >/dev/null; then
+            cargo install cargo-ndk --version 4.1.2 --locked
+          fi
+          bash android-app/build-native.sh
+
+      - name: Build the app and check native library alignment
+        shell: bash
+        run: |
+          cd android-app
+          ./gradlew --no-daemon assembleDebug assembleDebugAndroidTest
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -P 16 4 app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Enable the emulator on the hosted runner
+        shell: bash
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666"' | sudo tee /etc/udev/rules.d/99-auralis-test-kvm.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Verify segmentation, pause and resume, and queue order
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          script: cd android-app && ./gradlew --no-daemon connectedDebugAndroidTest
+
+      - name: Stage the verified Android APK
+        shell: bash
+        run: |
+          mkdir -p release-android
+          cp android-app/app/build/outputs/apk/debug/app-debug.apk release-android/Auralis.Android_0.1.0.apk
+          cd release-android
+          sha256sum Auralis.Android_0.1.0.apk > Auralis.Android_0.1.0.apk.sha256
+
+      - name: Upload the Android app and checksum
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: auralis-android-0.1.0
+          path: release-android/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14

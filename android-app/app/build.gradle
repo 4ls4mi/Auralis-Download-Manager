@@ -1,0 +1,50 @@
+plugins {
+    id 'com.android.application' version '8.9.2'
+}
+
+def licenseAssets = layout.buildDirectory.dir('generated/auralis-license')
+
+android {
+    namespace 'com.alsami.auralis'
+    compileSdk 35
+    ndkVersion '29.0.14206865'
+
+    defaultConfig {
+        applicationId 'com.alsami.auralis'
+        minSdk 29
+        targetSdk 35
+        versionCode 1
+        versionName '0.1.0'
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+
+        ndk { abiFilters 'arm64-v8a', 'x86_64' }
+    }
+
+    sourceSets.main.assets.srcDir(licenseAssets)
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+def copyLicenseAssets = tasks.register('copyLicenseAssets', Copy) {
+    from(rootProject.file('../LICENSE'), rootProject.file('../ATTRIBUTION.md'))
+    into(licenseAssets)
+}
+def verifyNativeLibraries = tasks.register('verifyNativeLibraries') {
+    doLast {
+        ['arm64-v8a', 'x86_64'].each { abi ->
+            if (!file("src/main/jniLibs/${abi}/libauralis_android.so").isFile()) {
+                throw new GradleException("Missing the Auralis engine for ${abi}. Run android-app/build-native.sh first.")
+            }
+        }
+    }
+}
+tasks.named('preBuild') { dependsOn(copyLicenseAssets, verifyNativeLibraries) }
+
+dependencies {
+    implementation 'org.rustls:rustls-platform-verifier:0.2.0'
+    androidTestImplementation 'androidx.test:runner:1.6.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+}

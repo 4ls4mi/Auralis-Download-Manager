@@ -1279,6 +1279,11 @@ impl Download {
         self.shared.snapshot()
     }
 
+    /// Whether the engine task has returned, including an unexpected panic.
+    pub fn is_finished(&self) -> bool {
+        self.task.is_finished()
+    }
+
     pub fn cancel(&self) {
         self.cancel.cancel();
     }
