@@ -122,6 +122,34 @@ bool blocksNativeHost(QSettings &registry)
         && !listContains(registry, QStringLiteral("NativeMessagingAllowlist"), NativeHost, false);
 }
 
+enum class StoreForceList { Unlisted, Configured, OtherSource };
+
+StoreForceList storeForceList(QSettings &registry, bool chrome)
+{
+    registry.beginGroup(QStringLiteral("ExtensionInstallForcelist"));
+    auto result = StoreForceList::Unlisted;
+    for (const auto &key : registry.childKeys()) {
+        const auto setting = registry.value(key).toString().trimmed();
+        if (setting.section(QLatin1Char(';'), 0, 0).trimmed() != StoreId)
+            continue;
+        // Chrome's documented default for an ID by itself is the Chrome Web Store.
+        if (setting != StoreId + QLatin1Char(';') + StoreUpdate && !(chrome && setting == StoreId)) {
+            result = StoreForceList::OtherSource;
+            break;
+        }
+        result = StoreForceList::Configured;
+    }
+    registry.endGroup();
+    return result;
+}
+
+bool usesOfficialStore(const QJsonObject &entry)
+{
+    const auto mode = entry.value(InstallationMode).toString();
+    return (mode == NormalInstalled || mode == QStringLiteral("force_installed"))
+        && entry.value(UpdateUrl).toString() == StoreUpdate;
+}
+
 bool existingPolicyBlocksSetup(QSettings &registry)
 {
     const auto external = QStringLiteral("BlockExternalExtensions");
@@ -133,7 +161,6 @@ bool existingPolicyBlocksSetup(QSettings &registry)
             && !listContains(registry, allowedTypes, QStringLiteral("extension"), false))
         || listContains(registry, QStringLiteral("ExtensionInstallBlocklist"), StoreId, true)
         || listContains(registry, QStringLiteral("ExtensionInstallBlacklist"), StoreId, true)
-        || listContains(registry, QStringLiteral("ExtensionInstallForcelist"), StoreId, false)
         || blocksNativeHost(registry);
 }
 
@@ -146,13 +173,28 @@ Review reviewPolicy(const QString &browserId, const QString &path, QSettings &us
 {
     const QString governed = QCoreApplication::translate("BrowserSetup",
         "Existing browser policies control extension installation. Use the browser’s supported setup or your administrator’s policy.");
+    const bool chrome = browserId == QStringLiteral("chrome");
+    bool machineConfigured = false;
     for (const auto format : {QSettings::Registry64Format, QSettings::Registry32Format}) {
         QSettings machine(QStringLiteral("HKEY_LOCAL_MACHINE") + path, format);
-        if (machine.contains(SettingsName) || existingPolicyBlocksSetup(machine) || machine.status() != QSettings::NoError)
+        const auto forceList = storeForceList(machine, chrome);
+        if (existingPolicyBlocksSetup(machine) || forceList == StoreForceList::OtherSource
+            || machine.status() != QSettings::NoError)
             return {{false, false, governed}, {}};
+        if (machine.contains(SettingsName)) {
+            const auto settings = QJsonDocument::fromJson(machine.value(SettingsName).toString().toUtf8()).object();
+            if (!usesOfficialStore(settings.value(StoreId).toObject()))
+                return {{false, false, governed}, {}};
+            machineConfigured = true;
+        }
+        machineConfigured |= forceList == StoreForceList::Configured;
     }
-    if (existingPolicyBlocksSetup(user) || user.status() != QSettings::NoError)
+    const auto userForceList = storeForceList(user, chrome);
+    if (existingPolicyBlocksSetup(user) || userForceList == StoreForceList::OtherSource
+        || user.status() != QSettings::NoError)
         return {{false, false, governed}, {}};
+    if (machineConfigured)
+        return {{false, true, {}}, {}};
 
     QJsonObject settings;
     if (user.contains(SettingsName)) {
@@ -164,11 +206,10 @@ Review reviewPolicy(const QString &browserId, const QString &path, QSettings &us
 
     const auto existing = settings.value(StoreId);
     const auto entry = existing.toObject();
-    const auto mode = entry.value(InstallationMode).toString();
-    const auto update = entry.value(UpdateUrl).toString();
-    if ((mode == NormalInstalled || mode == QStringLiteral("force_installed")) && update == StoreUpdate) {
+    if (usesOfficialStore(entry)) {
         QSettings ownership;
-        const bool removable = entry == auralisPolicy() && ownership.contains(ownershipKey(browserId));
+        const bool removable = userForceList == StoreForceList::Unlisted && entry == auralisPolicy()
+            && ownership.contains(ownershipKey(browserId));
         return {{false, true, {}, removable}, settings};
     }
 
@@ -186,6 +227,8 @@ Review reviewPolicy(const QString &browserId, const QString &path, QSettings &us
     }
     if (!existing.isUndefined())
         return {{false, false, governed}, {}};
+    if (userForceList == StoreForceList::Configured)
+        return {{false, true, {}}, settings};
     return {{true, false, {}}, settings};
 }
 }

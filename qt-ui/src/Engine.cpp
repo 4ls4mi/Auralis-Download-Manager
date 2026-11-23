@@ -359,9 +359,12 @@ QVariantMap Engine::dispatch(const QVariantMap &command) const
                 const auto policyError = BrowserSetup::installPolicy(browserId);
                 if (!policyError.isEmpty())
                     return failure(policyError);
+                // A newly installed Chrome may never have opened its normal profile. Open its
+                // Extensions page after saving the setting so Chrome can read and apply it.
+                const bool browserOpened = browserId == QStringLiteral("chrome")
+                    && QProcess::startDetached(handler.executable, {QStringLiteral("chrome://extensions/")});
                 return result(QVariantMap{{QStringLiteral("ok"), true},
-                    {QStringLiteral("pending"), true},
-                    {QStringLiteral("message"), tr("Reopen your browser to finish installing the Auralis extension.")}});
+                    {QStringLiteral("browserOpened"), browserOpened}, {QStringLiteral("pending"), true}});
             }
             const auto registrationError = BrowserSetup::registerNativeHost(browserId, false);
             if (!QProcess::startDetached(handler.executable, {store}))

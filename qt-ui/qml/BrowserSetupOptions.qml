@@ -48,14 +48,16 @@ ColumnLayout {
     readonly property bool pending: !installed && attempt?.state === "pending"
     readonly property bool automaticBlocked: needsSetup && supportedBrowser && !automaticAvailable
     readonly property bool attemptNeedsAttention: !installed && Boolean(attempt?.state && !pending)
+    readonly property string attemptError: attempt?.state === "failed" ? attempt.detail || "" : ""
     readonly property bool needsHostRepair: hostNeedsAttention && status?.nativeHostCanRegister === true
         && (installed || status?.policyInstalled || automaticBlocked || attemptNeedsAttention)
     readonly property string setupDetail: {
         if (problem)
             return ""
         if (automaticBlocked || attemptNeedsAttention) {
-            return attempt?.detail || (status?.policyState === "blocked" ? status?.policyProblem || "" : "")
-                || (hostNeedsAttention ? status.nativeHostProblem : "")
+            const detail = status?.policyState === "blocked" ? status?.policyProblem || ""
+                : hostNeedsAttention ? status.nativeHostProblem : ""
+            return detail === attemptError ? "" : detail
         }
         return hostNeedsAttention && (installed || status?.policyInstalled) ? status.nativeHostProblem : ""
     }
@@ -65,9 +67,9 @@ ColumnLayout {
 
     spacing: 8
 
-    function recordAttempt(browserId, state, detail = "") {
+    function recordAttempt(browserId, state, detail = "", browserOpened = false) {
         const expires = state === "pending" ? Date.now() + verificationTimeout : 0
-        attempts = Object.assign({}, attempts, {[browserId]: state ? {state, expires, detail} : null})
+        attempts = Object.assign({}, attempts, {[browserId]: state ? {state, expires, detail, browserOpened} : null})
     }
 
     function refresh(reportReset = false) {
@@ -109,7 +111,7 @@ ColumnLayout {
                     else if (!value.policyInstalled)
                         recordAttempt(browserId, "failed", qsTr("Auralis could no longer find the saved automatic setup."))
                     else if (Date.now() >= previous.expires)
-                        recordAttempt(browserId, "timeout")
+                        recordAttempt(browserId, "timeout", "", previous.browserOpened)
                 } else if (browserId && value.policyInstalled && !previous && !value.extensionPreviouslyConnected
                     && !value.storePreviouslyConnected) {
                     recordAttempt(browserId, "pending")
@@ -190,7 +192,7 @@ ColumnLayout {
                         : qsTr("Could not open your browser.")
                 }
             } else if (install) {
-                recordAttempt(browserId, "pending")
+                recordAttempt(browserId, "pending", "", Boolean(value.browserOpened))
             } else if (openStore) {
                 feedback = installed ? qsTr("Opened the Auralis extension page.")
                     : qsTr("Follow the browser prompts to add the extension, then open the Auralis toolbar icon to verify the connection.")
@@ -233,6 +235,7 @@ ColumnLayout {
     }
 
     Label {
+        objectName: "browserSetupStatus"
         Layout.fillWidth: true
         wrapMode: Text.WordWrap
         textFormat: Text.PlainText
@@ -260,9 +263,18 @@ ColumnLayout {
                 return qsTr("Auralis found the extension in %1. Open its toolbar icon to verify the connection.").arg(browser)
             if (root.activeAction === "installBrowserExtensionPolicy")
                 return qsTr("Starting extension installation in %1…").arg(browser)
+            if (root.pending && root.status?.browserId === "chrome") {
+                return root.attempt.browserOpened
+                    ? qsTr("Setup was saved and Chrome opened. Waiting to detect the Auralis extension.")
+                    : qsTr("Setup was saved. Open Google Chrome to finish installing the Auralis extension.")
+            }
             if (root.pending)
                 return qsTr("Close all %1 windows, then reopen the browser to finish installing. Open the Auralis toolbar icon to verify the connection.").arg(browser)
             if (root.attemptNeedsAttention) {
+                if (root.attemptError)
+                    return root.attemptError
+                if (root.attempt.state === "timeout" && root.status?.policyInstalled && root.status?.browserId === "chrome")
+                    return qsTr("Setup was saved. Check Chrome’s Extensions page for Auralis.")
                 if (root.attempt.state === "timeout" && root.status?.policyInstalled)
                     return qsTr("Automatic setup was saved for %1, but Auralis could not verify the installation. You can install the extension manually.").arg(browser)
                 if (root.attempt.state === "timeout")
@@ -283,6 +295,16 @@ ColumnLayout {
         Layout.fillWidth: true
         visible: root.edgeStoreSetup && !root.confirming
         text: qsTr("Open the Chrome Web Store in Edge and follow its prompts. If Edge asks, allow extensions from other stores, then add Auralis.")
+        textFormat: Text.PlainText
+        wrapMode: Text.WordWrap
+        color: root.colors.muted
+    }
+
+    Label {
+        Layout.fillWidth: true
+        visible: root.status?.browserId === "chrome" && root.status?.policyInstalled
+            && !root.installed && root.attempt?.state === "timeout" && !root.confirming
+        text: qsTr("If Auralis is missing, open chrome://policy in Chrome and choose Reload policies, then check chrome://extensions again.")
         textFormat: Text.PlainText
         wrapMode: Text.WordWrap
         color: root.colors.muted
