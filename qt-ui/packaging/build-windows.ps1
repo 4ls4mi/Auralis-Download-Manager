@@ -20,13 +20,24 @@ foreach ($path in @($build, $job, $stage)) { New-Item -ItemType Directory -Force
 
 Push-Location $repo
 try {
+    $configure = @('-S',$source,'-B',$build,'-G','Visual Studio 17 2022','-A','x64',
+        "-DCMAKE_PREFIX_PATH:PATH=$env:AURALIS_QT_ROOT","-DCMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE:PATH=$builtApp")
+    $cache = Join-Path $build 'CMakeCache.txt'
+    if (Test-Path -LiteralPath $cache) {
+        $cachedSource = Select-String -LiteralPath $cache -Pattern '^CMAKE_HOME_DIRECTORY:INTERNAL=(.*)$' -List |
+            ForEach-Object { $_.Matches[0].Groups[1].Value }
+        if ($cachedSource -ine $source.Replace('\', '/')) {
+            Write-Host 'Refreshing the CMake configuration for the current checkout.'
+            $configure += '--fresh'
+        }
+    }
+    Invoke-Checked 'cmake' $configure
+
     $env:AURALIS_ENGINE_REV = (git log -1 '--format=%h' '--' crates i18n assets Cargo.toml Cargo.lock .cargo rust-toolchain.toml).Trim()
     if ($LASTEXITCODE -ne 0 -or !$env:AURALIS_ENGINE_REV) { throw 'Could not determine the backend revision.' }
     Invoke-Checked 'cargo' @('build','--locked','--release','--target','x86_64-pc-windows-msvc','-p','auralis-qt-engine','-p','mdm-nmhost')
     $rust = Join-Path $env:CARGO_TARGET_DIR 'x86_64-pc-windows-msvc/release'
 
-    Invoke-Checked 'cmake' @('-S',$source,'-B',$build,'-G','Visual Studio 17 2022','-A','x64',
-        "-DCMAKE_PREFIX_PATH:PATH=$env:AURALIS_QT_ROOT","-DCMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE:PATH=$builtApp")
     Invoke-Checked 'cmake' @('--build',$build,'--config','Release','--target','auralis-download-manager')
     Copy-Item -LiteralPath (Join-Path $builtApp 'auralis-download-manager.exe') -Destination $stage
     Copy-Item -LiteralPath (Join-Path $rust 'auralis_engine.dll') -Destination $stage
