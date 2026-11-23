@@ -94,6 +94,13 @@ struct Fixture {
     server: JoinHandle<()>,
 }
 
+#[derive(Clone, Copy)]
+enum Redirect {
+    Normal,
+    OffsiteFromShare,
+    OffsiteFromFile,
+}
+
 impl Drop for Fixture {
     fn drop(&mut self) {
         self.server.abort();
@@ -101,7 +108,7 @@ impl Drop for Fixture {
 }
 
 impl Fixture {
-    async fn start(redirect_host: &'static str) -> Self {
+    async fn start(redirect: Redirect) -> Self {
         let (tls, ca) = test_certificate_for_hosts(&[SITE, CDN, UNRELATED]).unwrap();
         let acceptor = TlsAcceptor::from(Arc::new(tls));
         let tcp = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).await.unwrap();
@@ -121,7 +128,7 @@ impl Fixture {
                     };
                     let response = {
                         let mut requests = log.lock().unwrap();
-                        let response = reply(&request, port, redirect_host, &requests);
+                        let response = reply(&request, port, redirect, &requests);
                         requests.push(request);
                         response
                     };
@@ -187,7 +194,7 @@ impl Fixture {
 fn reply(
     request: &SeenRequest,
     port: u16,
-    redirect_host: &str,
+    redirect: Redirect,
     requests: &[SeenRequest],
 ) -> Vec<u8> {
     let hostname = request.host.split(':').next().unwrap_or_default();
@@ -224,12 +231,22 @@ function triggerFreeDownload() {{ setInterval('display()',1000); }}
                     first.path == PAGE && request.at.duration_since(first.at) >= WAIT
                 }) =>
         {
+            let redirect_host = if matches!(redirect, Redirect::OffsiteFromShare) {
+                UNRELATED
+            } else {
+                CDN
+            };
             response(
                 "302 Found",
                 &format!("Location: https://{redirect_host}:{port}{FILE}\r\n"),
                 b"",
             )
         }
+        ("GET", CDN, FILE) if matches!(redirect, Redirect::OffsiteFromFile) => response(
+            "302 Found",
+            &format!("Location: https://{UNRELATED}:{port}{FILE}\r\n"),
+            b"",
+        ),
         ("GET", CDN, FILE)
             if request.cookie.is_none()
                 && request.range.as_deref() == Some("bytes=0-0")
@@ -277,7 +294,7 @@ fn request(s: &Fixture, dir: &tempfile::TempDir) -> Request {
 
 #[tokio::test]
 async fn downloads_the_archive_after_the_wait_without_leaking_the_session() {
-    let server = Fixture::start(CDN).await;
+    let server = Fixture::start(Redirect::Normal).await;
     let folder = tempfile::tempdir().unwrap();
     let out = tokio::time::timeout(
         TEST_TIMEOUT,
@@ -293,7 +310,7 @@ async fn downloads_the_archive_after_the_wait_without_leaking_the_session() {
 
 #[tokio::test]
 async fn start_reuses_the_open_probe_answer_without_redeeming_the_address_again() {
-    let server = Fixture::start(CDN).await;
+    let server = Fixture::start(Redirect::Normal).await;
     let folder = tempfile::tempdir().unwrap();
     let options = server.options();
     let (info, kept) = tokio::time::timeout(
@@ -322,7 +339,7 @@ async fn start_reuses_the_open_probe_answer_without_redeeming_the_address_again(
 
 #[tokio::test]
 async fn a_redirect_to_an_unrelated_host_is_never_requested() {
-    let server = Fixture::start(UNRELATED).await;
+    let server = Fixture::start(Redirect::OffsiteFromShare).await;
     let folder = tempfile::tempdir().unwrap();
     let out = tokio::time::timeout(
         TEST_TIMEOUT,
@@ -339,8 +356,25 @@ async fn a_redirect_to_an_unrelated_host_is_never_requested() {
 }
 
 #[tokio::test]
+async fn a_file_server_redirect_to_an_unrelated_host_is_never_requested() {
+    let server = Fixture::start(Redirect::OffsiteFromFile).await;
+    let folder = tempfile::tempdir().unwrap();
+    let out = tokio::time::timeout(
+        TEST_TIMEOUT,
+        Download::start(request(&server, &folder), server.options()).wait(),
+    )
+    .await
+    .expect("the fixture download stops");
+    assert!(out.is_err());
+    // These three requests are the share, its timed button, and the file server.
+    // In particular the unrelated host never receives the redirected request.
+    server.assert_delivery();
+    assert!(std::fs::read_dir(folder.path()).unwrap().next().is_none());
+}
+
+#[tokio::test]
 async fn only_the_archive_request_receives_range_headers() {
-    let server = Fixture::start(CDN).await;
+    let server = Fixture::start(Redirect::Normal).await;
     let mut headers = HeaderMap::new();
     headers.insert(RANGE, "bytes=0-0".parse().unwrap());
     headers.insert(IF_RANGE, "\"fixture\"".parse().unwrap());

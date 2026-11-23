@@ -666,12 +666,19 @@ const MAX_REDIRECTS: usize = 20;
 /// redirect to `get`, which applies each site's cookie and referrer rules.
 fn get_policy() -> reqwest::redirect::Policy {
     reqwest::redirect::Policy::custom(|attempt| {
+        // Reqwest can use the previous URL as Referer. Keep Bowfile's signed file
+        // URL within its origin, including when an intermediate path redirects.
+        let leaves_bowfile_file_origin = attempt
+            .previous()
+            .iter()
+            .find(|url| sites::bowfile::is_file(url))
+            .is_some_and(|file| file.origin() != attempt.url().origin());
         let handled_in_get = attempt.previous().last().is_some_and(|from| {
             sites::bowfile::is_share(from)
                 || (from.host_str() != attempt.url().host_str()
                     && sites::same_party(from, attempt.url()))
         });
-        if handled_in_get {
+        if handled_in_get || leaves_bowfile_file_origin {
             attempt.stop()
         } else {
             reqwest::redirect::Policy::limited(MAX_REDIRECTS).redirect(attempt)
