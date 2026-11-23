@@ -21,6 +21,9 @@
 #include <QtConcurrentRun>
 
 #ifdef Q_OS_WIN
+#include <QJsonObject>
+#include <QRandomGenerator>
+#include <QVersionNumber>
 #include <windows.h>
 #include <dwmapi.h>
 #endif
@@ -103,10 +106,46 @@ Engine::Engine(QJSEngine *scriptEngine, bool startHidden, bool smoke, QObject *p
     connect(&m_service, &QFutureWatcherBase::finished, this, &Engine::finishService);
     m_timer.setInterval(850);
     connect(&m_timer, &QTimer::timeout, this, &Engine::refresh);
+#ifdef Q_OS_WIN
+    m_releaseSocket.setMaxAllowedIncomingFrameSize(256);
+    m_releaseSocket.setMaxAllowedIncomingMessageSize(256);
+    m_releaseSocketTimer.setSingleShot(true);
+    connect(&m_releaseSocketTimer, &QTimer::timeout, this, [this] {
+        if (!m_releaseHintsEnabled)
+            return;
+        if (m_releaseSocket.state() == QAbstractSocket::UnconnectedState) {
+            m_releaseSocketTimer.start(15000);
+            m_releaseSocket.open(QUrl(QStringLiteral("wss://auralis-release-push.auralis-updates.workers.dev/events")));
+        } else if (m_releaseSocket.state() != QAbstractSocket::ConnectedState) {
+            m_releaseSocket.abort();
+            if (!m_releaseSocketTimer.isActive())
+                scheduleReleaseReconnect();
+        }
+    });
+    connect(&m_releaseSocket, &QWebSocket::connected, this, [this] {
+        m_releaseSocketTimer.stop();
+        m_releaseReconnectDelay = 2000;
+        emit releaseUpdateHint({});
+    });
+    connect(&m_releaseSocket, &QWebSocket::disconnected, this, &Engine::scheduleReleaseReconnect);
+    connect(&m_releaseSocket, &QWebSocket::textMessageReceived, this, [this](const QString &message) {
+        if (!m_releaseHintsEnabled)
+            return;
+        const auto hint = QJsonDocument::fromJson(message.toUtf8()).object();
+        const auto version = hint.value(QStringLiteral("version")).toString();
+        const auto parsed = QVersionNumber::fromString(version);
+        if (hint.value(QStringLiteral("type")).toString() == QStringLiteral("release")
+            && parsed.segmentCount() == 3 && parsed.toString() == version
+            && parsed > QVersionNumber::fromString(this->version())) {
+            emit releaseUpdateHint(version);
+        }
+    });
+#endif
 }
 
 Engine::~Engine()
 {
+    setReleaseUpdateHintsEnabled(false);
     // Worker lambdas borrow the engine and profile. Wait while they still exist.
     m_commands.waitForDone();
     m_localJobs.waitForDone();
@@ -281,6 +320,10 @@ QVariantMap Engine::dispatch(const QVariantMap &command) const
             }
             if (installExtension || removeExtensionPolicy) {
                 if (removeExtensionPolicy) {
+                    if (command.value(QStringLiteral("requireUnverifiedExtension")).toBool()
+                        && (browserResult.value(QStringLiteral("extensionPresent")).toBool()
+                            || browserResult.value(QStringLiteral("connectedRecently")).toBool()))
+                        return failure(tr("The browser has the extension. Open its toolbar menu to verify the Auralis connection."));
                     const auto policyError = BrowserSetup::removePolicy(browserId);
                     if (!policyError.isEmpty())
                         return failure(policyError);
@@ -606,6 +649,36 @@ void Engine::notifyUpdate(const QString &version)
     if (!m_smoke && !version.isEmpty())
         emit updateNotificationRequested(version);
 }
+
+void Engine::setReleaseUpdateHintsEnabled(bool enabled)
+{
+#ifdef Q_OS_WIN
+    enabled = enabled && !m_smoke;
+    if (enabled == m_releaseHintsEnabled)
+        return;
+    m_releaseHintsEnabled = enabled;
+    m_releaseReconnectDelay = 2000;
+    if (enabled) {
+        m_releaseSocketTimer.start(0);
+    } else {
+        m_releaseSocketTimer.stop();
+        m_releaseSocket.abort();
+    }
+#else
+    Q_UNUSED(enabled);
+#endif
+}
+
+#ifdef Q_OS_WIN
+void Engine::scheduleReleaseReconnect()
+{
+    if (!m_releaseHintsEnabled)
+        return;
+    const int jitter = QRandomGenerator::global()->bounded(1000);
+    m_releaseSocketTimer.start(m_releaseReconnectDelay + jitter);
+    m_releaseReconnectDelay = qMin(60000, m_releaseReconnectDelay * 2);
+}
+#endif
 
 bool Engine::applyBackdrop(QWindow *window, bool enabled, bool dark) const
 {

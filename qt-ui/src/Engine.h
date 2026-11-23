@@ -10,6 +10,10 @@
 #include <QVariantMap>
 #include <memory>
 
+#ifdef Q_OS_WIN
+#include <QtWebSockets/QWebSocket>
+#endif
+
 class QJSEngine;
 class QTranslator;
 class QWindow;
@@ -64,6 +68,7 @@ public:
     Q_INVOKABLE bool openFolder(const QString &path) const;
     Q_INVOKABLE void setTrayDownloadItems(const QVariantList &items) { emit trayDownloadItemsChanged(items); }
     Q_INVOKABLE void notifyUpdate(const QString &version);
+    Q_INVOKABLE void setReleaseUpdateHintsEnabled(bool enabled);
     Q_INVOKABLE bool applyBackdrop(QWindow *window, bool enabled, bool dark) const;
     Q_INVOKABLE void installInteractiveResize(QWindow *window, int borderSize, int cornerSize) const;
 
@@ -78,6 +83,7 @@ signals:
     void browserWindowRequested(const QString &target);
     void serviceStopped(bool clean);
     void updateNotificationRequested(const QString &version);
+    void releaseUpdateHint(const QString &version);
     void quittingChanged();
     void restartFailed(const QString &message);
 
@@ -94,6 +100,9 @@ private:
     void applyInterfaceLanguage(const QString &language);
     void applySnapshot(const QVariantMap &response);
     void finishService();
+#ifdef Q_OS_WIN
+    void scheduleReleaseReconnect();
+#endif
 
     QJSEngine *m_scriptEngine;
     QLibrary m_library;
@@ -107,6 +116,12 @@ private:
     QThreadPool m_serviceThread;
     QFutureWatcher<QVariantMap> m_service;
     QTimer m_timer;
+#ifdef Q_OS_WIN
+    QTimer m_releaseSocketTimer;
+    QWebSocket m_releaseSocket;
+    int m_releaseReconnectDelay = 2000;
+    bool m_releaseHintsEnabled = false;
+#endif
     QVariantMap m_dashboard;
     QVariantMap m_visuals;
     QString m_profile;

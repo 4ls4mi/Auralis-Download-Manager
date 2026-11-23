@@ -491,6 +491,10 @@
             <source>Cancel</source>
             <translation>إلغاء</translation>
         </message>
+        <message>
+            <source>Reset setup status</source>
+            <translation>إعادة ضبط حالة الإعداد</translation>
+        </message>
     </context>
     <context>
         <name>CaptionControls</name>

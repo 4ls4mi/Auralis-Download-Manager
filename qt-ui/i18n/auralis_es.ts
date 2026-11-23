@@ -491,6 +491,10 @@
             <source>Cancel</source>
             <translation>Cancelar</translation>
         </message>
+        <message>
+            <source>Reset setup status</source>
+            <translation>Restablecer estado de configuración</translation>
+        </message>
     </context>
     <context>
         <name>CaptionControls</name>

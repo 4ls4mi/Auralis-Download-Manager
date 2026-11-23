@@ -18,8 +18,10 @@ Window {
     property string presentation: "toast"
     property var availableUpdate: null
 
-    readonly property bool updateSupported: Qt.platform.os === "windows"
+    property bool updateSupported: Qt.platform.os === "windows"
+    property int checkInterval: 15 * 60 * 1000
     readonly property bool canCheck: automaticChecks && updateSupported && Boolean(backend)
+        && backend.interactiveSetup !== false && !backend.quitting
     readonly property var colors: MaterialTheme.palette
     readonly property bool working: stage !== ""
     readonly property bool updateInProgress: updateWindow.requestInProgress
@@ -30,11 +32,16 @@ Window {
     property var release: null
     property string offeredVersion: ""
     property string stage: ""
+    property double lastCheckStartedAt: 0
+    property string hintedVersion: ""
+    property int hintChecksRemaining: 0
+    property double hintCheckAfter: 0
 
     objectName: "updateNotice"
     title: qsTr("Auralis update available")
     flags: Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.WindowDoesNotAcceptFocus
     modality: Qt.NonModal
+    transientParent: null
     screen: anchorWindow.screen
     color: "transparent"
     visible: false
@@ -56,6 +63,9 @@ Window {
             return;
         availableUpdate = update;
         const version = String(update.version);
+        clearVerifiedHint(version);
+        if (presentation === "quiet")
+            return;
         if (preferences.dismissedVersion === version)
             return;
         if (preferences.reminderVersion === version && preferences.remindAfter > Date.now())
@@ -79,12 +89,69 @@ Window {
         }
     }
 
-    onAutomaticChecksChanged: if (!automaticChecks && !working) visible = false
-    onPresentationChanged: if (presentation === "quiet" && !working) visible = false
+    function configureReleaseHints() {
+        backend?.setReleaseUpdateHintsEnabled?.(canCheck);
+        if (!canCheck) {
+            visible = false;
+            lastCheckStartedAt = 0;
+            hintedVersion = "";
+            hintChecksRemaining = 0;
+        }
+    }
+
+    function newerVersion(left, right) {
+        const lhs = String(left).split(".").map(Number);
+        const rhs = String(right).split(".").map(Number);
+        for (let i = 0; i < 3; i++) {
+            if (lhs[i] !== rhs[i])
+                return lhs[i] > rhs[i];
+        }
+        return false;
+    }
+
+    function clearVerifiedHint(version) {
+        if (hintedVersion && !newerVersion(hintedVersion, version)) {
+            hintedVersion = "";
+            hintChecksRemaining = 0;
+        }
+    }
+
+    function handleReleaseHint(version) {
+        if (!canCheck)
+            return;
+        const now = Date.now();
+        if (!version) {
+            if (hintChecksRemaining === 0 && now - lastCheckStartedAt >= 60000)
+                checkForUpdate(false);
+            return;
+        }
+        if (version === hintedVersion || !newerVersion(version, availableUpdate?.version || backend.version))
+            return;
+        // The socket announces a version only. Recheck the verified feed, with one retry
+        // if the freshly published release has yet to appear there.
+        hintedVersion = version;
+        hintChecksRemaining = 2;
+        hintCheckAfter = Math.max(now + 150, lastCheckStartedAt + 15000);
+    }
+
+    onCanCheckChanged: configureReleaseHints()
+    Component.onCompleted: configureReleaseHints()
+    onPresentationChanged: {
+        if (presentation === "quiet")
+            visible = false;
+        else if (canCheck && availableUpdate)
+            offer(availableUpdate, false);
+    }
+
+    Connections {
+        target: popup.backend
+        function onReleaseUpdateHint(version) { popup.handleReleaseHint(version); }
+    }
 
     function checkForUpdate(reminder) {
         if (!canCheck || working || updateWindow.requestInProgress)
             return;
+        lastCheckStartedAt = Date.now();
         stage = "check";
         backend.request({ shellAction: "update-check" }, function(result, error) {
             popup.stage = "";
@@ -162,6 +229,7 @@ Window {
             if (result.state === "available") {
                 popup.release = result;
                 popup.offeredVersion = String(result.version);
+                popup.clearVerifiedHint(popup.offeredVersion);
             }
             if (result.state === "latest") {
                 popup.release = null;
@@ -174,13 +242,21 @@ Window {
     Timer {
         interval: 700
         running: popup.canCheck
+        onTriggered: if (popup.lastCheckStartedAt === 0) popup.checkForUpdate(false)
+    }
+    Timer {
+        interval: popup.checkInterval
+        running: popup.canCheck && !popup.working && !popup.updateInProgress
         onTriggered: popup.checkForUpdate(false)
     }
     Timer {
-        interval: 4 * 60 * 60 * 1000
-        repeat: true
-        running: popup.canCheck
-        onTriggered: popup.checkForUpdate(false)
+        interval: popup.working || popup.updateInProgress ? 1 : Math.max(1, popup.hintCheckAfter - Date.now())
+        running: popup.canCheck && !popup.working && !popup.updateInProgress && popup.hintChecksRemaining > 0
+        onTriggered: {
+            popup.hintChecksRemaining--;
+            popup.hintCheckAfter = Date.now() + 60000;
+            popup.checkForUpdate(false);
+        }
     }
     Timer {
         interval: 60 * 1000

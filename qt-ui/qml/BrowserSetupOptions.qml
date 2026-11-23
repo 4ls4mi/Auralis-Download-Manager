@@ -22,6 +22,7 @@ ColumnLayout {
     property string confirmationBrowserName: ""
     property string removalBrowserId: ""
     property string removalBrowserName: ""
+    property bool removalForReset: false
     property string installConfirmationDetails: ""
     property bool advancedOpen: false
     property var attempts: ({})
@@ -36,9 +37,12 @@ ColumnLayout {
     readonly property bool supportedBrowser: status?.browserId === "chrome" || status?.browserId === "edge"
     readonly property bool hostNeedsAttention: Boolean(!problem && status?.browserSupported && supportedBrowser
         && status?.nativeHostRegistered === false && status?.nativeHostProblem)
-    readonly property bool automaticAvailable: needsSetup && status?.browserId === "chrome"
+    readonly property bool automaticAvailable: needsSetup && supportedBrowser
         && Boolean(status?.silentInstallAvailable)
     readonly property bool canUndo: showManualTools && !problem && supportedBrowser && Boolean(status?.policyRemovable)
+    readonly property bool canReset: showManualTools && hasStore && !installed && supportedBrowser
+        && (!status?.policyInstalled || canUndo)
+    readonly property bool canConfirmRemoval: canUndo && (!removalForReset || !installed)
     readonly property var attempt: attempts[status?.browserId]
     readonly property bool pending: !installed && attempt?.state === "pending"
     readonly property bool manualAvailable: hasStore && !installed && Boolean(attempt?.state && !pending)
@@ -96,6 +100,8 @@ ColumnLayout {
                         recordAttempt(browserId, "unavailable")
                     }
                 }
+                if (removalBrowserId && !canConfirmRemoval)
+                    cancelConfirmation()
                 if (installed) {
                     if (previous)
                         recordAttempt(browserId, "")
@@ -110,7 +116,7 @@ ColumnLayout {
                         recordAttempt(browserId, "failed", qsTr("Auralis could no longer find the saved automatic setup."))
                     else if (Date.now() >= previous.expires)
                         recordAttempt(browserId, "timeout")
-                } else if (browserId === "chrome" && value.policyInstalled && !previous && !value.extensionPreviouslyConnected
+                } else if (browserId && value.policyInstalled && !previous && !value.extensionPreviouslyConnected
                     && !value.storePreviouslyConnected) {
                     recordAttempt(browserId, "pending")
                 }
@@ -123,7 +129,7 @@ ColumnLayout {
     }
 
     function offerInstall(browserId) {
-        if (!needsSetup || edgeStoreSetup || acting || checking || status?.browserId !== browserId)
+        if (!needsSetup || acting || checking || status?.browserId !== browserId)
             return
         feedback = ""
         feedbackFailed = false
@@ -140,9 +146,35 @@ ColumnLayout {
         confirmationBrowserName = ""
         removalBrowserId = ""
         removalBrowserName = ""
+        removalForReset = false
     }
 
-    function perform(action, browserId) {
+    function offerRemoval(forReset = false) {
+        if (!canUndo || acting || checking || (forReset && installed))
+            return
+        cancelConfirmation()
+        removalForReset = forReset
+        removalBrowserId = status.browserId
+        removalBrowserName = status.browser
+    }
+
+    function resetSetup() {
+        if (!canReset || acting || checking)
+            return
+        if (canUndo) {
+            offerRemoval(true)
+            return
+        }
+        cancelConfirmation()
+        recordAttempt(status.browserId, "")
+        feedback = ""
+        feedbackFailed = false
+        problem = ""
+        checked = false
+        refresh()
+    }
+
+    function perform(action, browserId, forReset = false) {
         if (acting || checking || !browserId || status?.browserId !== browserId)
             return
         const install = action === "installBrowserExtensionPolicy"
@@ -152,7 +184,10 @@ ColumnLayout {
         activeAction = action
         feedback = ""
         feedbackFailed = false
-        engine.request({local: action, expectedBrowser: browserId}, function(value, error) {
+        const command = {local: action, expectedBrowser: browserId}
+        if (undo && forReset)
+            command.requireUnverifiedExtension = true
+        engine.request(command, function(value, error) {
             if (error || !value?.ok) {
                 if (install) {
                     recordAttempt(browserId, "failed", error || value?.message || "")
@@ -268,7 +303,7 @@ ColumnLayout {
         GlassButton {
             objectName: "installBrowserExtension"
             text: qsTr("Install extension")
-            visible: root.needsSetup && !root.edgeStoreSetup && !root.manualAvailable && !root.pending
+            visible: root.needsSetup && !root.manualAvailable && !root.pending
             enabled: !root.acting && !root.checking
             accent: root.colors.positive
             filled: true
@@ -291,6 +326,14 @@ ColumnLayout {
             visible: root.hasStore && root.installed
             enabled: !root.acting && !root.checking
             onClicked: root.perform("openBrowserExtensions", root.status?.browserId)
+        }
+
+        GlassButton {
+            objectName: "resetBrowserSetup"
+            text: qsTr("Reset setup status")
+            visible: root.canReset
+            enabled: !root.acting && !root.checking
+            onClicked: root.resetSetup()
         }
 
         GlassButton {
@@ -323,10 +366,7 @@ ColumnLayout {
             text: qsTr("Undo automatic setup…")
             visible: root.canUndo && root.advancedOpen
             enabled: !root.acting && !root.checking
-            onClicked: {
-                root.removalBrowserId = root.status.browserId
-                root.removalBrowserName = root.status.browser
-            }
+            onClicked: root.offerRemoval()
         }
     }
 
@@ -385,12 +425,13 @@ ColumnLayout {
                 objectName: "confirmBrowserPolicyRemoval"
                 text: qsTr("Undo setup")
                 visible: Boolean(root.removalBrowserId)
-                enabled: root.canUndo && !root.acting && !root.checking && root.removalBrowserId === root.status?.browserId
+                enabled: root.canConfirmRemoval && !root.acting && !root.checking && root.removalBrowserId === root.status?.browserId
                 accent: root.colors.destructive
                 onClicked: {
                     const browserId = root.removalBrowserId
+                    const forReset = root.removalForReset
                     root.cancelConfirmation()
-                    root.perform("removeBrowserExtensionPolicy", browserId)
+                    root.perform("removeBrowserExtensionPolicy", browserId, forReset)
                 }
             }
             GlassButton {

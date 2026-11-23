@@ -82,6 +82,7 @@ try {
         'dxcompiler.dll','dxil.dll','directx-shader-compiler/LICENCE-MIT.txt','directx-shader-compiler/LICENSE-LLVM.txt',
         'directx-shader-compiler/LICENSE-MS.txt',
         'Qt6Core.dll','Qt6Quick3D.dll','Qt6Multimedia.dll','platforms/qwindows.dll','qml/QtQuick3D/qmldir',
+        'Qt6WebSockets.dll','tls/qschannelbackend.dll',
         'qml/QtQuick/Controls/qmldir','qml/QtMultimedia/qmldir','multimedia/ffmpegmediaplugin.dll',
         'msvcp140.dll','vcruntime140.dll','auralis-extension/manifest.json',$shortcutIcon)) {
         if (!(Test-Path -LiteralPath (Join-Path $stage $file) -PathType Leaf)) { throw "Missing deployed package file: $file" }

@@ -134,6 +134,7 @@ $qtArchives = @(
     @{ Module='qtquicktimeline'; Addon=$true; Sha='6bf980bd3c1c4158d830fb703deff22335f7a5c11d930a302d6c126909e351c3' },
     @{ Module='qtquick3d'; Addon=$true; Sha='231fdc53ec2fe3c4c5d6c394862f44fa76df6a095a2da33118189c95e5fde5f6' },
     @{ Module='qtmultimedia'; Addon=$true; Sha='344fb1b0185ab810cfc247dabd1470d14e23999e6861f3a7e62d217fa6ec5fc5' },
+    @{ Module='qtwebsockets'; Addon=$true; Sha='471d4033691b34d3a1aa0b7f20b75d49f55e66c47cf2fc16cb639ec6e52d37da' },
     @{ Module='d3dcompiler'; Archive='d3dcompiler_47-x64.7z'; Sha='be4292719fe0930c988236972bca7f5926db1342e1c85b247e1cef87b903fc9a' }
 )
 $sdk = Join-Path $qtCache "$qtVersion/msvc2022_64"
@@ -155,7 +156,8 @@ foreach ($package in $qtArchives) {
 foreach ($file in @(
     'bin/windeployqt.exe','bin/qtpaths.exe','bin/lrelease.exe',
     'lib/cmake/Qt6/Qt6Config.cmake','lib/cmake/Qt6Quick3D/Qt6Quick3DConfig.cmake',
-    'lib/cmake/Qt6LinguistTools/Qt6LinguistToolsConfig.cmake','qml/QtMultimedia/qmldir'
+    'lib/cmake/Qt6LinguistTools/Qt6LinguistToolsConfig.cmake',
+    'lib/cmake/Qt6WebSockets/Qt6WebSocketsConfig.cmake','qml/QtMultimedia/qmldir'
 )) {
     if (!(Test-Path (Join-Path $sdk $file))) { throw "Qt SDK package is incomplete: $file" }
 }

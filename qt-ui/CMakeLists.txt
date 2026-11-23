@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(AuralisQt VERSION 0.3.72 LANGUAGES CXX)
+project(AuralisQt VERSION 0.3.73 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -32,6 +32,7 @@ target_link_libraries(auralis-download-manager PRIVATE
 )
 
 if(WIN32)
+    find_package(Qt6 6.8 REQUIRED COMPONENTS WebSockets)
     enable_language(RC)
     set(auralis_icon "${CMAKE_CURRENT_SOURCE_DIR}/assets/auralis.ico")
     # Change the generated RC itself on an icon update for the Visual Studio generator.
@@ -39,7 +40,7 @@ if(WIN32)
     file(SHA256 "${auralis_icon}" AURALIS_ICON_SHA256)
     configure_file(src/WindowsIcon.rc.in "${CMAKE_CURRENT_BINARY_DIR}/WindowsIcon.rc" @ONLY)
     target_sources(auralis-download-manager PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/WindowsIcon.rc")
-    target_link_libraries(auralis-download-manager PRIVATE dwmapi comctl32 shell32 shlwapi ole32)
+    target_link_libraries(auralis-download-manager PRIVATE Qt6::WebSockets dwmapi comctl32 shell32 shlwapi ole32)
 endif()
 
 qt_add_shaders(auralis-download-manager "glass_effects"
