@@ -58,6 +58,95 @@ QString policyPath(const QString &browserId)
     return {};
 }
 
+struct PolicyValue {
+    bool exists = false;
+    LSTATUS error = ERROR_SUCCESS;
+    QJsonObject settings;
+};
+
+constexpr DWORD PolicySizeLimit = 4 * 1024 * 1024;
+
+PolicyValue readPolicyValue(HKEY key, LPCWSTR subkey, DWORD view)
+{
+    const auto name = reinterpret_cast<LPCWSTR>(SettingsName.utf16());
+    const DWORD flags = RRF_RT_REG_SZ | view;
+    DWORD bytes = 0;
+    const auto status = RegGetValueW(key, subkey, name, flags, nullptr, nullptr, &bytes);
+    if (status == ERROR_FILE_NOT_FOUND || status == ERROR_PATH_NOT_FOUND)
+        return {};
+    if (status != ERROR_SUCCESS)
+        return {true, status, {}};
+    if (!bytes || bytes > PolicySizeLimit || bytes % sizeof(wchar_t))
+        return {true, ERROR_INVALID_DATA, {}};
+
+    std::vector<wchar_t> value(bytes / sizeof(wchar_t));
+    const auto read = RegGetValueW(key, subkey, name, flags, nullptr, value.data(), &bytes);
+    if (read != ERROR_SUCCESS)
+        return {true, read, {}};
+    if (!bytes || bytes % sizeof(wchar_t) || value[bytes / sizeof(wchar_t) - 1] != L'\0')
+        return {true, ERROR_INVALID_DATA, {}};
+    const auto text = QString::fromWCharArray(value.data(), qsizetype(bytes / sizeof(wchar_t)) - 1);
+    const auto doc = QJsonDocument::fromJson(text.toUtf8());
+    return {true, doc.isObject() ? ERROR_SUCCESS : ERROR_INVALID_DATA, doc.object()};
+}
+
+PolicyValue readPolicy(HKEY hive, const QString &path, DWORD view)
+{
+    const QString key = path.mid(1);
+    return readPolicyValue(hive, reinterpret_cast<LPCWSTR>(key.utf16()), view);
+}
+
+bool canReviewPolicyKey(HKEY hive, const QString &path, REGSAM view)
+{
+    const QString name = path.mid(1);
+    HKEY key = nullptr;
+    const auto status = RegOpenKeyExW(hive, reinterpret_cast<LPCWSTR>(name.utf16()), 0, KEY_READ | view, &key);
+    if (status == ERROR_SUCCESS)
+        RegCloseKey(key);
+    return status == ERROR_SUCCESS || status == ERROR_FILE_NOT_FOUND || status == ERROR_PATH_NOT_FOUND;
+}
+
+// QSettings opens a registry key for both reading and writing, including permission to
+// create subkeys. Request only the rights needed to compare and change this value.
+LSTATUS writeUserPolicy(const QString &path, const PolicyValue &expected,
+                        const QJsonObject &settings, bool removeValue)
+{
+    const QString json = removeValue ? QString() : QString::fromUtf8(QJsonDocument(settings).toJson(QJsonDocument::Compact));
+    const auto bytes = (json.size() + 1) * sizeof(wchar_t);
+    if (bytes > PolicySizeLimit)
+        return ERROR_INVALID_DATA;
+    const QString keyPath = path.mid(1);
+    const auto keyName = reinterpret_cast<LPCWSTR>(keyPath.utf16());
+    constexpr REGSAM access = KEY_QUERY_VALUE | KEY_SET_VALUE | KEY_WOW64_64KEY;
+    HKEY key = nullptr;
+    auto status = RegOpenKeyExW(HKEY_CURRENT_USER, keyName, 0, access, &key);
+    if (status == ERROR_FILE_NOT_FOUND || status == ERROR_PATH_NOT_FOUND) {
+        if (expected.exists || removeValue)
+            return ERROR_RETRY;
+        status = RegCreateKeyExW(HKEY_CURRENT_USER, keyName, 0, nullptr, REG_OPTION_NON_VOLATILE,
+                                 access, nullptr, &key, nullptr);
+    }
+    if (status != ERROR_SUCCESS)
+        return status;
+
+    const auto current = readPolicyValue(key, nullptr, 0);
+    if (current.error != ERROR_SUCCESS || current.exists != expected.exists || current.settings != expected.settings) {
+        RegCloseKey(key);
+        return current.error == ERROR_SUCCESS ? ERROR_RETRY : current.error;
+    }
+    const auto valueName = reinterpret_cast<LPCWSTR>(SettingsName.utf16());
+    if (removeValue) {
+        status = RegDeleteValueW(key, valueName);
+        if (status == ERROR_FILE_NOT_FOUND)
+            status = ERROR_SUCCESS;
+    } else {
+        status = RegSetValueExW(key, valueName, 0, REG_SZ,
+                                reinterpret_cast<const BYTE *>(json.utf16()), DWORD(bytes));
+    }
+    RegCloseKey(key);
+    return status;
+}
+
 QString browserHelper()
 {
     return QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("auralis-browser-host.exe"));
@@ -166,7 +255,7 @@ bool existingPolicyBlocksSetup(QSettings &registry)
 
 struct Review {
     BrowserSetup::PolicyStatus status;
-    QJsonObject policy;
+    PolicyValue policy;
 };
 
 Review reviewPolicy(const QString &browserId, const QString &path, QSettings &user)
@@ -176,19 +265,25 @@ Review reviewPolicy(const QString &browserId, const QString &path, QSettings &us
     const bool chrome = browserId == QStringLiteral("chrome");
     bool machineConfigured = false;
     for (const auto format : {QSettings::Registry64Format, QSettings::Registry32Format}) {
+        const bool wide = format == QSettings::Registry64Format;
+        if (!canReviewPolicyKey(HKEY_LOCAL_MACHINE, path, wide ? KEY_WOW64_64KEY : KEY_WOW64_32KEY))
+            return {{false, false, governed}, {}};
         QSettings machine(QStringLiteral("HKEY_LOCAL_MACHINE") + path, format);
         const auto forceList = storeForceList(machine, chrome);
+        const auto view = wide ? RRF_SUBKEY_WOW6464KEY : RRF_SUBKEY_WOW6432KEY;
+        const auto configured = readPolicy(HKEY_LOCAL_MACHINE, path, view);
         if (existingPolicyBlocksSetup(machine) || forceList == StoreForceList::OtherSource
-            || machine.status() != QSettings::NoError)
+            || configured.error != ERROR_SUCCESS || machine.status() != QSettings::NoError)
             return {{false, false, governed}, {}};
-        if (machine.contains(SettingsName)) {
-            const auto settings = QJsonDocument::fromJson(machine.value(SettingsName).toString().toUtf8()).object();
-            if (!usesOfficialStore(settings.value(StoreId).toObject()))
+        if (configured.exists) {
+            if (!usesOfficialStore(configured.settings.value(StoreId).toObject()))
                 return {{false, false, governed}, {}};
             machineConfigured = true;
         }
         machineConfigured |= forceList == StoreForceList::Configured;
     }
+    if (!canReviewPolicyKey(HKEY_CURRENT_USER, path, KEY_WOW64_64KEY))
+        return {{false, false, governed}, {}};
     const auto userForceList = storeForceList(user, chrome);
     if (existingPolicyBlocksSetup(user) || userForceList == StoreForceList::OtherSource
         || user.status() != QSettings::NoError)
@@ -196,13 +291,10 @@ Review reviewPolicy(const QString &browserId, const QString &path, QSettings &us
     if (machineConfigured)
         return {{false, true, {}}, {}};
 
-    QJsonObject settings;
-    if (user.contains(SettingsName)) {
-        const auto document = QJsonDocument::fromJson(user.value(SettingsName).toString().toUtf8());
-        if (!document.isObject())
-            return {{false, false, governed}, {}};
-        settings = document.object();
-    }
+    const auto configured = readPolicy(HKEY_CURRENT_USER, path, RRF_SUBKEY_WOW6464KEY);
+    if (configured.error != ERROR_SUCCESS)
+        return {{false, false, governed}, {}};
+    const auto &settings = configured.settings;
 
     const auto existing = settings.value(StoreId);
     const auto entry = existing.toObject();
@@ -210,7 +302,7 @@ Review reviewPolicy(const QString &browserId, const QString &path, QSettings &us
         QSettings ownership;
         const bool removable = userForceList == StoreForceList::Unlisted && entry == auralisPolicy()
             && ownership.contains(ownershipKey(browserId));
-        return {{false, true, {}, removable}, settings};
+        return {{false, true, {}, removable}, configured};
     }
 
     // Adding a specific extension can change how a browser inherits wildcard permissions.
@@ -228,8 +320,8 @@ Review reviewPolicy(const QString &browserId, const QString &path, QSettings &us
     if (!existing.isUndefined())
         return {{false, false, governed}, {}};
     if (userForceList == StoreForceList::Configured)
-        return {{false, true, {}}, settings};
-    return {{true, false, {}}, settings};
+        return {{false, true, {}}, configured};
+    return {{true, false, {}}, configured};
 }
 }
 
@@ -385,17 +477,22 @@ QString BrowserSetup::installPolicy(const QString &browserId)
     auto review = reviewPolicy(browserId, path, user);
     if (review.status.configured || !review.status.available)
         return review.status.problem;
-    const bool hadSettings = user.contains(SettingsName);
-    review.policy.insert(StoreId, auralisPolicy());
-    user.setValue(SettingsName, QString::fromUtf8(QJsonDocument(review.policy).toJson(QJsonDocument::Compact)));
-    user.sync();
-    if (user.status() != QSettings::NoError)
-        return QCoreApplication::translate("BrowserSetup", "Could not save browser setup for the current Windows user.");
-    QSettings saved(QStringLiteral("HKEY_CURRENT_USER") + path, QSettings::Registry64Format);
-    if (QJsonDocument::fromJson(saved.value(SettingsName).toString().toUtf8()).object().value(StoreId).toObject() != auralisPolicy())
+    auto settings = review.policy.settings;
+    settings.insert(StoreId, auralisPolicy());
+    const auto error = writeUserPolicy(path, review.policy, settings, false);
+    if (error == ERROR_RETRY)
+        return QCoreApplication::translate("BrowserSetup", "The browser policy changed while saving. Check browser setup and try again.");
+    if (error == ERROR_ACCESS_DENIED)
+        return QCoreApplication::translate("BrowserSetup",
+            "Windows denied permission to save automatic setup for this account. Use Install manually, or ask your administrator to configure the extension.");
+    if (error != ERROR_SUCCESS)
+        return QCoreApplication::translate("BrowserSetup",
+            "Could not save browser setup for this Windows account (Windows error %1).").arg(error);
+    const auto saved = readPolicy(HKEY_CURRENT_USER, path, RRF_SUBKEY_WOW6464KEY);
+    if (saved.error != ERROR_SUCCESS || saved.settings.value(StoreId).toObject() != auralisPolicy())
         return QCoreApplication::translate("BrowserSetup", "Windows did not retain the Auralis browser policy for this user.");
     QSettings ownership;
-    ownership.setValue(ownershipKey(browserId), hadSettings);
+    ownership.setValue(ownershipKey(browserId), review.policy.exists);
     ownership.sync();
     return {};
 }
@@ -411,14 +508,13 @@ QString BrowserSetup::removePolicy(const QString &browserId)
         return QCoreApplication::translate("BrowserSetup", "The existing browser policy was changed or was configured outside Auralis.");
     QSettings ownership;
     const auto key = ownershipKey(browserId);
-    review.policy.remove(StoreId);
-    if (review.policy.isEmpty() && !ownership.value(key).toBool())
-        user.remove(SettingsName);
-    else
-        user.setValue(SettingsName, QString::fromUtf8(QJsonDocument(review.policy).toJson(QJsonDocument::Compact)));
-    user.sync();
-    if (user.status() != QSettings::NoError)
-        return QCoreApplication::translate("BrowserSetup", "Could not remove browser setup for the current Windows user.");
+    auto settings = review.policy.settings;
+    settings.remove(StoreId);
+    const bool removeValue = settings.isEmpty() && !ownership.value(key).toBool();
+    const auto error = writeUserPolicy(path, review.policy, settings, removeValue);
+    if (error != ERROR_SUCCESS)
+        return QCoreApplication::translate("BrowserSetup",
+            "Could not remove automatic browser setup for this Windows account (Windows error %1).").arg(error);
     ownership.remove(key);
     return {};
 }
