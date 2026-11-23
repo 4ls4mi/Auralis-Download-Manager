@@ -185,6 +185,7 @@ DetachedDialogWindow {
         readOnly: true
         selectByMouse: true
         color: root.colors.ink
+        font.family: root.fontFamilyForText(text)
         padding: 10
         background: GlassSurface { material: root.material; role: "field" }
         PlainTextToolTip {

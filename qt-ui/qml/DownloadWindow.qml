@@ -7,7 +7,7 @@ import QtQuick.Layouts
 import QtQuick.Window
 import "TransferData.js" as Transfer
 
-ApplicationWindow {
+AuralisWindow {
     id: root
     objectName: "downloadProgressWindow"
     property var downloadId: null
@@ -19,6 +19,7 @@ ApplicationWindow {
     readonly property var colors: MaterialTheme.profile(material)
     readonly property string transferLayout: colors.layout || ""
     readonly property bool sideTabs: ["fogSlate", "violetRail", "coralSlate"].includes(transferLayout)
+    readonly property bool useCompactActions: height < 470
     readonly property color detailDivider: colors.surfaceLine || colors.divider
     readonly property color summaryInk: sideTabs && colors.summaryInk ? colors.summaryInk : colors.text
     readonly property int recoveryTab: 3
@@ -378,6 +379,7 @@ ApplicationWindow {
                         text: root.title
                         textFormat: Text.PlainText
                         elide: Text.ElideMiddle
+                        font.family: root.fontFamilyForText(text)
                         font.weight: Font.DemiBold
                         color: root.colors.ink
                     }
@@ -415,22 +417,6 @@ ApplicationWindow {
             background: GlassSurface { material: root.material; role: "toolbar"; backdropAvailable: root.backdropAvailable }
             contentItem: Flow {
                 spacing: 7
-                GlassButton {
-                    objectName: "pauseOrResumeDownload"
-                    material: root.material
-                    text: root.runningTransfer ? qsTr("Pause") : root.item && root.item.status === "Queued" ? qsTr("Start") : qsTr("Resume")
-                    visible: !!root.item && !root.finished
-                    enabled: !root.busy && (root.runningTransfer || (!root.recoveryBusy && !(root.telemetry && root.telemetry.recovery_damaged)))
-                    accent: root.runningTransfer ? root.colors.caution : root.colors.positive
-                    onClicked: root.perform(root.runningTransfer ? "pause" : "start", false)
-                }
-                GlassButton {
-                    objectName: "stopOrCloseDownload"
-                    material: root.material
-                    text: root.runningTransfer ? qsTr("Cancel…") : qsTr("Close")
-                    accent: root.runningTransfer ? root.colors.destructive : root.colors.accent
-                    onClicked: root.runningTransfer ? stopConsent.open() : root.close()
-                }
                 GlassButton { material: root.material; text: qsTr("Open folder"); enabled: !!root.item; onClicked: root.openLocation(true) }
                 GlassButton {
                     material: root.material
@@ -506,18 +492,34 @@ ApplicationWindow {
         gripColor: root.colors.muted
     }
 
-    Timer {
+    FrameAnimation {
         id: water
         property real phase: 0
         property real slowPhase: 0
-        interval: root.workerRows.length > 16 ? 68 : root.workerRows.length > 8 ? 48 : 33
-        repeat: true
-        running: root.animateTransfer && !MaterialTheme.reducedMotion
-            && (WindowAppearance.connectionAnimation !== "none" || (root.displayFlow && WindowAppearance.progressAnimation !== "none"))
+        property real activeSeconds: 0
+        property real nextPaint: 0
+        // Match display frames for the ordinary connection grid. Limit larger
+        // Canvas batches while advancing all motion at the same elapsed speed.
+        readonly property real paintInterval: 1 / (root.workerRows.length > 16 ? 30 : root.workerRows.length > 8 ? 40 : 60)
+        readonly property bool animateConnections: WindowAppearance.connectionAnimation !== "none"
+            && root.workerRows.some(connection => connection.state === "Receiving")
+        readonly property bool animateProgressPipe: root.displayFlow && WindowAppearance.progressAnimation !== "none"
+        running: root.animateTransfer && !MaterialTheme.reducedMotion && (animateConnections || animateProgressPipe)
+        onRunningChanged: nextPaint = activeSeconds
+        onPaintIntervalChanged: nextPaint = activeSeconds
         onTriggered: {
-            phase = (phase + Math.PI * 2 * interval / 1120) % (Math.PI * 2)
+            activeSeconds += frameTime
+            const sample = activeSeconds + .002
+            // Render each ordinary display frame. Only sample that clock on
+            // very fast displays or when a larger connection grid costs more.
+            const sampleFrames = root.workerRows.length > 8 || smoothFrameTime < 1 / 75
+            if (sampleFrames && sample < nextPaint)
+                return
+            nextPaint = (Math.floor(sample / paintInterval) + 1) * paintInterval
+            const turn = Math.PI * 2
+            phase = activeSeconds % 1.12 / 1.12 * turn
             if (WindowAppearance.connectionAnimation === "jelly" || WindowAppearance.progressAnimation === "jelly")
-                slowPhase = (slowPhase + Math.PI * 2 * interval / 2840) % (Math.PI * 2)
+                slowPhase = activeSeconds % 2.84 / 2.84 * turn
         }
     }
 
@@ -579,11 +581,59 @@ ApplicationWindow {
         }
     }
 
+    Pane {
+        id: compactActions
+        visible: root.useCompactActions
+        anchors.left: view.left
+        anchors.right: view.right
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: root.resizeInset
+        implicitHeight: downloadActions.implicitHeight + topPadding + bottomPadding
+        padding: 6
+        background: GlassSurface { material: root.material; role: "toolbar"; backdropAvailable: root.backdropAvailable }
+    }
+
+    GridLayout {
+        id: downloadActions
+        objectName: "downloadActionGroup"
+        parent: root.useCompactActions ? compactActions.contentItem : inlineActions
+        anchors.centerIn: parent
+        width: parent ? Math.min(implicitWidth, parent.width) : implicitWidth
+        columns: pauseResume.visible && parent && parent.width < Math.max(96, pauseResume.implicitWidth)
+            + Math.max(96, stopClose.implicitWidth) + columnSpacing ? 1 : 2
+        columnSpacing: 9
+        rowSpacing: 6
+
+        GlassButton {
+            id: pauseResume
+            objectName: "pauseOrResumeDownload"
+            material: root.material
+            text: root.runningTransfer ? qsTr("Pause") : root.item && root.item.status === "Queued" ? qsTr("Start") : qsTr("Resume")
+            visible: !!root.item && !root.finished
+            enabled: !root.busy && (root.runningTransfer || (!root.recoveryBusy && !(root.telemetry && root.telemetry.recovery_damaged)))
+            Layout.minimumWidth: 96
+            Layout.minimumHeight: 36
+            filled: true
+            accent: MaterialTheme.actionColor(root.runningTransfer ? "pause" : "start", root.colors.light)
+            onClicked: root.perform(root.runningTransfer ? "pause" : "start", false)
+        }
+        GlassButton {
+            id: stopClose
+            objectName: "stopOrCloseDownload"
+            material: root.material
+            text: root.runningTransfer ? qsTr("Cancel…") : qsTr("Close")
+            Layout.minimumWidth: 96
+            Layout.minimumHeight: 36
+            accent: root.runningTransfer ? root.colors.destructive : root.colors.accent
+            onClicked: root.runningTransfer ? stopConsent.open() : root.close()
+        }
+    }
+
     ScrollView {
         id: view
         anchors.top: parent.top
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: root.resizeInset
+        anchors.bottom: root.useCompactActions ? compactActions.top : parent.bottom
+        anchors.bottomMargin: root.useCompactActions ? 0 : root.resizeInset
         anchors.left: root.sideTabs ? transferRail.right : parent.left
         anchors.right: parent.right
         anchors.rightMargin: root.resizeInset
@@ -624,6 +674,7 @@ ApplicationWindow {
                             textFormat: Text.PlainText
                             elide: Text.ElideMiddle
                             color: root.summaryInk
+                            font.family: root.fontFamilyForText(text)
                             font.pixelSize: 19
                             font.bold: true
                         }
@@ -725,6 +776,13 @@ ApplicationWindow {
                     }
                 }
 
+                Item {
+                    id: inlineActions
+                    visible: !root.useCompactActions
+                    Layout.fillWidth: true
+                    implicitHeight: visible ? downloadActions.implicitHeight + 4 : 0
+                }
+
                 GridLayout {
                     id: transferOverview
                     visible: !!root.item && root.activeTab === 0
@@ -789,6 +847,7 @@ ApplicationWindow {
                                             paintingPaused: root.interactiveFrame
                                             receiving: worker.receiving
                                             phase: worker.receiving ? water.phase : 0
+                                            slowPhase: worker.receiving ? water.slowPhase : 0
                                             startColor: root.connectionColors[0]
                                             endColor: root.connectionColors[1]
                                             trackColor: root.colors.background

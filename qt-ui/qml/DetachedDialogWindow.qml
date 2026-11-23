@@ -5,7 +5,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Window
 
-ApplicationWindow {
+AuralisWindow {
     id: root
 
     property Window hostWindow
@@ -107,6 +107,7 @@ ApplicationWindow {
             anchors.bottom: parent.bottom
             text: root.title
             color: root.colors.ink
+            font.family: root.fontFamilyForText(text)
             font.bold: true
             font.pixelSize: 18
             elide: Text.ElideRight

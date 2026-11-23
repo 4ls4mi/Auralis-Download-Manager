@@ -21,6 +21,7 @@ Canvas {
     readonly property var progressEndTone: MaterialTheme.neonTone(progressEnd)
     readonly property var connectionStartTone: MaterialTheme.neonTone(connectionStart)
     readonly property var connectionEndTone: MaterialTheme.neonTone(connectionEnd)
+    readonly property bool animateFlow: visible && flowing && !paintingPaused && !MaterialTheme.reducedMotion
     // The content cards reserve this lane for the vertical portion.
     property real gutter: 8
 
@@ -36,10 +37,9 @@ Canvas {
     onGridItemChanged: requestPaint()
     onWorkersChanged: requestPaint()
     onFlowingChanged: requestPaint()
-    onPhaseChanged: if (flowing && !MaterialTheme.reducedMotion && (["classic", "water"].includes(progressAnimation)
-                       || ["classic", "water"].includes(connectionAnimation))) requestPaint()
-    onSlowPhaseChanged: if (flowing && !MaterialTheme.reducedMotion && (progressAnimation === "jelly"
-                           || connectionAnimation === "jelly")) requestPaint()
+    onPhaseChanged: if (animateFlow && (progressAnimation === "classic" || progressAnimation === "water"
+                       || connectionAnimation === "classic" || connectionAnimation === "water")) requestPaint()
+    onSlowPhaseChanged: if (animateFlow && (progressAnimation === "jelly" || connectionAnimation === "jelly")) requestPaint()
     onProgressAnimationChanged: requestPaint()
     onConnectionAnimationChanged: requestPaint()
     onProgressStartChanged: requestPaint()
@@ -189,7 +189,8 @@ Canvas {
         ctx.lineWidth = .92
         ctx.strokeStyle = pipeGradient(ctx, first, last, firstTone.glow, lastTone.glow, active ? .53 : .20)
         ctx.stroke()
-        if (active && !MaterialTheme.reducedMotion && style !== "none")
+        // The short spout stays lit with the pipe. Its droplet carries the motion.
+        if (total >= 8 && active && animateFlow && style !== "none")
             flowingPulse(ctx, points, total, firstTone, lastTone, style, offset)
     }
 
@@ -254,7 +255,7 @@ Canvas {
     }
 
     onPaint: {
-        if (paintingPaused)
+        if (paintingPaused || !visible)
             return
         const ctx = getContext("2d")
         if (!ctx)
@@ -310,7 +311,7 @@ Canvas {
                 const start = Qt.point(port.point.x, row.y)
                 const receiving = flowing && port.receiving
                 pipe(ctx, [start, port.point], connectionStartTone, connectionEndTone, receiving, 29 + index * 3, connectionAnimation)
-                if (receiving && connectionAnimation !== "none" && !MaterialTheme.reducedMotion)
+                if (receiving && animateFlow && connectionAnimation !== "none")
                     droplet(ctx, port.point, port.surface, port.width, port.index)
             }
         }

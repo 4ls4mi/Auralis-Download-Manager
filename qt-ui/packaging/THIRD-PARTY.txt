@@ -10,3 +10,7 @@ The app can use Qt Multimedia for video. Its open-source backend uses FFmpeg.
 Sources and licensing https://ffmpeg.org/legal.html
 
 The bundled Deno runtime is distributed under the license in deno-LICENSE.md.
+
+The Windows package includes the DirectX Shader Compiler and DXIL runtime from Microsoft DirectXShaderCompiler v1.9.2609.
+License files from the release are included in directx-shader-compiler.
+https://github.com/microsoft/DirectXShaderCompiler/releases/tag/v1.9.2609

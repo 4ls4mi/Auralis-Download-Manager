@@ -84,7 +84,7 @@ ColumnLayout {
                 extensionMessage = error || qsTr("Browser setup did not complete.")
             } else if (action === "openChromeExtensionStore") {
                 extensionMessage = result.openedInChrome
-                    ? qsTr("Continue in Chrome to install or manage the extension.")
+                    ? qsTr("Approve the installation in Chrome. Auralis checks the connection automatically.")
                     : qsTr("The listing opened in your default browser. Use Google Chrome to install Auralis.")
             } else if (action === "openChromeExtensions") {
                 extensionMessage = qsTr("In Chrome’s extension manager, turn on Developer mode and select Update to check for updates now.")
@@ -155,7 +155,7 @@ ColumnLayout {
             wrapMode: Text.WordWrap
             textFormat: Text.PlainText
             text: root.hasWindowsIntegration
-                ? qsTr("Choose Add to Chrome on the listing, then open Auralis from Chrome’s Extensions menu to verify the connection. Chrome updates the store extension automatically.")
+                ? qsTr("Choose Add to Chrome and approve the installation. Auralis checks the connection automatically, and Chrome handles extension updates.")
                 : qsTr("Chrome Web Store setup and bundled browser registration are available on Windows.")
         }
 
@@ -205,7 +205,7 @@ ColumnLayout {
                     return qsTr("The store extension has connected before. Open Auralis in Chrome to verify the connection now.")
                 if (root.chromeStatus?.chromePreviouslyConnected)
                     return qsTr("Chrome has connected before. The store extension connection is still unverified.")
-                return qsTr("Waiting for the Chrome Web Store extension to connect.")
+                return qsTr("Waiting for the extension to connect. If it’s already installed, open Auralis from Chrome’s Extensions menu to retry.")
             }
         }
 

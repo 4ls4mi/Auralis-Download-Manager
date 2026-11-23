@@ -188,6 +188,12 @@ void EngineSmoke::inspectTransfers()
             observeTransferWindow(id);
             if (!m_framePresented || download.value(QStringLiteral("downloaded")).toLongLong() <= 0)
                 return;
+#ifdef Q_OS_WIN
+            if (m_window->rendererInterface()->graphicsApi() != QSGRendererInterface::Direct3D12) {
+                fail(QStringLiteral("The installed progress window did not render with Direct3D 12."));
+                return;
+            }
+#endif
             if (!m_resizeVerified) {
                 if (!m_expectedProgressSize.isValid()) {
                     resizeTransferWindow();
@@ -247,6 +253,10 @@ void EngineSmoke::observeTransferWindow(qulonglong id)
                 fail(QStringLiteral("The download progress window is owned by another window or is modal."));
                 return;
             }
+#ifdef Q_OS_WIN
+            // Exercise the translucent surface and Qt Quick 3D on the Windows renderer.
+            progress->setProperty("material", QStringLiteral("aero-gloss"));
+#endif
             disconnect(m_frameConnection);
             m_window = progress;
             m_framePresented = false;

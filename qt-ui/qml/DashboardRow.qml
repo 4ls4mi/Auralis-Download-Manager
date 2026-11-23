@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Window
 import "TransferData.js" as TransferData
 
 Item {
@@ -130,6 +131,7 @@ Item {
                 Layout.fillWidth: true
                 text: row.fileName
                 textFormat: Text.PlainText
+                font.family: row.Window.window?.fontFamilyForText?.(text) || ""
                 elide: Text.ElideMiddle
                 color: row.chosen ? row.colors.rowSelectionInk || row.colors.ink : row.colors.ink
                 font.weight: Font.DemiBold

@@ -8,12 +8,15 @@ $previousData = $env:MDM_DATA_DIR
 $previousDownloads = $env:MDM_DOWNLOADS
 $previousSkipHost = $env:AURALIS_TEST_SKIP_HOST
 $previousRenderer = $env:QSG_RHI_BACKEND
+$previousQuickBackend = $env:QT_QUICK_BACKEND
 $previousGraphicsInfo = $env:QSG_INFO
 $env:MDM_DATA_DIR = $data
 $env:MDM_DOWNLOADS = Join-Path $data 'downloads'
 $env:AURALIS_TEST_SKIP_HOST = '1'
 $env:QSG_INFO = '1'
-Remove-Item Env:QSG_RHI_BACKEND -ErrorAction SilentlyContinue
+# Confirm the installed application selects Direct3D 12 over legacy overrides.
+$env:QSG_RHI_BACKEND = 'd3d11'
+$env:QT_QUICK_BACKEND = 'software'
 New-Item -ItemType Directory -Force -Path $data, $env:MDM_DOWNLOADS | Out-Null
 
 function Write-FixtureDiagnostics([DateTime]$StartedAt) {
@@ -129,7 +132,7 @@ try {
         throw 'The standalone Qt installation is incomplete.'
     }
     Test-InstalledIcon
-    Run-Fixture $exe @('--engine-smoke') 90000
+    Run-Fixture $exe @('--engine-smoke', '--device=software') 90000
     if (!(Test-Path $marker)) { throw 'The installed application did not verify start, pause, resume, and transfer integrity.' }
     Get-Content -LiteralPath $marker | ForEach-Object { Write-Host $_ }
 
@@ -157,7 +160,7 @@ try {
     if ((Test-Path $exe) -or !(Test-Path $ownedByUser)) {
         throw 'The uninstaller did not remove only the packaged application files.'
     }
-    Write-Host 'Verified silent install, native icons, rendered start and resume, passive upgrade relaunch, and scoped uninstallation.'
+    Write-Host 'Verified silent install, native icons, Direct3D 12 rendering during start and resume, passive upgrade relaunch, and scoped uninstallation.'
 } finally {
     Get-Process -Name 'auralis-download-manager' -ErrorAction SilentlyContinue |
         Where-Object { $_.Path -ieq $exe } | Stop-Process -Force -ErrorAction SilentlyContinue
@@ -166,5 +169,6 @@ try {
     $env:MDM_DOWNLOADS = $previousDownloads
     $env:AURALIS_TEST_SKIP_HOST = $previousSkipHost
     $env:QSG_RHI_BACKEND = $previousRenderer
+    $env:QT_QUICK_BACKEND = $previousQuickBackend
     $env:QSG_INFO = $previousGraphicsInfo
 }

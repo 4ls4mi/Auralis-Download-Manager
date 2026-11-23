@@ -92,6 +92,34 @@ if (!(Test-Path (Join-Path $deno 'deno.exe'))) {
 $denoLicense = Join-Path $deno 'deno-LICENSE.md'
 Receive-Pinned 'https://raw.githubusercontent.com/denoland/deno/v2.9.8/LICENSE.md' $denoLicense 'f62497fffecc0852960c8d3e6934b9db86d16396e9b604072e923892cae3a588'
 
+# Microsoft DirectXShaderCompiler v1.9.2609, GitHub release asset 596913261.
+$dxcSha = 'ad31b1fc8443175d204f77a611fdb3ef2ec42759bdc2f1167368de24a4a7e7f1'
+$dxc = Join-Path $qtCache 'dxc-1.9.2609-x64'
+$dxcMark = Join-Path $dxc ".auralis-$dxcSha"
+$dxcMembers = @{
+    'bin\x64\dxcompiler.dll' = 'dxcompiler.dll'
+    'bin\x64\dxil.dll' = 'dxil.dll'
+    'LICENCE-MIT.txt' = 'LICENCE-MIT.txt'
+    'LICENSE-LLVM.txt' = 'LICENSE-LLVM.txt'
+    'LICENSE-MS.txt' = 'LICENSE-MS.txt'
+}
+$missingDxc = @($dxcMembers.Values | Where-Object { !(Test-Path -LiteralPath (Join-Path $dxc $_) -PathType Leaf) })
+if (!(Test-Path -LiteralPath $dxcMark -PathType Leaf) -or $missingDxc.Count) {
+    $archive = Join-Path $qtCache 'dxc_2026_09_29.zip'
+    Receive-Pinned 'https://github.com/microsoft/DirectXShaderCompiler/releases/download/v1.9.2609/dxc_2026_09_29.zip' $archive $dxcSha
+    New-Item -ItemType Directory -Force -Path $dxc | Out-Null
+    $zip = [IO.Compression.ZipFile]::OpenRead($archive)
+    try {
+        foreach ($member in $dxcMembers.GetEnumerator()) {
+            $entry = $zip.GetEntry($member.Key)
+            if (!$entry) { throw "DXC release archive is missing $($member.Key)." }
+            $destination = Join-Path $dxc $member.Value
+            [IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $destination, $true)
+        }
+    } finally { $zip.Dispose() }
+    New-Item -ItemType File -Path $dxcMark -Force | Out-Null
+}
+
 # Exact package names and SHA-256 values from the official Qt repository.
 $qtVersion = '6.11.3'
 $qtSeries = '6113'
@@ -140,3 +168,4 @@ $rustBin >> $env:GITHUB_PATH
 "AURALIS_QT_WORK=$qtCache" >> $env:GITHUB_ENV
 "AURALIS_QT_NSIS=$nsis" >> $env:GITHUB_ENV
 "AURALIS_QT_DENO=$deno" >> $env:GITHUB_ENV
+"AURALIS_QT_DXC=$dxc" >> $env:GITHUB_ENV

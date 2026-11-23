@@ -67,7 +67,7 @@ Frame {
         Label {
             Layout.fillWidth: true
             text: root.problem || (root.openedListing
-                ? qsTr("Finish adding Auralis in Chrome, then open it from Chrome’s Extensions menu.")
+                ? qsTr("Approve Auralis in Chrome. The app checks the connection automatically.")
                 : qsTr("Add Auralis to Chrome to send browser downloads to the app and get extension updates automatically."))
             textFormat: Text.PlainText
             color: root.problem ? MaterialTheme.palette.destructive : MaterialTheme.palette.ink

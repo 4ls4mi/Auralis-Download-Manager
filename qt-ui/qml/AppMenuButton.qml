@@ -12,10 +12,13 @@ Basic.Button {
     property color idleInk: colors.ink
     property color accent: colors.highlight
     readonly property var colors: MaterialTheme.menuColors
+    readonly property var profile: MaterialTheme.palette
+    readonly property var finish: MaterialTheme.buttonFinishes[profile.finish]
     readonly property bool emphasized: enabled && (hovered || visualFocus || down || menuOpen)
     readonly property color actionAccent: MaterialTheme.vividControlAccent(MaterialTheme.forcedAccent || accent,
-        MaterialTheme.palette.light)
-    readonly property color face: MaterialTheme.controlHighlight(actionAccent, down, hovered || visualFocus)
+        profile.light)
+    readonly property color pigment: MaterialTheme.mix(actionAccent, profile.secondary, finish.tint, 1)
+    readonly property color face: MaterialTheme.controlHighlight(pigment, down, hovered || visualFocus)
     readonly property color activeInk: MaterialTheme.contrastInk(face)
 
     hoverEnabled: true
@@ -49,27 +52,40 @@ Basic.Button {
         implicitHeight: 29
 
         Rectangle {
+            id: menuFace
             anchors.fill: parent
             anchors.margins: 1
-            radius: 5
+            radius: Math.min(8, button.profile.radius)
             gradient: Gradient {
                 GradientStop {
                     position: 0
-                    color: button.emphasized ? MaterialTheme.mix(button.face, button.actionAccent, .25, 1)
+                    color: button.emphasized ? MaterialTheme.mix(button.face, button.profile.upper, button.finish.crown * .45, 1)
                         : MaterialTheme.rgba(button.actionAccent, .21)
                 }
                 GradientStop {
-                    position: .48
+                    position: button.finish.shoulder
                     color: button.emphasized ? button.face : MaterialTheme.rgba(button.actionAccent, .14)
                 }
                 GradientStop {
+                    position: .71
+                    color: button.emphasized ? button.face : MaterialTheme.rgba(button.actionAccent, .12)
+                }
+                GradientStop {
                     position: 1
-                    color: button.emphasized ? MaterialTheme.mix(button.face, "#111422", .14, 1)
+                    color: button.emphasized ? MaterialTheme.mix(button.face, button.profile.shade, button.finish.depth, 1)
                         : MaterialTheme.rgba(button.actionAccent, .10)
                 }
             }
             border.width: button.visualFocus ? 1 : 0
             border.color: button.activeInk
+        }
+
+        ButtonLighting {
+            anchors.fill: menuFace
+            radius: menuFace.radius
+            accent: button.actionAccent
+            emphasized: button.emphasized
+            pressed: button.down
         }
 
         Rectangle {

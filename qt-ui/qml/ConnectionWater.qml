@@ -7,6 +7,9 @@ Canvas {
     property var value: null
     property bool receiving: false
     property real phase: 0
+    // The progress window shares a separate, slower clock for Jelly. Other
+    // callers can still feed a single phase for previews and dashboard rows.
+    property real slowPhase: -1
     property string animationStyle: "classic"
     property bool paintingPaused: false
     property string shape: "round"
@@ -24,9 +27,10 @@ Canvas {
     readonly property bool water: animationStyle === "water"
     readonly property bool jelly: animationStyle === "jelly"
     readonly property bool movingLiquid: visible && receiving && amount > 0 && !paintingPaused
-        && !MaterialTheme.reducedMotion && animationStyle !== "none"
+        && !MaterialTheme.reducedMotion && animationStyle !== "none" && (amount < 1 || water || jelly)
         && (!Window.window || (Window.window.visible && Window.window.visibility !== Window.Minimized))
-    readonly property real waterPhase: !movingLiquid ? 0 : water ? phase * 2 : jelly ? jellyPhase : phase
+    readonly property real waterPhase: !movingLiquid ? 0 : water ? phase * 2
+        : jelly ? (slowPhase >= 0 ? slowPhase : jellyPhase) : phase
     readonly property bool sculpted: fillStyle === "sculpted"
     property real lastPhase: 0
     property real jellyPhase: 0
@@ -43,6 +47,8 @@ Canvas {
     onAnimationStyleChanged: requestPaint()
     onWaterPhaseChanged: if (visible && !paintingPaused) requestPaint()
     onPhaseChanged: {
+        if (slowPhase >= 0)
+            return
         if (movingLiquid && jelly) {
             const turn = Math.PI * 2
             const advance = (phase - lastPhase + turn) % turn

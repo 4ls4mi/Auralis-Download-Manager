@@ -54,7 +54,18 @@ try {
 
     $exe = Join-Path $stage 'auralis-download-manager.exe'
     Invoke-Checked (Join-Path $env:AURALIS_QT_ROOT 'bin/windeployqt.exe') @('--release','--no-translations',
-        '--no-compiler-runtime','--include-plugins','qsvg,qsvgicon,ffmpegmediaplugin','--qmldir',$source,'--dir',$stage,$exe)
+        '--no-compiler-runtime','--no-system-dxc-compiler','--include-plugins','qsvg,qsvgicon,ffmpegmediaplugin',
+        '--qmldir',$source,'--dir',$stage,$exe)
+    # Use the same app-local x64 DXC pair on every installation.
+    foreach ($file in @('dxcompiler.dll','dxil.dll')) {
+        Copy-Item -LiteralPath (Join-Path $env:AURALIS_QT_DXC $file) -Destination $stage
+    }
+    $dxcLicenses = Join-Path $stage 'directx-shader-compiler'
+    New-Item -ItemType Directory -Force -Path $dxcLicenses | Out-Null
+    foreach ($file in @('LICENCE-MIT.txt','LICENSE-LLVM.txt','LICENSE-MS.txt')) {
+        Copy-Item -LiteralPath (Join-Path $env:AURALIS_QT_DXC $file) -Destination $dxcLicenses
+    }
+
     # Bundle the x64 C++ runtime app-local so setup stays per-user.
     $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
     $vs = & $vswhere -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -latest -property installationPath
@@ -68,10 +79,12 @@ try {
     Copy-Item -Path (Join-Path $crt.FullName '*.dll') -Destination $stage
 
     foreach ($file in @('auralis-download-manager.exe','auralis_engine.dll','auralis-browser-host.exe','deno.exe',
+        'dxcompiler.dll','dxil.dll','directx-shader-compiler/LICENCE-MIT.txt','directx-shader-compiler/LICENSE-LLVM.txt',
+        'directx-shader-compiler/LICENSE-MS.txt',
         'Qt6Core.dll','Qt6Quick3D.dll','Qt6Multimedia.dll','platforms/qwindows.dll','qml/QtQuick3D/qmldir',
         'qml/QtQuick/Controls/qmldir','qml/QtMultimedia/qmldir','multimedia/ffmpegmediaplugin.dll',
         'msvcp140.dll','vcruntime140.dll','auralis-extension/manifest.json',$shortcutIcon)) {
-        if (!(Test-Path (Join-Path $stage $file))) { throw "Missing deployed Qt package file: $file" }
+        if (!(Test-Path -LiteralPath (Join-Path $stage $file) -PathType Leaf)) { throw "Missing deployed package file: $file" }
     }
     Get-ChildItem -LiteralPath $stage -Recurse -File -Filter '*.pdb' | Remove-Item -Force
 

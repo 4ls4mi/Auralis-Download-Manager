@@ -1,10 +1,12 @@
 #include "Engine.h"
 #include "Smoke.h"
+#include "Typography.h"
 
 #include <QAction>
 #include <QActionGroup>
 #include <QApplication>
 #include <QClipboard>
+#include <QColor>
 #include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QCursor>
@@ -18,6 +20,10 @@
 #include <QMenu>
 #include <QMessageBox>
 #include <QMutex>
+#include <QPainter>
+#include <QPalette>
+#include <QPixmap>
+#include <QPointer>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickStyle>
@@ -28,6 +34,7 @@
 #include <QSystemTrayIcon>
 #include <QTimer>
 
+#include <algorithm>
 #include <cstring>
 #include <functional>
 #include <memory>
@@ -81,11 +88,136 @@ bool forwardToInstance(const QString &serverName, const QByteArray &message)
     return socket.waitForBytesWritten(800);
 }
 
+QVariant qmlValue(const QObject *object, const char *property)
+{
+    const QVariant value = object ? object->property(property) : QVariant();
+    return value.metaType() == QMetaType::fromType<QJSValue>()
+        ? value.value<QJSValue>().toVariant() : value;
+}
+
+QColor trayColor(const QVariantMap &palette, const char *key, const QColor &fallback)
+{
+    const QVariant value = palette.value(QString::fromLatin1(key));
+    const QColor color = value.value<QColor>();
+    return color.isValid() ? color : fallback;
+}
+
+QColor mixTrayColor(const QColor &base, const QColor &tint, qreal weight)
+{
+    return QColor::fromRgbF(base.redF() + (tint.redF() - base.redF()) * weight,
+                            base.greenF() + (tint.greenF() - base.greenF()) * weight,
+                            base.blueF() + (tint.blueF() - base.blueF()) * weight);
+}
+
+void setTrayPopupFrame(QMenu &menu, const QPalette &palette)
+{
+    menu.setWindowFlag(Qt::FramelessWindowHint);
+    menu.setAttribute(Qt::WA_TranslucentBackground);
+    menu.setPalette(palette);
+    for (auto *action : menu.actions()) {
+        if (auto *submenu = action->menu())
+            setTrayPopupFrame(*submenu, palette);
+    }
+}
+
+void styleTrayPopup(QMenu &menu, const QObject *materialTheme)
+{
+    const auto profile = qmlValue(materialTheme, "palette").toMap();
+    const auto colors = qmlValue(materialTheme, "menuColors").toMap();
+    const auto hex = [](const QColor &color) { return color.name(QColor::HexArgb); };
+    const QColor surface = trayColor(colors, "surface", QColor("#242934"));
+    const QColor ink = trayColor(colors, "ink", QColor("#f5f6fa"));
+    const QColor muted = trayColor(colors, "muted", QColor("#aab4c5"));
+    const QColor border = trayColor(colors, "border", QColor("#555b6a"));
+    const QColor highlight = trayColor(colors, "highlight", QColor("#7950d4"));
+    const QColor pressed = trayColor(colors, "pressed", QColor("#6542b2"));
+    const QColor highlightInk = trayColor(colors, "highlightInk", Qt::white);
+    const QColor rail = trayColor(colors, "rail", highlightInk);
+    const qreal gloss = std::clamp(profile.value(QStringLiteral("gloss")).toDouble(), 0., 1.);
+    const QColor upper = mixTrayColor(surface, trayColor(profile, "upper", ink), .04 + gloss * .13);
+    const QColor shade = mixTrayColor(surface, trayColor(profile, "shade", surface), .16 + gloss * .22);
+    const int radius = std::clamp(profile.value(QStringLiteral("panelRadius"), 10).toInt() + 2, 6, 13);
+
+    QPalette palette = menu.palette();
+    palette.setColor(QPalette::Window, surface);
+    palette.setColor(QPalette::WindowText, ink);
+    palette.setColor(QPalette::Text, ink);
+    palette.setColor(QPalette::ButtonText, ink);
+    palette.setColor(QPalette::Highlight, highlight);
+    palette.setColor(QPalette::HighlightedText, highlightInk);
+    palette.setColor(QPalette::Disabled, QPalette::Text, muted);
+    palette.setColor(QPalette::Disabled, QPalette::WindowText, muted);
+    setTrayPopupFrame(menu, palette);
+
+    const auto panel = QStringLiteral(
+        "qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 %1, stop:0.21 %2, stop:1 %3)")
+        .arg(hex(upper), hex(surface), hex(shade));
+    const auto selection = QStringLiteral(
+        "qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 %1, stop:0.34 %1, stop:1 %2)")
+        .arg(hex(highlight), hex(pressed));
+    menu.setStyleSheet(QStringLiteral(
+        "QMenu { background: %1; color: %2; border: 1px solid %3; border-radius: %4px;"
+        " padding: 6px; font-size: 13px; min-width: 214px; menu-scrollable: 1; }"
+        "QMenu::item { padding: 6px 27px 6px 24px; border: 1px solid transparent;"
+        " border-left: 3px solid transparent; border-radius: 7px; }"
+        "QMenu::item:selected:enabled { background: %5; color: %6; border-left-color: %7; }"
+        "QMenu::item:disabled { color: %8; }"
+        "QMenu::separator { height: 1px; background: %3; margin: 4px 8px; }")
+        .arg(panel, hex(ink), hex(border), QString::number(radius),
+             selection, hex(highlightInk), hex(rail), hex(muted)));
+}
+
+enum class TrayGlyph { Add, Scheduler, Settings, Exit };
+
+QIcon trayActionIcon(TrayGlyph glyph, const QColor &color, const QColor &activeInk)
+{
+    const auto render = [glyph](const QColor &ink) {
+        QPixmap pixmap(36, 36);
+        pixmap.setDevicePixelRatio(2);
+        pixmap.fill(Qt::transparent);
+        QPainter painter(&pixmap);
+        painter.setRenderHint(QPainter::Antialiasing);
+        painter.setPen(QPen(ink, 1.7, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        switch (glyph) {
+        case TrayGlyph::Add:
+            painter.drawLine(9, 3, 9, 15);
+            painter.drawLine(3, 9, 15, 9);
+            break;
+        case TrayGlyph::Scheduler:
+            painter.drawEllipse(QRectF(2.3, 2.3, 13.4, 13.4));
+            painter.drawPolyline(QPolygonF{QPointF(9, 5), QPointF(9, 9), QPointF(12, 11)});
+            break;
+        case TrayGlyph::Settings:
+            for (int rail = 0; rail < 3; ++rail) {
+                const int y = 4 + rail * 5;
+                const int x = rail == 1 ? 11 : 6;
+                painter.drawLine(2, y, x - 2, y);
+                painter.drawLine(x + 2, y, 16, y);
+                painter.drawEllipse(QRectF(x - 1.5, y - 1.5, 3, 3));
+            }
+            break;
+        case TrayGlyph::Exit:
+            painter.drawPolyline(QPolygonF{QPointF(10, 3), QPointF(3, 3), QPointF(3, 15), QPointF(10, 15)});
+            painter.drawLine(8, 9, 15, 9);
+            painter.drawPolyline(QPolygonF{QPointF(12, 6), QPointF(15, 9), QPointF(12, 12)});
+            break;
+        }
+        painter.end();
+        return pixmap;
+    };
+    QIcon icon(render(color));
+    const QPixmap selected = render(activeInk);
+    icon.addPixmap(selected, QIcon::Active);
+    icon.addPixmap(selected, QIcon::Selected);
+    return icon;
+}
+
 class TrayMenus final : public QObject
 {
 public:
-    TrayMenus(Engine &engine, QObject &root, const QIcon &icon, std::function<void()> activate, bool registerIcons)
-        : m_engine(engine), m_root(root), m_activate(std::move(activate)), m_mainIcon(icon),
+    TrayMenus(Engine &engine, QObject &root, QObject *materialTheme, const QIcon &icon,
+              std::function<void()> activate, bool registerIcons)
+        : m_engine(engine), m_root(root), m_materialTheme(materialTheme), m_activate(std::move(activate)), m_mainIcon(icon),
           m_progressIcon(QIcon(QStringLiteral(":/auralis/auralis-progress.png")))
     {
         connect(&m_mainIcon, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason reason) {
@@ -183,10 +315,7 @@ private:
 
     QVariantList downloadSnapshot() const
     {
-        const QVariant items = m_root.property("trayDownloadItems");
-        if (items.metaType() == QMetaType::fromType<QJSValue>())
-            return items.value<QJSValue>().toVariant().toList();
-        return items.toList();
+        return qmlValue(&m_root, "trayDownloadItems").toList();
     }
 
     void updateProgressIcon(const QVariantList &items)
@@ -225,7 +354,10 @@ private:
                 addDownloads(*m_popup, items, true);
             else
                 addMainCommands(*m_popup, items);
-            m_popup->popup(position);
+            styleTrayPopup(*m_popup, m_materialTheme);
+            const auto icon = (progress ? m_progressIcon : m_mainIcon).geometry();
+            const bool nearIcon = icon.adjusted(-8, -8, 8, 8).contains(position);
+            m_popup->popup(icon.isValid() && !nearIcon ? icon.center() : position);
         });
     }
 
@@ -265,18 +397,32 @@ private:
 
     void addMainCommands(QMenu &menu, const QVariantList &items)
     {
-        connect(menu.addAction(tr("Open Auralis Download Manager")), &QAction::triggered, this, m_activate);
+        connect(menu.addAction(m_mainIcon.icon(), tr("Open Auralis Download Manager")),
+                &QAction::triggered, this, m_activate);
         menu.addSeparator();
 
+        const auto profile = qmlValue(m_materialTheme, "palette").toMap();
+        const auto colors = qmlValue(m_materialTheme, "menuColors").toMap();
+        const QColor activeInk = trayColor(colors, "highlightInk", Qt::white);
+        const auto icon = [this, &profile, &activeInk](TrayGlyph glyph, const char *symbol, const QColor &fallback) {
+            QVariant tone;
+            if (m_materialTheme) {
+                QMetaObject::invokeMethod(m_materialTheme, "actionColor", Q_RETURN_ARG(QVariant, tone),
+                    Q_ARG(QVariant, QVariant(QString::fromLatin1(symbol))),
+                    Q_ARG(QVariant, profile.value(QStringLiteral("light"))));
+            }
+            const QColor color = tone.value<QColor>();
+            return trayActionIcon(glyph, color.isValid() ? color : fallback, activeInk);
+        };
         const bool available = m_engine.ready() && !m_root.property("busy").toBool();
-        const auto addCommand = [this, &menu](const QString &label, const char *method, bool enabled = true) {
-            auto *action = menu.addAction(label);
+        const auto addCommand = [this, &menu](const QString &label, const char *method, const QIcon &glyph, bool enabled = true) {
+            auto *action = menu.addAction(glyph, label);
             action->setEnabled(enabled);
             connect(action, &QAction::triggered, this, [this, method] {
                 QMetaObject::invokeMethod(&m_root, method);
             });
         };
-        addCommand(tr("Add new download…"), "addDownload", available);
+        addCommand(tr("Add new download…"), "addDownload", icon(TrayGlyph::Add, "add", QColor("#55f38e")), available);
         auto *batch = menu.addAction(tr("Add batch download…"));
         batch->setEnabled(available);
         connect(batch, &QAction::triggered, this, [this] {
@@ -291,7 +437,7 @@ private:
             QMetaObject::invokeMethod(&m_root, "showBatchDownloadFromClipboard", Q_ARG(QVariant, text));
         });
 
-        addDownloads(*menu.addMenu(tr("Downloads in progress")), items, false);
+        addDownloads(*menu.addMenu(m_progressIcon.icon(), tr("Downloads in progress")), items, false);
         menu.addSeparator();
 
         auto *limiter = menu.addMenu(tr("Speed limiter"));
@@ -309,7 +455,7 @@ private:
             });
         }
 
-        addCommand(tr("Scheduler"), "showScheduler");
+        addCommand(tr("Scheduler"), "showScheduler", icon(TrayGlyph::Scheduler, "clock", QColor("#67e8e9")));
         const auto queue = m_engine.dashboard().value(QStringLiteral("queues")).toList().value(0).toMap();
         const bool running = queue.value(QStringLiteral("running")).toBool();
         auto *mainQueue = menu.addAction(running ? tr("Stop main download queue") : tr("Start main download queue"));
@@ -317,13 +463,15 @@ private:
         connect(mainQueue, &QAction::triggered, this, [this, running] {
             QMetaObject::invokeMethod(&m_root, "setMainQueueRunningFromTray", Q_ARG(QVariant, QVariant(!running)));
         });
-        addCommand(tr("Settings"), "showSettings");
+        addCommand(tr("Settings"), "showSettings", icon(TrayGlyph::Settings, "settings", QColor("#c09aff")));
         menu.addSeparator();
-        connect(menu.addAction(tr("Exit Auralis")), &QAction::triggered, this, [this] { m_engine.requestQuit(); });
+        const QIcon exitIcon = trayActionIcon(TrayGlyph::Exit, trayColor(colors, "danger", QColor("#ff7498")), activeInk);
+        connect(menu.addAction(exitIcon, tr("Exit Auralis")), &QAction::triggered, this, [this] { m_engine.requestQuit(); });
     }
 
     Engine &m_engine;
     QObject &m_root;
+    QPointer<QObject> m_materialTheme;
     std::function<void()> m_activate;
     QSystemTrayIcon m_mainIcon;
     QSystemTrayIcon m_progressIcon;
@@ -342,6 +490,12 @@ void addBundledTools()
 int main(int argc, char **argv)
 {
 #ifdef Q_OS_WIN
+    // Qt Quick's legacy --device option takes priority over setSceneGraphBackend().
+    const auto argumentsEnd = std::remove_if(argv + 1, argv + argc, [](const char *argument) {
+        return std::strncmp(argument, "--device=", sizeof("--device=") - 1) == 0;
+    });
+    argc = static_cast<int>(argumentsEnd - argv);
+    argv[argc] = nullptr;
     if (argc == 2 && std::strcmp(argv[1], "--refresh-taskbar-icon") == 0) {
         QCoreApplication app(argc, argv);
         refreshTaskbarIcon();
@@ -382,12 +536,15 @@ int main(int argc, char **argv)
     const bool startHidden = arguments.contains(QStringLiteral("--auralis-startup-minimized"));
 
     addBundledTools();
-    // Qt's Direct3D 11 backend keeps transparent Windows swapchains stable.
-    // Qt still accepts QSG_RHI_BACKEND=d3d12 for explicitly selected devices.
+#ifdef Q_OS_WIN
+    QQuickWindow::setSceneGraphBackend(QStringLiteral("rhi"));
+    QQuickWindow::setGraphicsApi(QSGRendererInterface::Direct3D12);
+#endif
     QQuickStyle::setStyle(QStringLiteral("Basic"));
     QQuickWindow::setDefaultAlphaBuffer(true);
 
-    // QML bindings must be destroyed before their native context object.
+    // QML bindings must be destroyed before their native context objects.
+    Typography typography;
     std::optional<Engine> engineLifetime;
     QQmlApplicationEngine qml;
     Engine &engine = engineLifetime.emplace(&qml, startHidden, smoke);
@@ -421,6 +578,7 @@ int main(int argc, char **argv)
         return 1;
 
     qml.rootContext()->setContextProperty(QStringLiteral("engine"), &engine);
+    qml.rootContext()->setContextProperty(QStringLiteral("typography"), &typography);
     if (smoke) qInfo("Smoke: loading the Qt interface.");
     qml.loadFromModule(QStringLiteral("Auralis"), QStringLiteral("Main"));
     if (qml.rootObjects().isEmpty())
@@ -485,7 +643,9 @@ int main(int argc, char **argv)
     std::optional<TrayMenus> trayMenus;
     const bool registerTrayIcons = !smoke && engine.trayAvailable();
     if (registerTrayIcons || smoke)
-        trayMenus.emplace(engine, *root, app.windowIcon(), activate, registerTrayIcons);
+        trayMenus.emplace(engine, *root,
+            qml.singletonInstance<QObject *>(QStringLiteral("Auralis"), QStringLiteral("MaterialTheme")),
+            app.windowIcon(), activate, registerTrayIcons);
 
     std::unique_ptr<EngineSmoke> test;
     if (smoke) {

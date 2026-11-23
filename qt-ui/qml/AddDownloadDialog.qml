@@ -197,6 +197,7 @@ DetachedDialogWindow {
                 placeholderText: qsTr("Destination file name")
                 onTextEdited: root.destinationEdited = true
                 color: root.colors.text
+                font.family: root.fontFamilyForText(text)
                 selectByMouse: true
                 background: GlassSurface { material: root.material; role: "field" }
                 Accessible.name: qsTr("Save as")
@@ -213,6 +214,7 @@ DetachedDialogWindow {
             Layout.fillWidth: true
             placeholderText: qsTr("Description")
             color: root.colors.text
+            font.family: root.fontFamilyForText(text)
             background: GlassSurface { material: root.material; role: "field" }
             Accessible.name: qsTr("Description")
         },

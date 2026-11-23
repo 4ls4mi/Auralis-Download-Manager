@@ -227,8 +227,8 @@ Dialog {
             id: qualityTabs
             visible: root.hasAudio && root.hasVideo
             Layout.fillWidth: true
-            TabButton { text: qsTr("Video") }
-            TabButton { text: qsTr("Audio") }
+            GlassTabButton { text: qsTr("Video"); material: root.material }
+            GlassTabButton { text: qsTr("Audio"); material: root.material; accent: root.colors.secondary }
             onCurrentIndexChanged: quality.currentIndex = root.visibleChoices.length ? 0 : -1
         }
         RowLayout {

@@ -6,7 +6,7 @@ import QtQuick.Dialogs
 import QtQuick.Window
 import "TransferData.js" as TransferData
 
-ApplicationWindow {
+AuralisWindow {
     id: root
     objectName: "mainWindow"
     title: qsTr("Auralis Download Manager")
@@ -927,8 +927,11 @@ ApplicationWindow {
         property color accent: root.colors.accent
         readonly property color navigationAccent: MaterialTheme.safeAccent(
             MaterialTheme.forcedAccent || accent, root.fogSlate || root.colors.light)
+        readonly property var finish: MaterialTheme.buttonFinishes[root.colors.finish]
+        readonly property color pigment: MaterialTheme.mix(navigationAccent, root.colors.secondary, finish.tint, 1)
         readonly property bool emphasized: checked || down || hovered || visualFocus
-        readonly property color face: MaterialTheme.controlHighlight(navigationAccent, down, hovered || visualFocus)
+        readonly property color face: MaterialTheme.mix(root.colors.navigationFill || root.colors.background,
+            pigment, down ? finish.press : hovered || visualFocus ? finish.hover : finish.selected, 1)
         readonly property color foreground: emphasized ? MaterialTheme.contrastInk(face) : root.sidebarInk
 
         hoverEnabled: true
@@ -942,6 +945,8 @@ ApplicationWindow {
             DashboardIcon {
                 symbol: libraryButton.symbol
                 ink: libraryButton.emphasized ? libraryButton.foreground : libraryButton.navigationAccent
+                relief: libraryButton.enabled
+                surface: libraryButton.emphasized ? libraryButton.face : root.colors.background
                 Layout.preferredWidth: 17
                 Layout.preferredHeight: 17
             }
@@ -950,6 +955,7 @@ ApplicationWindow {
                 elide: Text.ElideRight
                 text: libraryButton.text
                 color: libraryButton.foreground
+                font.family: root.fontFamilyForText(text)
                 font.pixelSize: 12
                 font.weight: libraryButton.checked ? Font.DemiBold : Font.Normal
             }
@@ -961,11 +967,22 @@ ApplicationWindow {
             }
         }
         background: Rectangle {
+            id: libraryFace
             radius: root.materialDashboard ? 8 : 6
-            color: libraryButton.emphasized ? libraryButton.face : Qt.alpha(libraryButton.navigationAccent, .14)
+            color: libraryButton.emphasized ? libraryButton.face
+                : Qt.alpha(libraryButton.pigment, libraryButton.finish.idle)
             border.width: libraryButton.visualFocus ? 2 : 1
             border.color: libraryButton.visualFocus ? libraryButton.foreground
-                : Qt.alpha(libraryButton.navigationAccent, .43)
+                : Qt.alpha(libraryButton.pigment, .35 + libraryButton.finish.depth * .35)
+
+            ButtonLighting {
+                anchors.fill: parent
+                radius: libraryFace.radius
+                enabled: libraryButton.enabled
+                accent: libraryButton.pigment
+                emphasized: libraryButton.emphasized
+                pressed: libraryButton.down
+            }
 
             Behavior on color {
                 ColorAnimation { duration: MaterialTheme.reducedMotion ? 0 : 120 }
@@ -1232,11 +1249,8 @@ ApplicationWindow {
                             readonly property bool primaryCommand: modelData.command === addUrl
                             readonly property bool fogResume: root.fogSlate && modelData.command === resumeTransfers
                             readonly property bool fogPause: root.fogSlate && modelData.command === pauseTransfers
-                            readonly property string label: primaryCommand ? qsTr("Add download")
-                                : fogResume ? qsTr("Resume") : qsTr("Pause")
-                            readonly property bool showLabel: (primaryCommand && root.materialDashboard
-                                && actionControls.width >= 640)
-                                || ((fogResume || fogPause) && actionControls.width >= 730)
+                            readonly property string label: fogResume ? qsTr("Resume") : qsTr("Pause")
+                            readonly property bool showLabel: (fogResume || fogPause) && actionControls.width >= 730
                             Layout.preferredWidth: root.materialDashboard
                                 ? (showLabel ? Math.max(102, buttonLabel.implicitWidth + 40)
                                     : Math.min(43, Math.floor((actionControls.width - 48) / 11)))

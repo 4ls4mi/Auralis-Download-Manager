@@ -13,14 +13,19 @@ Basic.Button {
     property bool filled: false
     property color accent: danger ? materialPalette.destructive : materialPalette.accent
     readonly property var materialPalette: MaterialTheme.profile(material)
+    readonly property var finish: MaterialTheme.buttonFinishes[materialPalette.finish]
     readonly property color activeAccent: MaterialTheme.safeAccent(MaterialTheme.forcedAccent || accent, materialPalette.light)
     readonly property color vividAccent: MaterialTheme.vividControlAccent(activeAccent, materialPalette.light)
     readonly property color neutralFace: materialPalette.buttonFace || materialPalette.background
-    readonly property color restingFace: MaterialTheme.mix(neutralFace, vividAccent,
-        materialPalette.light ? .09 : .20, materialPalette.opaque ? 1 : .88)
+    readonly property color facePigment: MaterialTheme.mix(vividAccent, materialPalette.secondary, finish.tint, 1)
+    readonly property real backingOpacity: finish.opacity + (1 - finish.opacity) * MaterialTheme.opacityFor(material)
+    readonly property color restingFace: MaterialTheme.mix(neutralFace, facePigment,
+        materialPalette.light ? finish.idle * .59 : finish.idle, backingOpacity)
     readonly property bool selectedFace: filled || checked || highlighted
-    readonly property real accentStrength: down ? .47 : hovered ? .80 : visualFocus ? .70 : .63
-    readonly property color engagedFace: MaterialTheme.mix(neutralFace, vividAccent, accentStrength, 1)
+    readonly property real accentStrength: down ? finish.press : hovered ? finish.hover
+        : visualFocus ? (finish.hover + finish.selected) / 2 : finish.selected
+    readonly property color engagedFace: MaterialTheme.mix(neutralFace, facePigment, accentStrength,
+        Math.max(.93, backingOpacity))
     readonly property bool accentFill: enabled && (selectedFace || hovered || down || visualFocus)
     readonly property color faceColor: accentFill ? engagedFace : restingFace
     readonly property color buttonInk: accentFill ? MaterialTheme.contrastInk(engagedFace) : materialPalette.text
@@ -56,15 +61,15 @@ Basic.Button {
 
         readonly property var profile: control.materialPalette
         readonly property real radius: Math.min(10, profile.radius)
-        readonly property string outline: profile.softChrome ? "round" : profile.shape
+        readonly property string outline: profile.shape === "plain" ? "square" : profile.shape
         readonly property real gloss: profile.gloss
-        readonly property real lip: .85 + gloss * .45
+        readonly property real lip: control.finish.lip + gloss * .34
         readonly property color highlight: MaterialTheme.mix(profile.light ? "#ffffff" : profile.upper,
-            control.vividAccent, control.accentFill ? .44 : .19, 1)
-        readonly property color shade: profile.light ? "#31304b" : profile.shade
-        readonly property color edge: MaterialTheme.mix(profile.edge, control.vividAccent,
-            control.accentFill ? .82 : .44, 1)
-        readonly property color baseShadow: MaterialTheme.rgba(shade, profile.light ? .30 : .75)
+            control.facePigment, control.accentFill ? .44 : .19, 1)
+        readonly property color shade: profile.light ? MaterialTheme.mix(profile.shade, "#20283d", .38, 1) : profile.shade
+        readonly property color edge: MaterialTheme.mix(profile.edge, control.facePigment,
+            control.accentFill ? .76 + .10 * gloss : .36 + .16 * gloss, 1)
+        readonly property color baseShadow: MaterialTheme.rgba(shade, profile.light ? .26 : .30 + .38 * control.backingOpacity)
         readonly property real faceHeight: height - 2.8
         readonly property real focusInset: lip + 1.55
         readonly property string edgePath: Geometry.buttonFrame(.7, .7, width - 1.4, faceHeight, radius, outline)
@@ -94,13 +99,14 @@ Basic.Button {
 
             ShapePath {
                 strokeWidth: -1
+                fillRule: ShapePath.OddEvenFill
                 fillGradient: LinearGradient {
                     x2: buttonBackground.width * .03
                     y2: buttonBackground.faceHeight
                     GradientStop {
                         position: 0
                         color: MaterialTheme.mix(buttonBackground.edge, buttonBackground.highlight,
-                            control.down ? .13 : .31 + buttonBackground.gloss * .26, 1)
+                            control.down ? .17 : .24 + control.finish.crown, 1)
                     }
                     GradientStop {
                         position: .46
@@ -111,7 +117,7 @@ Basic.Button {
                         color: MaterialTheme.mix(buttonBackground.edge, buttonBackground.shade, .51, 1)
                     }
                 }
-                PathSvg { path: buttonBackground.edgePath }
+                PathSvg { path: buttonBackground.edgePath + " " + buttonBackground.facePath }
             }
 
             ShapePath {
@@ -123,10 +129,10 @@ Basic.Button {
                         position: 0
                         color: control.down ? MaterialTheme.mix(control.faceColor, buttonBackground.shade, .19, 1)
                             : MaterialTheme.mix(control.faceColor, buttonBackground.highlight,
-                                .19 + .23 * buttonBackground.gloss, 1)
+                                control.finish.crown + .08 * buttonBackground.gloss, control.faceColor.a)
                     }
                     GradientStop {
-                        position: .36
+                        position: control.finish.shoulder
                         color: control.faceColor
                     }
                     GradientStop {
@@ -136,11 +142,21 @@ Basic.Button {
                     GradientStop {
                         position: 1
                         color: MaterialTheme.mix(control.faceColor, buttonBackground.shade,
-                            control.down ? .10 : .19 + .07 * buttonBackground.gloss, 1)
+                            control.down ? .12 : control.finish.depth, control.faceColor.a)
                     }
                 }
                 PathSvg { path: buttonBackground.facePath }
             }
+        }
+
+        ButtonLighting {
+            anchors.fill: parent
+            transform: Translate { y: control.faceOffset }
+            material: control.material
+            accent: control.vividAccent
+            emphasized: control.accentFill
+            pressed: control.down
+            surfacePath: buttonBackground.facePath
         }
 
         Shape {

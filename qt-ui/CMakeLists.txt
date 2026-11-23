@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(AuralisQt VERSION 0.3.67 LANGUAGES CXX)
+project(AuralisQt VERSION 0.3.68 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -19,6 +19,8 @@ qt_add_executable(auralis-download-manager WIN32
     src/LocalFiles.h
     src/Smoke.cpp
     src/Smoke.h
+    src/Typography.cpp
+    src/Typography.h
 )
 
 target_compile_definitions(auralis-download-manager PRIVATE AURALIS_VERSION="${PROJECT_VERSION}")

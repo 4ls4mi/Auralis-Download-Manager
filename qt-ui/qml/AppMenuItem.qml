@@ -12,10 +12,13 @@ Basic.MenuItem {
         ? MaterialTheme.actionColor(symbol, MaterialTheme.palette.light) : MaterialTheme.menuColors.icon
     property bool destructive: false
     readonly property var colors: MaterialTheme.menuColors
+    readonly property var profile: MaterialTheme.palette
+    readonly property var finish: MaterialTheme.buttonFinishes[profile.finish]
     readonly property bool selected: enabled && (highlighted || hovered || activeFocus || down)
     readonly property color actionAccent: MaterialTheme.vividControlAccent(MaterialTheme.forcedAccent
-        || (destructive ? colors.danger : symbol.length ? commandColor : colors.highlight), MaterialTheme.palette.light)
-    readonly property color face: MaterialTheme.controlHighlight(actionAccent, down, hovered)
+        || (destructive ? colors.danger : symbol.length ? commandColor : colors.highlight), profile.light)
+    readonly property color pigment: MaterialTheme.mix(actionAccent, profile.secondary, finish.tint, 1)
+    readonly property color face: MaterialTheme.controlHighlight(pigment, down, hovered)
     readonly property color activeInk: MaterialTheme.contrastInk(face)
     readonly property real glyphSpace: symbol.length ? 27 : 0
     readonly property string shortcutText: subMenu ? "" : menuShortcut.nativeText
@@ -45,54 +48,26 @@ Basic.MenuItem {
         implicitHeight: 35
 
         Rectangle {
+            id: itemFace
             anchors.fill: parent
             anchors.topMargin: 1
             anchors.bottomMargin: 1
-            radius: item.colors.studio ? 9 : 6
+            radius: Math.min(9, item.profile.radius)
             visible: item.selected
             gradient: Gradient {
-                GradientStop { position: 0; color: MaterialTheme.mix(item.face, item.actionAccent, .29, 1) }
-                GradientStop { position: .50; color: item.face }
-                GradientStop { position: 1; color: MaterialTheme.mix(item.face, "#111422", .14, 1) }
+                GradientStop { position: 0; color: MaterialTheme.mix(item.face, item.profile.upper, item.finish.crown * .45, 1) }
+                GradientStop { position: item.finish.shoulder; color: item.face }
+                GradientStop { position: .71; color: item.face }
+                GradientStop { position: 1; color: MaterialTheme.mix(item.face, item.profile.shade, item.finish.depth, 1) }
             }
         }
 
-        Loader {
-            anchors.fill: parent
-            anchors.margins: 2
-            active: item.selected && item.colors.studio
-            sourceComponent: GlassProgress {
-                Accessible.ignored: true
-                shape: "round"
-                value: .95
-                animated: true
-                opacity: item.colors.showShortcuts ? .16 : .31
-                startColor: item.face
-                endColor: MaterialTheme.mix(item.face, item.activeInk, .10, 1)
-                trackColor: "transparent"
-            }
-        }
-
-        Rectangle {
-            anchors.verticalCenter: parent.verticalCenter
-            x: item.selected ? (item.mirrored ? 8 : parent.width - width - 8)
-                             : (item.mirrored ? parent.width - width - 8 : 8)
-            width: Math.min(68, parent.width * .3)
-            height: Math.max(0, parent.height - 5)
-            radius: 5
-            color: "transparent"
-            visible: item.selected && !MaterialTheme.reducedMotion
-            gradient: Gradient {
-                orientation: Gradient.Horizontal
-                GradientStop { position: 0; color: "transparent" }
-                GradientStop { position: .55; color: "#25ffffff" }
-                GradientStop { position: 1; color: "transparent" }
-            }
-
-            Behavior on x {
-                enabled: item.selected && !MaterialTheme.reducedMotion
-                NumberAnimation { duration: 220; easing.type: Easing.OutCubic }
-            }
+        ButtonLighting {
+            anchors.fill: itemFace
+            radius: itemFace.radius
+            accent: item.actionAccent
+            emphasized: item.selected
+            pressed: item.down
         }
 
         Rectangle {

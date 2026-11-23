@@ -6,7 +6,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Window
 
-ApplicationWindow {
+AuralisWindow {
     id: root
 
     title: qsTr("Settings — Auralis Download Manager")

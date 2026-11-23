@@ -18,6 +18,29 @@ QtObject {
     property string progressPalette: "material"
     property string connectionPalette: "material"
     property string graphPalette: "material"
+    property int visibleButtonLights: 0
+    property real buttonLightPhase: 0
+
+    property Timer buttonLightClock: Timer {
+        interval: 40
+        repeat: true
+        triggeredOnStart: true
+        running: theme.visibleButtonLights > 0 && !theme.reducedMotion
+        onTriggered: theme.buttonLightPhase = (Date.now() % 5200) / 5200 * Math.PI * 2
+    }
+
+    readonly property var buttonFinishes: ({
+        matte: {idle: .14, hover: .64, press: .37, selected: .53, tint: .10, opacity: .92,
+            lip: .77, crown: .15, shoulder: .29, depth: .14, light: .10, spread: .76, slant: .10},
+        satin: {idle: .15, hover: .60, press: .41, selected: .50, tint: .13, opacity: .92,
+            lip: .94, crown: .32, shoulder: .40, depth: .20, light: .15, spread: .49, slant: .73},
+        gloss: {idle: .23, hover: .82, press: .49, selected: .65, tint: .16, opacity: .76,
+            lip: 1.24, crown: .42, shoulder: .32, depth: .32, light: .22, spread: .29, slant: 1.00},
+        frosted: {idle: .19, hover: .68, press: .45, selected: .56, tint: .23, opacity: .83,
+            lip: 1.08, crown: .34, shoulder: .46, depth: .20, light: .17, spread: .66, slant: .27},
+        clear: {idle: .13, hover: .66, press: .40, selected: .52, tint: .20, opacity: .70,
+            lip: 1.11, crown: .24, shoulder: .26, depth: .28, light: .21, spread: .42, slant: .87}
+    })
 
     readonly property var indicatorPalettes: ({
         "blue-purple": { label: qsTr("Blue / Purple"), colors: ["#13bafa", "#9f57f8"] },
