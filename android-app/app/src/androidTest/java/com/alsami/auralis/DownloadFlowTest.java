@@ -92,7 +92,9 @@ public final class DownloadFlowTest {
             for (DownloadItem item : queue.list()) {
                 if (!item.url.equals(url)) continue;
                 last = item;
-                if (DownloadItem.ERROR.equals(item.status)) throw new AssertionError(item.error);
+                if (DownloadItem.ERROR.equals(item.status)) {
+                    throw new AssertionError(item.name + " failed after " + item.downloaded + " bytes. " + item.error);
+                }
                 if (ready.test(item)) return item;
             }
             SystemClock.sleep(80);

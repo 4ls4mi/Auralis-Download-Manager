@@ -75,7 +75,7 @@ fn multiple_links(_file: &File, _metadata: &Metadata) -> io::Result<bool> {
 /// Move a file on the same filesystem without replacing any destination.
 /// Filesystems that do not support the atomic operation return an error; the
 /// source is retained so the user can retry or choose another destination.
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(any(target_os = "linux", target_os = "android", target_os = "macos"))]
 pub fn rename_no_replace(from: &Path, to: &Path) -> io::Result<()> {
     rustix::fs::renameat_with(
         rustix::fs::CWD,
@@ -110,7 +110,7 @@ pub fn rename_no_replace(from: &Path, to: &Path) -> io::Result<()> {
     }
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
+#[cfg(not(any(target_os = "linux", target_os = "android", target_os = "macos", windows)))]
 pub fn rename_no_replace(from: &Path, to: &Path) -> io::Result<()> {
     std::fs::hard_link(from, to)?;
     std::fs::remove_file(from)
