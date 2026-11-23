@@ -601,6 +601,9 @@ AuralisWindow {
                                                 id: interfaceSize
                                                 objectName: "settingsInterfaceSize"
                                                 property bool saveFailed: false
+                                                property string restartProblem: ""
+                                                readonly property bool restartRequired: root.fontSettings?.interfaceScalePercent
+                                                    !== root.fontSettings?.activeInterfaceScalePercent
 
                                                 Layout.fillWidth: true
                                                 from: root.fontSettings?.interfaceScaleMinimum ?? 85
@@ -616,6 +619,7 @@ AuralisWindow {
                                                     const percent = Math.round(value)
                                                     if (percent === root.fontSettings.interfaceScalePercent)
                                                         return
+                                                    restartProblem = ""
                                                     saveFailed = !root.fontSettings.setInterfaceScalePercent(percent)
                                                     if (saveFailed)
                                                         value = Qt.binding(() => root.fontSettings.interfaceScalePercent)
@@ -631,11 +635,38 @@ AuralisWindow {
                                         }
 
                                         PaneCopy {
-                                            text: root.fontSettings?.interfaceScalePercent === root.fontSettings?.activeInterfaceScalePercent
-                                                ? qsTr("Resizes controls, text, and spacing throughout Auralis after you quit and reopen the app.")
-                                                : qsTr("Saved %2% for the next launch. The current size is %1%. Quit Auralis and reopen it to apply.")
+                                            text: interfaceSize.restartRequired
+                                                ? qsTr("Saved %2% for the next launch. The current size is %1%. Quit Auralis and reopen it to apply.")
                                                     .arg(root.fontSettings?.activeInterfaceScalePercent)
                                                     .arg(root.fontSettings?.interfaceScalePercent)
+                                                : qsTr("Resizes controls, text, and spacing throughout Auralis after you quit and reopen the app.")
+                                        }
+
+                                        GlassButton {
+                                            objectName: "restartForInterfaceScale"
+                                            visible: interfaceSize.restartRequired
+                                            enabled: !engine.quitting
+                                            text: engine.quitting ? qsTr("Restarting…") : qsTr("Restart Auralis")
+                                            accent: root.colors.accent
+                                            filled: true
+                                            onClicked: {
+                                                interfaceSize.restartProblem = ""
+                                                engine.requestRestart()
+                                            }
+                                        }
+
+                                        Connections {
+                                            target: engine
+                                            function onRestartFailed(message) {
+                                                interfaceSize.restartProblem = qsTranslate("BackendErrors", message)
+                                            }
+                                        }
+
+                                        PaneCopy {
+                                            visible: interfaceSize.restartRequired && interfaceSize.restartProblem !== ""
+                                            text: interfaceSize.restartProblem
+                                            textFormat: Text.PlainText
+                                            color: root.colors.destructive
                                         }
 
                                         PaneCopy {

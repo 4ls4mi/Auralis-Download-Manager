@@ -1279,6 +1279,14 @@ Identificador del torrent %3</translation>
             <source>File dragging is available on Windows.</source>
             <translation>Se pueden arrastrar archivos en Windows.</translation>
         </message>
+        <message>
+            <source>Auralis is already closing or preparing an update.</source>
+            <translation>Auralis ya se está cerrando o preparando una actualización.</translation>
+        </message>
+        <message>
+            <source>Wait for Auralis to finish preparing the update.</source>
+            <translation>Espera a que Auralis termine de preparar la actualización.</translation>
+        </message>
     </context>
     <context>
         <name>EnginePrompts</name>
@@ -3370,6 +3378,38 @@ Identificador del torrent %3</translation>
             <source>Install licensed font copies on this device, then reopen Auralis to use them here.</source>
             <translation>Instala en este dispositivo las fuentes para las que tengas licencia. Vuelve a abrir Auralis para usarlas aquí.</translation>
         </message>
+        <message>
+            <source>Find fonts…</source>
+            <translation>Buscar fuentes…</translation>
+        </message>
+        <message>
+            <source>Find %1 online</source>
+            <translation>Buscar %1 en Internet</translation>
+        </message>
+        <message>
+            <source>Could not open the font page.</source>
+            <translation>No se pudo abrir la página de la fuente.</translation>
+        </message>
+        <message>
+            <source>Import font file…</source>
+            <translation>Importar archivo de fuente…</translation>
+        </message>
+        <message>
+            <source>Font imported. Select it, then choose Apply font.</source>
+            <translation>Fuente importada. Selecciónala y pulsa Aplicar fuente.</translation>
+        </message>
+        <message>
+            <source>The linked font downloads are for personal use. Import a TTF or OTF file you are licensed to use.</source>
+            <translation>Las fuentes de estos enlaces son para uso personal. Importa un archivo TTF u OTF que tengas licencia para usar.</translation>
+        </message>
+        <message>
+            <source>Choose a licensed font file</source>
+            <translation>Elige un archivo de fuente con licencia</translation>
+        </message>
+        <message>
+            <source>Font files (*.ttf *.otf)</source>
+            <translation>Archivos de fuente (*.ttf *.otf)</translation>
+        </message>
     </context>
     <context>
         <name>SettingsUpdates</name>
@@ -3891,6 +3931,14 @@ Identificador del torrent %3</translation>
         <message>
             <source>Could not save the interface size.</source>
             <translation>No se pudo guardar el tamaño de la interfaz.</translation>
+        </message>
+        <message>
+            <source>Restart Auralis</source>
+            <translation>Reiniciar Auralis</translation>
+        </message>
+        <message>
+            <source>Restarting…</source>
+            <translation>Reiniciando…</translation>
         </message>
     </context>
     <context>
@@ -4944,6 +4992,44 @@ Identificador del torrent %3</translation>
         <message>
             <source>Wait for the other saved-data operation to finish</source>
             <translation>Espera a que termine la otra operación sobre los datos guardados.</translation>
+        </message>
+        <message>
+            <source>Wait for the download backup or restore to finish before exiting</source>
+            <translation>Espera a que termine la copia de seguridad o la restauración de las descargas antes de salir.</translation>
+        </message>
+    </context>
+    <context>
+        <name>AppRestart</name>
+        <message>
+            <source>Could not restart Auralis. Open it again to apply the saved interface size.</source>
+            <translation>No se pudo reiniciar Auralis. Vuelve a abrir la aplicación para aplicar el tamaño de interfaz guardado.</translation>
+        </message>
+    </context>
+    <context>
+        <name>Typography</name>
+        <message>
+            <source>Choose a local TTF or OTF font file.</source>
+            <translation>Elige un archivo de fuente TTF u OTF local.</translation>
+        </message>
+        <message>
+            <source>Could not read this font. Choose a valid TTF or OTF file up to 16 MB.</source>
+            <translation>No se pudo leer la fuente. Elige un archivo TTF u OTF válido de hasta 16 MB.</translation>
+        </message>
+        <message>
+            <source>Could not load the selected font file.</source>
+            <translation>No se pudo cargar el archivo de fuente seleccionado.</translation>
+        </message>
+        <message>
+            <source>This font is already available in Auralis.</source>
+            <translation>Esta fuente ya está disponible en Auralis.</translation>
+        </message>
+        <message>
+            <source>Could not save the font for Auralis.</source>
+            <translation>No se pudo guardar la fuente en Auralis.</translation>
+        </message>
+        <message>
+            <source>The file does not match a listed interface font or does not support its language.</source>
+            <translation>El archivo no coincide con una fuente de la lista o no admite su idioma.</translation>
         </message>
     </context>
 </TS>

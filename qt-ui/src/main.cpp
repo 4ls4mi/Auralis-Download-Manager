@@ -24,6 +24,7 @@
 #include <QPalette>
 #include <QPixmap>
 #include <QPointer>
+#include <QProcess>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickStyle>
@@ -487,6 +488,9 @@ void addBundledTools()
     if (QFileInfo::exists(QDir(dir).filePath(QStringLiteral("deno.exe"))))
         qputenv("PATH", QDir::toNativeSeparators(dir).toUtf8() + QDir::listSeparator().toLatin1() + qgetenv("PATH"));
 }
+
+int runDesktop(QApplication &app, int activeInterfaceScale, bool startHidden, bool exitRequest, bool smoke,
+               QString &restartError);
 }
 
 int main(int argc, char **argv)
@@ -547,6 +551,7 @@ int main(int argc, char **argv)
     const bool exitRequest = arguments.contains(QStringLiteral("--exit")) || arguments.contains(QStringLiteral("/exit"));
     const bool startHidden = arguments.contains(QStringLiteral("--auralis-startup-minimized"));
 
+    const auto launchEnvironment = QProcessEnvironment::systemEnvironment();
     addBundledTools();
 #ifdef Q_OS_WIN
     QQuickWindow::setSceneGraphBackend(QStringLiteral("rhi"));
@@ -555,6 +560,27 @@ int main(int argc, char **argv)
     QQuickStyle::setStyle(QStringLiteral("Basic"));
     QQuickWindow::setDefaultAlphaBuffer(true);
 
+    QString restartError;
+    const int code = runDesktop(app, activeInterfaceScale, startHidden, exitRequest, smoke, restartError);
+    if (code != Engine::RestartExitCode)
+        return code;
+
+    QProcess relaunch;
+    relaunch.setProgram(QCoreApplication::applicationFilePath());
+    relaunch.setProcessEnvironment(launchEnvironment);
+    if (relaunch.startDetached())
+        return 0;
+
+    QMessageBox::critical(nullptr, app.applicationName(), restartError);
+    return 1;
+}
+
+namespace {
+int runDesktop(QApplication &app, int activeInterfaceScale, bool startHidden, bool exitRequest, bool smoke,
+               QString &restartError)
+{
+    // Keep the lock until the engine and its workers have finished shutting down.
+    std::optional<QLockFile> instanceLock;
     // QML bindings must be destroyed before their native context objects.
     Typography typography(activeInterfaceScale);
     std::optional<Engine> engineLifetime;
@@ -571,9 +597,9 @@ int main(int argc, char **argv)
     const QString serverName = QStringLiteral("AuralisQt-") + QString::fromLatin1(profileHash);
     const QString lockFile = QDir(QStandardPaths::writableLocation(QStandardPaths::TempLocation))
                                  .filePath(serverName + QStringLiteral(".lock"));
-    QLockFile lock(lockFile);
-    lock.setStaleLockTime(0);
-    if (!lock.tryLock(300)) {
+    instanceLock.emplace(lockFile);
+    instanceLock->setStaleLockTime(0);
+    if (!instanceLock->tryLock(300)) {
         const bool forwarded = forwardToInstance(serverName, exitRequest ? QByteArrayLiteral("exit\n")
                                                                          : QByteArrayLiteral("activate\n"));
         return forwarded ? 0 : 1;
@@ -601,7 +627,7 @@ int main(int argc, char **argv)
     auto *window = qobject_cast<QWindow *>(root);
     if (!window)
         return 1;
-    window->setIcon(appIcon);
+    window->setIcon(app.windowIcon());
 
     const auto activate = [window] {
         if (!window->isVisible() || window->visibility() == QWindow::Minimized)
@@ -671,5 +697,9 @@ int main(int argc, char **argv)
     if (smoke) qInfo("Smoke: starting the Qt event loop and Rust service.");
     const int code = app.exec();
     if (smoke) qInfo("Smoke: event loop finished with exit code %d.", code);
+    if (code == Engine::RestartExitCode)
+        restartError = QCoreApplication::translate("AppRestart",
+            "Could not restart Auralis. Open it again to apply the saved interface size.");
     return code;
+}
 }

@@ -125,7 +125,8 @@ pub fn main(args: Vec<String>) -> ExitCode {
 /// Initialize the service separately from the process entry point. This keeps
 /// all existing persistence and IPC setup while making its lifetime explicit.
 fn initialize(args: Vec<String>) -> Result<HeadlessService, ExitCode> {
-    if let Some(dir) = setting(&args, "data", "MDM_DATA_DIR") {
+    let explicit_profile = setting(&args, "data", "MDM_DATA_DIR");
+    if let Some(dir) = &explicit_profile {
         mdm_ipc::set_data_dir(PathBuf::from(dir));
     }
     let Some(data) = mdm_ipc::data_dir() else {
@@ -148,6 +149,9 @@ fn initialize(args: Vec<String>) -> Result<HeadlessService, ExitCode> {
         return Err(ExitCode::FAILURE);
     };
     mdm_crash::logs::init(&data, mdm_crash::logs::APP);
+    if embedded() && explicit_profile.is_none() {
+        crate::helper_storage::configure(&data);
+    }
     // The default browser, looked for once on a thread of its own (logged): its User-Agent is
     // the one links added by hand go with (#668).
     crate::defaultbrowser::start();

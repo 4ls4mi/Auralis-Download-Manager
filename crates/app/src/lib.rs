@@ -29,6 +29,7 @@ mod grabber;
 mod headless;
 mod headless_loop;
 mod help;
+mod helper_storage;
 mod helpers;
 mod hotkey;
 mod i18n;

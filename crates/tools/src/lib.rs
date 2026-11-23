@@ -29,6 +29,7 @@ pub mod workdir;
 pub mod youtube;
 
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -123,9 +124,19 @@ impl Installed {
     }
 }
 
-/// `<data dir>/tools`.
+static TOOLS_DIR: OnceLock<PathBuf> = OnceLock::new();
+
+/// Select the host application's helper directory before starting its downloader.
+pub fn set_tools_dir(dir: PathBuf) {
+    let _ = TOOLS_DIR.set(dir);
+}
+
+/// The host's helper directory, or `<data dir>/tools` for standalone runs.
 pub fn tools_dir() -> Option<PathBuf> {
-    mdm_ipc::data_dir().map(|d| d.join("tools"))
+    TOOLS_DIR
+        .get()
+        .cloned()
+        .or_else(|| mdm_ipc::data_dir().map(|d| d.join("tools")))
 }
 
 /// yt-dlp's file name for this system and processor in its releases; None where it publishes

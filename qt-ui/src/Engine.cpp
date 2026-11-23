@@ -358,9 +358,10 @@ void Engine::request(const QVariantMap &command, const QJSValue &callback)
 {
     const QString local = command.value(QStringLiteral("local")).toString();
     const QString shellAction = command.value(QStringLiteral("shellAction")).toString();
+    const bool installingUpdate = shellAction == QStringLiteral("update-install");
     const bool changesDownloads = local.isEmpty() && shellAction.isEmpty()
         && !command.contains(QStringLiteral("query"));
-    const auto deliver = [this, callback, shellAction](const QVariantMap &response) {
+    const auto deliver = [this, callback, installingUpdate](const QVariantMap &response) {
         const QVariant value = response.value(QStringLiteral("result"));
         QString error = response.value(QStringLiteral("error")).toString();
         if (error.isEmpty())
@@ -371,10 +372,14 @@ void Engine::request(const QVariantMap &command, const QJSValue &callback)
         } else if (!error.isEmpty()) {
             emit operationFailed(error);
         }
-        if (error.isEmpty() && shellAction == QStringLiteral("update-install")
+        if (error.isEmpty() && installingUpdate
             && value.toMap().value(QStringLiteral("ok")).toBool())
             requestQuit();
     };
+    if (installingUpdate && (m_updateInstallPending || m_quitting)) {
+        deliver(failure(tr("Auralis is already closing or preparing an update.")));
+        return;
+    }
     if (local == QStringLiteral("openExtensionFolder")) {
         const auto path = QCoreApplication::applicationDirPath() + QStringLiteral("/auralis-extension");
         deliver(openFolder(path) ? result(QVariantMap{{QStringLiteral("ok"), true}})
@@ -387,9 +392,13 @@ void Engine::request(const QVariantMap &command, const QJSValue &callback)
         return;
     }
 
+    if (installingUpdate)
+        m_updateInstallPending = true;
     auto *watcher = new QFutureWatcher<QVariantMap>(this);
-    connect(watcher, &QFutureWatcherBase::finished, this, [this, watcher, deliver, changesDownloads] {
+    connect(watcher, &QFutureWatcherBase::finished, this, [this, watcher, deliver, changesDownloads, installingUpdate] {
         deliver(watcher->result());
+        if (installingUpdate)
+            m_updateInstallPending = false;
         watcher->deleteLater();
         if (changesDownloads)
             refresh();
@@ -463,16 +472,27 @@ void Engine::applySnapshot(const QVariantMap &response)
     }
 }
 
+void Engine::requestRestart()
+{
+    if (m_updateInstallPending) {
+        emit restartFailed(tr("Wait for Auralis to finish preparing the update."));
+        return;
+    }
+    if (!m_smoke)
+        requestQuit(RestartExitCode);
+}
+
 void Engine::requestQuit(int exitCode)
 {
     if (m_quitting)
         return;
     m_exitCode = exitCode;
+    m_quitting = true;
+    emit quittingChanged();
     if (!running()) {
         QCoreApplication::exit(m_exitCode);
         return;
     }
-    m_quitting = true;
     auto *watcher = new QFutureWatcher<QVariantMap>(this);
     connect(watcher, &QFutureWatcherBase::finished, this, [this, watcher] {
         const auto response = watcher->result();
@@ -480,7 +500,11 @@ void Engine::requestQuit(int exitCode)
         const QString error = response.value(QStringLiteral("error")).toString();
         if (!error.isEmpty() && running()) {
             m_quitting = false;
-            emit operationFailed(error);
+            emit quittingChanged();
+            if (m_exitCode == RestartExitCode)
+                emit restartFailed(error);
+            else
+                emit operationFailed(error);
         }
     });
     watcher->setFuture(QtConcurrent::run(&m_commands, [this] {

@@ -48,6 +48,25 @@ fn refused(out: &Result<Vec<u8>, Error>) -> bool {
 }
 
 #[tokio::test]
+async fn the_file_probe_keeps_an_explicit_response_description() {
+    use std::sync::atomic::Ordering;
+
+    let headers = "Content-Type: application/octet-stream\r\nContent-Disposition: attachment; filename=archive.zip\r\nContent-Description: Example archive\r\n";
+    let (base, requests) = answers(headers, b"test archive").await;
+    let (info, kept) = mdm_engine::probe_kept(
+        format!("{base}/download").parse().unwrap(),
+        Default::default(),
+        &Options::default(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(info.file_name, "archive.zip");
+    assert_eq!(info.description.as_deref(), Some("Example archive"));
+    assert!(kept.is_some());
+    assert_eq!(requests.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
 async fn a_page_saved_as_a_document_is_an_error() {
     let s = server().await;
     // The reporter's case: the browser named it x.doc, the server sent its refusal page.

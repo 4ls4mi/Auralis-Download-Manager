@@ -1002,6 +1002,7 @@ pub struct FileInfo {
     pub save_as: String,
     pub category: Category,
     pub description: String,
+    description_edited: bool,
     /// "Remember this path for … category"; starts as Options → Save to → "Change folder for
     /// … category on last selected" says.
     pub remember: bool,
@@ -1064,6 +1065,28 @@ pub enum Start {
     Later,
 }
 
+/// External metadata is shown as one bounded line of plain text. Preserve ordinary Unicode
+/// and spacing for multilingual titles, without invisible direction overrides or controls.
+pub(crate) fn source_description(candidates: &[Option<&str>]) -> String {
+    candidates
+        .iter()
+        .flatten()
+        .find_map(|candidate| {
+            let cleaned: String = candidate
+                .chars()
+                .take(4096)
+                .filter(|ch| {
+                    (!ch.is_control() || ch.is_whitespace())
+                        && !matches!(ch, '\u{061c}' | '\u{200e}'..='\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}')
+                })
+                .collect();
+            let words = cleaned.split_whitespace().collect::<Vec<_>>().join(" ");
+            let description: String = words.chars().take(512).collect();
+            (!description.is_empty()).then(|| description.trim_end().to_owned())
+        })
+        .unwrap_or_default()
+}
+
 impl FileInfo {
     /// Opens the dialog and looks the URL up in the background (name, size), like IDM, with
     /// `request`'s headers (the download's own). A download from the browser needs no look-up:
@@ -1090,6 +1113,7 @@ impl FileInfo {
         let name = from_browser
             .clone()
             .unwrap_or_else(|| crate::model::browser_guess(&new.url, &context));
+        let description = source_description(&[context.video_title.as_deref(), Some(&name)]);
         let category = Category::of(&name);
         let folder = crate::model::category_folder(category, &downloads, &dirs);
         let mut place = SaveAsPlace::new(Some(ctx));
@@ -1105,6 +1129,7 @@ impl FileInfo {
                         .unwrap_or_else(|| new.url.clone()),
                     size: context.size,
                     file_name,
+                    description: None,
                     // The browser had the answer: nothing was asked of the server here.
                     server: None,
                     web_page: false,
@@ -1124,7 +1149,8 @@ impl FileInfo {
             login: new.login,
             save_as,
             category,
-            description: String::new(),
+            description,
+            description_edited: false,
             remember: false,
             probe,
             info,
@@ -1186,8 +1212,8 @@ impl FileInfo {
                     return;
                 }
                 let from_browser = crate::debrid::browser_started(&self.context);
+                let name = mdm_engine::naming::file_name(None, &url);
                 if !self.edited {
-                    let name = mdm_engine::naming::file_name(None, &url);
                     self.category = Category::of(&name);
                     let dir =
                         crate::model::category_folder(self.category, &self.downloads, &self.dirs);
@@ -1205,6 +1231,7 @@ impl FileInfo {
                 self.context.name = None;
                 self.context.size = None;
                 self.context.mime = None;
+                self.context.video_title = None;
                 self.context.final_url = None;
                 self.context.post = None;
                 self.context.post_type = None;
@@ -1217,6 +1244,9 @@ impl FileInfo {
                     self.direct = false;
                 }
                 self.url = url;
+                if !self.description_edited {
+                    self.description = source_description(&[Some(&name)]);
+                }
                 self.look_again(ctx);
             }
             _ => self.url_bad = true,
@@ -1275,6 +1305,15 @@ impl FileInfo {
                 self.kept = kept;
                 pi
             });
+            if let Ok(pi) = &res
+                && !self.description_edited
+            {
+                self.description = source_description(&[
+                    pi.description.as_deref(),
+                    self.context.video_title.as_deref(),
+                    Some(&pi.file_name),
+                ]);
+            }
             if let (Ok(pi), false) = (&res, self.edited) {
                 self.category = Category::of(&pi.file_name);
                 let dir = crate::model::category_folder(self.category, &self.downloads, &self.dirs);
@@ -1560,13 +1599,14 @@ impl FileInfo {
                     crate::i18n::t("Description"),
                     winui::TEXT(),
                 );
-                winui::edit(
+                self.description_edited |= winui::edit(
                     ui,
                     r(o, 96.0, 148.0, 366.0, 23.0),
                     &mut self.description,
                     true,
                     false,
-                );
+                )
+                .changed();
 
                 // Through a debrid account (#44): ticked, the service unlocks the link; unticked,
                 // the address is downloaded directly. Either way it is looked up again.

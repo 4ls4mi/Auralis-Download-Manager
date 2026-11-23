@@ -27,8 +27,11 @@ class Engine final : public QObject
     Q_PROPERTY(bool startHidden READ startHidden CONSTANT)
     Q_PROPERTY(bool trayAvailable READ trayAvailable CONSTANT)
     Q_PROPERTY(bool interactiveSetup READ interactiveSetup CONSTANT)
+    Q_PROPERTY(bool quitting READ quitting NOTIFY quittingChanged)
 
 public:
+    static constexpr int RestartExitCode = 64;
+
     Engine(QJSEngine *scriptEngine, bool startHidden, bool smoke, QObject *parent = nullptr);
 
     ~Engine() override;
@@ -44,6 +47,7 @@ public:
     bool trayAvailable() const;
     bool interactiveSetup() const { return !m_smoke; }
     bool running() const { return m_service.isRunning(); }
+    bool quitting() const { return m_quitting; }
 
     void initializeInterfaceLanguage();
     void start();
@@ -51,6 +55,7 @@ public:
     Q_INVOKABLE void request(const QVariantMap &command, const QJSValue &callback);
     Q_INVOKABLE void refresh();
     Q_INVOKABLE void requestQuit(int exitCode = 0);
+    Q_INVOKABLE void requestRestart();
     Q_INVOKABLE QString localPath(const QUrl &url) const;
     Q_INVOKABLE QUrl localMediaUrl(const QUrl &url) const;
     Q_INVOKABLE QUrl localFileUrl(const QString &path) const;
@@ -73,6 +78,8 @@ signals:
     void browserWindowRequested(const QString &target);
     void serviceStopped(bool clean);
     void updateNotificationRequested(const QString &version);
+    void quittingChanged();
+    void restartFailed(const QString &message);
 
 private:
     using Run = char *(*)();
@@ -109,6 +116,7 @@ private:
     bool m_ready = false;
     bool m_refreshing = false;
     bool m_quitting = false;
+    bool m_updateInstallPending = false;
     bool m_firstSnapshot = true;
     bool m_startHidden;
     bool m_smoke;

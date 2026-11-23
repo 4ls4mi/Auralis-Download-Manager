@@ -186,6 +186,11 @@ Review reviewPolicy(const QString &browserId, const QString &path, QSettings &us
     }
     if (!existing.isUndefined())
         return {{false, false, governed}, {}};
+    // Edge's effective ability to install from another store cannot be inferred from
+    // registry access. Auralis opens the store and leaves approval with the browser.
+    if (browserId == QStringLiteral("edge"))
+        return {{false, false, QCoreApplication::translate("BrowserSetup",
+            "Managed setup is unavailable for this browser.")}, {}};
     return {{true, false, {}}, settings};
 }
 }

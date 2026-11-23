@@ -30,6 +30,7 @@ pub struct VideoAdd {
     pub dest: PathBuf,
     /// The category it is listed under: Music for a sound-only choice (#611), else Video.
     pub category: Category,
+    pub description: String,
     pub size: Option<u64>,
     pub start_now: bool,
     /// What the browser's request for the page carried (its button), for yt-dlp to ask the
@@ -483,15 +484,15 @@ impl VideoDialog {
                 self.category(),
             )));
         }
-        let (Some((_, choices)), Ok(page)) = (&self.video, url::Url::parse(self.page.trim()))
+        let (Some((video, choices)), Ok(page)) = (&self.video, url::Url::parse(self.page.trim()))
         else {
             return None;
         };
         let c = choices.get(self.chosen.min(choices.len().checked_sub(1)?))?;
         let name = mdm_engine::naming::sanitize(self.name.trim());
         // Not the name the choice gave it (the page's title): the user's (#1102).
-        let named = name
-            != mdm_engine::naming::sanitize(file_name(&self.video.as_ref()?.0.title, c).trim());
+        let named = name != mdm_engine::naming::sanitize(file_name(&video.title, c).trim());
+        let description = crate::dialogs::source_description(&[Some(&video.title), Some(&name)]);
         let chosen = self.chosen_subs();
         // The video the page declares (#1076): its address, the page as its Referer.
         let declared = self
@@ -508,6 +509,7 @@ impl VideoDialog {
             selector: c.selector.clone(),
             dest: folder.join(name),
             category: self.category(),
+            description,
             size: c.size,
             start_now,
             context,

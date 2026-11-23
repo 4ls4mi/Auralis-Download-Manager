@@ -3,14 +3,15 @@
 #include <QFont>
 #include <QObject>
 #include <QStringList>
+#include <QUrl>
 #include <QVariant>
 
 class Typography final : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(QFont interfaceFont READ interfaceFont NOTIFY fontChanged)
-    Q_PROPERTY(QVariantList englishFontOptions READ englishFontOptions CONSTANT)
-    Q_PROPERTY(QVariantList arabicFontOptions READ arabicFontOptions CONSTANT)
+    Q_PROPERTY(QVariantList englishFontOptions READ englishFontOptions NOTIFY fontOptionsChanged)
+    Q_PROPERTY(QVariantList arabicFontOptions READ arabicFontOptions NOTIFY fontOptionsChanged)
     Q_PROPERTY(QString englishFamily READ englishFamily NOTIFY fontChanged)
     Q_PROPERTY(QString arabicFamily READ arabicFamily NOTIFY fontChanged)
     Q_PROPERTY(int fontSizePercent READ fontSizePercent NOTIFY fontChanged)
@@ -42,20 +43,23 @@ public:
     Q_INVOKABLE bool setInterfaceScalePercent(int percent);
     Q_INVOKABLE QFont fontForText(const QString &text) const;
     Q_INVOKABLE QFont previewFont(const QString &family) const;
+    Q_INVOKABLE QString importFont(const QUrl &file);
 
 signals:
     void fontChanged();
+    void fontOptionsChanged();
     void interfaceScaleChanged();
 
 private:
     QFont fontWithFamily(const QString &family) const;
     void applyInterfaceFont() const;
+    void refreshFontOptions();
 
     const QFont m_systemFont;
     const QStringList m_latinFallbacks;
     const QStringList m_arabicFallbacks;
-    const QVariantList m_englishFontOptions;
-    const QVariantList m_arabicFontOptions;
+    QVariantList m_englishFontOptions;
+    QVariantList m_arabicFontOptions;
     QString m_preferredEnglishFamily;
     QString m_preferredArabicFamily;
     QString m_englishFamily;

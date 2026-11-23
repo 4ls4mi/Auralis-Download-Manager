@@ -162,13 +162,17 @@ try {
     Get-Process -Name 'auralis-download-manager' -ErrorAction SilentlyContinue |
         Where-Object { $_.Path -ieq $exe } | Wait-Process -Timeout 10
 
-    # Confirm that the uninstaller preserves user-created files.
+    # A silent uninstall keeps custom profiles, portable data and user-created files.
     $ownedByUser = Join-Path $fixture 'keep-after-uninstall.txt'
+    $portableData = Join-Path $fixture 'data'
+    $portableMarker = Join-Path $portableData 'keep-portable-data.txt'
     Set-Content -LiteralPath $ownedByUser -Value 'User file'
+    New-Item -ItemType Directory -Path $portableData -Force | Out-Null
+    Set-Content -LiteralPath $portableMarker -Value 'Portable data'
     Run-Fixture (Join-Path $fixture 'uninstall.exe') @('/S', '/NOREG')
     $deadline = [DateTime]::UtcNow.AddSeconds(30)
     while ((Test-Path $exe) -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 250 }
-    if ((Test-Path $exe) -or !(Test-Path $ownedByUser)) {
+    if ((Test-Path $exe) -or !(Test-Path $ownedByUser) -or !(Test-Path $portableMarker) -or !(Test-Path $marker)) {
         throw 'The uninstaller did not remove only the packaged application files.'
     }
     Write-Host 'Verified silent install, native icons, Direct3D 12 rendering during start and resume, passive upgrade relaunch, and scoped uninstallation.'

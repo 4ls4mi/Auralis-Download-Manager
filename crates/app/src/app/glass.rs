@@ -43,10 +43,16 @@ impl App {
             self.open_file_info(new, context, &ctx);
         } else if let Some(add) = self.glass_video_waiting.pop_front() {
             let new=dialogs::NewUrl { url:add.page.clone(), login:None };
-            self.open_file_info(new, add.context.clone(), &ctx);
+            let mut context = add.context.clone();
+            // The existing video lookup already provided the name and size. The confirmation
+            // can use them without probing the page again.
+            context.name = add.dest.file_name().map(|name| name.to_string_lossy().into_owned());
+            context.size = add.size;
+            self.open_file_info(new, context, &ctx);
             if let Some(fi)=self.file_info.as_mut() {
                 fi.set_category(add.category);
                 fi.glass_destination(add.dest.to_string_lossy().into_owned());
+                fi.description = add.description.clone();
             }
             self.glass_active_video=Some(add);
         }
@@ -277,7 +283,9 @@ impl App {
             let mut fi = self.file_info.take().expect("pending checked above");
             fi.glass_refresh();
             fi.glass_destination(path.to_string_lossy().into_owned());
-            fi.description = payload["description"].as_str().unwrap_or("").chars().take(4096).collect();
+            if let Some(description) = payload["description"].as_str() {
+                fi.description = description.chars().take(4096).collect();
+            }
             fi.remember = payload["remember"].as_bool().unwrap_or(false);
             let count = payload["chunks"].as_u64().filter(|n| (1..=128).contains(n)).map(|n| n as u32);
             // Add through the ORIGINAL add path: category folders, request context,
@@ -290,9 +298,9 @@ impl App {
                     self.settings.keep_category_dir(category,std::path::Path::new(&dir),&self.downloads);
                 }
                 video.dest=path;video.category=fi.category;video.context.connections=count;
+                video.description = fi.description;
                 video.start_now=!later;video.named=true;
                 self.add_video_checked(video, true);
-                if let Some(item)=self.item(id) { item.description=fi.description.clone(); }
             } else {
                 self.add(&mut fi, if later { Start::Later } else { Start::Now });
             }

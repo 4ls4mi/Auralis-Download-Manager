@@ -869,6 +869,8 @@ pub struct ProbeInfo {
     pub size: Option<u64>,
     /// Suggested local name (Content-Disposition, else URL).
     pub file_name: String,
+    /// A description explicitly supplied with the file's response.
+    pub description: Option<String>,
     /// Where the server is, as the look saw it (#140).
     pub server: Option<crate::Server>,
     /// The answer was a web page (HTML the server didn't name as a file of its own): Link
@@ -932,6 +934,7 @@ pub async fn probe_kept(
         return Ok((
             ProbeInfo {
                 file_name: naming::file_name(None, &url),
+                description: None,
                 final_url: url,
                 size: facts.size,
                 server: None,
@@ -1039,6 +1042,10 @@ pub async fn probe_kept(
         final_url,
         size: size.or(unlocked.as_ref().and_then(|u| u.size)),
         file_name,
+        description: header_text(
+            &head.headers,
+            header::HeaderName::from_static("content-description"),
+        ),
         server: seen.get(),
         web_page: is_web_page(&head.headers) && !named(&head.headers),
     };

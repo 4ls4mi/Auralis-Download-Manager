@@ -1279,6 +1279,14 @@ Info hash %3</source>
             <source>File dragging is available on Windows.</source>
             <translation>سحب الملفات متاح على Windows.</translation>
         </message>
+        <message>
+            <source>Auralis is already closing or preparing an update.</source>
+            <translation>يُغلق Auralis أو يُحضّر تحديثًا بالفعل.</translation>
+        </message>
+        <message>
+            <source>Wait for Auralis to finish preparing the update.</source>
+            <translation>انتظر حتى ينتهي Auralis من تحضير التحديث.</translation>
+        </message>
     </context>
     <context>
         <name>EnginePrompts</name>
@@ -3370,6 +3378,38 @@ Info hash %3</source>
             <source>Install licensed font copies on this device, then reopen Auralis to use them here.</source>
             <translation>ثبّت نسخًا مرخّصة من الخطوط على هذا الجهاز، ثم أعد فتح Auralis لاستخدامها هنا.</translation>
         </message>
+        <message>
+            <source>Find fonts…</source>
+            <translation>البحث عن الخطوط…</translation>
+        </message>
+        <message>
+            <source>Find %1 online</source>
+            <translation>البحث عن %1 عبر الإنترنت</translation>
+        </message>
+        <message>
+            <source>Could not open the font page.</source>
+            <translation>تعذّر فتح صفحة الخط.</translation>
+        </message>
+        <message>
+            <source>Import font file…</source>
+            <translation>استيراد ملف خط…</translation>
+        </message>
+        <message>
+            <source>Font imported. Select it, then choose Apply font.</source>
+            <translation>تم استيراد الخط. حدّده ثم اختر تطبيق الخط.</translation>
+        </message>
+        <message>
+            <source>The linked font downloads are for personal use. Import a TTF or OTF file you are licensed to use.</source>
+            <translation>الخطوط في هذه الروابط للاستخدام الشخصي. استورد ملف TTF أو OTF لديك ترخيص باستخدامه.</translation>
+        </message>
+        <message>
+            <source>Choose a licensed font file</source>
+            <translation>اختر ملف خط مرخّصًا</translation>
+        </message>
+        <message>
+            <source>Font files (*.ttf *.otf)</source>
+            <translation>ملفات الخطوط (*.ttf *.otf)</translation>
+        </message>
     </context>
     <context>
         <name>SettingsUpdates</name>
@@ -3891,6 +3931,14 @@ Info hash %3</source>
         <message>
             <source>Could not save the interface size.</source>
             <translation>تعذّر حفظ حجم الواجهة.</translation>
+        </message>
+        <message>
+            <source>Restart Auralis</source>
+            <translation>إعادة تشغيل Auralis</translation>
+        </message>
+        <message>
+            <source>Restarting…</source>
+            <translation>جارٍ إعادة التشغيل…</translation>
         </message>
     </context>
     <context>
@@ -4944,6 +4992,44 @@ Info hash %3</source>
         <message>
             <source>Wait for the other saved-data operation to finish</source>
             <translation>انتظر عملية البيانات الأخرى المنقذة للانتهاء</translation>
+        </message>
+        <message>
+            <source>Wait for the download backup or restore to finish before exiting</source>
+            <translation>انتظر اكتمال النسخ الاحتياطي للتنزيلات أو استعادتها قبل الخروج.</translation>
+        </message>
+    </context>
+    <context>
+        <name>AppRestart</name>
+        <message>
+            <source>Could not restart Auralis. Open it again to apply the saved interface size.</source>
+            <translation>تعذّرت إعادة تشغيل Auralis. افتح التطبيق مجددًا لتطبيق حجم الواجهة المحفوظ.</translation>
+        </message>
+    </context>
+    <context>
+        <name>Typography</name>
+        <message>
+            <source>Choose a local TTF or OTF font file.</source>
+            <translation>اختر ملف خط محليًا بصيغة TTF أو OTF.</translation>
+        </message>
+        <message>
+            <source>Could not read this font. Choose a valid TTF or OTF file up to 16 MB.</source>
+            <translation>تعذّرت قراءة الخط. اختر ملف TTF أو OTF صالحًا لا يتجاوز 16 ميغابايت.</translation>
+        </message>
+        <message>
+            <source>Could not load the selected font file.</source>
+            <translation>تعذّر تحميل ملف الخط المحدّد.</translation>
+        </message>
+        <message>
+            <source>This font is already available in Auralis.</source>
+            <translation>هذا الخط متاح بالفعل في Auralis.</translation>
+        </message>
+        <message>
+            <source>Could not save the font for Auralis.</source>
+            <translation>تعذّر حفظ الخط في Auralis.</translation>
+        </message>
+        <message>
+            <source>The file does not match a listed interface font or does not support its language.</source>
+            <translation>لا يطابق الملف أيًا من خطوط الواجهة المدرجة أو لا يدعم اللغة المحدّدة.</translation>
         </message>
     </context>
 </TS>

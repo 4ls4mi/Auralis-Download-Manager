@@ -1551,6 +1551,7 @@ mod tests {
             final_url: g.links[0].url.clone(),
             size: None,
             file_name: "epanet.html".into(),
+            description: None,
             server: None,
             web_page: true,
         }));
@@ -1584,6 +1585,7 @@ mod tests {
                 final_url: url.clone(),
                 size: None,
                 file_name: "epanet.html".into(),
+                description: None,
                 server: None,
                 web_page: true,
             }));
@@ -1822,6 +1824,7 @@ mod tests {
             final_url: g.links[1].url.clone(),
             size: Some(5),
             file_name: "b.zip".into(),
+            description: None,
             server: None,
             web_page: false,
         }));
@@ -1896,6 +1899,7 @@ mod tests {
                     final_url: g.links[i].url.clone(),
                     size: Some(1),
                     file_name: format!("renamed-{i}.mkv"),
+                    description: None,
                     server: None,
                     web_page: false,
                 }));

@@ -30,12 +30,14 @@ ColumnLayout {
     readonly property bool hasStore: Boolean(!problem && status?.browserSupported && status?.storeUrl)
     readonly property bool installed: Boolean(status?.connectedRecently || status?.extensionPresent)
     readonly property bool needsSetup: hasStore && !installed && !status?.policyInstalled
+    readonly property bool edgeStoreSetup: hasStore && !installed && status?.browserId === "edge"
     readonly property bool confirmedMissing: needsSetup && status?.extensionDiscovery === "missing"
         && !status?.extensionPreviouslyConnected && !status?.storePreviouslyConnected
     readonly property bool supportedBrowser: status?.browserId === "chrome" || status?.browserId === "edge"
     readonly property bool hostNeedsAttention: Boolean(!problem && status?.browserSupported && supportedBrowser
         && status?.nativeHostRegistered === false && status?.nativeHostProblem)
-    readonly property bool automaticAvailable: needsSetup && supportedBrowser && Boolean(status?.silentInstallAvailable)
+    readonly property bool automaticAvailable: needsSetup && status?.browserId === "chrome"
+        && Boolean(status?.silentInstallAvailable)
     readonly property bool canUndo: showManualTools && !problem && supportedBrowser && Boolean(status?.policyRemovable)
     readonly property var attempt: attempts[status?.browserId]
     readonly property bool pending: !installed && attempt?.state === "pending"
@@ -108,7 +110,7 @@ ColumnLayout {
                         recordAttempt(browserId, "failed", qsTr("Auralis could no longer find the saved automatic setup."))
                     else if (Date.now() >= previous.expires)
                         recordAttempt(browserId, "timeout")
-                } else if (browserId && value.policyInstalled && !previous && !value.extensionPreviouslyConnected
+                } else if (browserId === "chrome" && value.policyInstalled && !previous && !value.extensionPreviouslyConnected
                     && !value.storePreviouslyConnected) {
                     recordAttempt(browserId, "pending")
                 }
@@ -121,14 +123,12 @@ ColumnLayout {
     }
 
     function offerInstall(browserId) {
-        if (!needsSetup || acting || checking || status?.browserId !== browserId)
+        if (!needsSetup || edgeStoreSetup || acting || checking || status?.browserId !== browserId)
             return
         feedback = ""
         feedbackFailed = false
         if (!automaticAvailable) {
             recordAttempt(browserId, "unavailable")
-            if (browserId === "edge")
-                perform("openBrowserExtensionStore", browserId)
             return
         }
         confirmationBrowserId = browserId
@@ -253,7 +253,7 @@ ColumnLayout {
 
     Label {
         Layout.fillWidth: true
-        visible: root.manualAvailable && root.status?.browserId === "edge" && !root.confirming
+        visible: root.edgeStoreSetup && !root.confirming
         text: qsTr("Open the Chrome Web Store in Edge and follow its prompts. If Edge asks, allow extensions from other stores, then add Auralis.")
         textFormat: Text.PlainText
         wrapMode: Text.WordWrap
@@ -268,7 +268,7 @@ ColumnLayout {
         GlassButton {
             objectName: "installBrowserExtension"
             text: qsTr("Install extension")
-            visible: root.needsSetup && !root.manualAvailable && !root.pending
+            visible: root.needsSetup && !root.edgeStoreSetup && !root.manualAvailable && !root.pending
             enabled: !root.acting && !root.checking
             accent: root.colors.positive
             filled: true
@@ -278,7 +278,7 @@ ColumnLayout {
         GlassButton {
             objectName: "openBrowserExtensionStore"
             text: root.status?.browserId === "edge" ? qsTr("Open Chrome Web Store") : qsTr("Install manually")
-            visible: root.manualAvailable || (root.hasStore && root.status?.browserId === "edge" && root.pending)
+            visible: root.manualAvailable || root.edgeStoreSetup
             enabled: !root.acting && !root.checking
             accent: root.colors.positive
             filled: true

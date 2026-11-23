@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import QtQuick.Window
 
@@ -13,6 +14,8 @@ ColumnLayout {
     property string draftArabicFamily: fontSettings.arabicFamily ?? ""
     property int draftSizePercent: fontSettings.fontSizePercent ?? 100
     property bool applyFailed: false
+    property string fontProblem: ""
+    property bool fontImported: false
     readonly property bool previewActive: visible && (!Window.window || Window.window.visible)
     readonly property bool hasChanges: draftEnglishFamily !== (fontSettings.englishFamily ?? "")
         || draftArabicFamily !== (fontSettings.arabicFamily ?? "") || draftSizePercent !== (fontSettings.fontSizePercent ?? 100)
@@ -35,7 +38,13 @@ ColumnLayout {
             discardDraft()
     }
 
-    onPreviewActiveChanged: if (!previewActive) discardDraft()
+    onPreviewActiveChanged: {
+        if (!previewActive) {
+            discardDraft()
+            fontProblem = ""
+            fontImported = false
+        }
+    }
     onDraftEnglishFamilyChanged: applyFailed = false
     onDraftArabicFamilyChanged: applyFailed = false
     onDraftSizePercentChanged: applyFailed = false
@@ -140,6 +149,31 @@ ColumnLayout {
                 }
             }
         }
+
+        GlassButton {
+            objectName: script.rightToLeft ? "getArabicFonts" : "getEnglishFonts"
+            text: qsTr("Find fonts…")
+            Accessible.name: qsTr("Find %1 online").arg(script.caption)
+            onClicked: fontSources.popup()
+
+            AppMenu {
+                id: fontSources
+                Instantiator {
+                    model: script.fontOptions
+                    delegate: AppMenuItem {
+                        required property var modelData
+                        text: modelData.label
+                        onTriggered: {
+                            root.fontImported = false
+                            root.fontProblem = Qt.openUrlExternally(modelData.sourceUrl)
+                                ? "" : qsTr("Could not open the font page.")
+                        }
+                    }
+                    onObjectAdded: (index, object) => fontSources.insertItem(index, object)
+                    onObjectRemoved: (index, object) => fontSources.removeItem(object)
+                }
+            }
+        }
     }
 
     Label {
@@ -219,6 +253,11 @@ ColumnLayout {
             enabled: root.hasChanges
             onClicked: root.discardDraft()
         }
+        GlassButton {
+            objectName: "importInterfaceFont"
+            text: qsTr("Import font file…")
+            onClicked: importFontFile.open()
+        }
     }
 
     Label {
@@ -231,8 +270,27 @@ ColumnLayout {
 
     Label {
         Layout.fillWidth: true
-        text: qsTr("Install licensed font copies on this device, then reopen Auralis to use them here.")
+        visible: root.fontImported || root.fontProblem.length > 0
+        text: root.fontProblem || qsTr("Font imported. Select it, then choose Apply font.")
+        textFormat: Text.PlainText
+        color: root.fontProblem ? root.colors.destructive : root.colors.positive
+        wrapMode: Text.WordWrap
+    }
+
+    Label {
+        Layout.fillWidth: true
+        text: qsTr("The linked font downloads are for personal use. Import a TTF or OTF file you are licensed to use.")
         color: root.colors.muted
         wrapMode: Text.WordWrap
+    }
+
+    FileDialog {
+        id: importFontFile
+        title: qsTr("Choose a licensed font file")
+        nameFilters: [qsTr("Font files (*.ttf *.otf)")]
+        onAccepted: {
+            root.fontProblem = root.fontSettings.importFont(selectedFile)
+            root.fontImported = !root.fontProblem
+        }
     }
 }

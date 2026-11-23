@@ -523,7 +523,9 @@ pub fn video_add(
     let page = url::Url::parse(&p.address)
         .ok()
         .filter(|u| matches!(u.scheme(), "http" | "https"))?;
-    let name = crate::videodlg::file_name(title_of(&p.video, &p.address, &p.context), &p.choice);
+    let title = title_of(&p.video, &p.address, &p.context);
+    let name = crate::videodlg::file_name(title, &p.choice);
+    let description = crate::dialogs::source_description(&[Some(title), Some(&name)]);
     let (category, folder) = match music {
         Some(m) if mdm_tools::resolve::is_audio(&p.choice) => (crate::model::Category::Music, m),
         _ => (crate::model::Category::Video, folder),
@@ -533,6 +535,7 @@ pub fn video_add(
         selector: p.choice.selector.clone(),
         dest: folder.join(mdm_engine::naming::sanitize(name.trim())),
         category,
+        description,
         size: p.choice.size,
         start_now,
         subs: crate::videodlg::default_subs(&p.video, &p.choice, pref),

@@ -13,6 +13,7 @@ DetachedDialogWindow {
     readonly property bool confirming: requestInfo !== null
     property string errorMessage: ""
     property bool destinationEdited: false
+    property bool descriptionEdited: false
     property var categoryOptions: []
     property int clipboardRead: 0
     signal downloadAdded(var id, bool later)
@@ -63,13 +64,16 @@ DetachedDialogWindow {
         categoryOptions = reply.categories || []
         if (changed) {
             destinationEdited = false
+            descriptionEdited = false
             errorMessage = ""
-            description.text = reply.info.description || ""
             remember.checked = reply.info.remember || false
             connectionCount.value = 0
         }
         if (!destinationEdited)
             destination.text = reply.info.save_as || ""
+        const suggestion = reply.info.description || ""
+        if (!descriptionEdited && description.text !== suggestion)
+            description.text = suggestion
         if (changed || !visible) {
             const index = categoryOptions.findIndex(item => item.key === reply.info.category)
             category.currentIndex = Math.max(0, index)
@@ -103,7 +107,7 @@ DetachedDialogWindow {
                 return
             }
             send({action: "glass-file-info", category: "commit", ids: [requestInfo.id],
-                queue: JSON.stringify({save_as: path, description: description.text,
+                queue: JSON.stringify({save_as: path, description: descriptionEdited ? description.text : null,
                     remember: remember.checked, chunks: connectionCount.value || null, later})}, later)
             return
         }
@@ -143,6 +147,7 @@ DetachedDialogWindow {
         connectionCount.value = 0
         errorMessage = ""
         destinationEdited = false
+        descriptionEdited = false
     }
 
     bodyContent: [
@@ -235,11 +240,14 @@ DetachedDialogWindow {
                 onClicked: savePicker.open()
             }
         },
+        Label { visible: root.confirming; text: qsTr("Description"); color: root.colors.muted },
         TextField {
             id: description
+            objectName: "downloadDescription"
             visible: root.confirming
             Layout.fillWidth: true
             placeholderText: qsTr("Description")
+            onTextEdited: root.descriptionEdited = true
             color: root.colors.text
             font.family: root.fontFamilyForText(text)
             background: GlassSurface { material: root.material; role: "field" }

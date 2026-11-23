@@ -1279,6 +1279,14 @@ Info hash %3</source>
             <source>File dragging is available on Windows.</source>
             <translation>Windows 支持拖放文件。</translation>
         </message>
+        <message>
+            <source>Auralis is already closing or preparing an update.</source>
+            <translation>Auralis 正在关闭或准备更新。</translation>
+        </message>
+        <message>
+            <source>Wait for Auralis to finish preparing the update.</source>
+            <translation>请等待 Auralis 准备好更新。</translation>
+        </message>
     </context>
     <context>
         <name>EnginePrompts</name>
@@ -3370,6 +3378,38 @@ Info hash %3</source>
             <source>Install licensed font copies on this device, then reopen Auralis to use them here.</source>
             <translation>在此设备上安装获许可的字体，然后重新打开 Auralis 即可使用。</translation>
         </message>
+        <message>
+            <source>Find fonts…</source>
+            <translation>查找字体…</translation>
+        </message>
+        <message>
+            <source>Find %1 online</source>
+            <translation>在线查找%1</translation>
+        </message>
+        <message>
+            <source>Could not open the font page.</source>
+            <translation>无法打开字体页面。</translation>
+        </message>
+        <message>
+            <source>Import font file…</source>
+            <translation>导入字体文件…</translation>
+        </message>
+        <message>
+            <source>Font imported. Select it, then choose Apply font.</source>
+            <translation>字体已导入。选中它，然后选择应用字体。</translation>
+        </message>
+        <message>
+            <source>The linked font downloads are for personal use. Import a TTF or OTF file you are licensed to use.</source>
+            <translation>链接中的字体仅供个人使用。请导入你有权使用的 TTF 或 OTF 文件。</translation>
+        </message>
+        <message>
+            <source>Choose a licensed font file</source>
+            <translation>选择有使用许可的字体文件</translation>
+        </message>
+        <message>
+            <source>Font files (*.ttf *.otf)</source>
+            <translation>字体文件 (*.ttf *.otf)</translation>
+        </message>
     </context>
     <context>
         <name>SettingsUpdates</name>
@@ -3891,6 +3931,14 @@ Info hash %3</source>
         <message>
             <source>Could not save the interface size.</source>
             <translation>无法保存界面缩放设置。</translation>
+        </message>
+        <message>
+            <source>Restart Auralis</source>
+            <translation>重启 Auralis</translation>
+        </message>
+        <message>
+            <source>Restarting…</source>
+            <translation>正在重启…</translation>
         </message>
     </context>
     <context>
@@ -4944,6 +4992,44 @@ Info hash %3</source>
         <message>
             <source>Wait for the other saved-data operation to finish</source>
             <translation>等待另一个保存数据操作完成</translation>
+        </message>
+        <message>
+            <source>Wait for the download backup or restore to finish before exiting</source>
+            <translation>请等待下载备份或恢复完成后再退出。</translation>
+        </message>
+    </context>
+    <context>
+        <name>AppRestart</name>
+        <message>
+            <source>Could not restart Auralis. Open it again to apply the saved interface size.</source>
+            <translation>无法重启 Auralis。请重新打开应用以应用已保存的界面大小。</translation>
+        </message>
+    </context>
+    <context>
+        <name>Typography</name>
+        <message>
+            <source>Choose a local TTF or OTF font file.</source>
+            <translation>请选择本地 TTF 或 OTF 字体文件。</translation>
+        </message>
+        <message>
+            <source>Could not read this font. Choose a valid TTF or OTF file up to 16 MB.</source>
+            <translation>无法读取此字体。请选择不超过 16 MB 的有效 TTF 或 OTF 文件。</translation>
+        </message>
+        <message>
+            <source>Could not load the selected font file.</source>
+            <translation>无法加载所选字体文件。</translation>
+        </message>
+        <message>
+            <source>This font is already available in Auralis.</source>
+            <translation>Auralis 已有此字体。</translation>
+        </message>
+        <message>
+            <source>Could not save the font for Auralis.</source>
+            <translation>无法将字体保存到 Auralis。</translation>
+        </message>
+        <message>
+            <source>The file does not match a listed interface font or does not support its language.</source>
+            <translation>文件与列表中的界面字体不匹配，或不支持该字体对应的语言。</translation>
         </message>
     </context>
 </TS>
