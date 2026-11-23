@@ -1,0 +1,86 @@
+name: Auralis and IDM speed comparison
+on:
+  push:
+    branches: [bench/auralis-idm]
+permissions:
+  contents: read
+concurrency:
+  group: auralis-self-hosted-windows
+  cancel-in-progress: false
+jobs:
+  compare:
+    runs-on: [self-hosted, Windows, X64, auralis]
+    timeout-minutes: 30
+    steps:
+      - name: Compare installed download managers
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $idm = @("${env:ProgramFiles(x86)}\Internet Download Manager\IDMan.exe", "$env:ProgramFiles\Internet Download Manager\IDMan.exe") | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+          $appDir = (Get-ItemProperty 'HKCU:\Software\misterhybrid\Auralis Download Manager' -ErrorAction SilentlyContinue).'(default)'
+          if (!$appDir) { $appDir = Join-Path $env:LOCALAPPDATA 'Programs\Auralis Download Manager' }
+          $engine = Join-Path $appDir 'auralis_engine.dll'
+          if (!$idm -or !(Test-Path -LiteralPath $engine)) { throw 'Could not locate both installed applications in the runner account.' }
+          $env:MDM_DATA_DIR = Join-Path $env:RUNNER_TEMP ("auralis-compare-profile-" + $env:GITHUB_RUN_ID)
+          $dest = Join-Path $env:RUNNER_TEMP ("auralis-compare-files-" + $env:GITHUB_RUN_ID)
+          New-Item -ItemType Directory -Path $env:MDM_DATA_DIR,$dest -Force | Out-Null
+          $env:PATH = "$appDir;$env:PATH"
+          Add-Type -TypeDefinition @'
+          using System;
+          using System.Runtime.InteropServices;
+          using System.Text;
+          using System.Threading.Tasks;
+          public static class AuralisBench {
+            [DllImport("auralis_engine.dll", CallingConvention=CallingConvention.Cdecl)] static extern IntPtr auralis_engine_run();
+            [DllImport("auralis_engine.dll", CallingConvention=CallingConvention.Cdecl)] static extern IntPtr auralis_engine_request(byte[] input, UIntPtr length);
+            [DllImport("auralis_engine.dll", CallingConvention=CallingConvention.Cdecl)] static extern void auralis_engine_free(IntPtr p);
+            static string Take(IntPtr p) { if (p == IntPtr.Zero) throw new Exception("Null engine response"); try { return Marshal.PtrToStringUTF8(p); } finally { auralis_engine_free(p); } }
+            public static Task<string> Start() { return Task.Run(() => Take(auralis_engine_run())); }
+            public static string Request(string json) { var b=Encoding.UTF8.GetBytes(json); return Take(auralis_engine_request(b,(UIntPtr)b.Length)); }
+          }
+          '@
+          $service = [AuralisBench]::Start()
+          function Invoke-Auralis($command) {
+            $raw = [AuralisBench]::Request(($command | ConvertTo-Json -Depth 12 -Compress))
+            $answer = $raw | ConvertFrom-Json
+            if ($answer.error) { throw $answer.error }
+            return $answer.result
+          }
+          $ready = $false
+          for ($i = 0; $i -lt 60; $i++) {
+            try { $null = Invoke-Auralis @{query='list'}; $ready = $true; break } catch { Start-Sleep -Milliseconds 500 }
+          }
+          if (!$ready) { throw 'The isolated Auralis engine did not start.' }
+          $url = 'https://speed.cloudflare.com/__down?bytes=100000000'
+          $results = @()
+          try {
+            foreach ($trial in 1..4) {
+              $order = if ($trial % 2) { @('Auralis','IDM') } else { @('IDM','Auralis') }
+              foreach ($program in $order) {
+                $filename = "$program-$trial.bin"
+                $path = Join-Path $dest $filename
+                $clock = [Diagnostics.Stopwatch]::StartNew()
+                if ($program -eq 'Auralis') {
+                  $null = Invoke-Auralis @{url=$url;dir=$dest;name=$filename;silent=$true}
+                } else {
+                  $process = Start-Process -FilePath $idm -ArgumentList @('/d', $url, '/p', $dest, '/f', $filename, '/n') -PassThru
+                }
+                $deadline = [DateTime]::UtcNow.AddMinutes(3)
+                while ([DateTime]::UtcNow -lt $deadline) {
+                  if ((Test-Path -LiteralPath $path) -and (Get-Item -LiteralPath $path).Length -eq 100000000) { break }
+                  Start-Sleep -Milliseconds 100
+                }
+                $clock.Stop()
+                if (!(Test-Path -LiteralPath $path) -or (Get-Item -LiteralPath $path).Length -ne 100000000) { throw "$program trial $trial did not finish the expected file." }
+                $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+                $results += [pscustomobject]@{Program=$program;Trial=$trial;Seconds=[math]::Round($clock.Elapsed.TotalSeconds,3);MBps=[math]::Round(100/$clock.Elapsed.TotalSeconds,2);SHA256=$hash}
+                Remove-Item -LiteralPath $path
+              }
+            }
+            $results | Format-Table -AutoSize | Out-String | Write-Host
+            $results | ConvertTo-Json -Depth 3 | Write-Host
+          } finally {
+            try { $null = Invoke-Auralis @{exit=$true} } catch {}
+            if ($service.Wait(30000)) { Remove-Item -LiteralPath $env:MDM_DATA_DIR -Recurse -Force -ErrorAction SilentlyContinue }
+            Remove-Item -LiteralPath $dest -Recurse -Force -ErrorAction SilentlyContinue
+          }
