@@ -1,0 +1,35 @@
+name: Publish verified Auralis downloads
+
+on:
+  push:
+    branches: [wip/auralis-publication]
+    paths:
+      - .github/workflows/auralis-publish-verified.yml
+      - .github/scripts/publish-auralis-platforms.py
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    name: Publish verified ${{ matrix.package }} downloads
+    if: github.repository == '4ls4mi/Auralis-Download-Manager'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [desktop, android]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Read original desktop release notes
+        if: matrix.package == 'desktop'
+        run: git fetch --no-tags --depth=1 origin 9ea57f80ac2eb28ab29e13c79e71a548b39e368e
+      - name: Verify artifacts, upload to draft, and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AURALIS_PACKAGE: ${{ matrix.package }}
+        run: python3 .github/scripts/publish-auralis-platforms.py "$AURALIS_PACKAGE"
