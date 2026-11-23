@@ -31,6 +31,7 @@ jobs:
           using System.Text;
           using System.Threading.Tasks;
           public static class AuralisBench {
+            [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)] public static extern bool SetDllDirectory(string path);
             [DllImport("auralis_engine.dll", CallingConvention=CallingConvention.Cdecl)] static extern IntPtr auralis_engine_run();
             [DllImport("auralis_engine.dll", CallingConvention=CallingConvention.Cdecl)] static extern IntPtr auralis_engine_request(byte[] input, UIntPtr length);
             [DllImport("auralis_engine.dll", CallingConvention=CallingConvention.Cdecl)] static extern void auralis_engine_free(IntPtr p);
@@ -39,6 +40,7 @@ jobs:
             public static string Request(string json) { var b=Encoding.UTF8.GetBytes(json); return Take(auralis_engine_request(b,(UIntPtr)b.Length)); }
           }
           '@
+          if (![AuralisBench]::SetDllDirectory($appDir)) { throw "Could not set the engine library directory." }
           $service = [AuralisBench]::Start()
           function Invoke-Auralis($command) {
             $raw = [AuralisBench]::Request(($command | ConvertTo-Json -Depth 12 -Compress))
@@ -46,11 +48,12 @@ jobs:
             if ($answer.error) { throw $answer.error }
             return $answer.result
           }
+          $lastError = ''
           $ready = $false
           for ($i = 0; $i -lt 60; $i++) {
-            try { $null = Invoke-Auralis @{query='list'}; $ready = $true; break } catch { Start-Sleep -Milliseconds 500 }
+            try { $null = Invoke-Auralis @{query='list'}; $ready = $true; break } catch { $lastError = $_.Exception.ToString(); if ($service.IsFaulted) { throw $service.Exception.ToString() }; Start-Sleep -Milliseconds 500 }
           }
-          if (!$ready) { throw 'The isolated Auralis engine did not start.' }
+          if (!$ready) { throw "The isolated Auralis engine did not start. $lastError" }
           $url = 'https://speed.cloudflare.com/__down?bytes=100000000'
           $results = @()
           try {
