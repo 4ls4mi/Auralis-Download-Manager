@@ -1,0 +1,70 @@
+name: Auralis Qt Linux build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [wip/auralis-qt-shell]
+    paths:
+      - 'qt-ui/packaging/build-linux.sh'
+      - '.github/workflows/auralis-qt-linux.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  debian-amd64:
+    name: Build and verify the Debian 13 application
+    if: >-
+      github.repository == '4ls4mi/Auralis-Download-Manager' &&
+      github.ref == 'refs/heads/wip/auralis-qt-shell' &&
+      (github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[build-auralis-linux]'))
+    runs-on: ubuntu-latest
+    container: debian:13-slim
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Install Debian build and runtime dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential ca-certificates clang cmake curl dpkg-dev git golang-go \
+            libclang-dev libegl-dev libgl-dev libudev-dev libvulkan-dev \
+            ninja-build perl pkg-config \
+            qt6-base-dev qt6-declarative-dev qt6-l10n-tools qt6-multimedia-dev \
+            qt6-quick3d-dev qt6-shader-baker qt6-shadertools-dev qt6-tools-dev \
+            fonts-dejavu-core qml6-module-qtcore qml6-module-qtqml \
+            qml6-module-qtqml-models qml6-module-qtqml-workerscript \
+            qml6-module-qtmultimedia qml6-module-qtquick qml6-module-qtquick-controls \
+            qml6-module-qtquick-dialogs qml6-module-qtquick-layouts \
+            qml6-module-qtquick-shapes qml6-module-qtquick-templates \
+            qml6-module-qtquick-window qml6-module-qtquick3d
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Install the Rust toolchain
+        run: |
+          curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | \
+            sh -s -- -y --profile minimal --default-toolchain stable --no-modify-path
+          printf '%s\n' "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: Build and smoke-test the packaged application
+        env:
+          CARGO_PROFILE_RELEASE_LTO: thin
+          CARGO_PROFILE_RELEASE_CODEGEN_UNITS: 4
+        run: bash qt-ui/packaging/build-linux.sh
+
+      - name: Upload the verified Debian package and checksum
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: auralis-download-manager-linux-debian13-amd64
+          path: |
+            target/auralis-qt-linux/dist/*.deb
+            target/auralis-qt-linux/dist/*.deb.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14

@@ -444,6 +444,10 @@
             <translation>在 Edge 中打开 Chrome 网上应用店，并按提示操作。如果 Edge 提示允许来自其他应用商店的扩展，请允许，然后添加 Auralis。</translation>
         </message>
         <message>
+            <source>Install automatically</source>
+            <translation>自动安装</translation>
+        </message>
+        <message>
             <source>Install extension</source>
             <translation>安装扩展</translation>
         </message>

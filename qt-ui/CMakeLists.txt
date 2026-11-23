@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(AuralisQt VERSION 0.3.75 LANGUAGES CXX)
+project(AuralisQt VERSION 0.3.76 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -9,7 +9,7 @@ find_package(Qt6 6.8 REQUIRED COMPONENTS
 )
 qt_standard_project_setup(REQUIRES 6.8)
 
-qt_add_executable(auralis-download-manager WIN32
+qt_add_executable(auralis-download-manager WIN32 MACOSX_BUNDLE
     src/main.cpp
     src/BrowserSetup.cpp
     src/BrowserSetup.h
@@ -41,6 +41,16 @@ if(WIN32)
     configure_file(src/WindowsIcon.rc.in "${CMAKE_CURRENT_BINARY_DIR}/WindowsIcon.rc" @ONLY)
     target_sources(auralis-download-manager PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/WindowsIcon.rc")
     target_link_libraries(auralis-download-manager PRIVATE Qt6::WebSockets dwmapi comctl32 shell32 shlwapi ole32)
+endif()
+
+if(APPLE)
+    set_target_properties(auralis-download-manager PROPERTIES
+        MACOSX_BUNDLE_BUNDLE_NAME "Auralis Download Manager"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "io.github.4ls4mi.auralis"
+        MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
+        MACOSX_BUNDLE_ICON_FILE "auralis.icns"
+    )
 endif()
 
 qt_add_shaders(auralis-download-manager "glass_effects"

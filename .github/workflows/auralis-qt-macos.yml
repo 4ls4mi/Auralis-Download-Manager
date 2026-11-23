@@ -1,0 +1,77 @@
+name: Auralis Qt macOS build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [wip/auralis-qt-shell]
+    paths:
+      - .github/workflows/auralis-qt-macos.yml
+      - qt-ui/packaging/build-macos.sh
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and verify macOS ${{ matrix.arch }}
+    if: >-
+      github.repository == '4ls4mi/Auralis-Download-Manager' &&
+      github.ref == 'refs/heads/wip/auralis-qt-shell' &&
+      (github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[build-auralis-macos]'))
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: arm64, runner: macos-15, target: aarch64-apple-darwin }
+          - { arch: x86_64, runner: macos-15-intel, target: x86_64-apple-darwin }
+    env:
+      QT_VERSION: '6.11.3'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Install the Rust target
+        shell: bash
+        env:
+          RUST_TARGET: ${{ matrix.target }}
+          BUILD_ARCH: ${{ matrix.arch }}
+        run: |
+          test "$(uname -m)" = "$BUILD_ARCH"
+          rustup toolchain install stable --profile minimal
+          rustup target add --toolchain stable "$RUST_TARGET"
+
+      - name: Install the macOS Qt SDK
+        shell: bash
+        run: |
+          python3 -m venv "$RUNNER_TEMP/aqt"
+          "$RUNNER_TEMP/aqt/bin/python" -m pip install --disable-pip-version-check aqtinstall==3.3.0
+          "$RUNNER_TEMP/aqt/bin/aqt" install-qt mac desktop "$QT_VERSION" clang_64 \
+            --base https://download.qt.io --outputdir "$RUNNER_TEMP/qt" \
+            -m qtquick3d qtquicktimeline qtmultimedia qtshadertools
+          for sdk in "$RUNNER_TEMP/qt/$QT_VERSION/"*; do
+            if [[ -x "$sdk/bin/macdeployqt" ]]; then
+              printf 'AURALIS_MACOS_QT=%s\n' "$sdk" >> "$GITHUB_ENV"
+              exit 0
+            fi
+          done
+          echo 'Qt macdeployqt was not found in the installed SDK.' >&2
+          exit 1
+
+      - name: Build, package and test the macOS application
+        shell: bash
+        run: bash qt-ui/packaging/build-macos.sh
+
+      - name: Upload the verified macOS package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: auralis-macos-${{ matrix.arch }}
+          path: |
+            target/dist/Auralis.Download.Manager_*_macos-${{ matrix.arch }}.dmg
+            target/dist/Auralis.Download.Manager_*_macos-${{ matrix.arch }}.dmg.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14

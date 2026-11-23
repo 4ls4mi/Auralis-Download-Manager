@@ -33,28 +33,28 @@ ColumnLayout {
     readonly property bool needsSetup: hasStore && !installed && !status?.policyInstalled
     readonly property bool edgeStoreSetup: hasStore && !installed && status?.browserId === "edge"
     readonly property bool extensionMissing: !installed && status?.extensionDiscovery === "missing"
-    readonly property bool confirmedMissing: needsSetup && extensionMissing
-        && !status?.extensionPreviouslyConnected && !status?.storePreviouslyConnected
     readonly property bool supportedBrowser: status?.browserId === "chrome" || status?.browserId === "edge"
     readonly property bool hostNeedsAttention: Boolean(!problem && status?.browserSupported && supportedBrowser
         && status?.nativeHostRegistered === false && status?.nativeHostProblem)
     readonly property bool automaticAvailable: needsSetup && supportedBrowser
         && Boolean(status?.silentInstallAvailable)
+    readonly property bool offerAtStartup: needsSetup && (extensionMissing || automaticAvailable)
+        && !status?.extensionPreviouslyConnected && !status?.storePreviouslyConnected
+        && !status?.browserPreviouslyConnected
     readonly property bool canUndo: showManualTools && !problem && supportedBrowser && Boolean(status?.policyRemovable)
     readonly property bool canReset: showManualTools && hasStore && supportedBrowser
     readonly property bool canConfirmRemoval: canUndo && (!removalForReset || extensionMissing)
     readonly property var attempt: attempts[status?.browserId]
     readonly property bool pending: !installed && attempt?.state === "pending"
-    readonly property bool manualAvailable: hasStore && !installed && Boolean(attempt?.state && !pending)
+    readonly property bool automaticBlocked: needsSetup && supportedBrowser && !automaticAvailable
+    readonly property bool attemptNeedsAttention: !installed && Boolean(attempt?.state && !pending)
     readonly property bool needsHostRepair: hostNeedsAttention && status?.nativeHostCanRegister === true
-        && (installed || status?.policyInstalled || manualAvailable)
-    readonly property bool canRetry: showManualTools && manualAvailable && automaticAvailable
+        && (installed || status?.policyInstalled || automaticBlocked || attemptNeedsAttention)
     readonly property string setupDetail: {
         if (problem)
             return ""
-        if (manualAvailable) {
-            const currentBlock = attempt?.state === "unavailable" || status?.policyState === "blocked"
-            return attempt?.detail || (currentBlock ? status?.policyProblem || "" : "")
+        if (automaticBlocked || attemptNeedsAttention) {
+            return attempt?.detail || (status?.policyState === "blocked" ? status?.policyProblem || "" : "")
                 || (hostNeedsAttention ? status.nativeHostProblem : "")
         }
         return hostNeedsAttention && (installed || status?.policyInstalled) ? status.nativeHostProblem : ""
@@ -92,14 +92,8 @@ ColumnLayout {
                 problem = ""
                 const browserId = value.browserId
                 const previous = attempts[browserId]
-                if (confirmationBrowserId) {
-                    if (installed || value.policyInstalled) {
-                        cancelConfirmation()
-                    } else if (!automaticAvailable) {
-                        cancelConfirmation()
-                        recordAttempt(browserId, "unavailable")
-                    }
-                }
+                if (confirmationBrowserId && !automaticAvailable)
+                    cancelConfirmation()
                 if (removalBrowserId && !canConfirmRemoval)
                     cancelConfirmation()
                 if (installed) {
@@ -131,14 +125,10 @@ ColumnLayout {
     }
 
     function offerInstall(browserId) {
-        if (!needsSetup || acting || checking || status?.browserId !== browserId)
+        if (!automaticAvailable || pending || acting || checking || status?.browserId !== browserId)
             return
         feedback = ""
         feedbackFailed = false
-        if (!automaticAvailable) {
-            recordAttempt(browserId, "unavailable")
-            return
-        }
         confirmationBrowserId = browserId
         confirmationBrowserName = status.browser
     }
@@ -246,7 +236,7 @@ ColumnLayout {
         Layout.fillWidth: true
         wrapMode: Text.WordWrap
         textFormat: Text.PlainText
-        color: root.problem || root.manualAvailable ? root.colors.destructive
+        color: root.problem || root.attemptNeedsAttention || root.automaticBlocked ? root.colors.destructive
             : root.status?.connectedRecently ? root.colors.positive : root.colors.muted
         text: {
             const browser = root.status?.browser
@@ -272,18 +262,18 @@ ColumnLayout {
                 return qsTr("Starting extension installation in %1…").arg(browser)
             if (root.pending)
                 return qsTr("Close all %1 windows, then reopen the browser to finish installing. Open the Auralis toolbar icon to verify the connection.").arg(browser)
-            if (root.manualAvailable) {
-                if (root.attempt.state === "unavailable")
-                    return qsTr("Automatic installation is unavailable in %1. You can install the extension manually.").arg(browser)
+            if (root.attemptNeedsAttention) {
                 if (root.attempt.state === "timeout" && root.status?.policyInstalled)
                     return qsTr("Automatic setup was saved for %1, but Auralis could not verify the installation. You can install the extension manually.").arg(browser)
                 if (root.attempt.state === "timeout")
                     return qsTr("Auralis could not verify installation in %1. You can install the extension manually.").arg(browser)
                 return qsTr("Automatic installation did not complete in %1. You can install the extension manually.").arg(browser)
             }
-            if (root.status?.extensionPreviouslyConnected || root.status?.storePreviouslyConnected)
+            if (root.automaticBlocked)
+                return qsTr("Automatic installation is unavailable in %1. You can install the extension manually.").arg(browser)
+            if (!root.extensionMissing && (root.status?.extensionPreviouslyConnected || root.status?.storePreviouslyConnected))
                 return qsTr("The extension previously connected in %1. Open its toolbar icon if it’s still installed.").arg(browser)
-            if (root.status?.browserPreviouslyConnected)
+            if (!root.extensionMissing && root.status?.browserPreviouslyConnected)
                 return qsTr("%1 has connected before. Open the Auralis toolbar icon to verify the extension.").arg(browser)
             return qsTr("Install the extension in %1 to send browser downloads to Auralis.").arg(browser)
         }
@@ -301,13 +291,13 @@ ColumnLayout {
     Flow {
         Layout.fillWidth: true
         spacing: 8
-        visible: !root.confirming && !root.problem
+        visible: !root.removalBrowserId && !root.problem
 
         GlassButton {
             objectName: "installBrowserExtension"
-            text: qsTr("Install extension")
-            visible: root.automaticAvailable && !root.manualAvailable && !root.pending
-            enabled: !root.acting && !root.checking
+            text: qsTr("Install automatically")
+            visible: root.hasStore && root.supportedBrowser && !root.installed
+            enabled: root.automaticAvailable && !root.pending && !root.confirming && !root.acting && !root.checking
             accent: root.colors.positive
             filled: true
             onClicked: root.offerInstall(root.status?.browserId)
@@ -315,18 +305,21 @@ ColumnLayout {
 
         GlassButton {
             objectName: "openBrowserExtensionStore"
-            text: qsTr("Open Chrome Web Store")
+            text: root.installed ? qsTr("Open Chrome Web Store") : qsTr("Install manually")
             visible: root.hasStore && root.supportedBrowser
             enabled: !root.acting && !root.checking
             accent: root.colors.positive
-            filled: !root.installed && (!root.automaticAvailable || root.manualAvailable)
-            onClicked: root.perform("openBrowserExtensionStore", root.status?.browserId)
+            filled: !root.installed && !root.automaticAvailable
+            onClicked: {
+                root.cancelConfirmation()
+                root.perform("openBrowserExtensionStore", root.status?.browserId)
+            }
         }
 
         GlassButton {
             objectName: "resetBrowserSetup"
             text: qsTr("Reset setup status")
-            visible: root.canReset
+            visible: root.canReset && !root.confirming
             enabled: !root.acting && !root.checking
             onClicked: root.resetSetup()
         }
@@ -334,26 +327,18 @@ ColumnLayout {
         GlassButton {
             objectName: "repairDetectedBrowserHost"
             text: qsTr("Repair browser connection")
-            visible: root.needsHostRepair && (root.installed || root.advancedOpen)
+            visible: root.needsHostRepair && !root.confirming
             enabled: !root.acting && !root.checking
             onClicked: root.perform("registerBrowserHost", root.status?.browserId)
         }
 
         GlassButton {
             text: qsTr("Advanced options")
-            visible: root.canUndo || root.canRetry || Boolean(root.setupDetail)
+            visible: root.canUndo && !root.confirming
             enabled: !root.acting
             checkable: true
             checked: root.advancedOpen
             onToggled: root.advancedOpen = checked
-        }
-
-        GlassButton {
-            objectName: "retryBrowserExtensionInstall"
-            text: qsTr("Retry automatic setup")
-            visible: root.canRetry && root.advancedOpen
-            enabled: !root.acting && !root.checking
-            onClicked: root.offerInstall(root.status?.browserId)
         }
 
         GlassButton {
@@ -368,7 +353,7 @@ ColumnLayout {
     Label {
         objectName: "browserSetupDetails"
         Layout.fillWidth: true
-        visible: root.advancedOpen && !root.confirming && text.length > 0
+        visible: !root.confirming && text.length > 0
         text: root.setupDetail
         textFormat: Text.PlainText
         wrapMode: Text.WordWrap

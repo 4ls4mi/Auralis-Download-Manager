@@ -444,6 +444,10 @@
             <translation>Abre Chrome Web Store en Edge y sigue sus indicaciones. Si Edge te lo pide, permite extensiones de otras tiendas y añade Auralis.</translation>
         </message>
         <message>
+            <source>Install automatically</source>
+            <translation>Instalar automáticamente</translation>
+        </message>
+        <message>
             <source>Install extension</source>
             <translation>Instalar extensión</translation>
         </message>

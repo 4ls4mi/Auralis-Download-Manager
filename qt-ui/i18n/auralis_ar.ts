@@ -444,6 +444,10 @@
             <translation>افتح سوق Chrome الإلكتروني في Edge واتبع التعليمات. إذا طلب Edge ذلك، فاسمح بالإضافات من المتاجر الأخرى، ثم أضف Auralis.</translation>
         </message>
         <message>
+            <source>Install automatically</source>
+            <translation>التثبيت تلقائيًا</translation>
+        </message>
+        <message>
             <source>Install extension</source>
             <translation>تثبيت الإضافة</translation>
         </message>

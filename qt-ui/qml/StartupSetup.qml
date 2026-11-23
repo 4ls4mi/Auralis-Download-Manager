@@ -29,7 +29,7 @@ DetachedDialogWindow {
     readonly property bool installerBusy: helperStatus?.job?.state === "installing"
     readonly property bool batchRunning: requestingHelper || Boolean(activeHelper) || queuedHelpers.length > 0
     readonly property bool missingPrerequisite: (missingHelpers.length > 0 && !installerBusy)
-        || browserSetup.confirmedMissing
+        || browserSetup.offerAtStartup
 
     title: qsTr("Set up Auralis")
     objectName: "startupSetupWindow"
@@ -50,6 +50,8 @@ DetachedDialogWindow {
     function offerIfNeeded() {
         if (canCheck && checksComplete && missingPrerequisite && !offered && !deferred) {
             offered = true
+            if (browserSetup.offerAtStartup)
+                browserSetup.offerInstall(browserSetup.status.browserId)
             open()
         }
     }
