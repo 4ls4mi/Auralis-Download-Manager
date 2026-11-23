@@ -1,11 +1,9 @@
-name: Publish verified Auralis downloads
+name: Publish verified Auralis Windows installer
 
 on:
   push:
     branches: [wip/auralis-publication]
-    paths:
-      - .github/workflows/auralis-publish-verified.yml
-      - .github/scripts/publish-auralis-platforms.py
+    paths: [.github/workflows/auralis-publish-verified.yml]
 
 permissions:
   actions: read
@@ -13,15 +11,18 @@ permissions:
 
 jobs:
   publish:
-    name: Publish verified macOS downloads
-    if: github.repository == '4ls4mi/Auralis-Download-Manager'
+    name: Publish verified Auralis 0.3.77
+    if: github.repository == '4ls4mi/Auralis-Download-Manager' && github.ref == 'refs/heads/wip/auralis-publication'
     runs-on: ubuntu-24.04
-    timeout-minutes: 110
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
+          ref: ${{ github.sha }}
           persist-credentials: false
-      - name: Add each verified disk image to the desktop release
+      - name: Publish the installer and extensions from the verified build
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 .github/scripts/publish-auralis-platforms.py macos
+          GH_REPO: ${{ github.repository }}
+          AURALIS_VERIFIED_RUN_ID: '45242737118'
+        run: bash qt-ui/packaging/publish-windows.sh
