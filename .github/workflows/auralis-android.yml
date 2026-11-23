@@ -21,6 +21,16 @@ jobs:
     if: github.repository == '4ls4mi/Auralis-Download-Manager' && github.ref == 'refs/heads/wip/auralis-android'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    env:
+      CARGO_ANDROID_CACHE_PATHS: |
+        ~/.cargo/git/db
+        ~/.cargo/registry/cache
+        ~/.cargo/registry/index
+        ~/.cargo/bin/cargo-ndk
+        ~/.cargo/bin/cargo-ndk-ndk
+        target/release
+        target/aarch64-linux-android/release
+        target/x86_64-linux-android/release
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -55,16 +65,10 @@ jobs:
             sudo apt-get install -y libclang-dev
           fi
 
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        id: cargo-cache
         with:
-          path: |
-            ~/.cargo/git/db
-            ~/.cargo/registry/cache
-            ~/.cargo/registry/index
-            ~/.cargo/bin/cargo-ndk
-            ~/.cargo/bin/cargo-ndk-ndk
-            target/aarch64-linux-android/release
-            target/x86_64-linux-android/release
+          path: ${{ env.CARGO_ANDROID_CACHE_PATHS }}
           key: auralis-android-ndk29-${{ steps.rust.outputs.version }}-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'crates/engine/Cargo.toml', 'crates/auralis-android/Cargo.toml') }}
 
       - name: Build the Auralis engine for Android
@@ -75,6 +79,12 @@ jobs:
           fi
           bash android-app/build-native.sh
 
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        if: steps.cargo-cache.outputs.cache-hit != 'true'
+        with:
+          path: ${{ env.CARGO_ANDROID_CACHE_PATHS }}
+          key: ${{ steps.cargo-cache.outputs.cache-primary-key }}
+
       - name: Build the app and check native library alignment
         shell: bash
         run: |
@@ -82,12 +92,14 @@ jobs:
           ./gradlew --no-daemon assembleDebug assembleDebugAndroidTest
           readelf="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
           for abi in arm64-v8a x86_64; do
-            "$readelf" -lW "app/src/main/jniLibs/$abi/libauralis_android.so" |
-              awk '$1 == "LOAD" { found = 1; if (strtonum($NF) < 16384) bad = 1 }
-                   END { if (!found || bad) exit 1 }' || {
+            alignments=$("$readelf" -lW "app/src/main/jniLibs/$abi/libauralis_android.so" |
+              awk '$1 == "LOAD" {print $NF}')
+            while IFS= read -r alignment; do
+              if [[ ! "$alignment" =~ ^0x[0-9a-fA-F]+$ ]] || (( alignment < 16384 )); then
                 echo "Auralis native library for $abi lacks 16 KB ELF alignment" >&2
                 exit 1
-              }
+              fi
+            done <<< "$alignments"
           done
           "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -P 16 4 app/build/outputs/apk/debug/app-debug.apk
 
