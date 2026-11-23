@@ -15,6 +15,8 @@ REPO = '4ls4mi/Auralis-Download-Manager'
 RELEASES = f'repos/{REPO}/releases'
 DESKTOP_SHA = '9ea57f80ac2eb28ab29e13c79e71a548b39e368e'
 ANDROID_SHA = '082ccaee847520df41e8c9b9ab0a1078bee29b28'
+MACOS_SHA = '97cf62eabad9b01bb1dcf453cc2c24b9ee65ff44'
+MACOS_RUN = 45232724008
 WINDOWS = 'Auralis.Download.Manager_0.3.76_x64-setup.exe'
 LINUX = 'Auralis.Download.Manager_0.3.76_debian13_amd64.deb'
 ANDROID = 'Auralis.Android_0.1.0.apk'
@@ -179,12 +181,105 @@ Download the APK below for a fresh install. This preview APK uses debug signing.
     print(f'Public release verified {checked["html_url"]}', flush=True)
 
 
+def publish_macos(output):
+    run_path = f'repos/{REPO}/actions/runs/{MACOS_RUN}'
+    tag_path = f'repos/{REPO}/git/ref/tags/v0.3.76'
+    release = api(f'{RELEASES}/tags/v0.3.76')
+    assert not release['draft'] and not release['prerelease'] and not release.get('immutable')
+    assert release['target_commitish'] == DESKTOP_SHA
+    assert api(tag_path)['object']['sha'] == DESKTOP_SHA
+    endpoint = f'{RELEASES}/{release["id"]}'
+    original = {a['name']: (a['id'], a['size'], a['digest']) for a in release['assets']
+                if '_macos-' not in a['name']}
+    assert set(original) == {WINDOWS, LINUX, LINUX + '.sha256', *ARTIFACTS['extensions'][-1]}
+    pending = {'arm64', 'x86_64'}
+    published = set()
+    deadline = time.monotonic() + 100 * 60
+    run = api(run_path)
+    assert run['head_sha'] == MACOS_SHA and run['head_branch'] == 'wip/auralis-qt-shell'
+    assert run['path'] == '.github/workflows/auralis-qt-macos.yml'
+    print(f'Waiting for verified macOS packages from run {MACOS_RUN}', flush=True)
+
+    while pending and time.monotonic() < deadline:
+        jobs = {job['name']: job for job in api(f'{run_path}/jobs?per_page=100')['jobs']}
+        artifacts = None
+        published_now = False
+        for arch in sorted(pending):
+            job = jobs.get(f'Build and verify macOS {arch}')
+            if not job or job['status'] != 'completed':
+                continue
+            if job['conclusion'] != 'success':
+                print(f'macOS {arch} ended with {job["conclusion"]}; no upload', flush=True)
+                pending.remove(arch)
+                continue
+            if artifacts is None:
+                artifacts = {a['name']: a for a in api(f'{run_path}/artifacts?per_page=100')['artifacts']
+                             if not a['expired']}
+            artifact = artifacts.get(f'auralis-macos-{arch}')
+            if not artifact:
+                continue
+            assert job['head_sha'] == MACOS_SHA
+            assert any(step['name'] == 'Upload the verified macOS package' and step['conclusion'] == 'success'
+                       for step in job['steps'])
+            digest = artifact['digest']
+            assert digest.startswith('sha256:') and len(digest) == 71
+            name = f'Auralis.Download.Manager_0.3.76_macos-{arch}.dmg'
+            key = f'macos-{arch}'
+            ARTIFACTS[key] = (artifact['id'], MACOS_RUN, MACOS_SHA, digest[7:], (name, name + '.sha256'))
+            files = stage(key, output)
+            verify_checksum(output / name)
+            with (output / name).open('rb') as image:
+                image.seek(-512, 2)
+                assert image.read(4) == b'koly'
+
+            for file in files:
+                expected = (file.stat().st_size, 'sha256:' + sha256(file))
+                current = api(endpoint)
+                match = next((a for a in current['assets'] if a['name'] == file.name), None)
+                if not match:
+                    match = api('--method', 'POST', '-H', 'Content-Type: application/octet-stream', '--input', str(file),
+                                f'https://uploads.github.com/{RELEASES}/{release["id"]}/assets?name={quote(file.name)}')
+                assert match['state'] == 'uploaded' and (match['size'], match['digest']) == expected
+                assert match['browser_download_url'] == f'https://github.com/{REPO}/releases/download/v0.3.76/{quote(file.name)}'
+                print(f'Published {file.name}', flush=True)
+            published.add(arch)
+            published_now = True
+            pending.remove(arch)
+
+        if published_now:
+            current = api(endpoint)
+            assert not current['draft'] and current['tag_name'] == 'v0.3.76'
+            attached = {a['name']: (a['id'], a['size'], a['digest']) for a in current['assets']}
+            assert all(attached.get(name) == values for name, values in original.items())
+            available = []
+            if 'arm64' in published:
+                available.append('Apple silicon')
+            if 'x86_64' in published:
+                available.append('Intel')
+            note = f'- macOS disk images for {" and ".join(available)}. The apps use ad-hoc signing and have no Apple notarization.\n'
+            base = current['body'].split('- macOS disk images for ', 1)[0]
+            if current['body'] != base + note:
+                api('--method', 'PATCH', endpoint, '-f', f'body={base + note}', '-f', 'make_latest=true')
+
+        if not pending:
+            break
+        time.sleep(55)
+
+    expected_arches = {'arm64', 'x86_64'}
+    if published != expected_arches:
+        raise RuntimeError(f'No verified package from this build for {sorted(expected_arches - published)}')
+    print('Published both verified macOS packages on the desktop release', flush=True)
+
+
 def main():
     kind = sys.argv[1]
-    assert kind in ('desktop', 'android')
-    keys = ('android',) if kind == 'android' else ('windows', 'linux', 'extensions')
+    assert kind in ('desktop', 'android', 'macos')
     with tempfile.TemporaryDirectory(prefix='auralis-public-release-') as temp:
         output = Path(temp)
+        if kind == 'macos':
+            publish_macos(output)
+            return
+        keys = ('android',) if kind == 'android' else ('windows', 'linux', 'extensions')
         with ThreadPoolExecutor(max_workers=len(keys)) as pool:
             jobs = [pool.submit(stage, key, output) for key in keys]
             files = [path for job in jobs for path in job.result()]
