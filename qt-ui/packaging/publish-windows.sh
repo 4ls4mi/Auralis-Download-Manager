@@ -35,8 +35,6 @@ release_json="$work/release.json"
 files=(
     "$work/installer/$asset"
     "$work/extensions/auralis-chromium.zip"
-    "$work/extensions/auralis-chrome-store.zip"
-    "$work/extensions/auralis-edge-store.zip"
     "$work/extensions/auralis-firefox.zip"
 )
 
@@ -65,20 +63,20 @@ fetch_artifact "$AURALIS_INSTALLER_ARTIFACT_ID" "$AURALIS_INSTALLER_ARTIFACT_DIG
 fetch_artifact "$AURALIS_EXTENSIONS_ARTIFACT_ID" "$AURALIS_EXTENSIONS_ARTIFACT_DIGEST" \
     auralis-browser-extensions "$work/extensions.zip"
 
-python3 - "$work" "$asset" <<'PY'
+python3 - "$work" "${files[@]}" <<'PY'
 import shutil
 import sys
 import zipfile
 from pathlib import Path
 
 work = Path(sys.argv[1])
-for archive_name, folder, expected, limit in (
-    ("windows.zip", "installer", [sys.argv[2]], 256 * 1024 * 1024),
-    ("extensions.zip", "extensions", [
-        "auralis-chromium.zip", "auralis-chrome-store.zip", "auralis-edge-store.zip", "auralis-firefox.zip"
-    ], 16 * 1024 * 1024),
+files = [Path(path) for path in sys.argv[2:]]
+for archive_name, folder, limit in (
+    ("windows.zip", "installer", 256 * 1024 * 1024),
+    ("extensions.zip", "extensions", 16 * 1024 * 1024),
 ):
     destination = work / folder
+    expected = [path.name for path in files if path.parent == destination]
     destination.mkdir()
     with zipfile.ZipFile(work / archive_name) as archive:
         if sorted(archive.namelist()) != sorted(expected):

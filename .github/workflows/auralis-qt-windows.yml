@@ -116,7 +116,9 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: auralis-browser-extensions${{ github.run_attempt > 1 && format('-attempt-{0}', github.run_attempt) || '' }}
-          path: ${{ env.AURALIS_QT_EXTENSIONS }}/*.zip
+          path: |
+            ${{ env.AURALIS_QT_EXTENSIONS }}/auralis-chromium.zip
+            ${{ env.AURALIS_QT_EXTENSIONS }}/auralis-firefox.zip
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
