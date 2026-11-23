@@ -1,36 +1,71 @@
 #!/usr/bin/env bash
-# Publish only the installer and extensions uploaded by this run's verified Windows job.
+# Publish only the installer and extensions uploaded by a verified Windows job.
 set -euo pipefail
 
 : "${GH_REPO:?Set GH_REPO to the build repository}"
 : "${GITHUB_RUN_ID:?Missing workflow run ID}"
 : "${GITHUB_SHA:?Missing verified build commit}"
-: "${AURALIS_INSTALLER_ARTIFACT_ID:?Missing installer artifact ID}"
-: "${AURALIS_INSTALLER_ARTIFACT_DIGEST:?Missing installer artifact digest}"
-: "${AURALIS_EXTENSIONS_ARTIFACT_ID:?Missing extension artifact ID}"
-: "${AURALIS_EXTENSIONS_ARTIFACT_DIGEST:?Missing extension artifact digest}"
 [[ "$GITHUB_RUN_ID" =~ ^[0-9]+$ && "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
 test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
 python3 -m unittest discover -s .github/scripts -p 'test_verify_auralis_release.py'
 
-version="$(python3 - <<'PY'
-import re
-from pathlib import Path
+build_run="$GITHUB_RUN_ID"
+build_commit="$GITHUB_SHA"
+if [[ -n "${AURALIS_VERIFIED_RUN_ID:-}" ]]; then
+    build_run="$AURALIS_VERIFIED_RUN_ID"
+    [[ "$build_run" =~ ^[0-9]+$ && "$build_run" != "$GITHUB_RUN_ID" ]]
+    build_commit="$(gh api "repos/$GH_REPO/actions/runs/$build_run" | jq -er '
+        select(.status == "completed" and .path == ".github/workflows/auralis-qt-windows.yml" and
+               .head_branch == "wip/auralis-qt-shell" and .head_repository.id == .repository.id) |
+        .head_sha | select(test("^[0-9a-f]{40}$"))
+    ')"
+    attempt="$(gh api --paginate "repos/$GH_REPO/actions/runs/$build_run/jobs?filter=all&per_page=100" |
+        jq -ser --arg sha "$build_commit" '
+            [.[] .jobs[] | select(.head_sha == $sha and .conclusion == "success" and
+                 .name == "Build and verify the installed Qt application" and
+                 any(.steps[]; .name == "Upload the verified installer" and .conclusion == "success") and
+                 any(.steps[]; .name == "Upload the browser extension packages" and .conclusion == "success"))] |
+            max_by(.run_attempt) | .run_attempt | select(type == "number" and . >= 1)
+        ')"
+    suffix=""
+    if (( attempt > 1 )); then suffix="-attempt-$attempt"; fi
+    artifacts="$(gh api --paginate "repos/$GH_REPO/actions/runs/$build_run/artifacts?per_page=100")"
+    artifact_id_and_digest() {
+        jq -ser --arg name "$1$suffix" '
+            [.[] .artifacts[] | select(.name == $name and .expired == false)] |
+            select(length == 1) | .[0] | "\(.id) \(.digest)"
+        ' <<< "$artifacts"
+    }
+    read -r AURALIS_INSTALLER_ARTIFACT_ID AURALIS_INSTALLER_ARTIFACT_DIGEST \
+        <<< "$(artifact_id_and_digest auralis-download-manager-windows-x64)"
+    read -r AURALIS_EXTENSIONS_ARTIFACT_ID AURALIS_EXTENSIONS_ARTIFACT_DIGEST \
+        <<< "$(artifact_id_and_digest auralis-browser-extensions)"
+    echo "Publishing verified Windows artifacts from run $build_run, attempt $attempt, commit $build_commit."
+    git fetch --no-tags --depth=1 origin "$build_commit"
+fi
+: "${AURALIS_INSTALLER_ARTIFACT_ID:?Missing installer artifact ID}"
+: "${AURALIS_INSTALLER_ARTIFACT_DIGEST:?Missing installer artifact digest}"
+: "${AURALIS_EXTENSIONS_ARTIFACT_ID:?Missing extension artifact ID}"
+: "${AURALIS_EXTENSIONS_ARTIFACT_DIGEST:?Missing extension artifact digest}"
 
-project = Path("qt-ui/CMakeLists.txt").read_text()
-match = re.search(r"project\s*\(\s*AuralisQt\s+VERSION\s+(\d+\.\d+\.\d+)\s", project)
+version="$(python3 - "$(git show "$build_commit:qt-ui/CMakeLists.txt")" <<'PY'
+import re
+import sys
+
+match = re.search(r"project\s*\(\s*AuralisQt\s+VERSION\s+(\d+\.\d+\.\d+)\s", sys.argv[1])
 if not match:
     raise SystemExit("AuralisQt project version not found")
 print(match[1])
 PY
 )"
 tag="v$version"
-notes="docs/glass-releases/$tag.md"
 asset="Auralis.Download.Manager_${version}_x64-setup.exe"
-test -s "$notes" || { echo "Release notes are missing: $notes" >&2; exit 1; }
 
 work="$(mktemp -d)"
 trap 'rm -rf -- "$work"' EXIT
+notes="$work/release-notes.md"
+git show "$build_commit:docs/glass-releases/$tag.md" > "$notes"
+test -s "$notes" || { echo "Release notes are missing for $tag." >&2; exit 1; }
 release_json="$work/release.json"
 files=(
     "$work/installer/$asset"
@@ -45,8 +80,8 @@ fetch_artifact() {
         return 1
     }
     gh api "repos/$GH_REPO/actions/artifacts/$id" |
-        jq -e --arg sha "$GITHUB_SHA" --arg digest "sha256:$digest" \
-            --arg name "$name" --argjson artifact "$id" --argjson run "$GITHUB_RUN_ID" '
+        jq -e --arg sha "$build_commit" --arg digest "sha256:$digest" \
+            --arg name "$name" --argjson artifact "$id" --argjson run "$build_run" '
             .id == $artifact and .expired == false and .digest == $digest and
             (.name | test("^" + $name + "(-attempt-[0-9]+)?$")) and
             .workflow_run.id == $run and .workflow_run.head_sha == $sha
@@ -109,11 +144,11 @@ tag_exists() {
 }
 
 verify_release() {
-    python3 .github/scripts/verify-auralis-release.py "$@" "$release_json" "$version" "$GITHUB_SHA" "${files[@]}"
+    python3 .github/scripts/verify-auralis-release.py "$@" "$release_json" "$version" "$build_commit" "${files[@]}"
 }
 
 verify_public_tag() {
-    tag_exists && jq -e --arg sha "$GITHUB_SHA" '.object.type == "commit" and .object.sha == $sha' "$work/tag.json" >/dev/null
+    tag_exists && jq -e --arg sha "$build_commit" '.object.type == "commit" and .object.sha == $sha' "$work/tag.json" >/dev/null
 }
 
 release_id="$(find_release_id)"
@@ -135,7 +170,7 @@ fi
 
 if [[ -z "$release_id" ]]; then
     gh api --method POST "repos/$GH_REPO/releases" \
-        -f tag_name="$tag" -f target_commitish="$GITHUB_SHA" \
+        -f tag_name="$tag" -f target_commitish="$build_commit" \
         -f name="Auralis Download Manager $version — Windows x64" \
         -F body="@$notes" -F draft=true -F prerelease=false > "$release_json"
     release_id="$(jq -er '.id | select(type == "number")' "$release_json")"
@@ -145,7 +180,7 @@ refresh_verified_draft() {
     local attempt
     for attempt in {1..7}; do
         fetch_release
-        jq -e --arg tag "$tag" --arg sha "$GITHUB_SHA" \
+        jq -e --arg tag "$tag" --arg sha "$build_commit" \
             '.draft and .tag_name == $tag and .target_commitish == $sha' "$release_json" >/dev/null
         if verify_release --partial; then return 0; fi
         if (( attempt < 7 )); then sleep 2; fi
@@ -204,5 +239,5 @@ for attempt in {1..10}; do
     fi
     if (( attempt < 10 )); then sleep 3; fi
 done
-echo "::error::Could not verify publication of $tag at $GITHUB_SHA."
+echo "::error::Could not verify publication of $tag at $build_commit."
 exit 1

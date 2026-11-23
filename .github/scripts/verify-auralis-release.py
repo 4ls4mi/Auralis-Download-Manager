@@ -32,7 +32,8 @@ def verify(release, version, commit, files, *, draft=True, partial=False):
             continue
         if asset.get("state") != "uploaded":
             raise ValueError(f"{path.name}: upload is not complete")
-        if asset.get("browser_download_url") != f"{RELEASE_URL}/v{version}/{quote(path.name, safe='')}":
+        # Draft downloads use a temporary GitHub tag until publication creates the version tag.
+        if not draft and asset.get("browser_download_url") != f"{RELEASE_URL}/v{version}/{quote(path.name, safe='')}":
             raise ValueError(f"{path.name}: release download address does not match the asset")
         if asset.get("size") != path.stat().st_size:
             raise ValueError(f"{path.name}: size mismatch")

@@ -138,13 +138,16 @@ jobs:
     name: Publish verified public release
     needs: windows-x64
     if: >-
-      needs.windows-x64.result == 'success' &&
+      !cancelled() &&
       github.repository == '4ls4mi/Auralis-Download-Manager' &&
       github.ref == 'refs/heads/wip/auralis-qt-shell' &&
-      ((github.event_name == 'workflow_dispatch' && inputs.publish) ||
-       (github.event_name == 'push' &&
-        contains(github.event.head_commit.message, '[build-auralis-qt]') &&
-        contains(github.event.head_commit.message, '[prepare-auralis-release]')))
+      ((needs.windows-x64.result == 'success' &&
+        ((github.event_name == 'workflow_dispatch' && inputs.publish) ||
+         (github.event_name == 'push' &&
+          contains(github.event.head_commit.message, '[build-auralis-qt]') &&
+          contains(github.event.head_commit.message, '[prepare-auralis-release]')))) ||
+       (needs.windows-x64.result == 'skipped' && github.event_name == 'push' &&
+        contains(github.event.head_commit.message, '[publish-auralis-run:')))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -164,4 +167,9 @@ jobs:
           AURALIS_INSTALLER_ARTIFACT_DIGEST: ${{ needs.windows-x64.outputs.installer-digest }}
           AURALIS_EXTENSIONS_ARTIFACT_ID: ${{ needs.windows-x64.outputs.extensions-id }}
           AURALIS_EXTENSIONS_ARTIFACT_DIGEST: ${{ needs.windows-x64.outputs.extensions-digest }}
-        run: bash qt-ui/packaging/publish-windows.sh
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == push ]] &&
+             [[ "$(jq -r '.head_commit.message' "$GITHUB_EVENT_PATH")" =~ \[publish-auralis-run:([0-9]+)\] ]]; then
+            export AURALIS_VERIFIED_RUN_ID="${BASH_REMATCH[1]}"
+          fi
+          bash qt-ui/packaging/publish-windows.sh

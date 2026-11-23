@@ -41,10 +41,19 @@ class VerifyReleaseTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "digest"):
             self.check()
 
-    def test_download_url_must_match_the_exact_released_asset(self):
+    def test_draft_accepts_a_temporary_github_download_url(self):
+        name = self.files[0].name
+        self.release["assets"][0]["browser_download_url"] = f"{module.RELEASE_URL}/untagged-736677fe04eb3ea87ee1/{name}"
+        self.check()
+        self.release["draft"] = False
+        with self.assertRaisesRegex(ValueError, "address"):
+            module.verify(self.release, "1.2.3", "abc123", self.files, draft=False)
+
+    def test_public_download_url_must_match_the_exact_released_asset(self):
+        self.release["draft"] = False
         self.release["assets"][0]["browser_download_url"] = self.release["assets"][1]["browser_download_url"]
         with self.assertRaisesRegex(ValueError, "address"):
-            self.check()
+            module.verify(self.release, "1.2.3", "abc123", self.files, draft=False)
 
     def test_corrupt_or_unexpected_assets_are_rejected(self):
         self.release["assets"][0]["size"] += 1
