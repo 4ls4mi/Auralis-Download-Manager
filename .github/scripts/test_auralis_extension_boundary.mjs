@@ -10,7 +10,7 @@ const source = readFileSync(new URL("background.js", extension), "utf8");
 const appearance = readFileSync(new URL("appearance-profile.js", extension), "utf8");
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
-async function browser(firefox) {
+async function browser(firefox, { listCookies, links = [] } = {}) {
   const events = new Map();
   const native = [];
   const saved = {};
@@ -26,7 +26,7 @@ async function browser(firefox) {
     browser: {
       downloads: firefox ? { onCreated: event("download") } : { onDeterminingFilename: event("download") },
       storage: { local: { get: async (keys) => Array.isArray(keys) ? saved : { ...keys, ...saved },
-        set: async (values) => Object.assign(saved, values) }, onChanged: event("storage") },
+        set: async (values) => Object.assign(saved, values), remove: async (key) => delete saved[key] }, onChanged: event("storage") },
       runtime: {
         id: "fixture", getURL: (path) => `chrome-extension://fixture/${path}`,
         getManifest: () => ({ version: "0.1.17", permissions: [], optional_permissions: [], content_scripts: [] }),
@@ -44,12 +44,13 @@ async function browser(firefox) {
       webRequest: eventsFor("request", ["onBeforeRequest", "onBeforeSendHeaders", "onSendHeaders",
         "onBeforeRedirect", "onResponseStarted", "onErrorOccurred", "onHeadersReceived"]),
       contextMenus: { onClicked: event("menu") },
+      scripting: { executeScript: async () => [{ result: links }] },
       action: { setBadgeText: async () => {}, setBadgeBackgroundColor: async () => {}, setTitle: async () => {} },
       permissions: { contains: async () => true },
-      cookies: { getAll: async () => [
+      cookies: { getAll: listCookies || (async () => [
         { name: "format", value: "standard", domain: "stream.example.test", path: "/videos", hostOnly: true, secure: true },
         { name: "preference", value: "other", domain: "stream.example.test", path: "/", hostOnly: true, secure: true },
-      ] },
+      ]) },
     },
   });
   vm.runInContext(appearance, script);
@@ -141,6 +142,68 @@ test("extension UI, tab content, and unknown senders stay separately authorized"
   assert.equal(native.filter(([, entry]) => entry.open).length, 1);
 });
 
+test("automatic Firefox downloads keep the observed header or its explicit absence", async () => {
+  let storeReads = 0;
+  const { script, emit, native } = await browser(true, { listCookies: async () => { storeReads++; return []; } });
+  const url = "https://files.example.test/report.zip";
+  const response = { tabId: 4, type: "sub_frame", url, method: "GET", statusCode: 200,
+    responseHeaders: [{ name: "Content-Type", value: "application/zip" }] };
+  const standard = { ...response, requestId: "report-standard", frameId: 1 };
+  const empty = { ...response, requestId: "report-empty", frameId: 2 };
+  emit("requestonSendHeaders", { ...standard, requestHeaders: [{ name: "Cookie", value: "format=standard" }] });
+  emit("requestonSendHeaders", { ...empty, requestHeaders: [] });
+  assert.equal((await script.headersReceived(standard)).cancel, true);
+  assert.equal((await script.headersReceived(empty)).cancel, true);
+  assert.deepEqual(native.map(([, message]) => message).filter((message) => message.url === url)
+    .map((message) => message.cookies), ["format=standard", ""]);
+  assert.equal(storeReads, 0);
+});
+
+test("an observed anonymous Firefox redirect keeps its original download address", async () => {
+  const { script, emit, native } = await browser(true);
+  const first = { requestId: "report-redirect", tabId: 4, frameId: 1, type: "sub_frame", method: "GET",
+    url: "https://files.example.test/export", requestHeaders: [] };
+  const last = { ...first, url: "https://static.example.test/report.zip", statusCode: 200,
+    responseHeaders: [{ name: "Content-Type", value: "application/zip" }] };
+  emit("requestonSendHeaders", first);
+  emit("requestonBeforeRedirect", { ...first, redirectUrl: last.url });
+  emit("requestonSendHeaders", last);
+  assert.equal((await script.headersReceived(last)).cancel, true);
+  const [download] = native.map(([, message]) => message).filter((message) => message.url === first.url);
+  assert.equal(download.finalUrl, last.url);
+  assert.equal(download.cookies, "");
+});
+
+test("anonymous Chromium downloads can be handed over without a request ID", async () => {
+  const publicUrl = "https://files.example.test/public.zip";
+  const sessionUrl = "https://files.example.test/reports/export.zip";
+  const unavailableUrl = "https://files.example.test/unavailable.zip";
+  const { script, native } = await browser(false, { listCookies: async ({ url }) => {
+    if (url === unavailableUrl) throw new Error("Cookie store unavailable");
+    return url === sessionUrl ? [{ name: "format", value: "standard", path: "/reports" }] : [];
+  } });
+  const item = (url) => ({ url, page: "https://files.example.test/", danger: "safe" });
+  assert.equal(await script.offer(item(publicUrl), publicUrl, { name: "public.zip" }), true);
+  assert.equal(await script.offer(item(sessionUrl), sessionUrl, { name: "export.zip" }), false);
+  assert.equal(await script.offer(item(unavailableUrl), unavailableUrl, { name: "unavailable.zip" }), false);
+  const downloads = native.map(([, message]) => message).filter((message) => message.url);
+  assert.deepEqual(downloads.map(({ url, cookies }) => [url, cookies]), [[publicUrl, ""]]);
+});
+
+test("selection import sends its link list without the page's cookies", async () => {
+  const referrer = "https://files.example.test/reports/";
+  const links = ["https://files.example.test/shared/example.zip", "https://static.example.test/report.zip"];
+  let storeReads = 0;
+  const { script, native } = await browser(false, { links,
+    listCookies: async () => { storeReads++; return [{ name: "format", value: "standard", path: "/reports" }]; } });
+  await script.menuClicked({ menuItemId: "mdm-selected", pageUrl: referrer, frameId: 1 }, { id: 7 });
+  const [list] = native.map(([, message]) => message).filter(({ links }) => links);
+  assert.deepEqual(list.links, links);
+  assert.equal(list.referrer, referrer);
+  assert.equal(list.cookies, undefined);
+  assert.equal(storeReads, 0);
+});
+
 test("extension size limit leaves valid native messages intact", async () => {
   const { script, native } = await browser(false);
   const direct = { url: "https://files.example.test/archive.zip", filename: "archive.zip" };
@@ -149,4 +212,112 @@ test("extension size limit leaves valid native messages intact", async () => {
   const tooLarge = await script.native({ ...direct, title: "a".repeat(1 << 20) });
   assert.equal(tooLarge.why, "too-large");
   assert.equal(native.length, calls);
+});
+
+test("local settings reads and downloads use their designated destination", async () => {
+  const { script, native } = await browser(false);
+  const paired = { url: "https://companion.example.test/", token: "test-pairing" };
+  const submissions = [];
+  script.remoteTarget = async () => paired;
+  script.remoteSend = async (target, url) => {
+    submissions.push({ target, url });
+    return { ok: true };
+  };
+
+  const page = "https://files.example.test/videos";
+  assert.equal(await script.panelOn(page), true);
+  assert.ok(native.some(([, message]) => message.panel === true && message.url === page));
+  assert.equal(submissions.length, 0);
+
+  const download = "https://files.example.test/archive.zip";
+  assert.equal((await script.submitDownload({ url: download })).ok, true);
+  assert.deepEqual(submissions, [{ target: paired, url: download }]);
+  assert.equal((await script.submitDownload({ url: download, private: true })).ok, true);
+  assert.ok(native.some(([, message]) => message.private === true && message.url === download));
+  assert.equal(submissions.length, 1);
+});
+
+test("media manifests use the decoded byte limit even without a reliable length header", async () => {
+  const { script } = await browser(false);
+  script.AbortController = AbortController;
+  const item = { url: "https://stream.example.test/index.m3u8", kind: "hls" };
+  const utf8 = new TextEncoder();
+  const sample = utf8.encode("#EXTM3U\n#EXTINF:6.5,Example\nclip.ts\n#EXT-X-ENDLIST\n");
+  let signal;
+  function response(chunks, length) {
+    const body = new ReadableStream({
+      start(controller) {
+        for (const chunk of chunks) controller.enqueue(chunk);
+        controller.close();
+      },
+    });
+    script.fetch = async (_url, options) => {
+      signal = options.signal;
+      return { ok: true, headers: new Headers(length === null ? {} : { "Content-Length": length }), body };
+    };
+    return body;
+  }
+  const chunked = response([sample.subarray(0, 3), sample.subarray(3)], null);
+  assert.equal((await script.probe(item)).duration, 6.5);
+  assert.equal(chunked.locked, false);
+  assert.equal(signal.aborted, false);
+
+  const limit = 2 << 20;
+  const padded = new Uint8Array(limit - sample.length).fill(32);
+  const full = response([sample, padded], null);
+  assert.equal((await script.probe(item)).duration, 6.5);
+  assert.equal(full.locked, false);
+
+  const oversized = response([sample, padded, Uint8Array.of(32)], String(sample.length));
+  assert.equal((await script.probe(item)).failed, true);
+  assert.equal(oversized.locked, false);
+  assert.equal(signal.aborted, true);
+
+  const advertisedOversize = response([sample], String(limit + 1));
+  assert.equal((await script.probe(item)).failed, true);
+  assert.equal(advertisedOversize.locked, false);
+  assert.equal(signal.aborted, true);
+});
+
+test("one media manifest deadline cancels the header and body waits", async () => {
+  const { script } = await browser(false);
+  script.AbortController = AbortController;
+  const item = { url: "https://stream.example.test/index.mpd", kind: "dash" };
+  for (const waitFor of ["headers", "body"]) {
+    let expire;
+    let cleared = false;
+    let signal;
+    let body;
+    script.setTimeout = (callback) => {
+      assert.equal(expire, undefined);
+      expire = callback;
+      return 1;
+    };
+    script.clearTimeout = (id) => {
+      assert.equal(id, 1);
+      cleared = true;
+    };
+    script.fetch = (_url, options) => {
+      signal = options.signal;
+      if (waitFor === "headers") {
+        return new Promise((_, reject) => signal.addEventListener("abort", () => reject(signal.reason), { once: true }));
+      }
+      body = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode("<MPD"));
+          signal.addEventListener("abort", () => controller.error(signal.reason), { once: true });
+        },
+      });
+      return Promise.resolve({ ok: true, headers: new Headers(), body });
+    };
+    const reading = script.probe(item);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(signal.aborted, false);
+    if (body) assert.equal(body.locked, true);
+    expire();
+    assert.equal((await reading).failed, true);
+    assert.equal(signal.aborted, true);
+    assert.equal(cleared, true);
+    if (body) assert.equal(body.locked, false);
+  }
 });

@@ -68,11 +68,6 @@ async function stamped(message) {
 // browser's status, and the rules depend on the browser). Never throws: failures come back as
 // `{ok: false, why}`.
 async function native(message, ms = HOST_WAIT) {
-  // A download for another MDM (a server, #157): sent there, not to this computer's.
-  if (typeof message.url === "string" && message.url) {
-    const target = await remoteTarget();
-    if (target) return remoteSend(target, message);
-  }
   const sent = await stamped(message);
   if (wireSize(sent) > MESSAGE_MAX) {
     await noteStatus("too-large");
@@ -170,11 +165,21 @@ async function remoteCall(base, path, body, token) {
 }
 
 // A download handed to the other MDM: its address only (a site's sign-in stays in this browser).
-async function remoteSend(target, message) {
-  const r = await remoteCall(target.url, "api/add", { url: message.url, start: true }, target.token);
+async function remoteSend(target, url) {
+  const r = await remoteCall(target.url, "api/add", { url, start: true }, target.token);
   if (r.status === 200 && r.body && !r.body.error) return { ok: true };
   if (r.status === 401) await ext.storage.local.set({ remote: null }); // unpaired there
   return { ok: false, why: "refused" };
+}
+
+// Only a download submission can use the paired destination. Settings and lookups use native().
+// The remote add operation takes only an address, so private downloads use the local host.
+async function submitDownload(message) {
+  if (!message.private && typeof message.url === "string" && /^(?:https?|ftps?|ftpes):\/\//i.test(message.url)) {
+    const target = await remoteTarget();
+    if (target) return remoteSend(target, message.url);
+  }
+  return native(message);
 }
 
 // The file types the app takes by default (mdm_ipc::capture::DEFAULT_AUTO_TYPES; a test keeps
@@ -516,6 +521,48 @@ function formBody(details) {
 // The loads a browser shows a file in: a tab, a frame, an <embed> or <object> (#1087: a PDF a
 // page shows in one is taken as one the tab goes to is).
 const PAGE_LOADS = ["main_frame", "sub_frame", "object"];
+
+// Keep only a bounded, in-memory observation of what the browser actually sent.
+// The same request ID can be reused across redirects, so keep the replay address
+// and the last hop separately. Never join a download to a request by URL alone.
+const downloadRequests = new Map();
+const DOWNLOAD_COOKIE_MAX = 32 * 1024;
+
+function rememberDownloadRequest(d) {
+  if (!d.requestId || !Number.isInteger(d.tabId) || d.tabId < 0 || !Number.isInteger(d.frameId)) return;
+  if (!/^https?:\/\//i.test(d.url) || d.url.length > URL_MAX) return;
+  const previous = recentNavigation(downloadRequests, d.requestId);
+  if (previous && (previous.tabId !== d.tabId || previous.frameId !== d.frameId)) return;
+  let cookie;
+  if (Array.isArray(d.requestHeaders)) {
+    const headers = d.requestHeaders.filter((h) => String(h.name).toLowerCase() === "cookie");
+    if (headers.every((h) => typeof h.value === "string" && !/[\r\n\0]/.test(h.value))) {
+      const value = headers.map((h) => h.value).join("; ");
+      if (value.length <= DOWNLOAD_COOKIE_MAX) cookie = value;
+    }
+  }
+  rememberNavigation(downloadRequests, d.requestId, {
+    tabId: d.tabId, frameId: d.frameId, first: previous?.first || d.url, url: d.url, cookie,
+    credentials: Boolean(cookie || previous?.credentials),
+    incomplete: cookie === undefined || Boolean(previous?.incomplete),
+  }, 96);
+}
+
+function downloadCookie(item, first, url) {
+  const sent = recentNavigation(downloadRequests, item.requestId);
+  if (!sent || sent.tabId !== item.tabId || sent.frameId !== item.frameId || sent.url !== url) return undefined;
+  if (first === url) return sent.cookie ?? null;
+  // The native transfer has one raw Cookie header. It cannot preserve the browser's
+  // independent cookie decisions for each address in a credentialed redirect chain.
+  if (sent.credentials || sent.incomplete) return null;
+  return sent.first === first ? "" : undefined;
+}
+
+// Only Firefox's response hook has the request identity needed to use this record.
+if (FIREFOX && ext.webRequest?.onSendHeaders) {
+  ext.webRequest.onSendHeaders.addListener(rememberDownloadRequest,
+    { urls: ["http://*/*", "https://*/*"], types: PAGE_LOADS }, ["requestHeaders"]);
+}
 
 // Firefox's response hook can recover its own request's originating page. A download event
 // without a request ID instead uses the browser's tab metadata (`pageOf`).
@@ -1100,14 +1147,38 @@ function parseDash(text) {
 // {failed: true}: a site that refuses the extension's request (it checks the page that asks) is
 // listed without them.
 async function probe(item) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
+  let reader;
+  let complete = false;
   try {
-    const r = await withTimeout(fetch(item.url, { credentials: "include" }), 5000);
-    if (!r.ok || Number(r.headers.get("content-length")) > MANIFEST_MAX) return { failed: true };
-    const text = await withTimeout(r.text(), 5000);
-    if (text.length > MANIFEST_MAX) return { failed: true };
+    const r = await fetch(item.url, { credentials: "include", signal: controller.signal });
+    const length = r.headers.get("content-length");
+    if (!r.ok || !r.body?.getReader ||
+        (length !== null && (!/^\d+$/.test(length) || Number(length) > MANIFEST_MAX))) return { failed: true };
+
+    // The header can describe encoded data. Count decoded bytes even when it is present.
+    reader = r.body.getReader();
+    const decoder = new TextDecoder();
+    let size = 0;
+    let text = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MANIFEST_MAX) return { failed: true };
+      text += decoder.decode(value, { stream: true });
+    }
+    complete = true;
+    if (controller.signal.aborted) return { failed: true };
+    text += decoder.decode();
     return (item.kind === "hls" ? parseHls(text, item.url) : parseDash(text)) || { failed: true };
   } catch {
     return { failed: true };
+  } finally {
+    clearTimeout(timer);
+    if (!complete) controller.abort();
+    reader?.releaseLock();
   }
 }
 
@@ -1669,7 +1740,9 @@ async function mediaDownload(tabId, url) {
   if (!shown) return { ok: false, why: "gone" };
   if (shown.drm) return { ok: false, why: "drm" };
   const kept = media.get(tabId);
-  const it = kept.items.find((x) => x.url === url);
+  const matches = kept?.items.filter((x) => x.url === url) || [];
+  const it = matches[0];
+  if (!it) return { ok: false, why: "gone" };
   let tab;
   try {
     tab = await ext.tabs.get(tabId);
@@ -1680,7 +1753,7 @@ async function mediaDownload(tabId, url) {
   const page = frame && /^https?:/i.test(frame) ? frame : tab.url || "";
   const ctx = { incognito: Boolean(tab.incognito), storeId: tab.cookieStoreId };
   if (isStream(it)) {
-    return native({
+    return submitDownload({
       video: true,
       // Asked for: whether the button over videos shows on this site doesn't matter.
       explicit: true,
@@ -1688,7 +1761,7 @@ async function mediaDownload(tabId, url) {
       src: it.url,
       title: tabTitle(tab),
       referrer: tab.url && tab.url !== page ? tab.url : "",
-      ...(await streamContext(tabId, it.url, ctx, it.frameId)),
+      ...(matches.length === 1 ? await streamContext(tabId, it.url, ctx, it.frameId) : {}),
       ...(ctx.incognito ? { private: true } : {}),
     });
   }
@@ -1698,7 +1771,8 @@ async function mediaDownload(tabId, url) {
   // The name the list shows; none when the address names the file as the app would (a server's
   // Content-Disposition may still name it). The title goes too: a file whose address names nothing
   // and whose type only the server or its bytes say is named by it in the app (#800).
-  return handOff({ url: it.url, referrer: page, page: tab.url || page, size: it.size, mime: it.mime, explicit: true, filename: named.own ? "" : named.name, ...(title ? { title } : {}), ...ctx });
+  const cookies = matches.length === 1 ? it.sent?.cookie : undefined;
+  return handOff({ url: it.url, referrer: page, page: tab.url || page, size: it.size, mime: it.mime, cookies, explicit: true, filename: named.own ? "" : named.name, ...(title ? { title } : {}), ...ctx });
 }
 
 // ---- the hand-off ------------------------------------------------------------------------
@@ -1708,9 +1782,10 @@ async function mediaDownload(tabId, url) {
 async function cookiesFor(url, { incognito, storeId }) {
   try {
     const query = storeId ? { url, storeId } : incognito ? { url, storeId: "1" } : { url };
-    return (await ext.cookies.getAll(query)) || [];
+    const list = await ext.cookies.getAll(query);
+    return Array.isArray(list) ? list : null;
   } catch {
-    return [];
+    return null;
   }
 }
 
@@ -1718,8 +1793,16 @@ function header(list) {
   return list.map((c) => `${c.name}=${c.value}`).join("; ");
 }
 
-async function cookieHeader(url, ctx) {
-  return header(await cookiesFor(url, ctx));
+async function canHandOffAnonymously(first, url, item) {
+  // Chromium's DownloadItem has no request identity. The store can tell us when to
+  // leave a transfer alone, but its contents cannot stand in for the sent header.
+  const context = { incognito: item.incognito, storeId: item.cookieStoreId };
+  const firstCookies = await cookiesFor(first, context);
+  if (!firstCookies || firstCookies.length) return false;
+  if (first === url) return true;
+  if (!(await siteAccess(url))) return false;
+  const lastCookies = await cookiesFor(url, context);
+  return lastCookies !== null && lastCookies.length === 0;
 }
 
 // For yt-dlp, which may ask another host of the site than the page's (a YouTube Music page is
@@ -1727,7 +1810,7 @@ async function cookieHeader(url, ctx) {
 // so the app files `.youtube.com`'s sign-in for every host of it and a host's own cookie for
 // that host alone. The header goes too, for an older app.
 async function videoCookies(url, ctx) {
-  const list = await cookiesFor(url, ctx);
+  const list = (await cookiesFor(url, ctx)) || [];
   const cookieJar = list.map((c) => ({
     name: c.name,
     value: c.value,
@@ -2056,7 +2139,7 @@ async function handOff(d) {
     finalUrl: d.finalUrl && d.finalUrl !== d.url ? d.finalUrl : "",
     referrer: d.referrer || "",
     ...(d.page && /^https?:\/\//i.test(d.page) && d.page.length <= URL_MAX ? { pageUrl: d.page } : {}),
-    cookies: await cookieHeader(d.url, d),
+    cookies: d.cookies || "",
     filename: d.filename || "",
     // The browser's name is only its address's guess (#948, `addressNamed`): the host checks
     // Options' file types by it, and MDM names the file from the server's own answer.
@@ -2071,7 +2154,7 @@ async function handOff(d) {
     // Through the browser's proxy too (#42): the one its own request for the file took.
     ...(await browserProxy(d.finalUrl || d.url, d.incognito)),
   };
-  return native(message);
+  return submitDownload(message);
 }
 
 // Colab's runtime proxy uses an ephemeral token tied to the browser's partitioned session.
@@ -2134,6 +2217,8 @@ function leftAlone(c, item, url) {
 // its address's (`addressNamed`).
 async function offer(item, url, { name, post }, nameGuessed = false) {
   const first = firstUrl(item);
+  const cookies = downloadCookie(item, first, url);
+  if (cookies === null || (cookies === undefined && !(await canHandOffAnonymously(first, url, item)))) return false;
   const reply = await handOff({
     url: first,
     finalUrl: url,
@@ -2143,6 +2228,7 @@ async function offer(item, url, { name, post }, nameGuessed = false) {
     nameGuessed,
     size: item.totalBytes > 0 ? item.totalBytes : item.fileSize,
     mime: item.mime,
+    cookies,
     post,
     incognito: item.incognito,
     storeId: item.cookieStoreId,
@@ -2511,6 +2597,7 @@ async function headersReceived(d) {
   const item = {
     url: d.url,
     tabId: d.tabId,
+    frameId: d.frameId,
     requestId: d.requestId,
     requestMethod: d.method,
     filename: file.name,
@@ -2692,7 +2779,7 @@ async function menuClicked(info, tab) {
     // The manifest's own cookies (its server may not be the page's), as the media list sends.
     if (url && MANIFEST.test(url)) {
       await mediaBack;
-      const reply = await native({ video: true, explicit: true, url: info.pageUrl, src: url, title, ...(await streamContext(tab && tab.id, url, { incognito, storeId }, info.frameId || 0)), private: incognito });
+      const reply = await submitDownload({ video: true, explicit: true, url: info.pageUrl, src: url, title, ...(await streamContext(tab && tab.id, url, { incognito, storeId }, info.frameId || 0)), private: incognito });
       if (!reply.ok && reply.why !== "options") explain(reply.why);
       return;
     }
@@ -2705,7 +2792,7 @@ async function menuClicked(info, tab) {
       const page = info.frameUrl || info.pageUrl;
       await mediaBack;
       const src = await streamFor({ tab, frameId: info.frameId || 0 });
-      const reply = await native({
+      const reply = await submitDownload({
         video: true,
         explicit: true,
         url: page,
@@ -2737,7 +2824,8 @@ async function menuClicked(info, tab) {
       // A page extensions may not read (the browser's own, a store).
     }
     if (!links.length) return;
-    const reply = await sendLinks({ links, referrer: info.pageUrl, cookies: await cookieHeader(info.pageUrl, { incognito, storeId }), private: incognito });
+    // A page's cookies are scoped to the page's request. They do not belong to its links.
+    const reply = await sendLinks({ links, referrer: info.pageUrl, private: incognito });
     // Sent, but a link longer than a whole message was left out: the help page says so.
     if (!reply.ok || reply.left) explain(reply.ok ? "too-large" : reply.why);
   }
@@ -3128,7 +3216,7 @@ async function pageMessage(m, sender) {
     const direct = Boolean(m.direct) && Boolean(v.file) && v.file === v.src;
     // A file a player fetched in ranges (#1092) as one it plays itself.
     const loaded = direct && playedItem(tab.id, v.src);
-    const reply = await native({
+    const reply = await submitDownload({
       video: true,
       url: v.own,
       ...(v.src ? { src: v.src } : {}),
