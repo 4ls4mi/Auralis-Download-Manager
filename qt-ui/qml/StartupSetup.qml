@@ -11,6 +11,7 @@ DetachedDialogWindow {
     property bool automatic: false
     property bool started: false
     property bool offered: false
+    property bool deferred: false
     property bool helpersChecked: false
     property bool checkingHelpers: false
     property var helperStatus: null
@@ -44,11 +45,19 @@ DetachedDialogWindow {
     }
 
     function offerIfNeeded() {
-        if (canCheck && checksComplete && !offered
-            && (missingHelpers.length > 0 || helperProblem || browserSetup.needsSetup || browserSetup.problem)) {
+        const missingBrowser = browserSetup.needsSetup && !browserSetup.status?.storePreviouslyConnected
+        if (canCheck && checksComplete && !offered && !deferred
+            && (missingHelpers.length > 0 || helperProblem || missingBrowser || browserSetup.problem
+                || browserSetup.needsHostRepair)) {
             offered = true
             open()
         }
+    }
+
+    function continueToApp() {
+        deferred = true
+        browserSetup.cancelConfirmation()
+        hide()
     }
 
     function checkHelpers() {
@@ -114,7 +123,7 @@ DetachedDialogWindow {
     onCanCheckChanged: if (canCheck) Qt.callLater(checkAtStartup)
     onChecksCompleteChanged: offerIfNeeded()
     Component.onCompleted: if (canCheck) Qt.callLater(checkAtStartup)
-    onDismissRequested: hide()
+    onDismissRequested: continueToApp()
     onOpened: continueButton.forceActiveFocus()
 
     Timer {
@@ -183,41 +192,22 @@ DetachedDialogWindow {
             Layout.fillWidth: true
             Layout.topMargin: 8
             monitoring: root.visible && root.visibility !== Window.Minimized
-            showPolicyChoice: false
-            policyConfirmationDetails: root.missingHelpers.length > 0
+            installConfirmationDetails: root.missingHelpers.length > 0 && !root.batchRunning && !root.installerBusy
                 ? qsTr("This also starts installing the missing video and gallery helpers.") : ""
-            policyConfirmText: root.missingHelpers.length > 0
-                ? qsTr("Install components") : qsTr("Install through policy")
-            onPolicyAccepted: root.installMissing()
+            onInstallAccepted: root.installMissing()
         },
         Flow {
             Layout.fillWidth: true
             Layout.topMargin: 4
             spacing: 8
-            visible: root.missingHelpers.length > 0 || browserSetup.policyAvailable
+            visible: root.missingHelpers.length > 0
 
             GlassButton {
                 objectName: "installMissingComponents"
-                visible: !Boolean(browserSetup.policyBrowserId)
-                text: root.batchRunning ? qsTr("Installing helpers…") : qsTr("Install missing components")
+                text: root.batchRunning ? qsTr("Installing helpers…") : qsTr("Install missing helpers")
                 accent: root.colors.positive
-                enabled: engine.ready && !root.batchRunning && !root.installerBusy && !browserSetup.acting
-                onClicked: {
-                    if (browserSetup.policyAvailable)
-                        browserSetup.preparePolicy()
-                    else
-                        root.installMissing()
-                }
-            }
-            GlassButton {
-                objectName: "installHelpersOnly"
-                visible: root.missingHelpers.length > 0 && browserSetup.policyAvailable
-                text: qsTr("Install helpers only")
                 enabled: engine.ready && !root.batchRunning && !root.installerBusy
-                onClicked: {
-                    browserSetup.cancelPolicy()
-                    root.installMissing()
-                }
+                onClicked: root.installMissing()
             }
         }
     ]
@@ -242,7 +232,7 @@ DetachedDialogWindow {
                 objectName: "continueStartupSetup"
                 text: qsTr("Continue to Auralis")
                 accent: root.colors.accent
-                onClicked: root.hide()
+                onClicked: root.continueToApp()
             }
         }
     }

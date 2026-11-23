@@ -861,6 +861,7 @@ pub struct App {
     add_url: Option<AddUrl>,
     file_info: Option<FileInfo>,
     glass_info_serial: u64,
+    glass_browser_download: Option<glass::BrowserDownloadNotice>,
     glass_active_video: Option<crate::videodlg::VideoAdd>,
     glass_video_waiting: std::collections::VecDeque<crate::videodlg::VideoAdd>,
     glass_video_serial: u64,
@@ -1717,6 +1718,7 @@ impl App {
             update_checked_this_run: None,
             file_info: None,
             glass_info_serial: 0,
+            glass_browser_download: None,
             glass_active_video: None,
             glass_video_waiting: Default::default(),
             glass_video_serial: 0,
@@ -4381,15 +4383,15 @@ impl App {
         }
     }
 
-    /// Options → General → "Offer to download links copied to the clipboard": a newly copied
-    /// link to a listed file type (Options → File types) is handled as if a browser had sent
-    /// it, so Download File Info opens with it (unless that window is turned off). Only read,
-    /// never written; on by default.
+    /// The original shell offers copied links to listed file types. In Auralis, only the
+    /// automatic download mode watches the clipboard. Paste mode is handled when Add URL opens.
     fn watch_clipboard(&mut self, ctx: &egui::Context) {
         // Looked at off the window's thread (clipboard.rs): the program that owns the clipboard
         // may hang, and a read that waits for it took the window with it (#418). The watch wakes
         // the window only for a newly copied text: an idle MDM draws no frame for it (#847).
-        let on = self.settings.clipboard_autostart;
+        let glass = self.glass_owned();
+        let automatic = glass && self.settings.glass_clipboard_auto_download;
+        let on = self.settings.clipboard_autostart && (!glass || automatic);
         crate::clipboard::watch(on);
         let Some(text) = crate::clipboard::copied().filter(|_| on) else {
             return;
@@ -4404,8 +4406,10 @@ impl App {
             return;
         };
         let name = mdm_engine::naming::file_name(None, &url);
-        let automatic = self.glass_owned() && self.settings.glass_clipboard_auto_download;
         if mdm_engine::supported(&url) && (automatic || self.settings.clipboard_type(&name)) {
+            if automatic && self.items.iter().any(|item| item.url == url) {
+                return;
+            }
             let cmd = ipc::Command {
                 url: Some(text),
                 silent: automatic,
@@ -6294,7 +6298,10 @@ impl App {
                     "recovery_damaged": i.recovery_damaged,
                 })
             }).collect::<Vec<_>>();
-            return serde_json::json!({ "downloads": files }).to_string();
+            return serde_json::json!({
+                "downloads": files,
+                "browserDownload": self.glass_browser_download,
+            }).to_string();
         }
         if !cmd.remote && cmd.query.as_deref() == Some("glass-network-adapters") {
             if !glass_owned { return line(&ErrorAnswer { error: "glass backend not active".into(), code: None }); }

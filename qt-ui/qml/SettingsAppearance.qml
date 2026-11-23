@@ -12,9 +12,7 @@ GridLayout {
     required property var backdrop
     readonly property var colors: MaterialTheme.palette
     readonly property bool sideTabs: ["fogSlate", "violetRail", "coralSlate"].includes(colors.layout)
-    readonly property var fontSettings: typeof typography === "undefined" ? null : typography
     readonly property var sections: [qsTr("Materials and color"), qsTr("Window backgrounds"), qsTr("Indicators")]
-        .concat(fontSettings ? [qsTr("Typography")] : [])
     property int activeTab: 0
     property string fileAction
     property string status
@@ -556,16 +554,6 @@ GridLayout {
                 endpointColor: MaterialTheme.graphColors[1]
                 gridColor: root.colors.divider
             }
-        }
-    }
-
-    TabPage {
-        visible: root.fontSettings !== null && root.activeTab === 3
-
-        Loader {
-            width: parent.width
-            active: visible
-            sourceComponent: SettingsTypography { fontSettings: root.fontSettings }
         }
     }
 

@@ -86,6 +86,21 @@ pub unsafe extern "C" fn auralis_engine_request(input: *const u8, length: usize)
                 .map_err(|e| e.to_string())?;
                 return Ok(json!({ "ok": true }));
             }
+            if action == "clipboard-prefill" {
+                ensure_owner()?;
+                let mode = mdm_ipc::request_checked(&mdm_ipc::Command {
+                    query: Some("glass-clipboard-mode".into()),
+                    ..Default::default()
+                })
+                .map_err(|e| e.to_string())?;
+                let mode: Value = serde_json::from_str(&mode).map_err(|e| e.to_string())?;
+                let address = if mode["mode"] == "paste" {
+                    mdm_app::add_url_clipboard_prefill()
+                } else {
+                    None
+                };
+                return Ok(address.map_or(Value::Null, |url| json!({ "url": url })));
+            }
             return Err("Unsupported shell action".into());
         }
 

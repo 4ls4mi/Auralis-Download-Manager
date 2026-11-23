@@ -13,6 +13,7 @@ const plain = (value) => JSON.parse(JSON.stringify(value));
 async function browser(firefox, { listCookies, links = [] } = {}) {
   const events = new Map();
   const native = [];
+  const downloadActions = [];
   const saved = {};
   const event = (name) => ({ addListener(fn) {
     if (!events.has(name)) events.set(name, []);
@@ -24,7 +25,13 @@ async function browser(firefox, { listCookies, links = [] } = {}) {
     URL, URLSearchParams, TextDecoder, console, setTimeout, clearTimeout,
     navigator: { userAgent: "Auralis fixture" },
     browser: {
-      downloads: firefox ? { onCreated: event("download") } : { onDeterminingFilename: event("download") },
+      downloads: {
+        ...(firefox ? { onCreated: event("download") } : { onDeterminingFilename: event("download") }),
+        pause: async (id) => { downloadActions.push(["pause", id]); },
+        resume: async (id) => { downloadActions.push(["resume", id]); },
+        cancel: async (id) => { downloadActions.push(["cancel", id]); },
+        erase: async ({ id }) => { downloadActions.push(["erase", id]); },
+      },
       storage: { local: { get: async (keys) => Array.isArray(keys) ? saved : { ...keys, ...saved },
         set: async (values) => Object.assign(saved, values), remove: async (key) => delete saved[key] }, onChanged: event("storage") },
       runtime: {
@@ -57,8 +64,8 @@ async function browser(firefox, { listCookies, links = [] } = {}) {
   vm.runInContext(source, script);
   // Allow startup to cache rules before running the isolated scenarios.
   await new Promise((resolve) => setImmediate(resolve));
-  return { script, native,
-    emit(name, details) { for (const fn of events.get(name) ?? []) fn(details); },
+  return { script, native, downloadActions,
+    emit(name, ...args) { return (events.get(name) ?? []).map((fn) => fn(...args)); },
     message(message, sender) {
       const [listener] = events.get("runtimeonMessage");
       return new Promise((resolve) => { if (listener(message, sender, resolve) === false) resolve(null); });
@@ -188,6 +195,56 @@ test("anonymous Chromium downloads can be handed over without a request ID", asy
   assert.equal(await script.offer(item(unavailableUrl), unavailableUrl, { name: "unavailable.zip" }), false);
   const downloads = native.map(([, message]) => message).filter((message) => message.url);
   assert.deepEqual(downloads.map(({ url, cookies }) => [url, cookies]), [[publicUrl, ""]]);
+});
+
+const popup = { id: "fixture", url: "chrome-extension://fixture/popup.html" };
+
+test("Chromium continues a browser-session download and explains why in the popup", async () => {
+  const session = "https://files.example.test/download?ticket=local-fixture";
+  const urlNamed = "https://files.example.test/local-fixture.zip";
+  const fixture = await browser(false, { listCookies: async () => [{ name: "fixture", value: "local" }] });
+  const { emit, native, message, downloadActions } = fixture;
+  async function browserContinues(item) {
+    const result = await new Promise((resolve) => emit("download", { danger: "safe", ...item }, resolve));
+    assert.equal(result.conflictAction, "uniquify");
+    await new Promise((resolve) => setImmediate(resolve));
+    const { declined } = await message({ type: "state" }, popup);
+    return plain(declined);
+  }
+
+  const named = await browserContinues({ id: 1, url: session, filename: "C:\\Downloads\\report.zip" });
+  assert.equal(named.why, "browser-session");
+  assert.equal(named.name, "report.zip");
+  assert.equal(named.site, "files.example.test");
+
+  const unnamed = await browserContinues({ id: 2, url: urlNamed, filename: "local-fixture.zip" });
+  assert.equal(unnamed.why, "browser-session");
+  assert.equal(unnamed.name, "");
+
+  const privateDownload = await browserContinues({ id: 3, url: session, filename: "private.zip", incognito: true });
+  assert.equal(privateDownload.why, "browser-session");
+  assert.equal(privateDownload.name, "");
+  assert.equal(privateDownload.site, "");
+
+  const requests = native.map(([, entry]) => entry);
+  assert.deepEqual(requests.filter((entry) => entry.declined).map((entry) => entry.declined), [
+    { why: "browser-session", name: "report.zip", site: "files.example.test" },
+    { why: "browser-session", name: "", site: "files.example.test" },
+  ]);
+  assert.ok(requests.every((entry) => !("url" in entry || "cookies" in entry || "private" in entry)));
+  assert.deepEqual(downloadActions, []);
+});
+
+test("Firefox resumes a browser-session download without offering it to Auralis", async () => {
+  const { emit, native, message, downloadActions } = await browser(true, {
+    listCookies: async () => [{ name: "fixture", value: "local" }],
+  });
+  const url = "https://files.example.test/download";
+  await Promise.all(emit("download", { id: 4, url, filename: "report.zip", danger: "safe" }));
+  const { declined } = await message({ type: "state" }, popup);
+  assert.equal(declined.why, "browser-session");
+  assert.deepEqual(downloadActions, [["pause", 4], ["resume", 4]]);
+  assert.ok(native.every(([, entry]) => !entry.url && !entry.cookies));
 });
 
 test("selection import sends its link list without the page's cookies", async () => {

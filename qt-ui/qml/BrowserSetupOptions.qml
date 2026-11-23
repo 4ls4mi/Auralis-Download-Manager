@@ -9,96 +9,159 @@ ColumnLayout {
 
     property bool monitoring: false
     property bool showManualTools: false
-    property bool showPolicyChoice: true
     property bool platformSupported: Qt.platform.os === "windows"
+    property int verificationTimeout: 90000
     property bool checked: false
     property bool checking: false
-    property bool acting: false
+    property string activeAction: ""
     property var status: null
     property string problem: ""
     property string feedback: ""
-    property string policyBrowserId: ""
-    property string policyBrowserName: ""
-    property bool removingPolicy: false
-    property string policyConfirmationDetails: ""
-    property string policyConfirmText: qsTr("Install through policy")
+    property bool feedbackFailed: false
+    property string confirmationBrowserId: ""
+    property string confirmationBrowserName: ""
+    property string removalBrowserId: ""
+    property string removalBrowserName: ""
+    property string installConfirmationDetails: ""
+    property bool advancedOpen: false
+    property var attempts: ({})
     readonly property var colors: MaterialTheme.palette
-    readonly property bool needsSetup: Boolean(status?.browserSupported && status?.storeUrl
-        && !status?.connectedRecently && !status?.extensionPresent && !status?.policyInstalled)
-    readonly property bool hasStore: Boolean(status?.browserSupported && status?.storeUrl)
-    readonly property bool policyAvailable: needsSetup && Boolean(status?.silentInstallAvailable && status?.browserId)
-    readonly property bool policyRemovable: showManualTools && Boolean(status?.policyRemovable && status?.browserId)
+    readonly property bool acting: activeAction.length > 0
+    readonly property bool hasStore: Boolean(!problem && status?.browserSupported && status?.storeUrl)
+    readonly property bool installed: Boolean(status?.connectedRecently || status?.extensionPresent)
+    readonly property bool needsSetup: hasStore && !installed && !status?.policyInstalled
+    readonly property bool supportedBrowser: status?.browserId === "chrome" || status?.browserId === "edge"
+    readonly property bool needsHostRepair: Boolean(!problem && status?.browserSupported && supportedBrowser
+        && status?.nativeHostRegistered === false && status?.nativeHostProblem
+        && (installed || status?.policyInstalled))
+    readonly property bool automaticAvailable: needsSetup && supportedBrowser && Boolean(status?.silentInstallAvailable)
+    readonly property bool canUndo: showManualTools && !problem && supportedBrowser && Boolean(status?.policyRemovable)
+    readonly property var attempt: attempts[status?.browserId]
+    readonly property bool pending: !installed && attempt?.state === "pending"
+    readonly property bool manualAvailable: hasStore && !installed && Boolean(attempt?.state && !pending)
+    readonly property bool confirming: Boolean(confirmationBrowserId || removalBrowserId)
 
-    signal policyAccepted()
+    signal installAccepted()
 
     spacing: 8
+
+    function recordAttempt(browserId, state) {
+        const expires = state === "pending" ? Date.now() + verificationTimeout : 0
+        attempts = Object.assign({}, attempts, {[browserId]: state ? {state: state, expires: expires} : null})
+    }
 
     function refresh() {
         if (!platformSupported) {
             checked = true
             return
         }
-        if (checking)
+        if (checking || acting)
             return
         checking = true
         engine.request({local: "browserExtensionStatus"}, function(value, error) {
-            checking = false
             if (!error && value) {
+                if (status?.browserId !== value.browserId) {
+                    cancelConfirmation()
+                    advancedOpen = false
+                    feedback = ""
+                    feedbackFailed = false
+                }
                 status = value
                 problem = ""
-            } else if (!status) {
-                problem = error || qsTr("Could not check browser integration.")
+                const browserId = value.browserId
+                const previous = attempts[browserId]
+                if (confirmationBrowserId) {
+                    if (installed || value.policyInstalled) {
+                        cancelConfirmation()
+                    } else if (!automaticAvailable) {
+                        cancelConfirmation()
+                        recordAttempt(browserId, "unavailable")
+                    }
+                }
+                if (previous && (value.extensionPresent || value.connectedRecently)) {
+                    recordAttempt(browserId, "")
+                    feedback = ""
+                    feedbackFailed = false
+                } else if (previous?.state === "pending") {
+                    if (value.policyState === "blocked")
+                        recordAttempt(browserId, "failed")
+                    else if (Date.now() >= previous.expires)
+                        recordAttempt(browserId, "timeout")
+                } else if (browserId && value.policyInstalled && !installed && !previous) {
+                    recordAttempt(browserId, "pending")
+                }
+            } else {
+                problem = qsTr("Could not check your browser setup.")
             }
+            checking = false
             checked = true
         })
     }
 
-    function perform(action, expectedBrowser) {
-        if (acting)
+    function offerInstall(browserId) {
+        if (!needsSetup || acting || checking || status?.browserId !== browserId)
             return
-        acting = true
         feedback = ""
-        const request = {local: action}
-        if (expectedBrowser)
-            request.expectedBrowser = expectedBrowser
-        engine.request(request, function(value, error) {
-            acting = false
-            if (error || !value?.ok)
-                feedback = error || qsTr("Browser setup did not complete.")
-            else if (value.message)
-                feedback = value.message
-            else if (action === "openBrowserExtensionStore")
-                feedback = qsTr("Approve the extension in the browser. Open its toolbar menu to verify the connection.")
-            else if (action === "installBrowserExtensionPolicy")
-                feedback = qsTr("Browser policy saved. Open the browser and its Auralis toolbar menu to verify the connection.")
-            else if (action === "removeBrowserExtensionPolicy")
-                feedback = qsTr("Auralis removed its browser policy. Review your extensions after the browser applies the change.")
-            else if (action === "registerBrowserHost")
-                feedback = qsTr("Browser connection registered. Reopen your browser to reconnect.")
-            else if (action === "openExtensionFolder")
-                feedback = qsTr("Choose the displayed Auralis folder when loading the unpacked extension.")
+        feedbackFailed = false
+        if (!automaticAvailable) {
+            recordAttempt(browserId, "unavailable")
+            return
+        }
+        confirmationBrowserId = browserId
+        confirmationBrowserName = status.browser
+    }
+
+    function cancelConfirmation() {
+        confirmationBrowserId = ""
+        confirmationBrowserName = ""
+        removalBrowserId = ""
+        removalBrowserName = ""
+    }
+
+    function perform(action, browserId) {
+        if (acting || checking || !browserId || status?.browserId !== browserId)
+            return
+        const install = action === "installBrowserExtensionPolicy"
+        const undo = action === "removeBrowserExtensionPolicy"
+        const openStore = action === "openBrowserExtensionStore"
+        const repair = action === "registerBrowserHost"
+        activeAction = action
+        feedback = ""
+        feedbackFailed = false
+        engine.request({local: action, expectedBrowser: browserId}, function(value, error) {
+            if (error || !value?.ok) {
+                if (install) {
+                    recordAttempt(browserId, "failed")
+                } else {
+                    feedbackFailed = true
+                    feedback = undo ? qsTr("Could not undo the automatic extension setup.")
+                        : repair ? qsTr("Could not repair the browser connection.")
+                        : qsTr("Could not open your browser.")
+                }
+            } else if (install) {
+                recordAttempt(browserId, "pending")
+            } else if (openStore) {
+                feedback = qsTr("Follow the browser prompts to add the extension, then open the Auralis toolbar icon to verify the connection.")
+                if (value.nativeHostRegistered === false)
+                    feedback += " " + qsTr("If it cannot connect, return here to repair the connection.")
+            } else if (undo) {
+                recordAttempt(browserId, "")
+                feedback = qsTr("Automatic setup was removed. Reopen your browser to apply the change.")
+            } else if (repair) {
+                feedback = qsTr("Browser connection repaired. Reopen your browser and open the Auralis toolbar icon.")
+            }
+            activeAction = ""
             refresh()
         })
-    }
-
-    function preparePolicy(remove) {
-        if (!(remove ? policyRemovable : policyAvailable) || acting)
-            return
-        removingPolicy = Boolean(remove)
-        policyBrowserId = status.browserId
-        policyBrowserName = status.browser
-    }
-
-    function cancelPolicy() {
-        policyBrowserId = ""
-        removingPolicy = false
     }
 
     onMonitoringChanged: {
         if (monitoring)
             refresh()
-        else
-            cancelPolicy()
+        else {
+            cancelConfirmation()
+            advancedOpen = false
+        }
     }
     Component.onCompleted: if (monitoring) refresh()
 
@@ -121,7 +184,8 @@ ColumnLayout {
         Layout.fillWidth: true
         wrapMode: Text.WordWrap
         textFormat: Text.PlainText
-        color: root.problem ? root.colors.destructive : root.status?.connectedRecently ? root.colors.positive : root.colors.muted
+        color: root.problem || root.manualAvailable ? root.colors.destructive
+            : root.status?.connectedRecently ? root.colors.positive : root.colors.muted
         text: {
             const browser = root.status?.browser
             if (!root.platformSupported)
@@ -137,73 +201,106 @@ ColumnLayout {
             if (root.status?.connectedRecently)
                 return qsTr("Verified the Auralis extension connection in %1.").arg(browser)
             if (root.status?.extensionPresent)
-                return qsTr("Auralis is installed in a %1 profile. Open its toolbar menu to verify the connection.").arg(browser)
-            if (root.status?.policyInstalled)
-                return qsTr("Installation is pending in %1. Open the browser and its Auralis toolbar menu to verify the connection.").arg(browser)
+                return qsTr("Auralis found the extension in %1. Open its toolbar icon to verify the connection.").arg(browser)
+            if (root.activeAction === "installBrowserExtensionPolicy")
+                return qsTr("Starting extension installation in %1…").arg(browser)
+            if (root.pending)
+                return qsTr("Close all %1 windows, then reopen the browser to finish installing. Open the Auralis toolbar icon to verify the connection.").arg(browser)
+            if (root.manualAvailable) {
+                if (root.attempt.state === "unavailable")
+                    return qsTr("Automatic installation is unavailable in %1. You can install the extension manually.").arg(browser)
+                if (root.attempt.state === "timeout")
+                    return qsTr("Auralis could not verify installation in %1. You can install the extension manually.").arg(browser)
+                return qsTr("Automatic installation did not complete in %1. You can install the extension manually.").arg(browser)
+            }
             if (root.status?.storePreviouslyConnected)
-                return qsTr("The store extension has connected in %1 before. Auralis could not verify that it is still installed.").arg(browser)
+                return qsTr("The extension previously connected in %1. Open its toolbar icon if it’s still installed.").arg(browser)
             if (root.status?.browserPreviouslyConnected)
-                return qsTr("%1 has connected before. Open the Auralis toolbar menu to verify the store extension.").arg(browser)
-            return qsTr("%1 is your default browser. Add the extension to send downloads to Auralis.").arg(browser)
+                return qsTr("%1 has connected before. Open the Auralis toolbar icon to verify the extension.").arg(browser)
+            return qsTr("Install the extension in %1 to send browser downloads to Auralis.").arg(browser)
         }
     }
 
     Flow {
         Layout.fillWidth: true
         spacing: 8
-        visible: Boolean(root.status?.browserSupported) && !Boolean(root.policyBrowserId)
+        visible: !root.confirming && !root.problem
+
+        GlassButton {
+            objectName: "installBrowserExtension"
+            text: qsTr("Install extension")
+            visible: root.needsSetup && !root.manualAvailable && !root.pending
+            enabled: !root.acting && !root.checking
+            accent: root.colors.positive
+            filled: true
+            onClicked: root.offerInstall(root.status?.browserId)
+        }
 
         GlassButton {
             objectName: "openBrowserExtensionStore"
-            text: root.needsSetup ? qsTr("Get the extension") : qsTr("View store listing")
+            text: qsTr("Install manually")
+            visible: root.manualAvailable
+            enabled: !root.acting && !root.checking
             accent: root.colors.positive
-            filled: root.needsSetup
-            enabled: root.hasStore && !root.acting
-            onClicked: root.perform("openBrowserExtensionStore")
+            filled: true
+            onClicked: root.perform("openBrowserExtensionStore", root.status?.browserId)
         }
 
         GlassButton {
             objectName: "manageBrowserExtensions"
             text: qsTr("Manage browser extensions")
-            enabled: !root.acting
-            onClicked: root.perform("openBrowserExtensions")
+            visible: root.hasStore && root.installed
+            enabled: !root.acting && !root.checking
+            onClicked: root.perform("openBrowserExtensions", root.status?.browserId)
         }
 
         GlassButton {
-            objectName: "requestBrowserPolicyInstall"
-            text: qsTr("Install through browser policy…")
-            visible: root.showPolicyChoice && root.policyAvailable
+            objectName: "repairDetectedBrowserHost"
+            text: qsTr("Repair browser connection")
+            visible: root.needsHostRepair && (root.installed || root.advancedOpen)
+            enabled: !root.acting && !root.checking
+            onClicked: root.perform("registerBrowserHost", root.status?.browserId)
+        }
+
+        GlassButton {
+            text: qsTr("Advanced options")
+            visible: root.canUndo || root.showManualTools && root.needsHostRepair && root.manualAvailable
             enabled: !root.acting
-            onClicked: root.preparePolicy()
+            checkable: true
+            checked: root.advancedOpen
+            onToggled: root.advancedOpen = checked
         }
 
         GlassButton {
             objectName: "requestBrowserPolicyRemoval"
-            text: qsTr("Remove Auralis browser policy…")
-            visible: root.policyRemovable
-            enabled: !root.acting
-            onClicked: root.preparePolicy(true)
+            text: qsTr("Undo automatic setup…")
+            visible: root.canUndo && root.advancedOpen
+            enabled: !root.acting && !root.checking
+            onClicked: {
+                root.removalBrowserId = root.status.browserId
+                root.removalBrowserName = root.status.browser
+            }
         }
     }
 
     ColumnLayout {
         Layout.fillWidth: true
-        visible: Boolean(root.policyBrowserId)
+        visible: root.confirming
 
         Label {
             Layout.fillWidth: true
             color: root.colors.ink
             wrapMode: Text.WordWrap
             textFormat: Text.PlainText
-            text: root.removingPolicy
-                ? qsTr("Remove the Auralis policy entry for %1 from your Windows account? Review the browser’s extension settings after it applies the change.").arg(root.policyBrowserName)
-                : qsTr("Add the official Auralis extension in %1 using your Windows account’s browser policy? The browser may show that it’s managed. You can disable the extension in the browser’s extension settings.").arg(root.policyBrowserName)
+            text: root.removalBrowserId
+                ? qsTr("Remove the Auralis extension setup setting for %1 from your Windows account? Reopen the browser to apply the change.").arg(root.removalBrowserName)
+                : qsTr("Auralis will save an extension installation setting for %1 in your Windows account. The browser may show a notice that it is managed and ask you to restart or approve the installation.").arg(root.confirmationBrowserName)
         }
 
         Label {
             Layout.fillWidth: true
-            visible: !root.removingPolicy && Boolean(root.policyConfirmationDetails)
-            text: root.policyConfirmationDetails
+            visible: Boolean(root.confirmationBrowserId && root.installConfirmationDetails)
+            text: root.installConfirmationDetails
             color: root.colors.muted
             wrapMode: Text.WordWrap
             textFormat: Text.PlainText
@@ -213,76 +310,45 @@ ColumnLayout {
             Layout.fillWidth: true
             spacing: 8
             GlassButton {
-                objectName: root.removingPolicy ? "confirmBrowserPolicyRemoval" : "confirmBrowserPolicyInstall"
-                text: root.removingPolicy ? qsTr("Remove Auralis policy") : root.policyConfirmText
-                enabled: !root.acting && (root.removingPolicy ? root.policyRemovable : root.policyAvailable)
-                    && root.status?.browserId === root.policyBrowserId
-                accent: root.removingPolicy ? root.colors.destructive : root.colors.positive
+                objectName: "confirmBrowserPolicyInstall"
+                text: qsTr("Install extension")
+                visible: Boolean(root.confirmationBrowserId)
+                enabled: root.automaticAvailable && !root.acting && !root.checking
+                    && root.confirmationBrowserId === root.status?.browserId
+                accent: root.colors.positive
+                filled: true
                 onClicked: {
-                    const browserId = root.policyBrowserId
-                    const remove = root.removingPolicy
-                    root.cancelPolicy()
-                    root.perform(remove ? "removeBrowserExtensionPolicy" : "installBrowserExtensionPolicy", browserId)
-                    if (!remove)
-                        root.policyAccepted()
+                    const browserId = root.confirmationBrowserId
+                    root.cancelConfirmation()
+                    root.perform("installBrowserExtensionPolicy", browserId)
+                    root.installAccepted()
+                }
+            }
+            GlassButton {
+                objectName: "confirmBrowserPolicyRemoval"
+                text: qsTr("Undo setup")
+                visible: Boolean(root.removalBrowserId)
+                enabled: root.canUndo && !root.acting && !root.checking && root.removalBrowserId === root.status?.browserId
+                accent: root.colors.destructive
+                onClicked: {
+                    const browserId = root.removalBrowserId
+                    root.cancelConfirmation()
+                    root.perform("removeBrowserExtensionPolicy", browserId)
                 }
             }
             GlassButton {
                 text: qsTr("Cancel")
-                onClicked: root.cancelPolicy()
+                onClicked: root.cancelConfirmation()
             }
         }
     }
 
     Label {
         Layout.fillWidth: true
-        visible: Boolean(root.status?.policyProblem) && !root.status?.policyInstalled
-        text: root.status?.policyProblem || ""
+        visible: Boolean(root.feedback)
+        text: root.feedback
         wrapMode: Text.WordWrap
         textFormat: Text.PlainText
-        color: root.colors.muted
-    }
-
-    Label {
-        Layout.fillWidth: true
-        Layout.topMargin: 6
-        visible: root.showManualTools && root.platformSupported
-        color: root.colors.ink
-        font.weight: Font.DemiBold
-        text: qsTr("Manual setup and repair")
-    }
-
-    Label {
-        Layout.fillWidth: true
-        visible: root.showManualTools && root.platformSupported
-        color: root.colors.muted
-        wrapMode: Text.WordWrap
-        textFormat: Text.PlainText
-        text: qsTr("To use the bundled copy in Chrome or Edge, enable Developer mode on the Extensions page and choose Load unpacked.")
-    }
-
-    Flow {
-        Layout.fillWidth: true
-        visible: root.showManualTools && root.platformSupported
-        spacing: 8
-        GlassButton {
-            text: qsTr("Open bundled extension folder")
-            enabled: !root.acting
-            onClicked: root.perform("openExtensionFolder")
-        }
-        GlassButton {
-            text: qsTr("Repair browser connection")
-            enabled: !root.acting
-            onClicked: root.perform("registerBrowserHost")
-        }
-    }
-
-    Label {
-        Layout.fillWidth: true
-        visible: root.acting || Boolean(root.feedback)
-        text: root.acting ? qsTr("Preparing browser integration…") : root.feedback
-        wrapMode: Text.WordWrap
-        textFormat: Text.PlainText
-        color: root.colors.muted
+        color: root.feedbackFailed ? root.colors.destructive : root.colors.muted
     }
 }

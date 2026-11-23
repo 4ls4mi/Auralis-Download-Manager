@@ -221,6 +221,10 @@
     "message": "The extension isn't allowed to read this site (the browser's site access).",
     "description": "why a download stayed with the browser: the user limited the extension's access to web sites in the browser, so it can't pass the sign-in on"
   },
+  "declined_browser_session": {
+    "message": "Auralis couldn't verify the original browser request. Continue in your browser's Downloads list.",
+    "description": "Why the download stayed in the browser when Auralis could not safely verify its browser session."
+  },
   "popup_alt": {
     "message": "Hold Alt while clicking a link to let the browser download it.",
     "description": "hint in the toolbar button's popup; Alt is the keyboard key"

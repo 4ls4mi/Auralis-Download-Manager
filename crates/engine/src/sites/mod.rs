@@ -3,6 +3,7 @@
 //! site knows stays in its own module, so the engine stays generic and a later site is one more
 //! module here.
 
+pub(crate) mod bowfile;
 pub mod gdrive;
 mod gofile;
 mod mediafire;
@@ -126,7 +127,10 @@ pub(crate) fn second_look(at: &Url) -> Option<Url> {
 /// `at` is a site's address for a file: a web page from it without a file name is the site
 /// talking, never the file (it is an error, not saved).
 pub(crate) fn expects_file(at: &Url) -> bool {
-    gdrive::expects_file(at) || mediafire::expects_file(at)
+    gdrive::expects_file(at)
+        || mediafire::expects_file(at)
+        || bowfile::is_share(at)
+        || bowfile::is_file(at)
 }
 
 #[cfg(test)]

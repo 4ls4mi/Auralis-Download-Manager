@@ -74,19 +74,6 @@ QVariantMap setStartupSettings(const QVariantMap &command)
     return result(QVariantMap{{QStringLiteral("enabled"), enabled}, {QStringLiteral("mode"), mode}});
 }
 
-#ifdef Q_OS_WIN
-QString registerNativeBrowserHost()
-{
-    QProcess host;
-    const QString path = QCoreApplication::applicationDirPath() + QStringLiteral("/auralis-browser-host.exe");
-    if (!QFileInfo(path).isFile())
-        return QObject::tr("The Auralis browser helper is missing from this installation.");
-    host.start(path, {QStringLiteral("--register-native-only")});
-    if (!host.waitForFinished(10000) || host.exitStatus() != QProcess::NormalExit || host.exitCode())
-        return QObject::tr("Could not register the browser helper.");
-    return {};
-}
-#endif
 }
 
 Engine::Engine(QJSEngine *scriptEngine, bool startHidden, bool smoke, QObject *parent)
@@ -156,6 +143,8 @@ QVariantMap Engine::dispatch(const QVariantMap &command) const
     const QString local = command.value(QStringLiteral("local")).toString();
     if (local.isEmpty()) {
         const QString shellAction = command.value(QStringLiteral("shellAction")).toString();
+        if (m_smoke && shellAction == QStringLiteral("clipboard-prefill"))
+            return result(QVariant());
         if (m_smoke && shellAction.startsWith(QStringLiteral("update-")))
             return failure(tr("External update requests are disabled during the installation smoke test."));
         if (shellAction == QStringLiteral("update-check")) {
@@ -182,13 +171,16 @@ QVariantMap Engine::dispatch(const QVariantMap &command) const
     const bool manage = local == QStringLiteral("openBrowserExtensions");
     const bool installExtension = local == QStringLiteral("installBrowserExtensionPolicy");
     const bool removeExtensionPolicy = local == QStringLiteral("removeBrowserExtensionPolicy");
-    if (browserStatus || openStore || manage || installExtension || removeExtensionPolicy) {
+    const bool repairHost = local == QStringLiteral("registerBrowserHost");
+    if (browserStatus || openStore || manage || installExtension || removeExtensionPolicy || repairHost) {
         QVariantMap status{{QStringLiteral("browser"), QString()}, {QStringLiteral("browserId"), QString()},
                            {QStringLiteral("browserSupported"), false}, {QStringLiteral("extensionPresent"), false},
                            {QStringLiteral("connectedRecently"), false}, {QStringLiteral("storePreviouslyConnected"), false},
                            {QStringLiteral("browserPreviouslyConnected"), false}, {QStringLiteral("storeUrl"), QString()},
+                           {QStringLiteral("nativeHostRegistered"), false}, {QStringLiteral("nativeHostProblem"), QString()},
                            {QStringLiteral("silentInstallAvailable"), false}, {QStringLiteral("policyInstalled"), false},
-                           {QStringLiteral("policyRemovable"), false}, {QStringLiteral("policyProblem"), QString()}};
+                           {QStringLiteral("policyRemovable"), false}, {QStringLiteral("policyProblem"), QString()},
+                           {QStringLiteral("policyState"), QStringLiteral("unsupported")}};
 #ifdef Q_OS_WIN
         if (!m_smoke) {
             const auto handler = BrowserSetup::defaultHttpsHandler();
@@ -199,9 +191,19 @@ QVariantMap Engine::dispatch(const QVariantMap &command) const
                 return response;
             const auto browserResult = response.value(QStringLiteral("result")).toMap();
             const auto browserId = browserResult.value(QStringLiteral("browserId")).toString();
+            const auto expectedBrowser = command.value(QStringLiteral("expectedBrowser")).toString();
+            const bool browserSpecified = (openStore || manage || repairHost) && !expectedBrowser.isEmpty();
+            if ((installExtension || removeExtensionPolicy || browserSpecified) && expectedBrowser != browserId)
+                return failure(tr("The Windows default browser changed. Review browser setup again."));
             if (browserId != QStringLiteral("chrome") && browserId != QStringLiteral("edge")) {
                 if (browserStatus)
                     return result(status);
+                // Retain manual host repair for other bundles and browsers. Guided setup
+                // and background preparation only register the selected Chrome or Edge key.
+                if (repairHost) {
+                    const auto error = BrowserSetup::registerNativeHost({}, true);
+                    return error.isEmpty() ? result(QVariantMap{{QStringLiteral("ok"), true}}) : failure(error);
+                }
                 return failure(tr("Guided extension setup is available for Chrome and Edge when one is your Windows default browser."));
             }
             const QString store = BrowserSetup::storeUrl().toString(QUrl::FullyEncoded);
@@ -209,28 +211,36 @@ QVariantMap Engine::dispatch(const QVariantMap &command) const
                 for (auto it = browserResult.constBegin(); it != browserResult.constEnd(); ++it)
                     status.insert(it.key(), it.value());
                 const auto policy = BrowserSetup::policyStatus(browserId);
+                const auto host = BrowserSetup::nativeHostStatus(browserId);
+                const bool canPrepare = host.registered || (host.canRegister && !host.anotherApplication);
                 status.insert(QStringLiteral("storeUrl"), store);
-                status.insert(QStringLiteral("silentInstallAvailable"), policy.available);
+                status.insert(QStringLiteral("nativeHostRegistered"), host.registered);
+                status.insert(QStringLiteral("nativeHostProblem"), host.problem);
+                status.insert(QStringLiteral("silentInstallAvailable"), policy.available && canPrepare);
                 status.insert(QStringLiteral("policyInstalled"), policy.configured);
                 status.insert(QStringLiteral("policyRemovable"), policy.removable);
-                status.insert(QStringLiteral("policyProblem"), policy.problem);
+                status.insert(QStringLiteral("policyProblem"), policy.available && !canPrepare ? host.problem : policy.problem);
+                status.insert(QStringLiteral("policyState"), policy.configured ? QStringLiteral("configured")
+                    : policy.available && canPrepare ? QStringLiteral("available") : QStringLiteral("blocked"));
                 return result(status);
             }
+            if (repairHost) {
+                const auto error = BrowserSetup::registerNativeHost(browserId, true);
+                return error.isEmpty() ? result(QVariantMap{{QStringLiteral("ok"), true},
+                    {QStringLiteral("nativeHostRegistered"), true}}) : failure(error);
+            }
             if (installExtension || removeExtensionPolicy) {
-                const auto expectedBrowser = command.value(QStringLiteral("expectedBrowser")).toString();
-                if (expectedBrowser != browserId)
-                    return failure(tr("The Windows default browser changed. Review browser setup again."));
                 if (removeExtensionPolicy) {
                     const auto policyError = BrowserSetup::removePolicy(browserId);
                     if (!policyError.isEmpty())
                         return failure(policyError);
                     return result(QVariantMap{{QStringLiteral("ok"), true},
-                        {QStringLiteral("message"), tr("Auralis removed its managed browser setup. The browser will apply the change.")}});
+                        {QStringLiteral("message"), tr("Auralis removed its automatic extension setup. Reopen your browser to apply the change.")}});
                 }
                 const auto policy = BrowserSetup::policyStatus(browserId);
                 if (!policy.available && !policy.configured)
                     return failure(policy.problem);
-                const auto registrationError = registerNativeBrowserHost();
+                const auto registrationError = BrowserSetup::registerNativeHost(browserId, false);
                 if (!registrationError.isEmpty())
                     return failure(registrationError);
                 if (BrowserSetup::defaultHttpsHandler().executable.compare(handler.executable, Qt::CaseInsensitive) != 0)
@@ -238,26 +248,28 @@ QVariantMap Engine::dispatch(const QVariantMap &command) const
                 const auto policyError = BrowserSetup::installPolicy(browserId);
                 if (!policyError.isEmpty())
                     return failure(policyError);
+                const bool pending = !browserResult.value(QStringLiteral("extensionPresent")).toBool()
+                    && !browserResult.value(QStringLiteral("connectedRecently")).toBool();
                 return result(QVariantMap{{QStringLiteral("ok"), true},
-                    {QStringLiteral("message"), tr("Browser setup is configured. The extension will connect after the browser installs it.")}});
+                    {QStringLiteral("pending"), pending},
+                    {QStringLiteral("message"), pending
+                        ? tr("Reopen your browser to finish installing the Auralis extension.")
+                        : tr("The browser has the extension. Open its toolbar menu to verify the Auralis connection.")}});
             }
-            const QString destination = manage ? BrowserSetup::extensionManager(browserId) : store;
+            const auto registrationError = openStore ? BrowserSetup::registerNativeHost(browserId, false) : QString();
+            const auto destination = manage ? BrowserSetup::extensionManager(browserId) : store;
             if (!QProcess::startDetached(handler.executable, {destination}))
                 return failure(tr("Could not open the Windows default browser."));
-            return result(QVariantMap{{QStringLiteral("ok"), true}, {QStringLiteral("openedInBrowser"), true}});
+            QVariantMap opened{{QStringLiteral("ok"), true}, {QStringLiteral("openedInBrowser"), true}};
+            if (openStore) {
+                opened.insert(QStringLiteral("nativeHostRegistered"), registrationError.isEmpty());
+                if (!registrationError.isEmpty())
+                    opened.insert(QStringLiteral("message"), registrationError);
+            }
+            return result(opened);
         }
 #endif
         return browserStatus ? result(status) : failure(tr("Browser setup is unavailable here."));
-    }
-    if (local == QStringLiteral("registerBrowserHost")) {
-#ifdef Q_OS_WIN
-        if (m_smoke)
-            return failure(tr("Browser setup is disabled during installation tests."));
-        const auto error = registerNativeBrowserHost();
-        return error.isEmpty() ? result(QVariantMap{{QStringLiteral("ok"), true}}) : failure(error);
-#else
-        return failure(tr("This installer registers browser integration on Windows."));
-#endif
     }
     return requestLocalFile(command, m_profile);
 }
@@ -270,6 +282,22 @@ void Engine::start()
         return;
     }
     m_service.setFuture(QtConcurrent::run(&m_serviceThread, [this] { return decode(m_run()); }));
+#ifdef Q_OS_WIN
+    if (!m_smoke) {
+        m_localJobs.start([this] {
+            if (!BrowserSetup::isInstalledApplication())
+                return;
+            const auto handler = BrowserSetup::defaultHttpsHandler();
+            if (handler.executable.isEmpty())
+                return;
+            const auto status = exchange({{QStringLiteral("shellAction"), QStringLiteral("browser-extension-status")},
+                                          {QStringLiteral("executable"), handler.executable}});
+            const auto browserId = status.value(QStringLiteral("result")).toMap().value(QStringLiteral("browserId")).toString();
+            if (browserId == QStringLiteral("chrome") || browserId == QStringLiteral("edge"))
+                BrowserSetup::registerNativeHost(browserId, false);
+        });
+    }
+#endif
     m_timer.start();
     refresh();
 }
@@ -316,9 +344,10 @@ void Engine::request(const QVariantMap &command, const QJSValue &callback)
         if (changesDownloads)
             refresh();
     });
+    const bool clipboardPrefill = shellAction == QStringLiteral("clipboard-prefill");
     QThreadPool *pool = shellAction == QStringLiteral("update-history") ? &m_releaseHistoryJobs
         : shellAction.startsWith(QStringLiteral("update-")) ? &m_updateJobs
-        : local.isEmpty() ? &m_commands : &m_localJobs;
+        : local.isEmpty() && !clipboardPrefill ? &m_commands : &m_localJobs;
     watcher->setFuture(QtConcurrent::run(pool, [this, command] { return dispatch(command); }));
 }
 

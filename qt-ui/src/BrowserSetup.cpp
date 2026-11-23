@@ -3,13 +3,18 @@
 #ifdef Q_OS_WIN
 #include <QCoreApplication>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QProcess>
 #include <QSettings>
+#include <QStringList>
 
 #include <windows.h>
 #include <shlwapi.h>
+#include <array>
 #include <vector>
 
 namespace {
@@ -53,6 +58,49 @@ QString policyPath(const QString &browserId)
     return {};
 }
 
+QString browserHelper()
+{
+    return QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("auralis-browser-host.exe"));
+}
+
+QStringList nativeHostPaths(const QString &browserId)
+{
+    const auto chrome = QStringLiteral("Software\\Google\\Chrome\\NativeMessagingHosts\\") + NativeHost;
+    if (browserId == QStringLiteral("chrome"))
+        return {chrome};
+    if (browserId == QStringLiteral("edge"))
+        return {QStringLiteral("Software\\Microsoft\\Edge\\NativeMessagingHosts\\") + NativeHost,
+                QStringLiteral("Software\\Chromium\\NativeMessagingHosts\\") + NativeHost, chrome};
+    return {};
+}
+
+bool isLocalFilePath(const QString &path)
+{
+    return path.size() >= 3 && path[0].isLetter() && path[1] == QLatin1Char(':')
+        && (path[2] == QLatin1Char('\\') || path[2] == QLatin1Char('/'));
+}
+
+QString manifestPath(HKEY hive, DWORD registryView, const QString &key, bool &unreadable)
+{
+    std::array<wchar_t, 4096> value;
+    DWORD bytes = sizeof(value);
+    const auto status = RegGetValueW(hive, reinterpret_cast<LPCWSTR>(key.utf16()), nullptr,
+                                    registryView | RRF_RT_REG_SZ, nullptr, value.data(), &bytes);
+    unreadable = status != ERROR_SUCCESS && status != ERROR_FILE_NOT_FOUND && status != ERROR_PATH_NOT_FOUND;
+    return status == ERROR_SUCCESS ? QString::fromWCharArray(value.data()) : QString();
+}
+
+QJsonObject readNativeManifest(const QString &path)
+{
+    if (!isLocalFilePath(path) || !QFileInfo(path).isFile())
+        return {};
+    QFile file(path);
+    constexpr qint64 manifestLimit = 64 * 1024;
+    if (!file.open(QIODevice::ReadOnly) || file.size() > manifestLimit)
+        return {};
+    return QJsonDocument::fromJson(file.read(manifestLimit)).object();
+}
+
 bool listContains(QSettings &registry, const QString &key, const QString &value, bool wildcard)
 {
     registry.beginGroup(key);
@@ -68,6 +116,12 @@ bool listContains(QSettings &registry, const QString &key, const QString &value,
     return found;
 }
 
+bool blocksNativeHost(QSettings &registry)
+{
+    return listContains(registry, QStringLiteral("NativeMessagingBlocklist"), NativeHost, true)
+        && !listContains(registry, QStringLiteral("NativeMessagingAllowlist"), NativeHost, false);
+}
+
 bool existingPolicyBlocksSetup(QSettings &registry)
 {
     const auto external = QStringLiteral("BlockExternalExtensions");
@@ -80,7 +134,7 @@ bool existingPolicyBlocksSetup(QSettings &registry)
         || listContains(registry, QStringLiteral("ExtensionInstallBlocklist"), StoreId, true)
         || listContains(registry, QStringLiteral("ExtensionInstallBlacklist"), StoreId, true)
         || listContains(registry, QStringLiteral("ExtensionInstallForcelist"), StoreId, false)
-        || listContains(registry, QStringLiteral("NativeMessagingBlocklist"), NativeHost, true);
+        || blocksNativeHost(registry);
 }
 
 struct Review {
@@ -140,9 +194,8 @@ BrowserSetup::Handler BrowserSetup::defaultHttpsHandler()
 {
     const QFileInfo path(queryHttpsAssociation(ASSOCSTR_EXECUTABLE));
     const auto executable = QDir::toNativeSeparators(path.canonicalFilePath());
-    const bool localExecutable = executable.size() >= 3 && executable[0].isLetter()
-        && executable[1] == QLatin1Char(':') && executable[2] == QLatin1Char('\\') && path.isFile();
-    return {localExecutable ? executable : QString(), queryHttpsAssociation(ASSOCSTR_FRIENDLYAPPNAME)};
+    return {isLocalFilePath(executable) && path.isFile() ? executable : QString(),
+            queryHttpsAssociation(ASSOCSTR_FRIENDLYAPPNAME)};
 }
 
 QUrl BrowserSetup::storeUrl()
@@ -154,6 +207,127 @@ QString BrowserSetup::extensionManager(const QString &browserId)
 {
     return browserId == QStringLiteral("edge") ? QStringLiteral("edge://extensions/")
                                                : QStringLiteral("chrome://extensions/");
+}
+
+bool BrowserSetup::isInstalledApplication()
+{
+    QSettings registration(
+        QStringLiteral("HKEY_CURRENT_USER\\Software\\misterhybrid\\Auralis Download Manager"),
+        QSettings::NativeFormat);
+    const auto installedPath = registration.value(QStringLiteral(".")).toString();
+    if (!isLocalFilePath(installedPath))
+        return false;
+    const auto application = QFileInfo(QCoreApplication::applicationDirPath()).canonicalFilePath();
+    return !application.isEmpty()
+        && application.compare(QFileInfo(installedPath).canonicalFilePath(), Qt::CaseInsensitive) == 0;
+}
+
+BrowserSetup::NativeHostStatus BrowserSetup::nativeHostStatus(const QString &browserId)
+{
+    const auto locations = nativeHostPaths(browserId);
+    if (locations.isEmpty())
+        return {};
+
+    bool userHostsAllowed = true;
+    const auto path = policyPath(browserId);
+    const auto userHostsPolicy = QStringLiteral("NativeMessagingUserLevelHosts");
+    for (const auto &root : {QStringLiteral("HKEY_LOCAL_MACHINE"), QStringLiteral("HKEY_CURRENT_USER")}) {
+        for (const auto format : {QSettings::Registry64Format, QSettings::Registry32Format}) {
+            QSettings policy(root + path, format);
+            if (blocksNativeHost(policy))
+                return {false, false, false, QCoreApplication::translate("BrowserSetup",
+                    "Browser policy blocks the Auralis native messaging host.")};
+            if (policy.contains(userHostsPolicy) && !policy.value(userHostsPolicy).toBool())
+                userHostsAllowed = false;
+        }
+    }
+
+    const QFileInfo helperFile(browserHelper());
+    const auto helper = helperFile.canonicalFilePath();
+    if (helper.isEmpty() || !helperFile.isFile())
+        return {false, false, false, QCoreApplication::translate("BrowserSetup",
+            "This installation is missing the Auralis browser helper. Reinstall Auralis from its Windows installer.")};
+    const auto officialOrigin = QStringLiteral("chrome-extension://") + StoreId + QLatin1Char('/');
+    QString manifest;
+    for (const auto hive : {HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE}) {
+        if (hive == HKEY_CURRENT_USER && !userHostsAllowed)
+            continue;
+        for (const auto registryView : {RRF_SUBKEY_WOW6432KEY, RRF_SUBKEY_WOW6464KEY}) {
+            for (const auto &location : locations) {
+                bool unreadable = false;
+                manifest = manifestPath(hive, registryView, location, unreadable);
+                if (unreadable)
+                    return {false, false, false, QCoreApplication::translate("BrowserSetup",
+                        "Auralis could not read the browser’s native messaging registration.")};
+                if (!manifest.isEmpty())
+                    break;
+            }
+            if (!manifest.isEmpty())
+                break;
+        }
+        if (!manifest.isEmpty())
+            break;
+    }
+    // Browsers use the first manifest registration they find. A stale registration
+    // does not make a lower-priority entry usable.
+    const auto description = readNativeManifest(manifest);
+    const auto program = description.value(QStringLiteral("path")).toString();
+    const auto origins = description.value(QStringLiteral("allowed_origins")).toArray();
+    const QFileInfo executable(program);
+    if (isLocalFilePath(program) && executable.isFile() && !origins.isEmpty()
+        && description.value(QStringLiteral("name")).toString() == NativeHost
+        && description.value(QStringLiteral("type")).toString() == QStringLiteral("stdio")) {
+        if (executable.canonicalFilePath().compare(helper, Qt::CaseInsensitive) != 0)
+            return {false, userHostsAllowed, true, QCoreApplication::translate("BrowserSetup",
+                "The browser is registered with another download manager installation. Use Repair browser connection to switch it to this Auralis installation.")};
+        if (origins.contains(QJsonValue(officialOrigin)))
+            return {true, false, false, {}};
+    }
+    if (!userHostsAllowed)
+        return {false, false, false, QCoreApplication::translate("BrowserSetup",
+            "Browser policy blocks per-user native messaging hosts. Ask your administrator to register the Auralis browser helper.")};
+    return {false, true, false, QCoreApplication::translate("BrowserSetup",
+        "The browser connection needs to be registered or repaired.")};
+}
+
+QString BrowserSetup::registerNativeHost(const QString &browserId, bool repair)
+{
+    if (!browserId.isEmpty()) {
+        const auto existing = nativeHostStatus(browserId);
+        if (existing.registered)
+            return {};
+        if (!existing.canRegister || (existing.anotherApplication && !repair))
+            return existing.problem;
+    }
+    const auto helper = browserHelper();
+    if (!QFileInfo(helper).isFile())
+        return QCoreApplication::translate("BrowserSetup", "This installation is missing the Auralis browser helper.");
+
+    QStringList arguments{QStringLiteral("--register-native-only")};
+    if (!browserId.isEmpty())
+        arguments.push_back(browserId);
+    QProcess process;
+    process.setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments *arguments) {
+        arguments->flags |= CREATE_NO_WINDOW;
+    });
+    process.start(helper, arguments);
+    if (!process.waitForStarted(5000))
+        return QCoreApplication::translate("BrowserSetup", "Could not start the Auralis browser helper. %1").arg(process.errorString());
+    if (!process.waitForFinished(10000)) {
+        process.kill();
+        process.waitForFinished(1000);
+        return QCoreApplication::translate("BrowserSetup", "The Auralis browser helper did not finish registering the connection.");
+    }
+    if (process.exitStatus() != QProcess::NormalExit || process.exitCode()) {
+        const auto detail = QString::fromUtf8(process.readAllStandardError().left(600)).simplified();
+        return detail.isEmpty()
+            ? QCoreApplication::translate("BrowserSetup", "The Auralis browser helper could not register the connection (exit code %1).").arg(process.exitCode())
+            : QCoreApplication::translate("BrowserSetup", "Could not register the browser connection. %1").arg(detail);
+    }
+    if (!browserId.isEmpty() && !nativeHostStatus(browserId).registered)
+        return QCoreApplication::translate("BrowserSetup",
+            "The browser helper ran, but Windows did not report a working Auralis registration for this browser.");
+    return {};
 }
 
 BrowserSetup::PolicyStatus BrowserSetup::policyStatus(const QString &browserId)
@@ -180,6 +354,9 @@ QString BrowserSetup::installPolicy(const QString &browserId)
     user.sync();
     if (user.status() != QSettings::NoError)
         return QCoreApplication::translate("BrowserSetup", "Could not save browser setup for the current Windows user.");
+    QSettings saved(QStringLiteral("HKEY_CURRENT_USER") + path, QSettings::Registry64Format);
+    if (QJsonDocument::fromJson(saved.value(SettingsName).toString().toUtf8()).object().value(StoreId).toObject() != auralisPolicy())
+        return QCoreApplication::translate("BrowserSetup", "Windows did not retain the Auralis browser policy for this user.");
     QSettings ownership;
     ownership.setValue(ownershipKey(browserId), hadSettings);
     ownership.sync();

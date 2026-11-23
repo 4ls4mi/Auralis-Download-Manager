@@ -407,6 +407,17 @@ fn answer(m: Message, rules: &mdm_ipc::capture::CaptureRules) -> Reply {
     }
     if let Some(n) = &m.declined {
         log_left(browser, &n.site, &n.name, notice_reason(&n.why), m.private);
+        if n.why == "browser-session" && !m.private && rules.captures(browser) {
+            // Report the browser-owned transfer only to an already running app.
+            let _ = mdm_ipc::request(&mdm_ipc::Command {
+                action: Some("glass-browser-download".into()),
+                queue: Some(serde_json::json!({
+                    "browser": clean(browser, 64),
+                    "name": clean(n.name.rsplit(['/', '\\']).next().unwrap_or_default(), 200),
+                }).to_string()),
+                ..Default::default()
+            });
+        }
         return Reply::done();
     }
     // The video button's quality menu: asked of a running app only, answered in `lookup`.
@@ -523,6 +534,9 @@ fn notice_reason(code: &str) -> String {
         None if code == "site-access" => {
             "the browser doesn't let the extension read this site (its site access is limited)"
                 .to_owned()
+        }
+        None if code == "browser-session" => {
+            "Auralis could not verify the request context needed for handoff".to_owned()
         }
         None => format!("{:?}", clean(code, 32)),
     }
@@ -1351,6 +1365,20 @@ fn register(all_users: bool) -> Result<(), String> {
     register_windows(all_users, true)
 }
 
+/// The installed Auralis app registers only the selected Chrome or Edge browser.
+#[cfg(windows)]
+fn register_native_browser(browser: &str) -> Result<(), String> {
+    portable_refused()?;
+    temporary_refused()?;
+    let key = match browser {
+        "chrome" => r"Software\Google\Chrome\NativeMessagingHosts",
+        "edge" => r"Software\Microsoft\Edge\NativeMessagingHosts",
+        _ => return Err("This browser does not support guided Auralis setup".into()),
+    };
+    let manifest = own_manifest(Family::Chromium, true)?;
+    reg_point("HKCU", key, &manifest)
+}
+
 #[cfg(windows)]
 fn register_windows(all_users: bool, external_offer: bool) -> Result<(), String> {
     portable_refused()?;
@@ -1653,7 +1681,10 @@ fn main() {
     let result = match args.first().map(String::as_str).unwrap_or_default() {
         "--register" => register(all_users),
         #[cfg(windows)]
-        "--register-native-only" => register_windows(false, false),
+        "--register-native-only" => match args.get(1) {
+            Some(browser) => register_native_browser(browser),
+            None => register_windows(false, false),
+        },
         "--unregister" => unregister(all_users),
         "--repair" => repair(),
         "--package-manifests" => package_manifests(args.get(1).map(String::as_str)),

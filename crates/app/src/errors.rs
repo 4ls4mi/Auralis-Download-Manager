@@ -11,6 +11,11 @@ use crate::i18n::{fmt, ltr, t};
 pub fn describe(e: &Error) -> String {
     match e {
         Error::Http(h) => http(h),
+        // i18n: a file server refused a direct request with a nonstandard HTTP status.
+        Error::Status(s) if s.as_u16() == 460 => fmt(
+            t("The server refused the download (HTTP {status}). Open the original download page in your browser and start the download there. If Auralis still cannot download it, let the browser finish."),
+            &[("status", &ltr(s.as_str()))],
+        ),
         Error::Status(s) => fmt(
             t("the server answered {status}"),
             &[("status", &ltr(&s.to_string()))],
@@ -556,6 +561,15 @@ fn os_text(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn http_460_suggests_finishing_in_the_browser() {
+        let status = reqwest::StatusCode::from_u16(460).unwrap();
+        let message = describe(&Error::Status(status));
+        assert!(message.contains("460"), "{message}");
+        assert!(message.contains("original download page"), "{message}");
+        assert!(message.contains("let the browser finish"), "{message}");
+    }
 
     #[test]
     fn messages_carry_their_data() {

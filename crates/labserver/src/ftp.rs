@@ -188,6 +188,25 @@ pub(crate) fn certificate_of(
     cert: crate::server::Cert,
 ) -> Result<(rustls::ServerConfig, Vec<u8>), String> {
     use crate::server::Cert;
+    let name = match cert {
+        Cert::WrongName => "another-site.invalid",
+        _ => "localhost",
+    };
+    certificate_with_hosts(cert, &[name])
+}
+
+/// A loopback test server's TLS config and CA, with the hostnames used by its test client.
+pub fn test_certificate_for_hosts(
+    hosts: &[&str],
+) -> Result<(rustls::ServerConfig, Vec<u8>), String> {
+    certificate_with_hosts(crate::server::Cert::TestCa, hosts)
+}
+
+fn certificate_with_hosts(
+    cert: crate::server::Cert,
+    hosts: &[&str],
+) -> Result<(rustls::ServerConfig, Vec<u8>), String> {
+    use crate::server::Cert;
     use rcgen::{
         BasicConstraints, CertificateParams, CertifiedIssuer, DnType, ExtendedKeyUsagePurpose,
         IsCa, KeyPair, KeyUsagePurpose,
@@ -209,15 +228,19 @@ pub(crate) fn certificate_of(
     ];
     let ca = CertifiedIssuer::self_signed(ca, KeyPair::generate().map_err(e)?).map_err(e)?;
     let key = KeyPair::generate().map_err(e)?;
-    let name = match cert {
-        Cert::WrongName => "another-site.invalid",
-        _ => "localhost",
-    };
     // A website's certificate, as a real one is made: its name among the subject's alternative
     // names, for TLS servers only (the extended key usage every system's verifier requires;
     // macOS's checks it before the dates), its key for signing the handshake, not a CA.
-    let mut leaf = CertificateParams::new(vec![name.to_owned()]).map_err(e)?;
-    leaf.distinguished_name.push(DnType::CommonName, name);
+    let mut leaf = CertificateParams::new(
+        hosts
+            .iter()
+            .map(|name| (*name).to_owned())
+            .collect::<Vec<_>>(),
+    )
+    .map_err(e)?;
+    if let Some(name) = hosts.first() {
+        leaf.distinguished_name.push(DnType::CommonName, *name);
+    }
     leaf.is_ca = IsCa::ExplicitNoCa;
     leaf.key_usages = vec![KeyUsagePurpose::DigitalSignature];
     leaf.extended_key_usages = vec![ExtendedKeyUsagePurpose::ServerAuth];

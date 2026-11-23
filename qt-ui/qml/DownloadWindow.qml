@@ -42,6 +42,8 @@ AuralisWindow {
     readonly property bool ordinary: !!(telemetry && !telemetry.is_torrent && !telemetry.is_video && !telemetry.is_gallery && !telemetry.is_remote)
     readonly property bool runningTransfer: !!(item && item.status === "Downloading")
     readonly property bool displayFlow: activeTab === 0 && !!item && !!item.url
+    readonly property bool displayConnectionFlow: displayFlow && workerRows.length > 0
+    readonly property int pipeInset: 32
     readonly property bool interactiveFrame: resizeHandles.resizing || downloadCaption.dragging
     readonly property bool animateTransfer: visible && visibility !== Window.Minimized && activeTab === 0
         && runningTransfer && !interactiveFrame
@@ -601,7 +603,7 @@ AuralisWindow {
     GridLayout {
         id: downloadActions
         objectName: "downloadActionGroup"
-        parent: root.useCompactActions ? compactActions.contentItem : inlineActions
+        parent: root.useCompactActions ? compactActions.contentItem : inlineActionArea
         anchors.centerIn: parent
         width: parent ? Math.min(implicitWidth, parent.width) : implicitWidth
         columns: pauseResume.visible && parent && parent.width < Math.max(96, pauseResume.implicitWidth)
@@ -684,11 +686,34 @@ AuralisWindow {
                     Layout.fillWidth: true
                     Layout.minimumWidth: 0
                     padding: root.compactWidth || root.compactHeight ? 8 : root.transferLayout === "fogSlate" ? 11 : 13
-                    leftPadding: root.displayFlow ? 31 : padding
-                    background: GlassSurface {
-                        material: root.material
-                        role: root.sideTabs ? "summary" : "card"
-                        backdropAvailable: root.backdropAvailable
+                    leftPadding: root.displayFlow ? root.pipeInset : padding
+                    background: Item {
+                        GlassSurface {
+                            anchors.fill: parent
+                            material: root.material
+                            role: root.sideTabs ? "summary" : "card"
+                            backdropAvailable: root.backdropAvailable
+                        }
+                        TransferTubes {
+                            objectName: "downloadProgressInlet"
+                            anchors.left: parent.left
+                            anchors.top: parent.top
+                            anchors.bottom: parent.bottom
+                            width: Math.min(parent.width, root.pipeInset + 17)
+                            visible: root.displayFlow
+                            progressItem: downloadProgress
+                            phase: water.phase
+                            slowPhase: water.slowPhase
+                            progressPhase: water.progressPhase
+                            paintingPaused: root.interactiveFrame
+                            flowing: root.showWaterFlow
+                            progressAnimation: WindowAppearance.progressAnimation
+                            progressLighting: WindowAppearance.progressLighting
+                            progressStart: root.progressColors[0]
+                            progressEnd: root.progressColors[1]
+                            channelColor: root.colors.background
+                            channelEdge: root.detailDivider
+                        }
                     }
                     contentItem: ColumnLayout {
                         spacing: root.compactWidth || root.compactHeight ? 5 : 8
@@ -817,6 +842,12 @@ AuralisWindow {
                     visible: !root.useCompactActions
                     Layout.fillWidth: true
                     implicitHeight: visible ? downloadActions.implicitHeight + 1 : 0
+                    Item {
+                        id: inlineActionArea
+                        anchors.fill: parent
+                        anchors.leftMargin: root.displayConnectionFlow ? root.pipeInset : 0
+                        anchors.rightMargin: anchors.leftMargin
+                    }
                 }
 
                 GridLayout {
@@ -829,16 +860,38 @@ AuralisWindow {
                     columnSpacing: 8
                     rowSpacing: root.compactWidth || root.compactHeight ? 6 : 8
                     Pane {
+                        id: connectionPane
                         Layout.fillWidth: true
                         Layout.minimumWidth: 0
                         Layout.preferredWidth: root.transferLayout === "violetRail" ? 315 : 355
                         Layout.alignment: Qt.AlignTop
                         padding: root.compactWidth || root.compactHeight ? 8 : 11
-                        leftPadding: root.displayFlow ? 31 : padding
-                        background: GlassSurface {
-                            material: root.material
-                            role: root.sideTabs ? "connections" : "card"
-                            backdropAvailable: root.backdropAvailable
+                        leftPadding: root.displayConnectionFlow ? root.pipeInset : padding
+                        background: Item {
+                            GlassSurface {
+                                anchors.fill: parent
+                                material: root.material
+                                role: root.sideTabs ? "connections" : "card"
+                                backdropAvailable: root.backdropAvailable
+                            }
+                            TransferTubes {
+                                id: transferTubes
+                                objectName: "downloadTransferTubes"
+                                anchors.fill: parent
+                                visible: root.displayConnectionFlow
+                                gridItem: waterGrid
+                                workers: waterWorkers
+                                phase: water.phase
+                                slowPhase: water.slowPhase
+                                paintingPaused: root.interactiveFrame
+                                flowing: root.showWaterFlow
+                                connectionAnimation: WindowAppearance.connectionAnimation
+                                connectionLighting: WindowAppearance.connectionLighting
+                                connectionStart: root.connectionColors[0]
+                                connectionEnd: root.connectionColors[1]
+                                channelColor: root.colors.background
+                                channelEdge: root.detailDivider
+                            }
                         }
                         contentItem: ColumnLayout {
                             spacing: 8
@@ -860,10 +913,10 @@ AuralisWindow {
                                 objectName: "downloadConnectionGrid"
                                 Layout.fillWidth: true
                                 Layout.minimumWidth: 0
-                                Layout.topMargin: root.displayFlow && root.workerRows.length ? 15 : 0
+                                Layout.topMargin: root.displayConnectionFlow ? 19 : 0
                                 columns: Math.max(1, Math.min(8,
                                     Math.floor((width + columnSpacing) / ((root.compactWidth ? 32 : 35) + columnSpacing))))
-                                rowSpacing: root.displayFlow ? 22 : 5
+                                rowSpacing: root.displayConnectionFlow ? 26 : 5
                                 columnSpacing: 4
                                 Repeater {
                                     id: waterWorkers
@@ -890,7 +943,7 @@ AuralisWindow {
                                             animationStyle: WindowAppearance.connectionAnimation
                                             lightingStyle: WindowAppearance.connectionLighting
                                             channelIndex: worker.index
-                                            connected: root.displayFlow
+                                            connected: root.displayConnectionFlow
                                             value: worker.saved
                                             paintingPaused: root.interactiveFrame
                                             receiving: worker.receiving
@@ -903,8 +956,8 @@ AuralisWindow {
                                         Label {
                                             anchors.left: parent.left
                                             anchors.leftMargin: 4
-                                            anchors.top: parent.top
-                                            anchors.topMargin: 4
+                                            anchors.bottom: parent.bottom
+                                            anchors.bottomMargin: 3
                                             color: root.colors.text
                                             style: Text.Outline
                                             styleColor: root.colors.shade
@@ -1175,14 +1228,16 @@ AuralisWindow {
             }
 
             TransferTubes {
-                id: transferTubes
-                objectName: "downloadTransferTubes"
-                width: Math.min(parent.width, waterWorkers.count > 0
-                    ? waterGrid.mapToItem(scrollContent, waterGrid.width, 0).x + 10 : 56)
-                height: parent.height
+                objectName: "downloadPipeTrunk"
+                anchors.left: parent.left
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                width: root.pipeInset - 2
                 visible: root.displayFlow
+                mainTrunk: true
                 sourceItem: transferSource
                 progressItem: downloadProgress
+                connectionCard: connectionPane
                 gridItem: waterGrid
                 workers: waterWorkers
                 phase: water.phase
@@ -1190,6 +1245,7 @@ AuralisWindow {
                 progressPhase: water.progressPhase
                 paintingPaused: root.interactiveFrame
                 flowing: root.showWaterFlow
+                feedingConnections: root.workerRows.some(connection => connection.state === "Receiving")
                 progressAnimation: WindowAppearance.progressAnimation
                 connectionAnimation: WindowAppearance.connectionAnimation
                 progressLighting: WindowAppearance.progressLighting
@@ -1198,6 +1254,8 @@ AuralisWindow {
                 progressEnd: root.progressColors[1]
                 connectionStart: root.connectionColors[0]
                 connectionEnd: root.connectionColors[1]
+                channelColor: root.colors.background
+                channelEdge: root.detailDivider
             }
         }
     }

@@ -30,6 +30,7 @@ pub struct Reader {
 struct Shared {
     state: Mutex<State>,
     asked: Condvar,
+    answered: Condvar,
 }
 
 #[derive(Default)]
@@ -60,6 +61,7 @@ impl Reader {
         let shared = Arc::new(Shared {
             state: Mutex::new(State::default()),
             asked: Condvar::new(),
+            answered: Condvar::new(),
         });
         let worker = shared.clone();
         let spawned = std::thread::Builder::new()
@@ -83,6 +85,7 @@ impl Reader {
                         s.text = text;
                         let woken = s.loud > s.answered;
                         s.answered = ask;
+                        worker.answered.notify_all();
                         woken
                     };
                     if woken {
@@ -122,6 +125,20 @@ impl Reader {
         (s.answered >= ask.0).then(|| s.text.clone())
     }
 
+    fn read_within(&self, timeout: Duration) -> Option<String> {
+        let ask = self.ask_quietly();
+        let (s, _) = self
+            .shared
+            .answered
+            .wait_timeout_while(self.shared.lock(), timeout, |s| s.answered < ask.0)
+            .unwrap_or_else(PoisonError::into_inner);
+        if s.answered >= ask.0 {
+            s.text.clone()
+        } else {
+            None
+        }
+    }
+
     /// What the last read found (None: no text, or nothing read yet).
     pub fn latest(&self) -> Option<String> {
         self.shared.lock().text.clone()
@@ -149,6 +166,24 @@ fn reader() -> &'static Reader {
             }
         })
     })
+}
+
+/// A one-shot Add URL read on a caller's background job, time-limited even if the
+/// system clipboard owner hangs. Result contains a supported, single address only.
+pub fn add_url_prefill() -> Option<String> {
+    let text = reader().read_within(Duration::from_millis(800))?;
+    supported_download_address(&text).map(str::to_owned)
+}
+
+fn supported_download_address(text: &str) -> Option<&str> {
+    let address = text.trim();
+    if address.len() > 8192 || address.contains(|c: char| c.is_whitespace() || c.is_control()) {
+        return None;
+    }
+    let (scheme, _) = address.split_once("://")?;
+    let url = url::Url::parse(address).ok()?;
+    (scheme.eq_ignore_ascii_case(url.scheme()) && url.has_host() && mdm_engine::supported(&url))
+        .then_some(address)
 }
 
 /// The window to wake when a read answers.
@@ -323,6 +358,55 @@ mod tests {
             std::thread::sleep(Duration::from_millis(2));
         }
         None
+    }
+
+    #[test]
+    fn add_url_prefill_accepts_only_one_supported_address() {
+        for address in [
+            "https://example.test/a.zip?q=x%20y",
+            "HTTP://example.test/a",
+            "ftp://example.test/archive",
+            "ftps://example.test/archive",
+            "ftpes://example.test/archive",
+        ] {
+            assert_eq!(
+                supported_download_address(&format!("  {address}\n")),
+                Some(address)
+            );
+        }
+        for text in [
+            "",
+            "https://example.test/one https://example.test/two",
+            "https://example.test/one\nhttps://example.test/two",
+            "file:///tmp/example.zip",
+            "https:example.test/archive",
+            "ftp://",
+        ] {
+            assert_eq!(supported_download_address(text), None);
+        }
+        assert_eq!(
+            supported_download_address(&format!("https://example.test/{}", "x".repeat(8192))),
+            None
+        );
+    }
+
+    #[test]
+    fn a_time_limited_read_leaves_a_stalled_clipboard_owner_on_the_reader_thread() {
+        let (release, stalled) = std::sync::mpsc::channel::<()>();
+        let stalled = Mutex::new(stalled);
+        let r = Reader::new(
+            move || {
+                let _ = stalled.lock().unwrap().recv();
+                Some("https://example.test/archive".to_owned())
+            },
+            || {},
+        );
+        assert_eq!(r.read_within(Duration::from_millis(25)), None);
+        drop(release);
+        assert_eq!(
+            r.read_within(Duration::from_secs(2)).as_deref(),
+            Some("https://example.test/archive")
+        );
     }
 
     /// #418, #661: a clipboard owner that never answers holds up no frame: asking, looking for

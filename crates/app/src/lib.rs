@@ -141,6 +141,8 @@ pub fn offscreen() -> bool {
     *ON.get_or_init(|| std::env::var_os("MDM_OFFSCREEN").is_some_and(|v| v == "1"))
 }
 
+pub use clipboard::add_url_prefill as add_url_clipboard_prefill;
+
 /// The clipboard's text, if any. Never read in an off-screen run ([`offscreen`]): its windows
 /// open from scripts, and the clipboard belongs to the person at the computer (Add URL's
 /// address came from it, and was fetched). It may wait for the clipboard's owner for ever:

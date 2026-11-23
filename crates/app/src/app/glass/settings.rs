@@ -3,11 +3,26 @@
 use super::*;
 
 impl App {
+    pub(super) fn glass_clipboard_mode(&self) -> &'static str {
+        match (self.settings.clipboard_autostart, self.settings.glass_clipboard_auto_download) {
+            (false, _) => "off",
+            (true, false) => "paste",
+            (true, true) => "download",
+        }
+    }
+
     pub(super) fn glass_original_settings(&self)->Value {
         let mut fields:Vec<Value>=Vec::new();
         fields.push(json!({"key":"update_check","label":"Check original MDM releases on startup","section":"General","kind":"boolean","value":self.settings.update_check}));
-        fields.push(json!({"key":"clipboard_autostart","label":"Offer copied download links","section":"General","kind":"boolean","value":self.settings.clipboard_autostart}));
-        fields.push(json!({"key":"glass_clipboard_auto_download","label":"Download copied links automatically","section":"General","kind":"boolean","value":self.settings.glass_clipboard_auto_download}));
+        fields.push(json!({
+            "key": "clipboard_mode", "label": "Clipboard links", "section": "General", "kind": "select",
+            "options": [
+                {"label": "Off", "value": "off"},
+                {"label": "Paste into Add URL", "value": "paste"},
+                {"label": "Download copied links automatically", "value": "download"}
+            ],
+            "value": self.glass_clipboard_mode()
+        }));
         fields.push(json!({"key":"speed_limit_on","label":"Speed Limiter enabled","section":"General","kind":"boolean","value":self.settings.speed_limit_on}));
         fields.push(json!({"key":"limiter_on_startup","label":"Enable the speed limiter on startup","section":"General","kind":"boolean","value":self.settings.limiter_on_startup}));
         fields.push(json!({"key":"global_only_active","label":"Apply the total cap only while the computer is in use","section":"General","kind":"boolean","value":self.settings.global_only_active}));
@@ -95,6 +110,16 @@ impl App {
         let apply=(||->Result<(),String>{
             match key {
                 "update_check" => next.update_check=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?,
+                "clipboard_mode" => {
+                    let (paste, download) = match value.as_str() {
+                        Some("off") => (false, false),
+                        Some("paste") => (true, false),
+                        Some("download") => (true, true),
+                        _ => return Err("Choose a valid clipboard mode".into()),
+                    };
+                    next.clipboard_autostart = paste;
+                    next.glass_clipboard_auto_download = download;
+                }
                 "clipboard_autostart" => next.clipboard_autostart=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?,
                 "glass_clipboard_auto_download" => next.glass_clipboard_auto_download=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?,
                 "speed_limit_on" => next.speed_limit_on=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?,

@@ -14,6 +14,7 @@ DetachedDialogWindow {
     property string errorMessage: ""
     property bool destinationEdited: false
     property var categoryOptions: []
+    property int clipboardRead: 0
     signal downloadAdded(var id, bool later)
 
     width: 595
@@ -24,11 +25,34 @@ DetachedDialogWindow {
                       : torrentMode ? qsTr("Add torrent") : qsTr("Add URL")
 
     function openAddress(torrent) {
-        if (!confirming && !busy)
+        const switchedWhileOpen = visible && !confirming && !busy && torrentMode !== torrent
+        if (!confirming && !busy) {
+            if (torrentMode !== torrent)
+                ++clipboardRead
             torrentMode = torrent
+        }
         if (visibility === Window.Minimized)
             showNormal()
         open()
+        if (switchedWhileOpen)
+            prefillAddress()
+    }
+
+    function isDownloadAddress(link) {
+        return link.length <= 8192 && /^(https?|ftps?|ftpes):\/\//i.test(link)
+    }
+
+    function prefillAddress() {
+        if (confirming || torrentMode || busy || address.text)
+            return
+        const read = ++clipboardRead
+        engine.request({shellAction: "clipboard-prefill"}, function (reply, error) {
+            if (read !== clipboardRead || !visible || visibility === Window.Minimized
+                    || confirming || torrentMode || busy || address.text || error)
+                return
+            if (reply && typeof reply.url === "string" && isDownloadAddress(reply.url))
+                address.text = reply.url
+        })
     }
 
     function openForRequest(reply) {
@@ -84,10 +108,9 @@ DetachedDialogWindow {
             return
         }
         const link = address.text.trim()
-        if (link.length > 8192 || (torrentMode
-                ? !(/^magnet:\?/i.test(link))
-                : !(/^(https?|ftp):\/\//i.test(link)))) {
-            errorMessage = torrentMode ? qsTr("Enter a magnet link, or open a .torrent file.") : qsTr("Enter a valid HTTP, HTTPS or FTP address.")
+        if (torrentMode ? link.length > 8192 || !(/^magnet:\?/i.test(link)) : !isDownloadAddress(link)) {
+            errorMessage = torrentMode ? qsTr("Enter a magnet link, or open a .torrent file.")
+                : qsTr("Enter a valid HTTP, HTTPS, FTP, FTPS or FTPES address.")
             return
         }
         // The backend handles duplicate decisions and supplies the live file-info
@@ -107,10 +130,12 @@ DetachedDialogWindow {
     onOpened: {
         if (!confirming) {
             address.forceActiveFocus()
+            prefillAddress()
         }
     }
     onDismissRequested: cancel()
     onDismissed: {
+        ++clipboardRead
         requestInfo = null
         address.clear()
         destination.clear()
@@ -131,12 +156,14 @@ DetachedDialogWindow {
         },
         TextField {
             id: address
+            objectName: "downloadAddress"
             Layout.fillWidth: true
             visible: !root.confirming
             placeholderText: root.torrentMode ? "magnet:?xt=urn:btih:…" : "https://example.com/file.zip"
             color: root.colors.text
             background: GlassSurface { material: root.material; role: "field" }
             selectByMouse: true
+            onTextEdited: ++root.clipboardRead
             onAccepted: root.submit(false)
             Accessible.name: qsTr("Download address")
         },

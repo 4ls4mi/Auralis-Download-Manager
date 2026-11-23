@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtCore
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Controls.Basic as Basic
 import QtQuick.Layouts
 import QtQuick.Window
 
@@ -29,6 +30,8 @@ AuralisWindow {
     property string category: "General"
     property var config: null
     property var advancedFields: []
+    property var networkAdapters: []
+    property string networkAdapterState: "idle"
     property bool saving: false
     property bool reading: false
     property string problem: ""
@@ -44,6 +47,7 @@ AuralisWindow {
         {id: "General", name: qsTr("General"), detail: qsTr("Startup, notifications, and backups"), terms: qsTr("start backup restore preferences notification window popup"),
             keys: ["start_immediately", "only_add_to_queue", "confirm_delete", "show_progress", "show_complete", "double_click_open",
                 "minimize_to_tray", "close_to_tray", "progress_minimize_to_tray"]},
+        {id: "Display", name: qsTr("Display & fonts"), detail: qsTr("Interface size, text size, and font previews"), terms: qsTr("interface app UI window scale size zoom DPI fonts typography preview"), keys: []},
         {id: "Downloads", name: qsTr("Downloads"), detail: qsTr("File rules, folders, and archive extraction"), terms: qsTr("file folder category archive duplicates extract"), keys: []},
         {id: "Connection", name: qsTr("Connection"), detail: qsTr("Speed limits, proxy, and DNS"), terms: qsTr("speed throttle proxy dns network adapter login authentication"),
             keys: ["max_connections", "speed_limit_on", "speed_limit_kb", "global_limit_on", "global_limit_kb", "net_adapter"]},
@@ -77,7 +81,8 @@ AuralisWindow {
         speed_limit_kb: {label: qsTr("Speed limit (KB/s)"), kind: "number", maximum: 10000000},
         global_limit_on: {label: qsTr("Enable the total download limit"), kind: "boolean"},
         global_limit_kb: {label: qsTr("Total download limit (KB)"), kind: "number", maximum: 10000000},
-        net_adapter: {label: qsTr("Network adapter"), kind: "text", description: qsTr("Leave empty to use the system default.")},
+        net_adapter: {label: qsTr("Network adapter"), kind: "select",
+            description: qsTr("Use the system route or select a specific adapter. Downloads pause if that adapter disconnects.")},
         capture_opened: {label: qsTr("Capture browser-opened downloads"), kind: "boolean"},
         advanced_integration: {label: qsTr("Advanced browser integration"), kind: "boolean"},
         proxy_from_browser: {label: qsTr("Use browser-provided proxy"), kind: "boolean"},
@@ -99,6 +104,14 @@ AuralisWindow {
         {label: "Whale", value: "whale"}
     ].concat(Qt.platform.os === "osx" ? [{label: "Safari", value: "safari"}] : [])
     readonly property var extraDetails: ({
+        clipboard_mode: {
+            label: qsTr("When a download link is copied"),
+            options: [
+                {label: qsTr("Paste when Add URL opens"), value: "paste"},
+                {label: qsTr("Download automatically"), value: "download"},
+                {label: qsTr("Do nothing"), value: "off"}
+            ]
+        },
         sounds: {description: qsTr("Choose a WAV file for each download or queue event.")},
         video_cookies: {kind: "select", description: qsTr("Choose the browser where you signed in. Auralis uses the local browser session for media requests when the extension did not send cookies.")},
         video_cookies_file: {description: qsTr("A Netscape cookies.txt file takes precedence over the browser session. Treat the file like a password.")},
@@ -107,7 +120,8 @@ AuralisWindow {
     readonly property var chosen: sections.find(section => section.id === category) || sections[0]
     readonly property var hiddenEngineFields: ["update_check", "speed_limit_on"]
     readonly property var visibleFields: matchingFields()
-    readonly property var destinationSections: term ? sections.filter(section => matchesText(section.name + " " + section.terms) ||
+    readonly property bool showingNetworkAdapter: visible && visibleFields.some(field => field.key === "net_adapter")
+    readonly property var destinationSections: term ? sections.filter(section => matchesText(section.name + " " + section.detail + " " + section.terms) ||
         visibleFields.some(field => field.section === section.id)) : sections
 
     Settings {
@@ -137,6 +151,55 @@ AuralisWindow {
         return term.split(/\s+/).every(part => text.includes(part))
     }
 
+    function loadNetworkAdapters() {
+        if (!showingNetworkAdapter || !engine.ready || networkAdapterState === "loading")
+            return
+        networkAdapterState = "loading"
+        engine.request({query: "glass-network-adapters"}, function(result, error) {
+            if (error || typeof result?.adapters?.length !== "number") {
+                networkAdapterState = "failed"
+                return
+            }
+            networkAdapters = Array.from(result.adapters)
+            networkAdapterState = "loaded"
+        })
+    }
+
+    function adapterKey(name) {
+        return name.replace(/[A-Z]/g, letter => letter.toLowerCase())
+    }
+
+    function networkAdapterChoices(saved) {
+        const choices = [{label: qsTr("System default"), value: ""}]
+        for (const adapter of networkAdapters) {
+            const name = String(adapter?.name ?? "")
+            if (!name.trim())
+                continue
+            const value = adapterKey(name) === adapterKey(saved) ? saved : name
+            const label = adapter.address
+                ? qsTr("%1 · %2").arg(name).arg(adapter.address)
+                : qsTr("%1 (no address)").arg(name)
+            choices.push({label, value})
+        }
+        if (saved && !choices.some(choice => choice.value === saved)) {
+            const adapter = networkAdapters.find(item => item?.address === saved)
+            const label = adapter ? qsTr("%1 · %2 (saved address)").arg(adapter.name).arg(saved)
+                : networkAdapterState === "loaded" ? qsTr("%1 (saved, not listed)").arg(saved)
+                : qsTr("%1 (saved)").arg(saved)
+            choices.push({label, value: saved})
+        }
+        return choices
+    }
+
+    function networkAdapterNote() {
+        switch (networkAdapterState) {
+        case "loading": return qsTr("Checking for network adapters…")
+        case "failed": return qsTr("Could not list network adapters. System default is still available.")
+        case "loaded": return networkAdapters.length ? "" : qsTr("No network adapters were reported.")
+        default: return ""
+        }
+    }
+
     function matchingFields() {
         const entries = []
         if (config) {
@@ -145,8 +208,17 @@ AuralisWindow {
                 for (const key of section.keys) {
                     if (config[key] === undefined || !common[key]) continue
                     const field = common[key]
-                    if (matchesText(key + " " + field.label + " " + (field.description || "")))
-                        entries.push(Object.assign({}, field, {key: key, value: config[key], section: section.id, basic: true}))
+                    if (!matchesText(key + " " + field.label + " " + (field.description || "")))
+                        continue
+                    const entry = Object.assign({}, field, {key: key, value: config[key], section: section.id, basic: true})
+                    if (key === "net_adapter") {
+                        entry.value = String(entry.value ?? "").trim()
+                        entry.options = networkAdapterChoices(entry.value)
+                        const note = networkAdapterNote()
+                        if (note)
+                            entry.description += "\n" + note
+                    }
+                    entries.push(entry)
                 }
             }
         }
@@ -198,12 +270,18 @@ AuralisWindow {
     }
 
     onVisibleChanged: if (visible) load()
+    onShowingNetworkAdapterChanged: if (showingNetworkAdapter) Qt.callLater(loadNetworkAdapters)
     onCategoryChanged: if (category === "Scheduler" && engine.ready && !scheduler.queues.length) scheduler.load()
+    onTermChanged: if (scrollViewport) scrollViewport.contentY = 0
 
     Connections {
         target: engine
         function onReadyChanged() {
-            if (root.visible && engine.ready) root.load()
+            if (root.visible && engine.ready) {
+                root.load()
+                if (root.showingNetworkAdapter)
+                    Qt.callLater(root.loadNetworkAdapters)
+            }
         }
     }
 
@@ -219,22 +297,46 @@ AuralisWindow {
         color: root.colors.muted
     }
 
-    component SettingsScrollBar: ScrollBar {
+    component SettingsScrollBar: Basic.ScrollBar {
         id: grip
-        implicitWidth: 11
+        readonly property color trackColor: MaterialTheme.mix(root.colors.background, root.colors.divider, .40, 1)
+
+        implicitWidth: 14
+        width: implicitWidth
         padding: 2
-        minimumSize: .08
-        policy: ScrollBar.AsNeeded
+        minimumSize: Math.min(1, 28 / Math.max(28, height - topPadding - bottomPadding))
+        interactive: true
         hoverEnabled: true
         contentItem: Rectangle {
-            implicitWidth: 7
+            implicitWidth: 10
             radius: width / 2
-            color: MaterialTheme.controlIconInk(root.colors.secondary, root.colors.background)
-            opacity: grip.pressed || grip.hovered ? 1 : .82
+            color: MaterialTheme.controlIconInk(grip.pressed || grip.hovered ? root.colors.accent : root.colors.secondary,
+                grip.trackColor)
         }
         background: Rectangle {
             radius: width / 2
-            color: MaterialTheme.rgba(root.colors.divider, grip.hovered ? .88 : .55)
+            color: grip.trackColor
+            border.color: root.colors.divider
+        }
+    }
+
+    component SettingsViewport: Flickable {
+        id: viewport
+        required property string scrollbarName
+        required property string scrollbarLabel
+        readonly property bool overflowing: contentHeight > height + 1
+        readonly property real columnWidth: Math.max(0, width - 20)
+
+        clip: true
+        contentWidth: width
+        flickableDirection: Flickable.VerticalFlick
+        boundsBehavior: Flickable.StopAtBounds
+        ScrollBar.vertical: SettingsScrollBar {
+            objectName: viewport.scrollbarName
+            Accessible.name: viewport.scrollbarLabel
+            policy: viewport.overflowing ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
+            visible: viewport.overflowing
+            z: 1
         }
     }
 
@@ -330,17 +432,17 @@ AuralisWindow {
             padding: 9
             background: GlassSurface { role: "sidebar"; backdropAvailable: settingsBackdrop.backdropAvailable }
 
-            ScrollView {
+            SettingsViewport {
                 id: navigation
+                objectName: "settingsNavigationViewport"
                 anchors.fill: parent
-                clip: true
-                rightPadding: 12
-                contentWidth: availableWidth
-                ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-                ScrollBar.vertical: SettingsScrollBar {}
+                contentHeight: navigationContent.implicitHeight
+                scrollbarName: "settingsNavigationScrollbar"
+                scrollbarLabel: qsTr("Scroll settings categories")
 
                 ColumnLayout {
-                    width: navigation.availableWidth
+                    id: navigationContent
+                    width: navigation.columnWidth
                     spacing: 4
                     Repeater {
                         model: root.destinationSections
@@ -371,6 +473,7 @@ AuralisWindow {
 
                 TextField {
                     id: search
+                    objectName: "settingsSearch"
                     Layout.fillWidth: true
                     placeholderText: qsTr("Search settings…")
                     Accessible.name: placeholderText
@@ -380,109 +483,166 @@ AuralisWindow {
                     background: GlassSurface { role: "field"; backdropAvailable: settingsBackdrop.backdropAvailable }
                 }
 
-                ScrollView {
-                    id: scroll
+                SettingsViewport {
+                    id: scrollViewport
+                    objectName: "settingsPageViewport"
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    clip: true
-                    rightPadding: 12
-                    contentWidth: availableWidth
-                    ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-                    ScrollBar.vertical: SettingsScrollBar {}
+                    contentHeight: settingsContent.implicitHeight
+                    scrollbarName: "settingsPageScrollbar"
+                    scrollbarLabel: qsTr("Scroll settings page")
 
-                    Flickable {
-                        id: scrollViewport
-                        contentWidth: width
-                        contentHeight: settingsContent.implicitHeight
-                        boundsBehavior: Flickable.StopAtBounds
+                    ColumnLayout {
+                        id: settingsContent
+                        width: scrollViewport.columnWidth
+                        spacing: 12
 
-                        ColumnLayout {
-                            id: settingsContent
-                            width: scroll.availableWidth
-                            spacing: 12
+                        Label {
+                            Layout.fillWidth: true
+                            text: root.term ? qsTr("Search results") : root.chosen.name
+                            color: root.colors.text
+                            font.pixelSize: TypographyScale.pixels(26)
+                            font.weight: Font.Bold
+                        }
 
-                            Label {
-                                Layout.fillWidth: true
-                                text: root.term ? qsTr("Search results") : root.chosen.name
-                                color: root.colors.text
-                                font.pixelSize: TypographyScale.pixels(26)
-                                font.weight: Font.Bold
-                            }
+                        PaneCopy { visible: !root.term; text: root.chosen.detail }
+                        PaneCopy {
+                            visible: Boolean(root.term) && !root.visibleFields.length
+                            text: root.destinationSections.length ? qsTr("Open a matching section from the sidebar.") : qsTr("No matching settings.")
+                        }
 
-                            PaneCopy { visible: !root.term; text: root.chosen.detail }
-                            PaneCopy {
-                                visible: Boolean(root.term) && !root.visibleFields.length
-                                text: root.destinationSections.length ? qsTr("Open a matching section from the sidebar.") : qsTr("No matching settings.")
-                            }
-
-                            Card {
-                                visible: root.visibleFields.length > 0
-                                ColumnLayout {
-                                    width: parent.width
-                                    spacing: 12
-                                    Repeater {
-                                        model: root.visibleFields
-                                        delegate: SettingsField {
-                                            required property var modelData
-                                            Layout.fillWidth: true
-                                            field: modelData
-                                            cookieBrowser: root.cookieBrowser
-                                            busy: root.saving || !engine.ready || backups.busy
-                                            onCommit: (value, options) => root.save(field, value, options)
-                                        }
+                        Card {
+                            visible: root.visibleFields.length > 0
+                            ColumnLayout {
+                                width: parent.width
+                                spacing: 12
+                                Repeater {
+                                    model: root.visibleFields
+                                    delegate: SettingsField {
+                                        required property var modelData
+                                        Layout.fillWidth: true
+                                        field: modelData
+                                        cookieBrowser: root.cookieBrowser
+                                        busy: root.saving || !engine.ready || backups.busy
+                                        onCommit: (value, options) => root.save(field, value, options)
                                     }
                                 }
                             }
+                        }
 
-                            SettingsBackup {
-                                id: backups
-                                Layout.fillWidth: true
-                                visible: !root.term && root.category === "General"
-                                backdrop: settingsBackdrop
-                                onSettingsRestored: root.load()
-                            }
+                        SettingsBackup {
+                            id: backups
+                            Layout.fillWidth: true
+                            visible: !root.term && root.category === "General"
+                            backdrop: settingsBackdrop
+                            onSettingsRestored: root.load()
+                        }
 
-                            SettingsAppearance {
-                                Layout.fillWidth: true
-                                visible: !root.term && root.category === "Appearance"
-                                backdrop: settingsBackdrop
-                            }
+                        SettingsAppearance {
+                            Layout.fillWidth: true
+                            visible: !root.term && root.category === "Appearance"
+                            backdrop: settingsBackdrop
+                        }
 
-                            SettingsScheduler {
-                                id: scheduler
-                                Layout.fillWidth: true
-                                visible: !root.term && root.category === "Scheduler"
-                            }
+                        Loader {
+                            Layout.fillWidth: true
+                            visible: !root.term && root.category === "Display" && root.fontSettings !== null
+                            active: visible
+                            sourceComponent: ColumnLayout {
+                                spacing: 12
 
-                            SettingsAccounts {
-                                Layout.fillWidth: true
-                                visible: !root.term && root.category === "Accounts"
-                            }
+                                Card {
+                                    ColumnLayout {
+                                        width: parent.width
+                                        spacing: 8
 
-                            SettingsTools {
-                                Layout.fillWidth: true
-                                visible: !root.term && (root.category === "Advanced" || root.category === "Browser Integration")
-                                section: root.category
-                            }
+                                        Label {
+                                            Layout.fillWidth: true
+                                            text: qsTr("Interface size")
+                                            color: root.colors.text
+                                            font.weight: Font.DemiBold
+                                        }
 
-                            SettingsUpdates {
-                                Layout.fillWidth: true
-                                visible: !root.term && root.category === "Updates"
-                                backdropAvailable: settingsBackdrop.backdropAvailable
-                                updatePresentation: root.updatePresentation
-                                automaticChecks: root.automaticUpdateChecks
-                                onUpdatePresentationRequested: value => updatePrefs.presentation = value
-                                onAutomaticChecksRequested: value => updatePrefs.automaticChecks = value
-                                release: root.availableUpdate
-                                onUpdateCheckRequested: root.updateCheckRequested()
-                                onUpdateDetailsRequested: root.updateDetailsRequested()
-                            }
+                                        GlassComboBox {
+                                            id: interfaceSize
+                                            objectName: "settingsInterfaceSize"
+                                            property bool saveFailed: false
+                                            readonly property int selectedIndex: Math.max(0, model.findIndex(option =>
+                                                option.value === root.fontSettings?.interfaceScalePercent))
 
-                            PaneCopy {
-                                visible: Boolean(root.problem)
-                                text: root.problem
-                                color: root.colors.destructive
+                                            Layout.fillWidth: true
+                                            Layout.maximumWidth: 200
+                                            model: Array.from(root.fontSettings?.interfaceScaleChoices ?? [100], value => ({
+                                                label: qsTr("%1%").arg(value), value: value
+                                            }))
+                                            textRole: "label"
+                                            valueRole: "value"
+                                            currentIndex: selectedIndex
+                                            Accessible.name: qsTr("Interface size")
+                                            onActivated: {
+                                                saveFailed = !root.fontSettings.setInterfaceScalePercent(currentValue)
+                                                if (saveFailed)
+                                                    currentIndex = Qt.binding(() => selectedIndex)
+                                            }
+                                        }
+
+                                        PaneCopy {
+                                            text: root.fontSettings?.interfaceScalePercent === root.fontSettings?.activeInterfaceScalePercent
+                                                ? qsTr("Resizes controls, text, and spacing throughout Auralis after you quit and reopen the app.")
+                                                : qsTr("Current size is %1%. Fully quit Auralis and reopen it to apply %2%.")
+                                                    .arg(root.fontSettings?.activeInterfaceScalePercent)
+                                                    .arg(root.fontSettings?.interfaceScalePercent)
+                                        }
+
+                                        PaneCopy {
+                                            visible: interfaceSize.saveFailed
+                                            text: qsTr("Could not save the interface size.")
+                                            color: root.colors.destructive
+                                        }
+                                    }
+                                }
+
+                                SettingsTypography {
+                                    Layout.fillWidth: true
+                                    fontSettings: root.fontSettings
+                                }
                             }
+                        }
+
+                        SettingsScheduler {
+                            id: scheduler
+                            Layout.fillWidth: true
+                            visible: !root.term && root.category === "Scheduler"
+                        }
+
+                        SettingsAccounts {
+                            Layout.fillWidth: true
+                            visible: !root.term && root.category === "Accounts"
+                        }
+
+                        SettingsTools {
+                            Layout.fillWidth: true
+                            visible: !root.term && (root.category === "Advanced" || root.category === "Browser Integration")
+                            section: root.category
+                        }
+
+                        SettingsUpdates {
+                            Layout.fillWidth: true
+                            visible: !root.term && root.category === "Updates"
+                            backdropAvailable: settingsBackdrop.backdropAvailable
+                            updatePresentation: root.updatePresentation
+                            automaticChecks: root.automaticUpdateChecks
+                            onUpdatePresentationRequested: value => updatePrefs.presentation = value
+                            onAutomaticChecksRequested: value => updatePrefs.automaticChecks = value
+                            release: root.availableUpdate
+                            onUpdateCheckRequested: root.updateCheckRequested()
+                            onUpdateDetailsRequested: root.updateDetailsRequested()
+                        }
+
+                        PaneCopy {
+                            visible: Boolean(root.problem)
+                            text: root.problem
+                            color: root.colors.destructive
                         }
                     }
                 }

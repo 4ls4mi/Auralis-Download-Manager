@@ -34,9 +34,7 @@ public:
     QList<int> fontSizeChoices() const;
     QList<int> interfaceScaleChoices() const;
 
-    Q_INVOKABLE bool setEnglishFamily(const QString &family);
-    Q_INVOKABLE bool setArabicFamily(const QString &family);
-    Q_INVOKABLE bool setFontSizePercent(int percent);
+    Q_INVOKABLE bool applyFontPreferences(const QString &englishFamily, const QString &arabicFamily, int sizePercent);
     Q_INVOKABLE bool setInterfaceScalePercent(int percent);
     Q_INVOKABLE QFont fontForText(const QString &text) const;
     Q_INVOKABLE QFont previewFont(const QString &family) const;
@@ -47,8 +45,6 @@ signals:
 
 private:
     QFont fontWithFamily(const QString &family) const;
-    bool setFamily(const QString &key, const QString &family,
-                   const QStringList &installed, QString &selected);
     void applyInterfaceFont() const;
 
     const QFont m_systemFont;
@@ -56,6 +52,8 @@ private:
     const QStringList m_arabicFallbacks;
     const QStringList m_englishFonts;
     const QStringList m_arabicFonts;
+    QString m_preferredEnglishFamily;
+    QString m_preferredArabicFamily;
     QString m_englishFamily;
     QString m_arabicFamily;
     int m_fontSizePercent;

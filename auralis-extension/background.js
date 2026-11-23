@@ -2218,7 +2218,14 @@ function leftAlone(c, item, url) {
 async function offer(item, url, { name, post }, nameGuessed = false) {
   const first = firstUrl(item);
   const cookies = downloadCookie(item, first, url);
-  if (cookies === null || (cookies === undefined && !(await canHandOffAnonymously(first, url, item)))) return false;
+  if (cookies === null || (cookies === undefined && !(await canHandOffAnonymously(first, url, item)))) {
+    // Keep URL-derived names out of the notice: a file route can contain a session token.
+    const basename = (item.filename || "").split(/[\\/]/).pop() || "";
+    const fromAddress = nameGuessed || basename === addressName(first) || basename === addressName(url);
+    const privateDownload = Boolean(item.incognito);
+    noteLeft("browser-session", fromAddress ? "" : basename, first, privateDownload, privateDownload).catch(() => {});
+    return false;
+  }
   const reply = await handOff({
     url: first,
     finalUrl: url,

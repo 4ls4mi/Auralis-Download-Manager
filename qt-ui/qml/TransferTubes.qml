@@ -6,9 +6,12 @@ Canvas {
 
     property Item sourceItem
     property Item progressItem
+    property Item connectionCard
     property Item gridItem
     property Repeater workers
+    property bool mainTrunk: false
     property bool flowing: false
+    property bool feedingConnections: false
     property string progressAnimation: "classic"
     property string connectionAnimation: "classic"
     property string progressLighting: "polished"
@@ -21,6 +24,8 @@ Canvas {
     property color progressEnd: MaterialTheme.palette.secondary
     property color connectionStart: progressStart
     property color connectionEnd: progressEnd
+    property color channelColor: MaterialTheme.palette.background
+    property color channelEdge: MaterialTheme.palette.divider
     readonly property var progressStartTone: MaterialTheme.neonTone(progressStart)
     readonly property var progressEndTone: MaterialTheme.neonTone(progressEnd)
     readonly property var connectionStartTone: MaterialTheme.neonTone(connectionStart)
@@ -29,10 +34,12 @@ Canvas {
     readonly property var connectionFinish: Lighting.style(connectionLighting)
     readonly property bool animateFlow: visible && flowing && !paintingPaused && !MaterialTheme.reducedMotion
     // The content cards reserve this lane for the vertical portion.
-    property real gutter: 12
+    property real gutter: 13
     readonly property real mainDiameter: 13
     readonly property real branchDiameter: 10
     readonly property real hoseDiameter: 9
+    readonly property real nozzleOffset: 3
+    readonly property real manifoldOffset: 15
 
     Accessible.ignored: true
 
@@ -43,13 +50,16 @@ Canvas {
     onVisibleChanged: requestPaint()
     onSourceItemChanged: requestPaint()
     onProgressItemChanged: requestPaint()
+    onConnectionCardChanged: requestPaint()
     onGridItemChanged: requestPaint()
     onWorkersChanged: requestPaint()
     onFlowingChanged: requestPaint()
-    onPhaseChanged: if (animateFlow && (progressAnimation === "classic"
-                       || connectionAnimation === "classic" || connectionAnimation === "water")) requestPaint()
-    onSlowPhaseChanged: if (animateFlow && (progressAnimation === "jelly" || connectionAnimation === "jelly")) requestPaint()
-    onProgressPhaseChanged: if (animateFlow && progressAnimation === "water") requestPaint()
+    onFeedingConnectionsChanged: requestPaint()
+    onPhaseChanged: if (animateFlow && ((progressItem && progressAnimation === "classic")
+                       || (workers && (connectionAnimation === "classic" || connectionAnimation === "water")))) requestPaint()
+    onSlowPhaseChanged: if (animateFlow && ((progressItem && progressAnimation === "jelly")
+                         || (workers && connectionAnimation === "jelly"))) requestPaint()
+    onProgressPhaseChanged: if (animateFlow && progressItem && progressAnimation === "water") requestPaint()
     onProgressAnimationChanged: requestPaint()
     onConnectionAnimationChanged: requestPaint()
     onProgressFinishChanged: requestPaint()
@@ -58,6 +68,25 @@ Canvas {
     onProgressEndChanged: requestPaint()
     onConnectionStartChanged: requestPaint()
     onConnectionEndChanged: requestPaint()
+    onChannelColorChanged: requestPaint()
+    onChannelEdgeChanged: requestPaint()
+
+    Connections {
+        target: tubes.sourceItem
+        function onYChanged() { tubes.requestPaint() }
+        function onHeightChanged() { tubes.requestPaint() }
+    }
+
+    Connections {
+        target: tubes.progressItem
+        function onYChanged() { tubes.requestPaint() }
+        function onWidthChanged() { tubes.requestPaint() }
+    }
+
+    Connections {
+        target: tubes.connectionCard
+        function onYChanged() { tubes.requestPaint() }
+    }
 
     Connections {
         target: tubes.workers
@@ -79,11 +108,43 @@ Canvas {
         function onReducedMotionChanged() { tubes.requestPaint() }
     }
 
-    function trace(ctx, points) {
-        ctx.beginPath()
+    function trace(ctx, points, newPath = true) {
+        if (newPath)
+            ctx.beginPath()
         ctx.moveTo(points[0].x, points[0].y)
         for (let index = 1; index < points.length; ++index)
             ctx.lineTo(points[index].x, points[index].y)
+    }
+
+    function channel(ctx, runs, diameter) {
+        ctx.save()
+        ctx.beginPath()
+        for (const run of runs)
+            trace(ctx, run, false)
+        ctx.lineJoin = "round"
+        ctx.lineCap = "round"
+        ctx.lineWidth = diameter + 5
+        ctx.strokeStyle = MaterialTheme.rgba(channelEdge, .63)
+        ctx.stroke()
+        ctx.lineWidth = diameter + 3.3
+        ctx.strokeStyle = MaterialTheme.mix(channelColor, "#050812", .63, .92)
+        ctx.stroke()
+        ctx.restore()
+    }
+
+    function intake(ctx, point, diameter, tone, active) {
+        const radius = diameter * .49
+        ctx.beginPath()
+        ctx.arc(point.x, point.y, radius, 0, Math.PI * 2)
+        ctx.lineWidth = 1.3
+        ctx.strokeStyle = MaterialTheme.rgba(tone.edge, active ? .72 : .44)
+        ctx.fillStyle = MaterialTheme.mix(tone.body, channelColor, .45, 1)
+        ctx.fill()
+        ctx.stroke()
+        ctx.beginPath()
+        ctx.arc(point.x, point.y, radius * .50, 0, Math.PI * 2)
+        ctx.fillStyle = MaterialTheme.mix(tone.core, tone.glow, active ? .46 : .22, 1)
+        ctx.fill()
     }
 
     function rail(ctx, points, offset, screenAligned = false) {
@@ -432,6 +493,9 @@ Canvas {
         const last = connectionEndTone
         const ink = MaterialTheme.rgba
         ctx.save()
+        ctx.beginPath()
+        ctx.rect(outlet.x - radius - 1, outlet.y + .45, (radius + 1) * 2, fall - .45)
+        ctx.clip()
         // End at the animated meniscus. The vessel paints the impact inside its clip.
         const flight = cycle / Lighting.dropContact
         const y = outlet.y + (fall - radius * 1.26) * flight * flight
@@ -477,8 +541,8 @@ Canvas {
             if (!worker || worker.width <= 0 || !worker.visible)
                 continue
             const x = Number.isFinite(worker.liquidX) ? worker.liquidX : worker.width * Lighting.outletPosition
-            const port = worker.mapToItem(tubes, x, -.85)
-            const headerY = port.y - 13
+            const port = worker.mapToItem(tubes, x, -nozzleOffset)
+            const headerY = port.y - (manifoldOffset - nozzleOffset)
             const surfaceY = Number.isFinite(worker.liquidSurface) ? worker.liquidSurface : worker.height * .76
             const surface = worker.mapToItem(tubes, 0, surfaceY).y
             let row = rows.find(entry => Math.abs(entry.y - headerY) < 1)
@@ -497,6 +561,80 @@ Canvas {
             : Qt.point(0, 0)
     }
 
+    function paintProgress(ctx) {
+        if (progressItem.width <= 0)
+            return
+
+        const outlet = progressOutlet()
+        if (outlet.x <= gutter)
+            return
+
+        const junction = Qt.point(gutter, outlet.y)
+        const branch = Qt.point(gutter + mainDiameter * .5, outlet.y)
+        const mouth = progressItem.mapToItem(tubes, -3, progressItem.height * .5)
+        channel(ctx, [[junction, mouth]], mainDiameter)
+        pipe(ctx, [branch, outlet], progressEndTone, progressEndTone,
+            flowing, 0, progressAnimation, progressFinish, mainDiameter, true)
+    }
+
+    function paintTrunk(ctx) {
+        if (!sourceItem || sourceItem.width <= 0 || !progressItem || progressItem.width <= 0)
+            return
+
+        const inlet = sourceItem.mapToItem(tubes, -10, sourceItem.height * .5)
+        const outlet = progressOutlet()
+        if (outlet.y <= inlet.y)
+            return
+
+        const upper = Qt.point(gutter, inlet.y)
+        const junction = Qt.point(gutter, outlet.y)
+        const last = workers && workers.count > 0 ? workers.itemAt(workers.count - 1) : null
+        const endY = last ? last.mapToItem(tubes, 0, -manifoldOffset).y + mainDiameter * .34 : outlet.y
+        const lower = Qt.point(gutter, Math.max(junction.y, endY))
+        const run = [inlet, upper, junction]
+        channel(ctx, [[inlet, upper, lower]], mainDiameter)
+        pipe(ctx, run, progressStartTone, progressEndTone,
+            flowing, 0, progressAnimation, progressFinish, mainDiameter, true)
+        if (lower.y > junction.y)
+            pipe(ctx, [junction, lower], progressEndTone, connectionStartTone,
+                flowing && feedingConnections, 13, connectionAnimation, connectionFinish, mainDiameter)
+        intake(ctx, inlet, mainDiameter, progressStartTone, flowing)
+        intake(ctx, junction, mainDiameter, progressEndTone, flowing)
+    }
+
+    function paintConnections(ctx) {
+        const rows = connectionRows()
+        if (!rows.length)
+            return
+
+        const slots = []
+        for (const row of rows) {
+            const end = Math.max(...row.ports.map(port => port.point.x)) + hoseDiameter * .36
+            row.headerEnd = Qt.point(end, row.y)
+            slots.push([Qt.point(gutter, row.y), row.headerEnd])
+            for (const port of row.ports)
+                slots.push([Qt.point(port.point.x, row.y), Qt.point(port.point.x, port.point.y - 3)])
+        }
+        // The junctions share one recessed channel. Their individual lit faces stop at the seams.
+        channel(ctx, slots, branchDiameter)
+
+        for (const row of rows) {
+            const headerStart = Qt.point(gutter + mainDiameter * .50, row.y)
+            pipe(ctx, [headerStart, row.headerEnd], connectionStartTone, connectionEndTone,
+                flowing && row.receiving, 20, connectionAnimation, connectionFinish, branchDiameter)
+            for (let index = 0; index < row.ports.length; ++index) {
+                const port = row.ports[index]
+                const start = Qt.point(port.point.x, row.y + branchDiameter * .50)
+                const receiving = flowing && port.receiving
+                pipe(ctx, [start, port.point], connectionStartTone, connectionEndTone,
+                    receiving, 29 + index * 3, connectionAnimation, connectionFinish, hoseDiameter)
+                if (receiving && animateFlow && connectionAnimation !== "none")
+                    droplet(ctx, port.point, port.surface, port.width, port.index)
+                nozzle(ctx, port.point, receiving)
+            }
+        }
+    }
+
     onPaint: {
         if (paintingPaused || !visible)
             return
@@ -505,42 +643,12 @@ Canvas {
             return
         ctx.reset()
         ctx.clearRect(0, 0, width, height)
-        if (!sourceItem || !progressItem || sourceItem.width <= 0 || progressItem.width <= 0)
-            return
-
-        const inlet = sourceItem.mapToItem(tubes, -6, sourceItem.height * .5)
-        const outlet = progressOutlet()
-        if (inlet.x <= gutter || outlet.x <= gutter || outlet.y <= inlet.y)
-            return
-
-        const upper = Qt.point(gutter, inlet.y)
-        const split = Qt.point(gutter, outlet.y)
-        pipe(ctx, [inlet, upper, split, outlet], progressStartTone, progressEndTone,
-            flowing, 0, progressAnimation, progressFinish, mainDiameter, true)
-
-        const rows = connectionRows()
-        if (!rows.length)
-            return
-
-        const active = flowing && rows.some(row => row.receiving)
-        pipe(ctx, [split, Qt.point(gutter, rows[rows.length - 1].y)], progressEndTone, connectionStartTone,
-            active, 13, connectionAnimation, connectionFinish, branchDiameter)
-
-        for (const row of rows) {
-            const headerStart = Qt.point(gutter, row.y)
-            const headerEnd = Qt.point(Math.max(...row.ports.map(port => port.point.x)), row.y)
-            pipe(ctx, [headerStart, headerEnd], connectionStartTone, connectionEndTone,
-                flowing && row.receiving, 20, connectionAnimation, connectionFinish, branchDiameter)
-            for (let index = 0; index < row.ports.length; ++index) {
-                const port = row.ports[index]
-                const start = Qt.point(port.point.x, row.y)
-                const receiving = flowing && port.receiving
-                pipe(ctx, [start, port.point], connectionStartTone, connectionEndTone,
-                    receiving, 29 + index * 3, connectionAnimation, connectionFinish, hoseDiameter)
-                if (receiving && animateFlow && connectionAnimation !== "none")
-                    droplet(ctx, port.point, port.surface, port.width, port.index)
-                nozzle(ctx, port.point, receiving)
-            }
+        if (mainTrunk) {
+            paintTrunk(ctx)
+        } else if (progressItem) {
+            paintProgress(ctx)
+        } else if (workers) {
+            paintConnections(ctx)
         }
     }
 }

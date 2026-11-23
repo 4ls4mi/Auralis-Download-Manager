@@ -42,6 +42,7 @@ AuralisWindow {
     readonly property var downloads: engine.dashboard.downloads || []
     readonly property var queues: engine.dashboard.queues || []
     readonly property var categories: engine.dashboard.categories || []
+    readonly property var browserDownloadNotice: engine.visuals.browserDownload || null
     readonly property var visualById: {
         const byId = {}
         for (const transfer of (engine.visuals.downloads || []))
@@ -143,6 +144,7 @@ AuralisWindow {
         && root.online && Number(engine.dashboard.speed || 0) > 0
     property var transferSpeedHistory: ({})
     property var recoveryDismissed: ({})
+    property var dismissedBrowserDownloadId: null
     property bool busy: false
     property string actionError: ""
     readonly property var recoveryNotice: downloads.find(item => {
@@ -1196,6 +1198,7 @@ AuralisWindow {
                             AppMenuItem { text: root.showSidebar ? qsTr("Hide sidebar") : qsTr("Show sidebar"); onTriggered: root.showSidebar = !root.showSidebar }
                             MenuRule {}
                             AppMenuItem { symbol: "settings"; text: qsTr("Appearance"); onTriggered: settingsWindow.showCategory("Appearance") }
+                            AppMenuItem { symbol: "settings"; text: qsTr("Display & fonts"); onTriggered: settingsWindow.showCategory("Display") }
                         }
                     }
                     CommandMenuButton {
@@ -1835,6 +1838,79 @@ AuralisWindow {
                             }
                         }
                     }
+                }
+            }
+        }
+
+        Frame {
+            id: browserNotice
+            objectName: "browserDownloadNotice"
+            readonly property var noticeId: root.browserDownloadNotice?.id ?? null
+            readonly property string browserName: root.browserDownloadNotice?.browser || ""
+            readonly property string filename: root.browserDownloadNotice?.name || ""
+            readonly property string guidance: browserName
+                ? qsTr("%1 kept this download. See it in the browser’s Downloads list.").arg(browserName)
+                : qsTr("Your browser kept this download. See it in its Downloads list.")
+
+            visible: noticeId !== null && noticeId !== root.dismissedBrowserDownloadId
+            Layout.fillWidth: true
+            padding: 7
+            leftPadding: 10
+            Accessible.role: Accessible.Grouping
+            Accessible.name: qsTr("Browser download notice")
+            Accessible.description: filename ? filename + ". " + guidance : guidance
+            onNoticeIdChanged: {
+                Qt.callLater(function () {
+                    if (browserNotice.visible && root.visible && root.visibility !== Window.Minimized)
+                        browserNotice.Accessible.announce(browserNotice.Accessible.description)
+                })
+            }
+
+            background: GlassSurface { role: "card" }
+            contentItem: RowLayout {
+                spacing: 8
+
+                DashboardIcon {
+                    symbol: "downloads"
+                    ink: root.colors.accent
+                    Layout.preferredWidth: 18
+                    Layout.preferredHeight: 18
+                    Accessible.ignored: true
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    spacing: 2
+
+                    Label {
+                        Layout.fillWidth: true
+                        Layout.minimumWidth: 0
+                        visible: Boolean(browserNotice.filename)
+                        text: browserNotice.filename
+                        textFormat: Text.PlainText
+                        color: root.colors.ink
+                        font.family: root.fontFamilyForText(text)
+                        font.weight: Font.DemiBold
+                        elide: Text.ElideRight
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        Layout.minimumWidth: 0
+                        text: browserNotice.guidance
+                        textFormat: Text.PlainText
+                        color: root.colors.muted
+                        font.family: root.fontFamilyForText(text)
+                        wrapMode: Text.Wrap
+                    }
+                }
+
+                GlassButton {
+                    objectName: "dismissBrowserDownloadNotice"
+                    text: qsTr("Dismiss")
+                    Accessible.description: qsTr("Dismiss the browser download notice")
+                    onClicked: root.dismissedBrowserDownloadId = browserNotice.noticeId
                 }
             }
         }

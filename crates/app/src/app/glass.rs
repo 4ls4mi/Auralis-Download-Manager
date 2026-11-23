@@ -11,6 +11,13 @@ use serde_json::{Value, json};
 
 pub(super) type CheckSlots = HashMap<u64, std::sync::Arc<std::sync::Mutex<Option<Result<bool,String>>>>>;
 pub(super) type RecoverySlots = HashMap<u64, std::sync::Arc<std::sync::Mutex<Option<Result<Value,String>>>>>;
+#[derive(serde::Serialize)]
+pub(super) struct BrowserDownloadNotice {
+    id: u64,
+    browser: String,
+    name: String,
+}
+
 #[derive(Default)]
 pub(super) struct RepairSlot { pub result: Option<Result<Value,String>>, pub applied: bool }
 pub(super) type RepairSlots = HashMap<u64, std::sync::Arc<std::sync::Mutex<RepairSlot>>>;
@@ -46,6 +53,27 @@ impl App {
     }
 
     pub(super) fn glass_answer(&mut self, cmd: &ipc::Command) -> Option<String> {
+        if cmd.action.as_deref() == Some("glass-browser-download") {
+            if cmd.private {
+                return Some(json!({"ok":true}).to_string());
+            }
+            let payload = cmd.queue.as_deref().filter(|body| body.len() <= 8192)
+                .and_then(|body| serde_json::from_str::<serde_json::Map<String, Value>>(body).ok());
+            let Some(payload) = payload else {
+                return Some(json!({"error":"Invalid browser download notice"}).to_string());
+            };
+            let text = |field: &str, limit: usize| {
+                payload.get(field).and_then(Value::as_str).unwrap_or_default().trim().chars()
+                    .filter(|ch| !ch.is_control()).take(limit).collect::<String>()
+            };
+            let id = self.glass_browser_download.as_ref().map_or(1, |notice| notice.id + 1);
+            self.glass_browser_download = Some(BrowserDownloadNotice {
+                id,
+                browser: text("browser", 64),
+                name: text("name", 200),
+            });
+            return Some(json!({"ok":true}).to_string());
+        }
         if let Some(answer)=self.glass_prompts(cmd){return Some(answer);}
         if let Some(answer)=self.glass_accounts(cmd){return Some(answer);}
         if let Some(answer)=self.glass_tools(cmd){return Some(answer);}
@@ -106,6 +134,9 @@ impl App {
             return Some(json!({"ok":true}).to_string());
         }
         if cmd.query.as_deref()==Some("glass-original-settings"){return Some(self.glass_original_settings().to_string());}
+        if cmd.query.as_deref() == Some("glass-clipboard-mode") {
+            return Some(json!({"mode": self.glass_clipboard_mode()}).to_string());
+        }
         if cmd.action.as_deref()==Some("glass-original-setting"){
             let payload=serde_json::from_str(cmd.queue.as_deref().unwrap_or("")).unwrap_or(Value::Null);
             return Some(self.glass_update_original(payload).to_string());

@@ -16,9 +16,19 @@ struct PolicyStatus {
     bool removable = false;
 };
 
+struct NativeHostStatus {
+    bool registered = false;
+    bool canRegister = false;
+    bool anotherApplication = false;
+    QString problem;
+};
+
 Handler defaultHttpsHandler();
 QUrl storeUrl();
 QString extensionManager(const QString &browserId);
+bool isInstalledApplication();
+NativeHostStatus nativeHostStatus(const QString &browserId);
+QString registerNativeHost(const QString &browserId, bool repair);
 PolicyStatus policyStatus(const QString &browserId);
 QString installPolicy(const QString &browserId);
 QString removePolicy(const QString &browserId);

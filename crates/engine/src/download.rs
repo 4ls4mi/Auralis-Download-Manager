@@ -662,15 +662,16 @@ impl AsGet {
 /// stops at 10): download links often go through a tracker, a mirror picker and a CDN.
 const MAX_REDIRECTS: usize = 20;
 
-/// A GET's redirects, followed up to `MAX_REDIRECTS`, except one between two of a site's own
-/// hosts (`sites::same_party`: Drive's `open?id=` to Docs): reqwest would drop the user's cookies
-/// there, so it is left to `get`, which follows it with them.
+/// Follow up to `MAX_REDIRECTS`. Leave Drive's same-party redirects and Bowfile's delivery
+/// redirect to `get`, which applies each site's cookie and referrer rules.
 fn get_policy() -> reqwest::redirect::Policy {
     reqwest::redirect::Policy::custom(|attempt| {
-        let party_hop = attempt.previous().last().is_some_and(|from| {
-            from.host_str() != attempt.url().host_str() && sites::same_party(from, attempt.url())
+        let handled_in_get = attempt.previous().last().is_some_and(|from| {
+            sites::bowfile::is_share(from)
+                || (from.host_str() != attempt.url().host_str()
+                    && sites::same_party(from, attempt.url()))
         });
-        if party_hop {
+        if handled_in_get {
             attempt.stop()
         } else {
             reqwest::redirect::Policy::limited(MAX_REDIRECTS).redirect(attempt)
@@ -3165,12 +3166,45 @@ async fn get(
     let mut looked = false;
     // Redirects between a site's own hosts followed here (`get_policy`).
     let mut party_hops = 0;
+    let mut bowfile_button_followed = false;
+    let mut bowfile_range = None;
     loop {
+        if post.is_none() && bowfile_range.is_none() && sites::bowfile::is_share(&url) {
+            // These headers apply to the archive, including a resume check, never its page.
+            bowfile_range = Some((headers.remove(header::RANGE), headers.remove(header::IF_RANGE)));
+        }
         let req = build(client, url.clone(), post, &headers, site_agent);
         let asked = std::time::Instant::now();
         let resp = cancellable(cancel, async { Ok(req.send().await?) }).await?;
         let took = asked.elapsed();
         let from = resp.url().clone();
+        let bowfile_share = post.is_none() && sites::bowfile::is_share(&from);
+        if bowfile_share && resp.status().is_redirection() {
+            // The share site's temporary session belongs only to that site. Its
+            // file server gets the delivery URL and the share origin as referrer.
+            let next = header_str(resp.headers(), header::LOCATION)
+                .and_then(|location| from.join(location).ok())
+                .filter(|next| {
+                    party_hops < MAX_REDIRECTS && sites::bowfile::is_file_redirect(&from, next)
+                })
+                .ok_or(Error::Status(resp.status()))?;
+            headers = scoped_headers(&headers, &url, &next);
+            if let Some((range, validator)) = bowfile_range.take() {
+                for (name, value) in [(header::RANGE, range), (header::IF_RANGE, validator)] {
+                    if let Some(value) = value {
+                        headers.insert(name, value);
+                    }
+                }
+            }
+            if let Ok(origin) =
+                HeaderValue::from_str(&format!("{}/", from.origin().ascii_serialization()))
+            {
+                headers.insert(header::REFERER, origin);
+            }
+            url = next;
+            party_hops += 1;
+            continue;
+        }
         // A redirect between a site's own hosts, which the client leaves (`get_policy`): followed
         // here, the user's credentials and the cookies it sets going on.
         if post.is_none()
@@ -3218,6 +3252,32 @@ async fn get(
             && is_web_page(resp.headers())
             && !named(resp.headers())
             && (sites::expects_file(&from) || expects);
+        if bowfile_share && site_page {
+            if bowfile_button_followed || resp.content_length().is_some_and(|n| n > PAGE_PEEK as u64)
+            {
+                return Err(Error::GotWebPage);
+            }
+            let response_headers = resp.headers().clone();
+            let page = read_up_to(resp, PAGE_PEEK, cancel).await?;
+            let (wait, next) = sites::bowfile::target(&from, &String::from_utf8_lossy(&page))
+                .ok_or(Error::GotWebPage)?;
+            if let Some(cookie) = sites::bowfile::session_cookie(&response_headers, wait) {
+                add_cookies(&mut headers, &[cookie]);
+            }
+            let mut referrer = from.clone();
+            referrer.set_fragment(None);
+            if let Ok(referrer) = HeaderValue::from_str(referrer.as_str()) {
+                headers.insert(header::REFERER, referrer);
+            }
+            cancellable(cancel, async {
+                tokio::time::sleep(wait).await;
+                Ok(())
+            })
+            .await?;
+            bowfile_button_followed = true;
+            url = next;
+            continue;
+        }
         // No type said where another kind of file is expected (#533): small, it is looked into.
         let untyped = post.is_none()
             && expects
