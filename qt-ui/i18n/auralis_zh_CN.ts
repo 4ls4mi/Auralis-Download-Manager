@@ -495,6 +495,14 @@
             <source>Reset setup status</source>
             <translation>重置设置状态</translation>
         </message>
+        <message>
+            <source>Browser setup checked again.</source>
+            <translation>已重新检查浏览器设置。</translation>
+        </message>
+        <message>
+            <source>Opened the Auralis extension page.</source>
+            <translation>已打开 Auralis 扩展页面。</translation>
+        </message>
     </context>
     <context>
         <name>CaptionControls</name>
@@ -1245,7 +1253,11 @@ Info hash %3</source>
         </message>
         <message>
             <source>The browser has the extension. Open its toolbar menu to verify the Auralis connection.</source>
-            <translation>浏览器有扩展。 打开工具栏菜单来验证Auralis 连接。</translation>
+            <translation>浏览器已安装此扩展。打开工具栏中的扩展菜单以验证与 Auralis 的连接。</translation>
+        </message>
+        <message>
+            <source>Auralis could not confirm that the extension is missing.</source>
+            <translation>Auralis 无法确认扩展尚未安装。</translation>
         </message>
         <message>
             <source>Could not open the Windows default browser.</source>
@@ -3383,18 +3395,6 @@ Info hash %3</source>
             <translation>在此设备上安装获许可的字体，然后重新打开 Auralis 即可使用。</translation>
         </message>
         <message>
-            <source>Find fonts…</source>
-            <translation>查找字体…</translation>
-        </message>
-        <message>
-            <source>Find %1 online</source>
-            <translation>在线查找%1</translation>
-        </message>
-        <message>
-            <source>Could not open the font page.</source>
-            <translation>无法打开字体页面。</translation>
-        </message>
-        <message>
             <source>Import font file…</source>
             <translation>导入字体文件…</translation>
         </message>
@@ -3403,8 +3403,8 @@ Info hash %3</source>
             <translation>字体已导入。选中它，然后选择应用字体。</translation>
         </message>
         <message>
-            <source>The linked font downloads are for personal use. Import a TTF or OTF file you are licensed to use.</source>
-            <translation>链接中的字体仅供个人使用。请导入你有权使用的 TTF 或 OTF 文件。</translation>
+            <source>Import a TTF or OTF file you are licensed to use.</source>
+            <translation>请导入你有权使用的 TTF 或 OTF 文件。</translation>
         </message>
         <message>
             <source>Choose a licensed font file</source>
@@ -3504,6 +3504,14 @@ Info hash %3</source>
         <message>
             <source>Choose window materials and adjust progress, connection and graph colors and animations independently. Export appearance settings or back up download history and supported transfer files.</source>
             <translation>可选择窗口材质，并分别调整进度条、连接指示和图表的颜色及动画。也可导出外观设置，或备份下载记录和支持的传输文件。</translation>
+        </message>
+        <message>
+            <source>Your support helps fund new apps, tools, and Arabic game localization.</source>
+            <translation>您的支持将帮助开发新应用与工具，并推动游戏的阿拉伯语本地化。</translation>
+        </message>
+        <message>
+            <source>Donate on Patreon</source>
+            <translation>在 Patreon 上捐赠</translation>
         </message>
         <message>
             <source>Recent release notes</source>

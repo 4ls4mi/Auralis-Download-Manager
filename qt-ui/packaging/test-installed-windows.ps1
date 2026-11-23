@@ -143,6 +143,19 @@ try {
     }
     Test-InstalledIcon
     Test-PublisherMetadata
+    if ($env:AURALIS_QT_RELEASE_FONTS -eq '1') {
+        $sourceFonts = Join-Path $env:AURALIS_QT_JOB 'payload/interface-fonts'
+        $installedFonts = Join-Path $fixture 'interface-fonts'
+        $expected = @(Get-ChildItem -LiteralPath $sourceFonts -File -Filter '*.font')
+        if ($expected.Count -ne 12) { throw 'Expected twelve staged interface fonts.' }
+        foreach ($font in $expected) {
+            $installedPath = Join-Path $installedFonts $font.Name
+            if ((Get-FileHash -LiteralPath $installedPath).Hash -ne (Get-FileHash -LiteralPath $font.FullName).Hash) {
+                throw "Installed font differs from the packaged copy: $($font.Name)"
+            }
+        }
+        Write-Host 'Verified all twelve embedded interface font files.'
+    }
     Run-Fixture $exe @('--engine-smoke', '--device=software') 90000
     if (!(Test-Path $marker)) { throw 'The installed application did not verify start, pause, resume, and transfer integrity.' }
     Get-Content -LiteralPath $marker | ForEach-Object { Write-Host $_ }

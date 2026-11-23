@@ -495,6 +495,14 @@
             <source>Reset setup status</source>
             <translation>Restablecer estado de configuración</translation>
         </message>
+        <message>
+            <source>Browser setup checked again.</source>
+            <translation>Se volvió a comprobar la configuración del navegador.</translation>
+        </message>
+        <message>
+            <source>Opened the Auralis extension page.</source>
+            <translation>Se abrió la página de la extensión de Auralis.</translation>
+        </message>
     </context>
     <context>
         <name>CaptionControls</name>
@@ -1246,6 +1254,10 @@ Identificador del torrent %3</translation>
         <message>
             <source>The browser has the extension. Open its toolbar menu to verify the Auralis connection.</source>
             <translation>El navegador ya tiene la extensión. Abre su menú en la barra de herramientas para comprobar la conexión con Auralis.</translation>
+        </message>
+        <message>
+            <source>Auralis could not confirm that the extension is missing.</source>
+            <translation>Auralis no pudo confirmar que faltara la extensión.</translation>
         </message>
         <message>
             <source>Could not open the Windows default browser.</source>
@@ -3383,18 +3395,6 @@ Identificador del torrent %3</translation>
             <translation>Instala en este dispositivo las fuentes para las que tengas licencia. Vuelve a abrir Auralis para usarlas aquí.</translation>
         </message>
         <message>
-            <source>Find fonts…</source>
-            <translation>Buscar fuentes…</translation>
-        </message>
-        <message>
-            <source>Find %1 online</source>
-            <translation>Buscar %1 en Internet</translation>
-        </message>
-        <message>
-            <source>Could not open the font page.</source>
-            <translation>No se pudo abrir la página de la fuente.</translation>
-        </message>
-        <message>
             <source>Import font file…</source>
             <translation>Importar archivo de fuente…</translation>
         </message>
@@ -3403,8 +3403,8 @@ Identificador del torrent %3</translation>
             <translation>Fuente importada. Selecciónala y pulsa Aplicar fuente.</translation>
         </message>
         <message>
-            <source>The linked font downloads are for personal use. Import a TTF or OTF file you are licensed to use.</source>
-            <translation>Las fuentes de estos enlaces son para uso personal. Importa un archivo TTF u OTF que tengas licencia para usar.</translation>
+            <source>Import a TTF or OTF file you are licensed to use.</source>
+            <translation>Importa un archivo TTF u OTF que tengas licencia para usar.</translation>
         </message>
         <message>
             <source>Choose a licensed font file</source>
@@ -3504,6 +3504,14 @@ Identificador del torrent %3</translation>
         <message>
             <source>Choose window materials and adjust progress, connection and graph colors and animations independently. Export appearance settings or back up download history and supported transfer files.</source>
             <translation>Elige los materiales de las ventanas y ajusta por separado los colores y las animaciones de la barra de progreso, los indicadores de conexión y los gráficos. Exporta los ajustes de apariencia o crea una copia de seguridad del historial de descargas y de los archivos de transferencia compatibles.</translation>
+        </message>
+        <message>
+            <source>Your support helps fund new apps, tools, and Arabic game localization.</source>
+            <translation>Tu apoyo ayuda a financiar nuevas aplicaciones, herramientas y la localización de videojuegos al árabe.</translation>
+        </message>
+        <message>
+            <source>Donate on Patreon</source>
+            <translation>Donar en Patreon</translation>
         </message>
         <message>
             <source>Recent release notes</source>

@@ -374,7 +374,7 @@ AuralisWindow {
     component Card: Frame {
         Layout.fillWidth: true
         padding: 14
-        background: GlassSurface { role: "content"; backdropAvailable: settingsBackdrop.backdropAvailable }
+        background: GlassSurface { role: "content"; roundedPanel: true; backdropAvailable: settingsBackdrop.backdropAvailable }
     }
 
     header: ColumnLayout {
@@ -382,7 +382,11 @@ AuralisWindow {
         ToolBar {
             Layout.fillWidth: true
             padding: 0
-            background: GlassSurface { role: "title"; radius: 0; backdropAvailable: settingsBackdrop.backdropAvailable }
+            leftInset: 8
+            rightInset: 8
+            topInset: 5
+            bottomInset: 2
+            background: GlassSurface { role: "title"; roundedPanel: true; backdropAvailable: settingsBackdrop.backdropAvailable }
 
             contentItem: RowLayout {
                 spacing: 7
@@ -429,7 +433,11 @@ AuralisWindow {
             rightPadding: root.resizeInset + 2
             topPadding: 4
             bottomPadding: 5
-            background: GlassSurface { role: "toolbar"; radius: 0; backdropAvailable: settingsBackdrop.backdropAvailable }
+            leftInset: 8
+            rightInset: 8
+            topInset: 2
+            bottomInset: 1
+            background: GlassSurface { role: "toolbar"; roundedPanel: true; backdropAvailable: settingsBackdrop.backdropAvailable }
             contentItem: RowLayout {
                 spacing: 8
                 Label {
@@ -461,7 +469,7 @@ AuralisWindow {
             Layout.fillHeight: true
             Layout.preferredWidth: 188
             padding: 9
-            background: GlassSurface { role: "sidebar"; backdropAvailable: settingsBackdrop.backdropAvailable }
+            background: GlassSurface { role: "sidebar"; roundedPanel: true; backdropAvailable: settingsBackdrop.backdropAvailable }
 
             SettingsViewport {
                 id: navigation
@@ -496,7 +504,7 @@ AuralisWindow {
             Layout.fillWidth: true
             Layout.fillHeight: true
             padding: 13
-            background: GlassSurface { role: "content"; backdropAvailable: settingsBackdrop.backdropAvailable }
+            background: GlassSurface { role: "content"; roundedPanel: true; backdropAvailable: settingsBackdrop.backdropAvailable }
 
             ColumnLayout {
                 anchors.fill: parent

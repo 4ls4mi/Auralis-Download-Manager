@@ -29,7 +29,6 @@ AuralisWindow {
     readonly property bool groupedQueue: violetRail && filterType === "status" && filterKey === "all"
     readonly property color sidebarInk: colors.sidebarInk || colors.ink
     readonly property color sidebarMuted: colors.sidebarMuted || colors.muted
-    readonly property color chromeDivider: colors.surfaceLine || colors.divider
     palette.window: colors.background
     palette.windowText: colors.ink
     palette.base: colors.background
@@ -1035,7 +1034,7 @@ AuralisWindow {
         Item {
             Layout.fillWidth: true
             Layout.preferredHeight: 43
-            GlassSurface { anchors.fill: parent; role: "title" }
+            GlassSurface { anchors.fill: parent; role: "title"; roundedPanel: true }
             CaptionMoveArea {
                 objectName: "titleDragArea"
                 hostWindow: root
@@ -1110,8 +1109,8 @@ AuralisWindow {
 
                 Rectangle {
                     anchors.fill: parent
-                    radius: 4
-                    visible: !root.studioChrome
+                    radius: 10
+                    visible: !root.sideMenus
                     color: MaterialTheme.menuColors.surface
                 }
 
@@ -1233,7 +1232,7 @@ AuralisWindow {
                 parent: root.materialDashboard ? workspaceActionDock : topActionDock
                 anchors.fill: parent
 
-                GlassSurface { anchors.fill: parent; role: "toolbar" }
+                GlassSurface { anchors.fill: parent; role: "toolbar"; roundedPanel: true }
                 RowLayout {
                     id: actionControls
                     anchors.fill: parent
@@ -1327,7 +1326,7 @@ AuralisWindow {
             visible: root.recoveryNotice !== null
             Layout.fillWidth: true
             padding: 6
-            background: GlassSurface { role: "card" }
+            background: GlassSurface { role: "card"; roundedPanel: true }
             RowLayout {
                 anchors.fill: parent
                 Label {
@@ -1368,7 +1367,7 @@ AuralisWindow {
                 Layout.preferredWidth: 45
                 Rectangle {
                     anchors.fill: parent
-                    radius: 8
+                    radius: 12
                     color: root.colors.railFill || root.colors.accent
                 }
             }
@@ -1378,17 +1377,7 @@ AuralisWindow {
                 Layout.preferredWidth: root.compact ? 151 : 184
                 Layout.fillHeight: true
                 padding: 6
-                background: Item {
-                    GlassSurface { anchors.fill: parent; role: "sidebar" }
-                    Rectangle {
-                        visible: root.studioChrome && !root.coralSlate
-                        anchors.right: parent.right
-                        anchors.top: parent.top
-                        anchors.bottom: parent.bottom
-                        width: 1
-                        color: root.chromeDivider
-                    }
-                }
+                background: GlassSurface { role: "sidebar"; roundedPanel: true }
                 ScrollView {
                     id: libraryScroll
                     anchors.fill: parent
@@ -1485,7 +1474,7 @@ AuralisWindow {
                 Layout.fillWidth: true
                 Layout.minimumWidth: 0
                 padding: 9
-                background: GlassSurface { role: "content" }
+                background: GlassSurface { role: "content"; roundedPanel: true }
                 ColumnLayout {
                     anchors.fill: parent
                     spacing: root.materialDashboard ? 8 : 5
@@ -1563,6 +1552,7 @@ AuralisWindow {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             role: "card"
+                            roundedPanel: true
                             RowLayout {
                                 anchors.fill: parent
                                 anchors.margins: 10
@@ -1594,6 +1584,7 @@ AuralisWindow {
                             Layout.preferredWidth: Math.max(120, activeSummary.implicitWidth + 26)
                             Layout.fillHeight: true
                             role: "summary"
+                            roundedPanel: true
                             Column {
                                 id: activeSummary
                                 anchors.left: parent.left
@@ -1620,6 +1611,7 @@ AuralisWindow {
                             Layout.preferredWidth: 145
                             Layout.fillHeight: true
                             role: "connections"
+                            roundedPanel: true
 
                             Column {
                                 anchors.fill: parent
@@ -1652,15 +1644,7 @@ AuralisWindow {
                     Item {
                         Layout.preferredHeight: 30
                         Layout.fillWidth: true
-                        GlassSurface { visible: !root.studioChrome; anchors.fill: parent; role: "field" }
-                        Rectangle {
-                            visible: root.studioChrome
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            anchors.bottom: parent.bottom
-                            height: 1
-                            color: root.chromeDivider
-                        }
+                        GlassSurface { anchors.fill: parent; role: "field"; roundedPanel: true }
                         RowLayout {
                             anchors.fill: parent
                             anchors.leftMargin: 11
@@ -1918,7 +1902,7 @@ AuralisWindow {
         Item {
             Layout.fillWidth: true
             Layout.preferredHeight: 55
-            GlassSurface { anchors.fill: parent; role: "footer" }
+            GlassSurface { anchors.fill: parent; role: "footer"; roundedPanel: true }
             RowLayout {
                 anchors.fill: parent
                 anchors.leftMargin: 11

@@ -70,6 +70,7 @@ public:
     Q_INVOKABLE void notifyUpdate(const QString &version);
     Q_INVOKABLE void setReleaseUpdateHintsEnabled(bool enabled);
     Q_INVOKABLE bool applyBackdrop(QWindow *window, bool enabled, bool dark) const;
+    Q_INVOKABLE void setWindowCornerRadius(QWindow *window, int radius) const;
     Q_INVOKABLE void installInteractiveResize(QWindow *window, int borderSize, int cornerSize) const;
 
 signals:

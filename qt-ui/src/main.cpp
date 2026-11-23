@@ -583,6 +583,18 @@ int runDesktop(QApplication &app, int activeInterfaceScale, bool startHidden, bo
     std::optional<QLockFile> instanceLock;
     // QML bindings must be destroyed before their native context objects.
     Typography typography(activeInterfaceScale);
+    if (smoke && qEnvironmentVariableIntValue("AURALIS_QT_RELEASE_FONTS") == 1) {
+        for (const auto &options : {typography.englishFontOptions(), typography.arabicFontOptions()}) {
+            for (const auto &entry : options) {
+                const auto option = entry.toMap();
+                if (!option.value(QStringLiteral("available")).toBool()) {
+                    qCritical() << "Could not load packaged interface font:" << option.value(QStringLiteral("label")).toString();
+                    return 1;
+                }
+            }
+        }
+        qInfo("Smoke: all packaged interface fonts are available.");
+    }
     std::optional<Engine> engineLifetime;
     QQmlApplicationEngine qml;
     Engine &engine = engineLifetime.emplace(&qml, startHidden, smoke);

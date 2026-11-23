@@ -16,7 +16,9 @@ Item {
     property color solidColor: profile.background
     property bool tintBacking: true
     property real mediaOverlay: -1
-    property real radius: studioPanel ? profile.panelRadius : profile.radius
+    property bool roundedPanel: false
+    property real radius: roundedPanel && !shell ? Math.max(12, profile.radius)
+        : studioPanel ? profile.panelRadius : profile.radius
     property bool showReflection: role === "toolbar" && profile.shape === "aero"
 
     readonly property var profile: MaterialTheme.profile(material)
@@ -30,7 +32,7 @@ Item {
         && ["card", "summary", "connections"].includes(role)
     readonly property bool cleanChrome: profile.opaque || profile.softChrome === true
     readonly property bool reflectionPlane: faceted && (!cleanChrome || shell || role === "toolbar")
-    readonly property string outline: shell ? "square" : profile.softChrome ? "round" : profile.shape
+    readonly property string outline: shell ? "square" : roundedPanel || profile.softChrome ? "round" : profile.shape
     readonly property color flatFace: (role === "summary" ? profile.summaryFill : profile.roleFaces?.[role])
         || profile.background
     readonly property bool plainMaterialAlpha: backdropAvailable && profile.opaque && MaterialTheme.translucency > 0
@@ -64,16 +66,17 @@ Item {
     Rectangle {
         anchors.fill: parent
         visible: surface.flatStudio
-        radius: surface.role === "field" || surface.studioPanel ? surface.radius : 0
+        radius: !surface.shell && (surface.roundedPanel || surface.role === "field" || surface.studioPanel)
+            ? surface.radius : 0
         color: surface.shell ? surface.backing : MaterialTheme.rgba(surface.flatFace, surface.flatFaceOpacity)
-        border.width: surface.shell || surface.role === "field" ? 1 : 0
+        border.width: surface.shell || surface.roundedPanel || surface.role === "field" ? 1 : 0
         border.color: surface.profile.surfaceLine || surface.profile.divider
 
         Rectangle {
             width: parent.width
             height: 1
             y: surface.role === "footer" ? 0 : parent.height - height
-            visible: ["title", "toolbar", "footer"].includes(surface.role)
+            visible: !surface.roundedPanel && ["title", "toolbar", "footer"].includes(surface.role)
             color: surface.profile.surfaceLine || surface.profile.divider
         }
     }

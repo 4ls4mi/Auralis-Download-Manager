@@ -25,7 +25,6 @@ struct NativeHostStatus {
 
 Handler defaultHttpsHandler();
 QUrl storeUrl();
-QString extensionManager(const QString &browserId);
 bool isInstalledApplication();
 NativeHostStatus nativeHostStatus(const QString &browserId);
 QString registerNativeHost(const QString &browserId, bool repair);

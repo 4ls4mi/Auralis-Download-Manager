@@ -1,6 +1,14 @@
 # Compile and stage the native Qt app, engine DLL, browser host and Deno.
+param([string]$PrivateFontDirectory, [switch]$BundleReleaseFonts)
+
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
+
+$releaseFontKey = $env:AURALIS_RELEASE_FONT_KEY
+Remove-Item Env:AURALIS_RELEASE_FONT_KEY -ErrorAction SilentlyContinue
+if ($PrivateFontDirectory -and $BundleReleaseFonts) {
+    throw 'Choose either private fonts or the release font bundle.'
+}
 
 function Invoke-Checked([string]$Tool, [string[]]$Arguments) {
     & $Tool @Arguments
@@ -13,10 +21,33 @@ $version = [regex]::Match((Get-Content (Join-Path $source 'CMakeLists.txt') -Raw
 if (!$version) { throw 'AuralisQt project version was not found.' }
 $build = Join-Path $env:AURALIS_QT_WORK 'cmake'
 $builtApp = Join-Path $build 'application'
-$job = Join-Path $env:AURALIS_QT_WORK "run-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+$jobName = "run-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+$installerKind = 'setup'
+$privateFonts = @()
+if ($PrivateFontDirectory) {
+    if ($env:GITHUB_ACTIONS -eq 'true' -or $env:GITHUB_ENV) {
+        throw 'Build the private font installer locally so GitHub Actions cannot upload it.'
+    }
+    $privateFonts = @(Get-ChildItem -LiteralPath $PrivateFontDirectory -File -Filter '*.font')
+    if (!$privateFonts -or ($privateFonts | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint })) {
+        throw 'The private font directory must contain regular Auralis .font files.'
+    }
+    $jobName = 'private-' + [guid]::NewGuid().ToString('N')
+    $installerKind = 'private-setup'
+}
+$job = Join-Path $env:AURALIS_QT_WORK $jobName
 $stage = Join-Path $job 'payload'
 foreach ($path in @($build, $job, $stage)) { New-Item -ItemType Directory -Force -Path $path | Out-Null }
-"AURALIS_QT_JOB=$job" >> $env:GITHUB_ENV
+if ($env:GITHUB_ENV) { "AURALIS_QT_JOB=$job" >> $env:GITHUB_ENV }
+try {
+    if ($BundleReleaseFonts) {
+        . (Join-Path $PSScriptRoot 'release-fonts.ps1')
+        $releaseFonts = Join-Path $stage 'interface-fonts'
+        Expand-AuralisReleaseFonts (Join-Path $source 'assets/fonts/auralis-release-fonts.zip.aes') $releaseFonts $releaseFontKey
+        Copy-Item -LiteralPath (Join-Path $source 'assets/fonts/SOURCES.md') -Destination $releaseFonts
+        if ($env:GITHUB_ENV) { 'AURALIS_QT_RELEASE_FONTS=1' >> $env:GITHUB_ENV }
+    }
+} finally { $releaseFontKey = $null }
 
 Push-Location $repo
 try {
@@ -45,6 +76,11 @@ try {
     Copy-Item -LiteralPath (Join-Path $env:AURALIS_QT_DENO 'deno.exe') -Destination $stage
     Copy-Item -LiteralPath (Join-Path $env:AURALIS_QT_DENO 'deno-LICENSE.md') -Destination $stage
     Copy-Item -LiteralPath (Join-Path $repo 'auralis-extension') -Destination $stage -Recurse
+    if ($privateFonts) {
+        $destination = Join-Path $stage 'interface-fonts'
+        New-Item -ItemType Directory -Path $destination -Force | Out-Null
+        Copy-Item -LiteralPath $privateFonts.FullName -Destination $destination
+    }
     Copy-Item -LiteralPath (Join-Path $repo 'LICENSE') -Destination (Join-Path $stage 'LICENSE.txt')
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'THIRD-PARTY.txt') -Destination $stage
     $brandIcon = Join-Path $source 'assets/auralis.ico'
@@ -105,7 +141,7 @@ try {
     $installerScript = Join-Path $job 'installer.nsi'
     Copy-Item -LiteralPath $brandIcon -Destination $icon
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'installer.nsi') -Destination $installerScript
-    $installer = Join-Path $job "Auralis.Download.Manager_$($version)_x64-setup.exe"
+    $installer = Join-Path $job "Auralis.Download.Manager_$($version)_x64-$installerKind.exe"
     Push-Location $job
     try {
         Invoke-Checked $env:AURALIS_QT_NSIS @('/V3',"/DVERSION=$version","/DOUTPUT=$installer","/DPAYLOAD=$stage",
@@ -114,6 +150,10 @@ try {
     if (!(Test-Path $installer) -or (Get-Item $installer).Length -gt 268435456) {
         throw 'The finished installer is missing or exceeds the size limit for automatic updates.'
     }
-    "AURALIS_QT_INSTALLER=$installer" >> $env:GITHUB_ENV
-    "AURALIS_QT_VERSION=$version" >> $env:GITHUB_ENV
+    if ($env:GITHUB_ENV) {
+        "AURALIS_QT_INSTALLER=$installer" >> $env:GITHUB_ENV
+        "AURALIS_QT_VERSION=$version" >> $env:GITHUB_ENV
+    } else {
+        Write-Output $installer
+    }
 } finally { Pop-Location }

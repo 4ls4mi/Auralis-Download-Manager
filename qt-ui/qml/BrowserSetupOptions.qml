@@ -32,7 +32,8 @@ ColumnLayout {
     readonly property bool installed: Boolean(status?.connectedRecently || status?.extensionPresent)
     readonly property bool needsSetup: hasStore && !installed && !status?.policyInstalled
     readonly property bool edgeStoreSetup: hasStore && !installed && status?.browserId === "edge"
-    readonly property bool confirmedMissing: needsSetup && status?.extensionDiscovery === "missing"
+    readonly property bool extensionMissing: !installed && status?.extensionDiscovery === "missing"
+    readonly property bool confirmedMissing: needsSetup && extensionMissing
         && !status?.extensionPreviouslyConnected && !status?.storePreviouslyConnected
     readonly property bool supportedBrowser: status?.browserId === "chrome" || status?.browserId === "edge"
     readonly property bool hostNeedsAttention: Boolean(!problem && status?.browserSupported && supportedBrowser
@@ -40,9 +41,8 @@ ColumnLayout {
     readonly property bool automaticAvailable: needsSetup && supportedBrowser
         && Boolean(status?.silentInstallAvailable)
     readonly property bool canUndo: showManualTools && !problem && supportedBrowser && Boolean(status?.policyRemovable)
-    readonly property bool canReset: showManualTools && hasStore && !installed && supportedBrowser
-        && (!status?.policyInstalled || canUndo)
-    readonly property bool canConfirmRemoval: canUndo && (!removalForReset || !installed)
+    readonly property bool canReset: showManualTools && hasStore && supportedBrowser
+    readonly property bool canConfirmRemoval: canUndo && (!removalForReset || extensionMissing)
     readonly property var attempt: attempts[status?.browserId]
     readonly property bool pending: !installed && attempt?.state === "pending"
     readonly property bool manualAvailable: hasStore && !installed && Boolean(attempt?.state && !pending)
@@ -70,7 +70,7 @@ ColumnLayout {
         attempts = Object.assign({}, attempts, {[browserId]: state ? {state, expires, detail} : null})
     }
 
-    function refresh() {
+    function refresh(reportReset = false) {
         if (!platformSupported) {
             checked = true
             return
@@ -120,6 +120,8 @@ ColumnLayout {
                     && !value.storePreviouslyConnected) {
                     recordAttempt(browserId, "pending")
                 }
+                if (reportReset)
+                    feedback = qsTr("Browser setup checked again.")
             } else {
                 problem = qsTr("Could not check your browser setup.")
             }
@@ -150,7 +152,7 @@ ColumnLayout {
     }
 
     function offerRemoval(forReset = false) {
-        if (!canUndo || acting || checking || (forReset && installed))
+        if (!canUndo || acting || checking || (forReset && !extensionMissing))
             return
         cancelConfirmation()
         removalForReset = forReset
@@ -161,7 +163,7 @@ ColumnLayout {
     function resetSetup() {
         if (!canReset || acting || checking)
             return
-        if (canUndo) {
+        if (canUndo && extensionMissing) {
             offerRemoval(true)
             return
         }
@@ -171,7 +173,7 @@ ColumnLayout {
         feedbackFailed = false
         problem = ""
         checked = false
-        refresh()
+        refresh(true)
     }
 
     function perform(action, browserId, forReset = false) {
@@ -200,7 +202,8 @@ ColumnLayout {
             } else if (install) {
                 recordAttempt(browserId, "pending")
             } else if (openStore) {
-                feedback = qsTr("Follow the browser prompts to add the extension, then open the Auralis toolbar icon to verify the connection.")
+                feedback = installed ? qsTr("Opened the Auralis extension page.")
+                    : qsTr("Follow the browser prompts to add the extension, then open the Auralis toolbar icon to verify the connection.")
                 if (value.nativeHostRegistered === false)
                     feedback += " " + qsTr("If it cannot connect, return here to repair the connection.")
             } else if (undo) {
@@ -303,7 +306,7 @@ ColumnLayout {
         GlassButton {
             objectName: "installBrowserExtension"
             text: qsTr("Install extension")
-            visible: root.needsSetup && !root.manualAvailable && !root.pending
+            visible: root.automaticAvailable && !root.manualAvailable && !root.pending
             enabled: !root.acting && !root.checking
             accent: root.colors.positive
             filled: true
@@ -312,20 +315,12 @@ ColumnLayout {
 
         GlassButton {
             objectName: "openBrowserExtensionStore"
-            text: root.status?.browserId === "edge" ? qsTr("Open Chrome Web Store") : qsTr("Install manually")
-            visible: root.manualAvailable || root.edgeStoreSetup
+            text: qsTr("Open Chrome Web Store")
+            visible: root.hasStore && root.supportedBrowser
             enabled: !root.acting && !root.checking
             accent: root.colors.positive
-            filled: true
+            filled: !root.installed && (!root.automaticAvailable || root.manualAvailable)
             onClicked: root.perform("openBrowserExtensionStore", root.status?.browserId)
-        }
-
-        GlassButton {
-            objectName: "manageBrowserExtensions"
-            text: qsTr("Manage browser extensions")
-            visible: root.hasStore && root.installed
-            enabled: !root.acting && !root.checking
-            onClicked: root.perform("openBrowserExtensions", root.status?.browserId)
         }
 
         GlassButton {

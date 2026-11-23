@@ -1,6 +1,7 @@
 #include "Typography.h"
 
 #include <QApplication>
+#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -22,11 +23,11 @@ const auto InterfaceScaleKey = QStringLiteral("Typography/interfaceScalePercent"
 struct FontSource
 {
     QString name;
-    QString page;
+    QString fileStem;
     QStringList aliases;
 };
 
-// The listing slugs and family names in the downloadable files are recorded in
+// The archive names and family names in the supplied files are recorded in
 // assets/fonts/SOURCES.md. Keep preferred typographic names before style aliases.
 const QList<FontSource> EnglishFonts{
     {QStringLiteral("Talina"), QStringLiteral("talina-demo"), {QStringLiteral("Talina DEMO")}},
@@ -126,8 +127,7 @@ QVariantList fontOptions(const QList<FontSource> &catalog, QFontDatabase::Writin
         options.append(QVariantMap{
             {QStringLiteral("label"), font.name},
             {QStringLiteral("available"), !family.isEmpty()},
-            {QStringLiteral("value"), family.isEmpty() ? font.name : family},
-            {QStringLiteral("sourceUrl"), QStringLiteral("https://www.1001fonts.com/%1-font.html").arg(font.page)}});
+            {QStringLiteral("value"), family.isEmpty() ? font.name : family}});
     }
     return options;
 }
@@ -158,7 +158,7 @@ QString privateFontFolder()
 
 QString privateFontPath(const QString &directory, const FontSource &font)
 {
-    return QDir(directory).filePath(font.page + QStringLiteral(".font"));
+    return QDir(directory).filePath(font.fileStem + QStringLiteral(".font"));
 }
 
 QByteArray readFontFile(const QString &path)
@@ -182,19 +182,24 @@ QString verifiedFontFamily(int id, const FontSource &font, const QRawFont &face,
     return !family.isEmpty() && supportsScript(face, script) ? family : QString();
 }
 
-void loadPrivateFonts(const QString &directory, const QList<FontSource> &catalog,
-                      QFontDatabase::WritingSystem script)
+void loadFonts(const QStringList &directories, const QList<FontSource> &catalog,
+               QFontDatabase::WritingSystem script)
 {
     for (const auto &font : catalog) {
-        const auto path = privateFontPath(directory, font);
-        if (QFileInfo(path).isSymLink())
-            continue;
-        const auto bytes = readFontFile(path);
-        if (bytes.isEmpty())
-            continue;
-        const int id = QFontDatabase::addApplicationFontFromData(bytes);
-        if (id >= 0 && verifiedFontFamily(id, font, QRawFont(bytes, 16), script).isEmpty())
+        for (const auto &directory : directories) {
+            const auto path = privateFontPath(directory, font);
+            if (QFileInfo(path).isSymLink())
+                continue;
+            const auto bytes = readFontFile(path);
+            if (bytes.isEmpty())
+                continue;
+            const int id = QFontDatabase::addApplicationFontFromData(bytes);
+            if (id < 0)
+                continue;
+            if (!verifiedFontFamily(id, font, QRawFont(bytes, 16), script).isEmpty())
+                break;
             QFontDatabase::removeApplicationFont(id);
+        }
     }
 }
 
@@ -243,11 +248,13 @@ Typography::Typography(int activeInterfaceScalePercent, QObject *parent)
       m_interfaceScalePercent(DefaultPercent),
       m_activeInterfaceScalePercent(activeInterfaceScalePercent)
 {
-    const auto folder = privateFontFolder();
-    if (!folder.isEmpty() && !QFileInfo(folder).isSymLink()) {
-        loadPrivateFonts(folder, EnglishFonts, QFontDatabase::Latin);
-        loadPrivateFonts(folder, ArabicFonts, QFontDatabase::Arabic);
-    }
+    const auto bundled = QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("interface-fonts"));
+    QStringList fontDirectories{privateFontFolder(), bundled};
+    fontDirectories.removeIf([](const QString &folder) {
+        return folder.isEmpty() || !QFileInfo(folder).isDir() || QFileInfo(folder).isSymLink();
+    });
+    loadFonts(fontDirectories, EnglishFonts, QFontDatabase::Latin);
+    loadFonts(fontDirectories, ArabicFonts, QFontDatabase::Arabic);
     refreshFontOptions();
     const QSettings settings;
     const auto fonts = settings.value(FontPreferencesKey).toMap();

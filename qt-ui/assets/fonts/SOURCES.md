@@ -1,8 +1,8 @@
-# Optional interface fonts
+# Interface fonts
 
-Auralis recognizes the font families below when Windows already has them or when a user imports a licensed TTF or OTF copy. The installer includes no font binaries. Download links in Settings open the listings so users can review each release’s terms.
+Auralis includes one face per family in its Windows release installer with redistribution permission confirmed by the project owner. The release workflow reads `auralis-release-fonts.zip.aes` with the `AURALIS_RELEASE_FONT_KEY` repository secret and verifies the installed fonts. The font data is distributed inside the installer. The Windows packaging script also accepts `-PrivateFontDirectory` for local builds. Each input uses the archive's base name with a `.font` extension and contains one TTF or OTF face.
 
-The [1001 Fonts personal-use license](https://www.1001fonts.com/licenses/ffp.html) requires author permission for publication. The Milkyway archive has separate personal-use terms from Makna Studio. Gumela Arabic DEMO lists CC BY-NC-ND and also carries the author’s personal-use-only notice. These releases provide no verified permission to redistribute a font as part of Auralis.
+The [1001 Fonts personal-use license](https://www.1001fonts.com/licenses/ffp.html) requires author permission for publication. The Milkyway archive has separate personal-use terms from Makna Studio. Gumela Arabic DEMO lists CC BY-NC-ND and also carries the author's personal-use-only notice. The source editions retain their original terms. Auralis's installer distribution relies on separate permission.
 
 | Auralis family | 1001 Fonts release | SHA-256 of the reviewed ZIP |
 | --- | --- | --- |

@@ -77,7 +77,9 @@ jobs:
 
       - name: Build and bundle the Qt installer
         shell: pwsh
-        run: ./qt-ui/packaging/build-windows.ps1
+        env:
+          AURALIS_RELEASE_FONT_KEY: ${{ secrets.AURALIS_RELEASE_FONT_KEY }}
+        run: ./qt-ui/packaging/build-windows.ps1 -BundleReleaseFonts
 
       - name: Verify Windows installation and update relaunch
         shell: pwsh

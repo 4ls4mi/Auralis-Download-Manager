@@ -495,6 +495,14 @@
             <source>Reset setup status</source>
             <translation>إعادة ضبط حالة الإعداد</translation>
         </message>
+        <message>
+            <source>Browser setup checked again.</source>
+            <translation>تم التحقق من إعداد المتصفح مرة أخرى.</translation>
+        </message>
+        <message>
+            <source>Opened the Auralis extension page.</source>
+            <translation>تم فتح صفحة إضافة Auralis.</translation>
+        </message>
     </context>
     <context>
         <name>CaptionControls</name>
@@ -1245,7 +1253,11 @@ Info hash %3</source>
         </message>
         <message>
             <source>The browser has the extension. Open its toolbar menu to verify the Auralis connection.</source>
-            <translation>المتجول لديه التمديد افتح قائمة الاسطوانات لتتحقق من وصلة Auralis</translation>
+            <translation>الإضافة مثبّتة في المتصفح. افتح قائمتها في شريط الأدوات للتحقق من الاتصال بـ Auralis.</translation>
+        </message>
+        <message>
+            <source>Auralis could not confirm that the extension is missing.</source>
+            <translation>تعذّر على Auralis التأكّد من أن الإضافة غير مثبّتة.</translation>
         </message>
         <message>
             <source>Could not open the Windows default browser.</source>
@@ -3383,18 +3395,6 @@ Info hash %3</source>
             <translation>ثبّت نسخًا مرخّصة من الخطوط على هذا الجهاز، ثم أعد فتح Auralis لاستخدامها هنا.</translation>
         </message>
         <message>
-            <source>Find fonts…</source>
-            <translation>البحث عن الخطوط…</translation>
-        </message>
-        <message>
-            <source>Find %1 online</source>
-            <translation>البحث عن %1 عبر الإنترنت</translation>
-        </message>
-        <message>
-            <source>Could not open the font page.</source>
-            <translation>تعذّر فتح صفحة الخط.</translation>
-        </message>
-        <message>
             <source>Import font file…</source>
             <translation>استيراد ملف خط…</translation>
         </message>
@@ -3403,8 +3403,8 @@ Info hash %3</source>
             <translation>تم استيراد الخط. حدّده ثم اختر تطبيق الخط.</translation>
         </message>
         <message>
-            <source>The linked font downloads are for personal use. Import a TTF or OTF file you are licensed to use.</source>
-            <translation>الخطوط في هذه الروابط للاستخدام الشخصي. استورد ملف TTF أو OTF لديك ترخيص باستخدامه.</translation>
+            <source>Import a TTF or OTF file you are licensed to use.</source>
+            <translation>استورد ملف TTF أو OTF لديك ترخيص باستخدامه.</translation>
         </message>
         <message>
             <source>Choose a licensed font file</source>
@@ -3504,6 +3504,14 @@ Info hash %3</source>
         <message>
             <source>Choose window materials and adjust progress, connection and graph colors and animations independently. Export appearance settings or back up download history and supported transfer files.</source>
             <translation>اختيار مواد النوافذ وتعديل التقدم والوصلات والرسوم البيانية والتقديرات بشكل مستقل.</translation>
+        </message>
+        <message>
+            <source>Your support helps fund new apps, tools, and Arabic game localization.</source>
+            <translation>يساعد دعمك في تمويل تطبيقات وأدوات جديدة وتعريب ألعاب الفيديو.</translation>
+        </message>
+        <message>
+            <source>Donate on Patreon</source>
+            <translation>تبرّع على Patreon</translation>
         </message>
         <message>
             <source>Recent release notes</source>

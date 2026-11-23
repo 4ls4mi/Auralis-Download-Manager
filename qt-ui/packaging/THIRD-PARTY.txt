@@ -11,6 +11,8 @@ Sources and licensing https://ffmpeg.org/legal.html
 
 The bundled Deno runtime is distributed under the license in deno-LICENSE.md.
 
+Windows release installers include interface fonts from their respective rights holders. Their sources and attributions are listed in interface-fonts/SOURCES.md.
+
 The Windows package includes the DirectX Shader Compiler and DXIL runtime from Microsoft DirectXShaderCompiler v1.9.2609.
 License files from the release are included in directx-shader-compiler.
 https://github.com/microsoft/DirectXShaderCompiler/releases/tag/v1.9.2609

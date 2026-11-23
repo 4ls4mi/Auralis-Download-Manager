@@ -203,12 +203,6 @@ QUrl BrowserSetup::storeUrl()
     return QUrl(QStringLiteral("https://chromewebstore.google.com/detail/auralis-download-manager/") + StoreId);
 }
 
-QString BrowserSetup::extensionManager(const QString &browserId)
-{
-    return browserId == QStringLiteral("edge") ? QStringLiteral("edge://extensions/")
-                                               : QStringLiteral("chrome://extensions/");
-}
-
 bool BrowserSetup::isInstalledApplication()
 {
     QSettings registration(

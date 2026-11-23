@@ -149,31 +149,6 @@ ColumnLayout {
                 }
             }
         }
-
-        GlassButton {
-            objectName: script.rightToLeft ? "getArabicFonts" : "getEnglishFonts"
-            text: qsTr("Find fonts…")
-            Accessible.name: qsTr("Find %1 online").arg(script.caption)
-            onClicked: fontSources.popup()
-
-            AppMenu {
-                id: fontSources
-                Instantiator {
-                    model: script.fontOptions
-                    delegate: AppMenuItem {
-                        required property var modelData
-                        text: modelData.label
-                        onTriggered: {
-                            root.fontImported = false
-                            root.fontProblem = Qt.openUrlExternally(modelData.sourceUrl)
-                                ? "" : qsTr("Could not open the font page.")
-                        }
-                    }
-                    onObjectAdded: (index, object) => fontSources.insertItem(index, object)
-                    onObjectRemoved: (index, object) => fontSources.removeItem(object)
-                }
-            }
-        }
     }
 
     Label {
@@ -279,7 +254,7 @@ ColumnLayout {
 
     Label {
         Layout.fillWidth: true
-        text: qsTr("The linked font downloads are for personal use. Import a TTF or OTF file you are licensed to use.")
+        text: qsTr("Import a TTF or OTF file you are licensed to use.")
         color: root.colors.muted
         wrapMode: Text.WordWrap
     }
