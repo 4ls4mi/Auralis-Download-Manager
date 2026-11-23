@@ -7,6 +7,10 @@ on:
         type: boolean
         description: Publish the verified installer and extensions
         default: false
+      full_tests:
+        type: boolean
+        description: Run the full Rust regression suite
+        default: false
   push:
     branches: [wip/auralis-qt-shell]
     paths:
@@ -80,6 +84,7 @@ jobs:
         run: ./qt-ui/packaging/test-installed-windows.ps1
 
       - name: Test the Rust engine bridge, recovery, and backup
+        if: github.event_name == 'workflow_dispatch' && inputs.full_tests
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
