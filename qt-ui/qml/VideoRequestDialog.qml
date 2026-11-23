@@ -158,7 +158,7 @@ Dialog {
         }
     }
     background: GlassSurface { material: root.material; role: "modal" }
-    header: Label { text: root.title; color: root.colors.ink; font.pixelSize: 20; font.bold: true; padding: 16; bottomPadding: 4 }
+    header: Label { text: root.title; color: root.colors.ink; font.pixelSize: TypographyScale.pixels(20); font.bold: true; padding: 16; bottomPadding: 4 }
     contentItem: ColumnLayout {
         spacing: 9
         RowLayout {

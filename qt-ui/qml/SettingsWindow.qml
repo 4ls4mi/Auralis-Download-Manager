@@ -54,7 +54,8 @@ AuralisWindow {
         {id: "Scheduler", name: qsTr("Scheduler"), detail: qsTr("Queue size, start times, and completion actions"), terms: qsTr("queue scheduler retry weekday schedule start stop"), keys: []},
         {id: "Accounts", name: qsTr("Accounts"), detail: qsTr("File hosts and supported service accounts"), terms: qsTr("account debrid host sign in token api"), keys: []},
         {id: "Appearance", name: qsTr("Appearance"), detail: qsTr("Materials, translucent backgrounds, and indicators"), terms: qsTr("theme tint glass dark light opacity translucent color material background indicator progress motion"), keys: []},
-        {id: "Advanced", name: qsTr("Advanced"), detail: qsTr("Application updates, media helpers, and other preferences"), terms: qsTr("update release media helper ffmpeg yt-dlp tools preferences"), keys: []}
+        {id: "Advanced", name: qsTr("Advanced"), detail: qsTr("Media helpers and other preferences"), terms: qsTr("media helper ffmpeg yt-dlp gallery-dl tools preferences"), keys: []},
+        {id: "Updates", name: qsTr("Updates & about"), detail: qsTr("Version, update preferences, and release notes"), terms: qsTr("application about update release changelog version notification"), keys: []}
     ]
     readonly property var recoveryChoices: [
         {label: qsTr("Off — search manually"), value: "off"},
@@ -220,17 +221,21 @@ AuralisWindow {
 
     component SettingsScrollBar: ScrollBar {
         id: grip
-        implicitWidth: 7
-        padding: 1
+        implicitWidth: 11
+        padding: 2
         minimumSize: .08
         policy: ScrollBar.AsNeeded
+        hoverEnabled: true
         contentItem: Rectangle {
-            implicitWidth: 5
+            implicitWidth: 7
             radius: width / 2
-            color: root.colors.secondary
-            opacity: grip.pressed ? .96 : grip.active ? .82 : .58
+            color: MaterialTheme.controlIconInk(root.colors.secondary, root.colors.background)
+            opacity: grip.pressed || grip.hovered ? 1 : .82
         }
-        background: Item {}
+        background: Rectangle {
+            radius: width / 2
+            color: MaterialTheme.rgba(root.colors.divider, grip.hovered ? .88 : .55)
+        }
     }
 
     component Card: Frame {
@@ -329,6 +334,7 @@ AuralisWindow {
                 id: navigation
                 anchors.fill: parent
                 clip: true
+                rightPadding: 12
                 contentWidth: availableWidth
                 ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
                 ScrollBar.vertical: SettingsScrollBar {}
@@ -379,6 +385,7 @@ AuralisWindow {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     clip: true
+                    rightPadding: 12
                     contentWidth: availableWidth
                     ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
                     ScrollBar.vertical: SettingsScrollBar {}
@@ -398,7 +405,7 @@ AuralisWindow {
                                 Layout.fillWidth: true
                                 text: root.term ? qsTr("Search results") : root.chosen.name
                                 color: root.colors.text
-                                font.pixelSize: 26
+                                font.pixelSize: TypographyScale.pixels(26)
                                 font.weight: Font.Bold
                             }
 
@@ -453,10 +460,15 @@ AuralisWindow {
                             }
 
                             SettingsTools {
-                                id: tools
                                 Layout.fillWidth: true
                                 visible: !root.term && (root.category === "Advanced" || root.category === "Browser Integration")
                                 section: root.category
+                            }
+
+                            SettingsUpdates {
+                                Layout.fillWidth: true
+                                visible: !root.term && root.category === "Updates"
+                                backdropAvailable: settingsBackdrop.backdropAvailable
                                 updatePresentation: root.updatePresentation
                                 automaticChecks: root.automaticUpdateChecks
                                 onUpdatePresentationRequested: value => updatePrefs.presentation = value

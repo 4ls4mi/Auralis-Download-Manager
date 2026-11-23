@@ -13,12 +13,13 @@ TabButton {
     readonly property bool emphasized: enabled && (checked || hovered || visualFocus || down)
     readonly property color vividAccent: MaterialTheme.vividControlAccent(
         MaterialTheme.safeAccent(MaterialTheme.forcedAccent || accent, profile.light), profile.light)
-    readonly property color pigment: MaterialTheme.mix(vividAccent, profile.secondary, finish.tint, 1)
+    readonly property color pigment: MaterialTheme.controlPigment(vividAccent, profile.secondary, finish.tint)
     readonly property color face: MaterialTheme.mix(profile.buttonFace || profile.background, pigment,
-        emphasized ? (down ? finish.press : hovered ? finish.hover : finish.selected) : finish.idle, 1)
+        emphasized ? (down ? finish.press : hovered ? finish.hover : finish.selected)
+            : MaterialTheme.controlIdleStrength(profile, finish), 1)
 
     hoverEnabled: true
-    palette.buttonText: emphasized ? MaterialTheme.contrastInk(face) : profile.ink
+    palette.buttonText: MaterialTheme.controlTextInk(profile.ink, face)
 
     background: Rectangle {
         id: plate
@@ -27,7 +28,7 @@ TabButton {
         opacity: tab.enabled ? 1 : .55
         border.width: tab.visualFocus ? 2 : 1
         border.color: tab.visualFocus ? tab.palette.buttonText
-            : MaterialTheme.mix(tab.profile.edge, tab.pigment, tab.emphasized ? .76 : .37, 1)
+            : MaterialTheme.mix(tab.profile.edge, tab.pigment, tab.emphasized ? .84 : .58, 1)
         gradient: Gradient {
             GradientStop { position: 0; color: MaterialTheme.mix(tab.face, tab.profile.upper, tab.finish.crown * .54, 1) }
             GradientStop { position: tab.finish.shoulder; color: tab.face }

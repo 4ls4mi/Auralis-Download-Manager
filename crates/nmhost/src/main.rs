@@ -1152,6 +1152,16 @@ fn exe_dir() -> Result<PathBuf, String> {
 fn serve() -> io::Result<()> {
     let mut stdin = io::stdin().lock();
     let mut stdout = io::stdout().lock();
+    let caller = std::env::args().find_map(|arg| {
+        arg.strip_prefix("chrome-extension://")
+            .map(|id| id.trim_end_matches('/').to_owned())
+    });
+    #[cfg(windows)]
+    let store_browser = if caller.as_deref() == store_id() {
+        win32::launching_store_browser()
+    } else {
+        None
+    };
     while let Some(raw) = read_message(&mut stdin)? {
         let raw = match raw {
             Ok(raw) => raw,
@@ -1177,8 +1187,19 @@ fn serve() -> io::Result<()> {
             // The rules as saved now: a change in Options applies to the next download.
             Ok(m) => {
                 // This browser has the extension: the app stops offering it (extension.rs).
-                let caller = std::env::args().find_map(|arg| arg.strip_prefix("chrome-extension://").map(|id| id.trim_end_matches('/').to_owned()));
-                mdm_ipc::extension::mark_seen(browser(&m), m.v.as_deref().unwrap_or_default(), caller.as_deref());
+                let browser = browser(&m);
+                #[cfg(not(windows))]
+                let store_browser = match browser {
+                    "Google Chrome" => Some(mdm_ipc::extension::StoreBrowser::Chrome),
+                    "Microsoft Edge" => Some(mdm_ipc::extension::StoreBrowser::Edge),
+                    _ => None,
+                };
+                mdm_ipc::extension::mark_seen(
+                    browser,
+                    m.v.as_deref().unwrap_or_default(),
+                    caller.as_deref(),
+                    store_browser,
+                );
                 answer(m, &mdm_ipc::capture::CaptureRules::load())
             }
             Err(e) => Reply::failed("refused", e.to_string()),
@@ -1327,6 +1348,11 @@ fn reg_point(root: &str, key: &str, manifest: &std::path::Path) -> Result<(), St
 /// (HKCU) or for everyone (HKLM).
 #[cfg(windows)]
 fn register(all_users: bool) -> Result<(), String> {
+    register_windows(all_users, true)
+}
+
+#[cfg(windows)]
+fn register_windows(all_users: bool, external_offer: bool) -> Result<(), String> {
     portable_refused()?;
     temporary_refused()?;
     let root = if all_users { "HKLM" } else { "HKCU" };
@@ -1334,7 +1360,7 @@ fn register(all_users: bool) -> Result<(), String> {
         reg_point(root, key, &own_manifest(family, !all_users)?)?;
     }
     // Chrome offers the store's extension once it is listed (never a placeholder ID).
-    if let Some(id) = store_id() {
+    if external_offer && let Some(id) = store_id() {
         reg(&[
             "add",
             &format!(r"{root}\{CHROME_EXTERNAL_KEY}\{id}"),
@@ -1626,6 +1652,8 @@ fn main() {
     let all_users = args.iter().any(|a| a == "--all-users");
     let result = match args.first().map(String::as_str).unwrap_or_default() {
         "--register" => register(all_users),
+        #[cfg(windows)]
+        "--register-native-only" => register_windows(false, false),
         "--unregister" => unregister(all_users),
         "--repair" => repair(),
         "--package-manifests" => package_manifests(args.get(1).map(String::as_str)),

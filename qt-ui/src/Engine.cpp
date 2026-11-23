@@ -1,4 +1,5 @@
 #include "Engine.h"
+#include "BrowserSetup.h"
 #include "FrameResize.h"
 #include "LocalFiles.h"
 
@@ -10,7 +11,6 @@
 #include <QJSEngine>
 #include <QJsonDocument>
 #include <QProcess>
-#include <QRegularExpression>
 #include <QSettings>
 #include <QSystemTrayIcon>
 #include <QWindow>
@@ -75,56 +75,15 @@ QVariantMap setStartupSettings(const QVariantMap &command)
 }
 
 #ifdef Q_OS_WIN
-QString chromeExecutableAt(QString path)
+QString registerNativeBrowserHost()
 {
-    path = QDir::fromNativeSeparators(path.trimmed());
-    if (path.size() >= 2 && path.startsWith(QLatin1Char('"')) && path.endsWith(QLatin1Char('"')))
-        path = path.mid(1, path.size() - 2);
-    if (path.size() < 3 || !path[0].isLetter() || path[1] != QLatin1Char(':') || path[2] != QLatin1Char('/'))
-        return {};
-    const QFileInfo executable(path);
-    if (!executable.isAbsolute()
-        || executable.fileName().compare(QStringLiteral("chrome.exe"), Qt::CaseInsensitive) != 0
-        || !executable.isFile())
-        return {};
-    return executable.canonicalFilePath();
-}
-
-QString chromeExecutable()
-{
-    const QString appPath = QStringLiteral("\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\chrome.exe");
-    for (const auto &root : {QStringLiteral("HKEY_CURRENT_USER"), QStringLiteral("HKEY_LOCAL_MACHINE")}) {
-        for (auto format : {QSettings::Registry64Format, QSettings::Registry32Format}) {
-            const QSettings registry(root + appPath, format);
-            const QString executable = chromeExecutableAt(registry.value(QStringLiteral(".")).toString());
-            if (!executable.isEmpty())
-                return executable;
-        }
-    }
-    for (const char *variable : {"LOCALAPPDATA", "ProgramFiles", "ProgramFiles(x86)"}) {
-        const QString directory = qEnvironmentVariable(variable);
-        if (directory.isEmpty())
-            continue;
-        for (const auto &channel : {QStringLiteral("Chrome"), QStringLiteral("Chrome Beta"),
-                                    QStringLiteral("Chrome Dev"), QStringLiteral("Chrome SxS")}) {
-            const QString executable = chromeExecutableAt(
-                QDir(directory).filePath(QStringLiteral("Google/%1/Application/chrome.exe").arg(channel)));
-            if (!executable.isEmpty())
-                return executable;
-        }
-    }
-    return {};
-}
-
-QUrl chromeExtensionStoreUrl(const QVariantMap &status)
-{
-    const QUrl url(status.value(QStringLiteral("storeUrl")).toString(), QUrl::StrictMode);
-    static const QRegularExpression listing(QStringLiteral("\\A/detail/auralis-download-manager/[a-p]{32}\\z"));
-    if (url.isValid() && url.scheme() == QStringLiteral("https")
-        && url.authority() == QStringLiteral("chromewebstore.google.com")
-        && !url.hasQuery() && !url.hasFragment()
-        && listing.match(url.path(QUrl::FullyEncoded)).hasMatch())
-        return url;
+    QProcess host;
+    const QString path = QCoreApplication::applicationDirPath() + QStringLiteral("/auralis-browser-host.exe");
+    if (!QFileInfo(path).isFile())
+        return QObject::tr("The Auralis browser helper is missing from this installation.");
+    host.start(path, {QStringLiteral("--register-native-only")});
+    if (!host.waitForFinished(10000) || host.exitStatus() != QProcess::NormalExit || host.exitCode())
+        return QObject::tr("Could not register the browser helper.");
     return {};
 }
 #endif
@@ -141,6 +100,7 @@ Engine::Engine(QJSEngine *scriptEngine, bool startHidden, bool smoke, QObject *p
     m_commands.setMaxThreadCount(1);
     m_localJobs.setMaxThreadCount(1);
     m_updateJobs.setMaxThreadCount(1);
+    m_releaseHistoryJobs.setMaxThreadCount(1);
     m_serviceThread.setMaxThreadCount(1);
     m_library.setLoadHints(QLibrary::PreventUnloadHint);
     m_run = reinterpret_cast<Run>(m_library.resolve("auralis_engine_run"));
@@ -160,6 +120,7 @@ Engine::~Engine()
     m_commands.waitForDone();
     m_localJobs.waitForDone();
     m_updateJobs.waitForDone();
+    m_releaseHistoryJobs.waitForDone();
     m_serviceThread.waitForDone();
 }
 
@@ -216,56 +177,84 @@ QVariantMap Engine::dispatch(const QVariantMap &command) const
         return result(startupSettings());
     if (local == QStringLiteral("setStartupSettings"))
         return setStartupSettings(command);
-    if (local == QStringLiteral("chromeExtensionStatus") || local == QStringLiteral("openChromeExtensionStore")
-        || local == QStringLiteral("openChromeExtensions")) {
-        const bool openStore = local == QStringLiteral("openChromeExtensionStore");
-        const bool manage = local == QStringLiteral("openChromeExtensions");
+    const bool browserStatus = local == QStringLiteral("browserExtensionStatus");
+    const bool openStore = local == QStringLiteral("openBrowserExtensionStore");
+    const bool manage = local == QStringLiteral("openBrowserExtensions");
+    const bool installExtension = local == QStringLiteral("installBrowserExtensionPolicy");
+    const bool removeExtensionPolicy = local == QStringLiteral("removeBrowserExtensionPolicy");
+    if (browserStatus || openStore || manage || installExtension || removeExtensionPolicy) {
+        QVariantMap status{{QStringLiteral("browser"), QString()}, {QStringLiteral("browserId"), QString()},
+                           {QStringLiteral("browserSupported"), false}, {QStringLiteral("extensionPresent"), false},
+                           {QStringLiteral("connectedRecently"), false}, {QStringLiteral("storePreviouslyConnected"), false},
+                           {QStringLiteral("browserPreviouslyConnected"), false}, {QStringLiteral("storeUrl"), QString()},
+                           {QStringLiteral("silentInstallAvailable"), false}, {QStringLiteral("policyInstalled"), false},
+                           {QStringLiteral("policyRemovable"), false}, {QStringLiteral("policyProblem"), QString()}};
 #ifdef Q_OS_WIN
         if (!m_smoke) {
-            const QString chrome = chromeExecutable();
-            if (manage) {
-                if (chrome.isEmpty())
-                    return failure(tr("Google Chrome was not found."));
-                if (!QProcess::startDetached(chrome, {QStringLiteral("chrome://extensions/")}))
-                    return failure(tr("Could not open Chrome’s extension manager."));
-                return result(QVariantMap{{QStringLiteral("ok"), true}});
-            }
-            const auto response = exchange({{QStringLiteral("shellAction"), QStringLiteral("chrome-extension-status")}});
+            const auto handler = BrowserSetup::defaultHttpsHandler();
+            status.insert(QStringLiteral("browser"), handler.name);
+            const auto response = exchange({{QStringLiteral("shellAction"), QStringLiteral("browser-extension-status")},
+                                            {QStringLiteral("executable"), handler.executable}});
             if (response.contains(QStringLiteral("error")))
                 return response;
-            auto status = response.value(QStringLiteral("result")).toMap();
-            const QUrl store = chromeExtensionStoreUrl(status);
-            if (!openStore) {
-                status.insert(QStringLiteral("chromeDetected"), !chrome.isEmpty());
-                status.insert(QStringLiteral("storeUrl"), store.toString(QUrl::FullyEncoded));
+            const auto browserResult = response.value(QStringLiteral("result")).toMap();
+            const auto browserId = browserResult.value(QStringLiteral("browserId")).toString();
+            if (browserId != QStringLiteral("chrome") && browserId != QStringLiteral("edge")) {
+                if (browserStatus)
+                    return result(status);
+                return failure(tr("Guided extension setup is available for Chrome and Edge when one is your Windows default browser."));
+            }
+            const QString store = BrowserSetup::storeUrl().toString(QUrl::FullyEncoded);
+            if (browserStatus) {
+                for (auto it = browserResult.constBegin(); it != browserResult.constEnd(); ++it)
+                    status.insert(it.key(), it.value());
+                const auto policy = BrowserSetup::policyStatus(browserId);
+                status.insert(QStringLiteral("storeUrl"), store);
+                status.insert(QStringLiteral("silentInstallAvailable"), policy.available);
+                status.insert(QStringLiteral("policyInstalled"), policy.configured);
+                status.insert(QStringLiteral("policyRemovable"), policy.removable);
+                status.insert(QStringLiteral("policyProblem"), policy.problem);
                 return result(status);
             }
-            if (store.isEmpty())
-                return failure(tr("Could not verify the Auralis Chrome Web Store listing."));
-            if (!chrome.isEmpty() && QProcess::startDetached(chrome, {store.toString(QUrl::FullyEncoded)}))
-                return result(QVariantMap{{QStringLiteral("ok"), true}, {QStringLiteral("openedInChrome"), true}});
-            // Run the desktop URL handoff on the application's GUI thread.
-            return result(QVariantMap{{QStringLiteral("storeUrl"), store.toString(QUrl::FullyEncoded)}});
+            if (installExtension || removeExtensionPolicy) {
+                const auto expectedBrowser = command.value(QStringLiteral("expectedBrowser")).toString();
+                if (expectedBrowser != browserId)
+                    return failure(tr("The Windows default browser changed. Review browser setup again."));
+                if (removeExtensionPolicy) {
+                    const auto policyError = BrowserSetup::removePolicy(browserId);
+                    if (!policyError.isEmpty())
+                        return failure(policyError);
+                    return result(QVariantMap{{QStringLiteral("ok"), true},
+                        {QStringLiteral("message"), tr("Auralis removed its managed browser setup. The browser will apply the change.")}});
+                }
+                const auto policy = BrowserSetup::policyStatus(browserId);
+                if (!policy.available && !policy.configured)
+                    return failure(policy.problem);
+                const auto registrationError = registerNativeBrowserHost();
+                if (!registrationError.isEmpty())
+                    return failure(registrationError);
+                if (BrowserSetup::defaultHttpsHandler().executable.compare(handler.executable, Qt::CaseInsensitive) != 0)
+                    return failure(tr("The Windows default browser changed. Review browser setup again."));
+                const auto policyError = BrowserSetup::installPolicy(browserId);
+                if (!policyError.isEmpty())
+                    return failure(policyError);
+                return result(QVariantMap{{QStringLiteral("ok"), true},
+                    {QStringLiteral("message"), tr("Browser setup is configured. The extension will connect after the browser installs it.")}});
+            }
+            const QString destination = manage ? BrowserSetup::extensionManager(browserId) : store;
+            if (!QProcess::startDetached(handler.executable, {destination}))
+                return failure(tr("Could not open the Windows default browser."));
+            return result(QVariantMap{{QStringLiteral("ok"), true}, {QStringLiteral("openedInBrowser"), true}});
         }
 #endif
-        if (openStore || manage)
-            return failure(tr("Opening the Chrome Web Store is unavailable here."));
-        return result(QVariantMap{{QStringLiteral("chromeDetected"), false},
-                                  {QStringLiteral("connectedRecently"), false},
-                                  {QStringLiteral("storePreviouslyConnected"), false},
-                                  {QStringLiteral("chromePreviouslyConnected"), false},
-                                  {QStringLiteral("storeUrl"), QString()}});
+        return browserStatus ? result(status) : failure(tr("Browser setup is unavailable here."));
     }
     if (local == QStringLiteral("registerBrowserHost")) {
 #ifdef Q_OS_WIN
-        QProcess host;
-        const QString path = QCoreApplication::applicationDirPath() + QStringLiteral("/auralis-browser-host.exe");
-        if (!QFileInfo::exists(path))
-            return failure(tr("The Auralis browser helper is missing from this installation."));
-        host.start(path, {QStringLiteral("--register")});
-        if (!host.waitForFinished(10000) || host.exitStatus() != QProcess::NormalExit || host.exitCode())
-            return failure(tr("Could not register the browser helper."));
-        return result(QVariantMap{{QStringLiteral("ok"), true}});
+        if (m_smoke)
+            return failure(tr("Browser setup is disabled during installation tests."));
+        const auto error = registerNativeBrowserHost();
+        return error.isEmpty() ? result(QVariantMap{{QStringLiteral("ok"), true}}) : failure(error);
 #else
         return failure(tr("This installer registers browser integration on Windows."));
 #endif
@@ -293,21 +282,11 @@ void Engine::request(const QVariantMap &command, const QJSValue &callback)
     const QString shellAction = command.value(QStringLiteral("shellAction")).toString();
     const bool changesDownloads = local.isEmpty() && shellAction.isEmpty()
         && !command.contains(QStringLiteral("query"));
-    const auto deliver = [this, callback, shellAction, local](const QVariantMap &response) {
-        QVariant value = response.value(QStringLiteral("result"));
+    const auto deliver = [this, callback, shellAction](const QVariantMap &response) {
+        const QVariant value = response.value(QStringLiteral("result"));
         QString error = response.value(QStringLiteral("error")).toString();
         if (error.isEmpty())
             error = value.toMap().value(QStringLiteral("error")).toString();
-#ifdef Q_OS_WIN
-        if (error.isEmpty() && local == QStringLiteral("openChromeExtensionStore")
-            && !value.toMap().value(QStringLiteral("ok")).toBool()) {
-            const QUrl store = chromeExtensionStoreUrl(value.toMap());
-            if (!store.isEmpty() && QDesktopServices::openUrl(store))
-                value = QVariantMap{{QStringLiteral("ok"), true}, {QStringLiteral("openedInChrome"), false}};
-            else
-                error = tr("Could not open the Auralis Chrome Web Store listing.");
-        }
-#endif
         if (callback.isCallable()) {
             callback.call({m_scriptEngine->toScriptValue(value),
                            error.isEmpty() ? QJSValue(QJSValue::NullValue) : QJSValue(error)});
@@ -337,7 +316,8 @@ void Engine::request(const QVariantMap &command, const QJSValue &callback)
         if (changesDownloads)
             refresh();
     });
-    QThreadPool *pool = shellAction.startsWith(QStringLiteral("update-")) ? &m_updateJobs
+    QThreadPool *pool = shellAction == QStringLiteral("update-history") ? &m_releaseHistoryJobs
+        : shellAction.startsWith(QStringLiteral("update-")) ? &m_updateJobs
         : local.isEmpty() ? &m_commands : &m_localJobs;
     watcher->setFuture(QtConcurrent::run(pool, [this, command] { return dispatch(command); }));
 }
@@ -398,10 +378,6 @@ void Engine::applySnapshot(const QVariantMap &response)
     if (m_firstSnapshot) {
         m_firstSnapshot = false;
         request({{QStringLiteral("shellAction"), QStringLiteral("register-interface")}});
-    #ifdef Q_OS_WIN
-        if (!m_smoke && !qEnvironmentVariableIsSet("AURALIS_TEST_SKIP_HOST"))
-            request({{QStringLiteral("local"), QStringLiteral("registerBrowserHost")}});
-#endif
     }
 }
 

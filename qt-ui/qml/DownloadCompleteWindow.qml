@@ -238,7 +238,7 @@ DetachedDialogWindow {
                 Label {
                     Layout.fillWidth: true
                     text: root.title
-                    font.pixelSize: 23
+                    font.pixelSize: TypographyScale.pixels(23)
                     font.bold: true
                     color: root.colors.ink
                     wrapMode: Text.Wrap

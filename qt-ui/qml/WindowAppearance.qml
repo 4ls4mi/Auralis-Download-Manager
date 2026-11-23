@@ -9,18 +9,37 @@ QtObject {
     property bool loaded: false
     property var preferences: defaults()
     readonly property string progressShape: preferences.progressShape
-    readonly property string progressFill: preferences.progressFill
     readonly property string progressAnimation: preferences.progressAnimation
+    readonly property string progressLighting: preferences.progressLighting
     readonly property string connectionShape: preferences.connectionShape
-    readonly property string connectionFill: preferences.connectionFill
     readonly property string connectionAnimation: preferences.connectionAnimation
+    readonly property string connectionLighting: preferences.connectionLighting
     readonly property string graphShape: preferences.graphShape
     readonly property string graphAnimation: preferences.graphAnimation
+    readonly property string graphLighting: preferences.graphLighting
     readonly property var animationChoices: [
         {label: qsTr("Classic"), value: "classic"},
         {label: qsTr("Normal (no motion)"), value: "none"},
         {label: qsTr("Gushing water"), value: "water"},
         {label: qsTr("Jelly"), value: "jelly"}
+    ]
+    readonly property var lightingChoices: [
+        {label: qsTr("Polished glass"), value: "polished"},
+        {label: qsTr("Deep shading"), value: "depth"},
+        {label: qsTr("Liquid caustics"), value: "caustics"},
+        {label: qsTr("Neon halo"), value: "halo"},
+        {label: qsTr("Soft Frost"), value: "frost"},
+        {label: qsTr("Chrome Edge"), value: "chrome"},
+        {label: qsTr("Bottom Light"), value: "underlit"},
+        {label: qsTr("Smoked Glass"), value: "smoke"},
+        {label: qsTr("Satin Sweep"), value: "satin"},
+        {label: qsTr("Faceted Crystal"), value: "facets"},
+        {label: qsTr("Cross Lighting"), value: "cross"},
+        {label: qsTr("Pinpoint Gloss"), value: "pinpoint"},
+        {label: qsTr("Fluted Glass"), value: "fluted"},
+        {label: qsTr("Iridescent Rim"), value: "iridescent"},
+        {label: qsTr("Backlit Glass"), value: "backlit"},
+        {label: qsTr("Edge-Lit Glass"), value: "edge-lit"}
     ]
 
     property Settings persistence: Settings {
@@ -55,9 +74,10 @@ QtObject {
     function defaults() {
         return {
             mainMode: "desktop", detailsMode: "desktop", mainMedia: "", detailsMedia: "",
-            mainColor: "", detailsColor: "", progressShape: "bubble", progressFill: "sculpted",
-            progressAnimation: "classic", connectionShape: "material", connectionFill: "sculpted",
-            connectionAnimation: "classic", graphShape: "area", graphAnimation: "classic"
+            mainColor: "", detailsColor: "", progressShape: "bubble",
+            progressAnimation: "classic", progressLighting: "polished", connectionShape: "material",
+            connectionAnimation: "classic", connectionLighting: "polished",
+            graphShape: "area", graphAnimation: "classic", graphLighting: "polished"
         }
     }
 
@@ -123,6 +143,10 @@ QtObject {
         return animationChoices.some(choice => choice.value === value) ? value : fallback
     }
 
+    function indicatorLighting(value, fallback) {
+        return lightingChoices.some(choice => choice.value === value) ? value : fallback
+    }
+
     function paletteFor(value, fallback) {
         if (value === "material") return value
         if (value === "neon") return "aurora"
@@ -150,9 +174,9 @@ QtObject {
             "mh-glass-connection-indicator": MaterialTheme.effectiveConnectionPalette,
             "mh-glass-graph-indicator": MaterialTheme.effectiveGraphPalette,
             "mh-glass-progress-shape": shape(progressShape),
-            "mh-glass-progress-material": progressFill === "default" ? "gradient" : "liquid-glass",
+            "mh-glass-progress-material": "liquid-glass",
             "mh-glass-connection-shape": shape(connectionShape),
-            "mh-glass-connection-material": connectionFill === "default" ? "gradient" : "liquid-glass",
+            "mh-glass-connection-material": "liquid-glass",
             "mh-glass-graph-shape": graphShape,
             "mh-glass-qt-appearance": JSON.stringify(Object.assign({}, preferences, {
                 tint: colorText(MaterialTheme.tintColor),
@@ -217,15 +241,14 @@ QtObject {
             mainColor: optionalColor(saved.mainColor ?? data["mh-glass-solid-main"], original.mainColor),
             detailsColor: optionalColor(saved.detailsColor ?? data["mh-glass-solid-details"], original.detailsColor),
             progressShape: indicatorShape(saved.progressShape || data["mh-glass-progress-shape"], original.progressShape),
-            progressFill: validChoice(saved.progressFill, ["default", "sculpted"],
-                data["mh-glass-progress-material"] === "gradient" ? "default" : original.progressFill),
             progressAnimation: indicatorAnimation(saved.progressAnimation, original.progressAnimation),
+            progressLighting: indicatorLighting(saved.progressLighting, original.progressLighting),
             connectionShape: indicatorShape(saved.connectionShape || data["mh-glass-connection-shape"], original.connectionShape),
-            connectionFill: validChoice(saved.connectionFill, ["default", "sculpted"],
-                data["mh-glass-connection-material"] === "gradient" ? "default" : original.connectionFill),
             connectionAnimation: indicatorAnimation(saved.connectionAnimation, original.connectionAnimation),
+            connectionLighting: indicatorLighting(saved.connectionLighting, original.connectionLighting),
             graphShape: validChoice(saved.graphShape || data["mh-glass-graph-shape"], ["area", "line", "bars"], original.graphShape),
-            graphAnimation: indicatorAnimation(saved.graphAnimation, original.graphAnimation)
+            graphAnimation: indicatorAnimation(saved.graphAnimation, original.graphAnimation),
+            graphLighting: indicatorLighting(saved.graphLighting, original.graphLighting)
         }
     }
 
@@ -255,8 +278,9 @@ QtObject {
             },
             qt: {
                 material: material, tint: colorText(MaterialTheme.tintColor), progressShape: progressShape,
-                progressAnimation: progressAnimation, connectionShape: connectionShape,
-                connectionAnimation: connectionAnimation, graphAnimation: graphAnimation,
+                progressAnimation: progressAnimation, progressLighting: progressLighting,
+                connectionShape: connectionShape, connectionAnimation: connectionAnimation, connectionLighting: connectionLighting,
+                graphAnimation: graphAnimation, graphLighting: graphLighting,
                 reducedMotion: MaterialTheme.reducedMotion,
                 forcedAccent: MaterialTheme.forcedAccent, colorTheme: MaterialTheme.colorTheme,
                 progressPalette: MaterialTheme.progressPalette, connectionPalette: MaterialTheme.connectionPalette,
@@ -298,13 +322,14 @@ QtObject {
             paletteFor(options.graphIndicator, MaterialTheme.graphPalette))
         preferences = Object.assign({}, preferences, {
             progressShape: indicatorShape(value.qt?.progressShape || options.progressShape, progressShape),
-            progressFill: options.progressMaterial === "gradient" ? "default" : "sculpted",
             progressAnimation: indicatorAnimation(value.qt?.progressAnimation, progressAnimation),
+            progressLighting: indicatorLighting(value.qt?.progressLighting, progressLighting),
             connectionShape: indicatorShape(value.qt?.connectionShape || options.connectionShape, connectionShape),
-            connectionFill: options.connectionMaterial === "gradient" ? "default" : "sculpted",
             connectionAnimation: indicatorAnimation(value.qt?.connectionAnimation, connectionAnimation),
+            connectionLighting: indicatorLighting(value.qt?.connectionLighting, connectionLighting),
             graphShape: validChoice(options.graphShape, ["area", "line", "bars"], graphShape),
-            graphAnimation: indicatorAnimation(value.qt?.graphAnimation, graphAnimation)
+            graphAnimation: indicatorAnimation(value.qt?.graphAnimation, graphAnimation),
+            graphLighting: indicatorLighting(value.qt?.graphLighting, graphLighting)
         })
         return true
     }

@@ -17,10 +17,10 @@ Basic.Button {
     readonly property color activeAccent: MaterialTheme.safeAccent(MaterialTheme.forcedAccent || accent, materialPalette.light)
     readonly property color vividAccent: MaterialTheme.vividControlAccent(activeAccent, materialPalette.light)
     readonly property color neutralFace: materialPalette.buttonFace || materialPalette.background
-    readonly property color facePigment: MaterialTheme.mix(vividAccent, materialPalette.secondary, finish.tint, 1)
+    readonly property color facePigment: MaterialTheme.controlPigment(vividAccent, materialPalette.secondary, finish.tint)
     readonly property real backingOpacity: finish.opacity + (1 - finish.opacity) * MaterialTheme.opacityFor(material)
     readonly property color restingFace: MaterialTheme.mix(neutralFace, facePigment,
-        materialPalette.light ? finish.idle * .59 : finish.idle, backingOpacity)
+        MaterialTheme.controlIdleStrength(materialPalette, finish), backingOpacity)
     readonly property bool selectedFace: filled || checked || highlighted
     readonly property real accentStrength: down ? finish.press : hovered ? finish.hover
         : visualFocus ? (finish.hover + finish.selected) / 2 : finish.selected
@@ -28,14 +28,13 @@ Basic.Button {
         Math.max(.93, backingOpacity))
     readonly property bool accentFill: enabled && (selectedFace || hovered || down || visualFocus)
     readonly property color faceColor: accentFill ? engagedFace : restingFace
-    readonly property color buttonInk: accentFill ? MaterialTheme.contrastInk(engagedFace) : materialPalette.text
+    readonly property color buttonInk: MaterialTheme.controlTextInk(materialPalette.text, faceColor)
     readonly property color iconInk: !enabled ? MaterialTheme.mix(materialPalette.muted, neutralFace, .36, 1)
-        : accentFill ? MaterialTheme.mix(buttonInk, vividAccent, .19, 1)
-        : MaterialTheme.controlIconInk(vividAccent, restingFace)
+        : MaterialTheme.controlIconInk(vividAccent, faceColor)
     property real faceOffset: enabled ? down ? 1.55 : hovered ? -.45 : 0 : 0
 
     hoverEnabled: true
-    font.pixelSize: 13
+    font.pixelSize: TypographyScale.pixels(13)
     font.weight: Font.Medium
     topPadding: 7
     bottomPadding: 7
@@ -65,10 +64,10 @@ Basic.Button {
         readonly property real gloss: profile.gloss
         readonly property real lip: control.finish.lip + gloss * .34
         readonly property color highlight: MaterialTheme.mix(profile.light ? "#ffffff" : profile.upper,
-            control.facePigment, control.accentFill ? .44 : .19, 1)
+            control.facePigment, control.accentFill ? .70 : .59, 1)
         readonly property color shade: profile.light ? MaterialTheme.mix(profile.shade, "#20283d", .38, 1) : profile.shade
         readonly property color edge: MaterialTheme.mix(profile.edge, control.facePigment,
-            control.accentFill ? .76 + .10 * gloss : .36 + .16 * gloss, 1)
+            control.accentFill ? .83 + .10 * gloss : .54 + .19 * gloss, 1)
         readonly property color baseShadow: MaterialTheme.rgba(shade, profile.light ? .26 : .30 + .38 * control.backingOpacity)
         readonly property real faceHeight: height - 2.8
         readonly property real focusInset: lip + 1.55
@@ -110,7 +109,7 @@ Basic.Button {
                     }
                     GradientStop {
                         position: .46
-                        color: MaterialTheme.rgba(buttonBackground.edge, .68)
+                        color: MaterialTheme.rgba(buttonBackground.edge, .84)
                     }
                     GradientStop {
                         position: 1

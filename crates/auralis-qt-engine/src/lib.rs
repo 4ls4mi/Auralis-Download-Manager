@@ -58,13 +58,22 @@ pub unsafe extern "C" fn auralis_engine_request(input: *const u8, length: usize)
             if action.starts_with("update-") {
                 return updater::dispatch(action, &request);
             }
-            if action == "chrome-extension-status" {
-                let status = mdm_ipc::extension::chrome_store_status();
+            if action == "browser-extension-status" {
+                use mdm_ipc::extension::StoreBrowser;
+                let executable = request["executable"].as_str().unwrap_or_default();
+                let Some(browser) = StoreBrowser::from_windows_executable(executable) else {
+                    return Ok(json!({"browserSupported": false}));
+                };
+                let status = mdm_ipc::extension::browser_store_status(browser);
                 return Ok(json!({
+                    "browserId": browser.id(),
+                    "browser": browser.name(),
+                    "browserSupported": true,
                     "storeUrl": mdm_ipc::extension::store_page(),
+                    "extensionPresent": browser.windows_extension_present(executable),
                     "connectedRecently": status.connected_recently,
                     "storePreviouslyConnected": status.store_previously_connected,
-                    "chromePreviouslyConnected": status.chrome_previously_connected,
+                    "browserPreviouslyConnected": status.browser_previously_connected,
                 }));
             }
             if action == "register-interface" {

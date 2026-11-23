@@ -72,6 +72,15 @@ pub struct UpdateStatus {
     notes: Option<String>,
     size: Option<u64>,
 }
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ReleaseNote {
+    version: String,
+    tag: String,
+    notes: String,
+    published_at: Option<String>,
+}
 fn client(
     timeout: Duration,
     redirect: reqwest::redirect::Policy,
@@ -202,6 +211,37 @@ fn release_feed(
         }),
     }
 }
+
+fn is_public_release(value: &serde_json::Value) -> bool {
+    value["draft"].as_bool() == Some(false) && value["prerelease"].as_bool() == Some(false)
+}
+
+fn release_history(feed: &serde_json::Value) -> Vec<ReleaseNote> {
+    let mut releases: Vec<_> = feed
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|release| is_public_release(release))
+        .filter_map(|release| {
+            let candidate = candidate_from_release(release, "0.0.0").ok()??;
+            let version = semver::Version::parse(&candidate.version).ok()?;
+            let note = ReleaseNote {
+                version: candidate.version,
+                tag: release["tag_name"].as_str()?.to_owned(),
+                notes: candidate.notes.chars().take(3600).collect(),
+                published_at: release["published_at"]
+                    .as_str()
+                    .filter(|date| date.len() <= 32)
+                    .map(str::to_owned),
+            };
+            Some((version, note))
+        })
+        .collect();
+    releases.sort_by(|a, b| b.0.cmp(&a.0));
+    releases.dedup_by(|a, b| a.0 == b.0);
+    releases.into_iter().take(3).map(|(_, note)| note).collect()
+}
+
 fn check(current: &str) -> Result<UpdateStatus, String> {
     semver::Version::parse(current).map_err(|_| "The installed version is invalid")?;
     let value = release_feed(
@@ -214,9 +254,7 @@ fn check(current: &str) -> Result<UpdateStatus, String> {
         .ok_or("The GitHub release feed is invalid")?;
     let mut next: Option<Candidate> = None;
     for release in releases {
-        if release["draft"].as_bool() != Some(false)
-            || release["prerelease"].as_bool() != Some(false)
-        {
+        if !is_public_release(release) {
             continue;
         }
         if let Some(candidate) = candidate_from_release(release, current)? {
@@ -465,6 +503,14 @@ pub(super) fn dispatch(
             .ok_or_else(|| String::from("Select an update version first"))
     };
     match action {
+        "update-history" => {
+            let value = release_feed(
+                &client(Duration::from_secs(5), reqwest::redirect::Policy::none())?,
+                FEED,
+                FALLBACK_FEED,
+            )?;
+            serde_json::to_value(release_history(&value)).map_err(|error| error.to_string())
+        }
         "update-check" => {
             let current = request
                 .get("currentVersion")
@@ -522,6 +568,51 @@ mod tests {
         assert!(candidate_from_release(&other_tag, "0.3.1").is_err());
         let invalid_digest = release(LEGACY_URL, "sha256:bad");
         assert!(candidate_from_release(&invalid_digest, "0.3.1").is_err());
+    }
+
+    #[test]
+    fn history_keeps_three_distinct_stable_auralis_releases() {
+        let published = |version: &str| {
+            let name = format!("Auralis.Download.Manager_{version}_x64-setup.exe");
+            let tag = format!("v{version}");
+            serde_json::json!({
+                "tag_name": tag, "body": "Release notes", "draft": false, "prerelease": false,
+                "published_at": "2026-11-23T02:44:45Z",
+                "assets": [{"name": name, "browser_download_url": format!("{ASSET_PREFIX}{tag}/{name}"),
+                    "digest": format!("sha256:{}", "a".repeat(64)), "size": 123}]
+            })
+        };
+        let mut draft = published("0.3.100");
+        draft["draft"] = serde_json::json!(true);
+        let mut preview = published("0.3.99");
+        preview["prerelease"] = serde_json::json!(true);
+        let mut upstream = published("1.0.0");
+        upstream["assets"] = serde_json::json!([]);
+        let feed = serde_json::json!([
+            published("0.3.65"),
+            draft,
+            upstream,
+            published("0.3.67"),
+            published("0.3.66"),
+            preview,
+            published("0.3.67"),
+            published("0.3.68")
+        ]);
+
+        let notes = release_history(&feed);
+        assert_eq!(
+            notes
+                .iter()
+                .map(|note| note.version.as_str())
+                .collect::<Vec<_>>(),
+            ["0.3.68", "0.3.67", "0.3.66"]
+        );
+        assert_eq!(notes[0].tag, "v0.3.68");
+        assert_eq!(notes[0].notes, "Release notes");
+        assert_eq!(
+            notes[0].published_at.as_deref(),
+            Some("2026-11-23T02:44:45Z")
+        );
     }
 
     #[test]

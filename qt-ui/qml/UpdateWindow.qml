@@ -164,7 +164,6 @@ DetachedDialogWindow {
             animationStyle: WindowAppearance.progressAnimation
             shape: WindowAppearance.progressShape === "material"
                 ? (["bubble", "prism", "ice"].includes(profile.shape) ? profile.shape : "round") : WindowAppearance.progressShape
-            fillStyle: WindowAppearance.progressFill
             startColor: MaterialTheme.progressColors[0]
             endColor: MaterialTheme.progressColors[1]
             showLabel: false

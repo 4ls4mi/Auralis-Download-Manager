@@ -100,7 +100,7 @@ ColumnLayout {
                 text: root.unavailable ? qsTr("Click’n’Load is unavailable. Existing settings are preserved.") : (root.field.description || "")
                 color: root.colors.muted
                 wrapMode: Text.WordWrap
-                font.pixelSize: 12
+                font.pixelSize: TypographyScale.pixels(12)
             }
         }
 

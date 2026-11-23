@@ -46,6 +46,7 @@ RowLayout {
                 width: 22
                 height: 22
                 symbol: button.symbol
+                bold: true
                 relief: button.enabled
                 ink: button.iconInk
                 surface: button.faceColor

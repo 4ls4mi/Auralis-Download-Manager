@@ -24,8 +24,8 @@ Shape {
     readonly property real phase: moving ? MaterialTheme.buttonLightPhase : 0
     readonly property real center: width * (.50 + .30 * Math.sin(phase + Math.max(0, accent.hsvHue) * 2.5))
     readonly property real span: Math.max(8, width * finish.spread) * .5
-    readonly property color glint: MaterialTheme.mix(profile.upper, accent, profile.light ? .57 : .37, 1)
-    readonly property color returnLight: MaterialTheme.mix(glint, profile.secondary, .28, 1)
+    readonly property color glint: MaterialTheme.mix(profile.upper, accent, profile.light ? .68 : .63, 1)
+    readonly property color returnLight: MaterialTheme.controlPigment(glint, profile.secondary, .28)
     readonly property real strength: finish.light * (.78 + profile.gloss * .44)
         * (pressed ? .66 : emphasized ? 1.13 : .88)
 

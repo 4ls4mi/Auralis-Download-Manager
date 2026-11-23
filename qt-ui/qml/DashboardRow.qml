@@ -141,7 +141,7 @@ Item {
                 text: row.sizeLabel + (row.mixed ? "  ·  " + qsTr("Direct → Torrent") : row.torrent ? "  ·  " + qsTr("Torrent") : "")
                 elide: Text.ElideRight
                 color: row.colors.muted
-                font.pixelSize: 11
+                font.pixelSize: TypographyScale.pixels(11)
             }
             RowLayout {
                 Layout.fillWidth: true
@@ -157,7 +157,7 @@ Item {
                     text: row.statusLabel
                     color: row.statusInk
                     elide: Text.ElideRight
-                    font.pixelSize: 11
+                    font.pixelSize: TypographyScale.pixels(11)
                 }
                 Label {
                     visible: row.speedLabel.length > 0
@@ -166,7 +166,7 @@ Item {
                     text: "·  " + row.speedLabel
                     color: row.colors.ink
                     elide: Text.ElideRight
-                    font.pixelSize: 11
+                    font.pixelSize: TypographyScale.pixels(11)
                 }
                 Item { visible: !row.speedLabel.length; Layout.fillWidth: true }
             }
@@ -176,7 +176,7 @@ Item {
                 text: row.recoveryLabel
                 elide: Text.ElideRight
                 color: row.colors.caution
-                font.pixelSize: 11
+                font.pixelSize: TypographyScale.pixels(11)
             }
         }
         RowLayout {
@@ -198,7 +198,6 @@ Item {
                     animationStyle: WindowAppearance.progressAnimation
                     shape: WindowAppearance.progressShape === "material"
                         ? (["bubble", "prism", "ice"].includes(profile.shape) ? profile.shape : "round") : WindowAppearance.progressShape
-                    fillStyle: WindowAppearance.progressFill
                     startColor: MaterialTheme.progressColors[0]
                     endColor: MaterialTheme.progressColors[1]
                 }
@@ -208,7 +207,7 @@ Item {
                     horizontalAlignment: Text.AlignRight
                     color: row.studioChrome && !row.colors.rowSelectionInk
                         ? row.colors.navigationInk || row.colors.accent : row.colors.ink
-                    font.pixelSize: row.studioChrome ? 12 : 11
+                    font.pixelSize: TypographyScale.pixels(row.studioChrome ? 12 : 11)
                     font.weight: row.studioChrome ? Font.Bold : Font.Normal
                 }
             }
@@ -236,7 +235,6 @@ Item {
                             phase: row.waterPhase
                             shape: WindowAppearance.connectionShape === "material"
                                 ? (["bubble", "prism", "ice"].includes(profile.shape) ? profile.shape : "round") : WindowAppearance.connectionShape
-                            fillStyle: WindowAppearance.connectionFill
                             animationStyle: WindowAppearance.connectionAnimation
                             startColor: MaterialTheme.connectionColors[0]
                             endColor: MaterialTheme.connectionColors[1]
@@ -248,7 +246,7 @@ Item {
                     color: row.colors.muted
                     text: row.connectionLabel
                     elide: Text.ElideRight
-                    font.pixelSize: 10
+                    font.pixelSize: TypographyScale.pixels(10)
                 }
             }
 
@@ -275,7 +273,7 @@ Item {
             elide: Text.ElideLeft
             color: row.colors.muted
             horizontalAlignment: Text.AlignRight
-            font.pixelSize: 12
+            font.pixelSize: TypographyScale.pixels(12)
         }
     }
     Rectangle {

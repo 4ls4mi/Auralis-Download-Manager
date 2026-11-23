@@ -571,6 +571,10 @@ AuralisWindow {
         automaticChecks: settingsWindow.automaticUpdateChecks
         presentation: settingsWindow.updatePresentation
     }
+    StartupSetup {
+        hostWindow: root
+        automatic: engine.interactiveSetup === true
+    }
     AddDownloadDialog { id: addDialog }
     // Preserve QObject ownership without making the dashboard their native parent.
     QtObject { id: downloadWindowOwner }
@@ -925,14 +929,18 @@ AuralisWindow {
         property string symbol: ""
         property string count: ""
         property color accent: root.colors.accent
-        readonly property color navigationAccent: MaterialTheme.safeAccent(
-            MaterialTheme.forcedAccent || accent, root.fogSlate || root.colors.light)
+        readonly property color navigationAccent: MaterialTheme.vividControlAccent(MaterialTheme.safeAccent(
+            MaterialTheme.forcedAccent || accent, root.fogSlate || root.colors.light), root.colors.light)
         readonly property var finish: MaterialTheme.buttonFinishes[root.colors.finish]
-        readonly property color pigment: MaterialTheme.mix(navigationAccent, root.colors.secondary, finish.tint, 1)
+        readonly property color pigment: MaterialTheme.controlPigment(navigationAccent, root.colors.secondary, finish.tint)
+        readonly property color baseFace: root.colors.navigationFill || root.colors.background
+        readonly property real idleStrength: MaterialTheme.controlIdleStrength(root.colors, finish)
+        readonly property color idleFace: MaterialTheme.mix(baseFace, pigment, idleStrength, 1)
         readonly property bool emphasized: checked || down || hovered || visualFocus
-        readonly property color face: MaterialTheme.mix(root.colors.navigationFill || root.colors.background,
+        readonly property color face: MaterialTheme.mix(baseFace,
             pigment, down ? finish.press : hovered || visualFocus ? finish.hover : finish.selected, 1)
-        readonly property color foreground: emphasized ? MaterialTheme.contrastInk(face) : root.sidebarInk
+        readonly property color actualFace: emphasized ? face : idleFace
+        readonly property color foreground: MaterialTheme.controlTextInk(root.sidebarInk, actualFace)
 
         hoverEnabled: true
         leftPadding: 9
@@ -944,9 +952,9 @@ AuralisWindow {
             spacing: 7
             DashboardIcon {
                 symbol: libraryButton.symbol
-                ink: libraryButton.emphasized ? libraryButton.foreground : libraryButton.navigationAccent
+                ink: MaterialTheme.controlIconInk(libraryButton.navigationAccent, libraryButton.actualFace)
                 relief: libraryButton.enabled
-                surface: libraryButton.emphasized ? libraryButton.face : root.colors.background
+                surface: libraryButton.actualFace
                 Layout.preferredWidth: 17
                 Layout.preferredHeight: 17
             }
@@ -956,24 +964,24 @@ AuralisWindow {
                 text: libraryButton.text
                 color: libraryButton.foreground
                 font.family: root.fontFamilyForText(text)
-                font.pixelSize: 12
+                font.pixelSize: TypographyScale.pixels(12)
                 font.weight: libraryButton.checked ? Font.DemiBold : Font.Normal
             }
             Label {
                 visible: libraryButton.count.length > 0
                 text: libraryButton.count
-                color: libraryButton.emphasized ? libraryButton.foreground : root.sidebarMuted
-                font.pixelSize: 11
+                color: MaterialTheme.controlTextInk(root.sidebarMuted, libraryButton.actualFace)
+                font.pixelSize: TypographyScale.pixels(11)
             }
         }
         background: Rectangle {
             id: libraryFace
             radius: root.materialDashboard ? 8 : 6
             color: libraryButton.emphasized ? libraryButton.face
-                : Qt.alpha(libraryButton.pigment, libraryButton.finish.idle)
+                : Qt.alpha(libraryButton.pigment, libraryButton.idleStrength)
             border.width: libraryButton.visualFocus ? 2 : 1
             border.color: libraryButton.visualFocus ? libraryButton.foreground
-                : Qt.alpha(libraryButton.pigment, .35 + libraryButton.finish.depth * .35)
+                : Qt.alpha(libraryButton.pigment, .45 + libraryButton.finish.depth * .35)
 
             ButtonLighting {
                 anchors.fill: parent
@@ -1050,7 +1058,7 @@ AuralisWindow {
                         Layout.fillWidth: true
                         text: qsTr("Auralis")
                         color: root.colors.ink
-                        font.pixelSize: 17
+                        font.pixelSize: TypographyScale.pixels(17)
                         font.weight: Font.Bold
                         elide: Text.ElideRight
                     }
@@ -1058,7 +1066,7 @@ AuralisWindow {
                         Layout.fillWidth: true
                         text: qsTr("Download Manager")
                         color: root.colors.muted
-                        font.pixelSize: 11
+                        font.pixelSize: TypographyScale.pixels(11)
                         elide: Text.ElideRight
                     }
                 }
@@ -1071,7 +1079,7 @@ AuralisWindow {
                 Label {
                     text: root.online ? qsTr("Connected") : qsTr("Offline")
                     color: root.colors.muted
-                    font.pixelSize: 12
+                    font.pixelSize: TypographyScale.pixels(12)
                 }
                 CaptionControls {
                     id: captionActions
@@ -1203,6 +1211,7 @@ AuralisWindow {
                             AppMenuItem { symbol: "keys"; text: qsTr("Keyboard shortcuts"); onTriggered: shortcutsDialog.open() }
                             AppMenuItem { symbol: "web"; text: qsTr("Browser integration"); onTriggered: settingsWindow.showCategory("Browser Integration") }
                             AppMenuItem { symbol: "refresh"; text: qsTr("Check for updates"); enabled: updateNotice.updateSupported; onTriggered: updateNotice.manualCheck() }
+                            AppMenuItem { symbol: "details"; text: qsTr("Updates & about"); onTriggered: settingsWindow.showCategory("Updates") }
                             AppMenuItem { symbol: "details"; text: qsTr("Project guide"); onTriggered: Qt.openUrlExternally("https://github.com/4ls4mi/Auralis-Download-Manager#guides-and-recovery") }
                         }
                     }
@@ -1311,11 +1320,6 @@ AuralisWindow {
             onActionRequested: root.showUpdates()
         }
 
-        ChromeExtensionOffer {
-            Layout.fillWidth: true
-            hostWindow: root
-        }
-
         Frame {
             visible: root.recoveryNotice !== null
             Layout.fillWidth: true
@@ -1413,7 +1417,7 @@ AuralisWindow {
                             leftPadding: 8
                             topPadding: 9
                             bottomPadding: 4
-                            font.pixelSize: 12
+                            font.pixelSize: TypographyScale.pixels(12)
                             font.weight: Font.DemiBold
                         }
                         Repeater {
@@ -1437,7 +1441,7 @@ AuralisWindow {
                             leftPadding: 8
                             topPadding: 9
                             bottomPadding: 4
-                            font.pixelSize: 12
+                            font.pixelSize: TypographyScale.pixels(12)
                             font.weight: Font.DemiBold
                         }
                         Repeater {
@@ -1498,7 +1502,7 @@ AuralisWindow {
                                 Layout.fillWidth: true
                                 text: root.filterTitle
                                 color: root.colors.ink
-                                font.pixelSize: root.studioChrome ? (root.compact ? 20 : 24) : (root.compact ? 17 : 22)
+                                font.pixelSize: TypographyScale.pixels(root.studioChrome ? (root.compact ? 20 : 24) : (root.compact ? 17 : 22))
                                 font.weight: Font.Bold
                                 elide: Text.ElideRight
                             }
@@ -1506,7 +1510,7 @@ AuralisWindow {
                                 Layout.fillWidth: true
                                 text: qsTr("%1 of %2 downloads").arg(rows.count).arg(root.downloads.length)
                                 color: root.colors.muted
-                                font.pixelSize: 11
+                                font.pixelSize: TypographyScale.pixels(11)
                             }
                         }
                         GlassComboBox {
@@ -1562,11 +1566,11 @@ AuralisWindow {
                                 spacing: 13
                                 Column {
                                     spacing: 3
-                                    Label { text: qsTr("Total speed"); color: root.colors.muted; font.pixelSize: 11 }
+                                    Label { text: qsTr("Total speed"); color: root.colors.muted; font.pixelSize: TypographyScale.pixels(11) }
                                     Label {
                                         text: TransferData.rate(engine.dashboard.speed || 0)
                                         color: root.colors.ink
-                                        font.pixelSize: 19
+                                        font.pixelSize: TypographyScale.pixels(19)
                                         font.weight: Font.DemiBold
                                     }
                                 }
@@ -1596,12 +1600,12 @@ AuralisWindow {
                                 Label {
                                     text: qsTr("Active downloads")
                                     color: root.colors.summaryInk || root.colors.ink
-                                    font.pixelSize: 11
+                                    font.pixelSize: TypographyScale.pixels(11)
                                 }
                                 Label {
                                     text: String(root.counts.downloading)
                                     color: root.colors.summaryInk || root.colors.ink
-                                    font.pixelSize: 21
+                                    font.pixelSize: TypographyScale.pixels(21)
                                     font.weight: Font.DemiBold
                                 }
                             }
@@ -1618,7 +1622,7 @@ AuralisWindow {
                                 anchors.fill: parent
                                 anchors.margins: 10
                                 spacing: 3
-                                Label { text: qsTr("Connections"); color: root.colors.muted; font.pixelSize: 11 }
+                                Label { text: qsTr("Connections"); color: root.colors.muted; font.pixelSize: TypographyScale.pixels(11) }
                                 Repeater {
                                     model: connectionSummary.workers
                                     delegate: Rectangle {
@@ -1859,7 +1863,7 @@ AuralisWindow {
                             id: footerMetric
                             anchors.centerIn: parent
                             spacing: 2
-                            Label { text: modelData.title; color: root.colors.muted; font.pixelSize: 11 }
+                            Label { text: modelData.title; color: root.colors.muted; font.pixelSize: TypographyScale.pixels(11) }
                             Label { text: modelData.value; color: root.colors.ink; font.weight: Font.DemiBold }
                         }
                     }
@@ -1883,7 +1887,7 @@ AuralisWindow {
                     textFormat: Text.PlainText
                     color: root.actionError ? root.colors.destructive : root.colors.muted
                     elide: Text.ElideRight
-                    font.pixelSize: 11
+                    font.pixelSize: TypographyScale.pixels(11)
                     PlainTextToolTip {
                         visible: statusHover.hovered && statusMessage.text.length > 20
                         text: statusMessage.text

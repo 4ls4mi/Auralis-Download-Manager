@@ -50,7 +50,8 @@ ColumnLayout {
     function previewFont(text, size, weight) {
         const fallback = fontSettings.interfaceFont
         const selected = fontSettings.fontForText(text)
-        return Qt.font({family: selected.family || fallback.family, pixelSize: size, weight: weight})
+        return Qt.font({family: selected.family || fallback.family,
+            pixelSize: TypographyScale.pixels(size), weight: weight})
     }
 
     component ScriptFonts: ColumnLayout {
@@ -88,6 +89,14 @@ ColumnLayout {
             valueRole: "value"
             currentIndex: script.selectedIndex
             Accessible.name: script.caption
+            fontOptionPreview: family => {
+                const selected = root.fontSettings.previewFont(family)
+                return {
+                    text: script.sampleTitle,
+                    font: Qt.font({family: selected.family,
+                        pixelSize: TypographyScale.pixels(19), weight: Font.DemiBold})
+                }
+            }
             onActivated: {
                 script.familyRequested(currentValue)
                 if (script.selectionFailed)
@@ -139,6 +148,85 @@ ColumnLayout {
             color: root.colors.destructive
             wrapMode: Text.WordWrap
         }
+    }
+
+    component ScaleChoice: ColumnLayout {
+        id: setting
+
+        required property string caption
+        required property int selectedPercent
+        required property var choices
+        required property var setter
+        readonly property var options: Array.from(choices ?? [100], value => ({
+            label: qsTr("%1%").arg(value), value: value
+        }))
+        readonly property int selectedIndex: Math.max(0, options.findIndex(option => option.value === selectedPercent))
+        property bool saveFailed: false
+
+        Layout.fillWidth: true
+        Layout.preferredWidth: 1
+        Layout.alignment: Qt.AlignTop
+        spacing: 6
+
+        Label {
+            Layout.fillWidth: true
+            text: setting.caption
+            color: root.colors.text
+            font.weight: Font.DemiBold
+            wrapMode: Text.WordWrap
+        }
+
+        GlassComboBox {
+            Layout.fillWidth: true
+            model: setting.options
+            textRole: "label"
+            valueRole: "value"
+            currentIndex: setting.selectedIndex
+            Accessible.name: setting.caption
+            onActivated: {
+                setting.saveFailed = !setting.setter(currentValue)
+                if (setting.saveFailed)
+                    currentIndex = Qt.binding(() => setting.selectedIndex)
+            }
+        }
+
+        Label {
+            Layout.fillWidth: true
+            visible: setting.saveFailed
+            text: qsTr("Auralis could not save this setting.")
+            color: root.colors.destructive
+            wrapMode: Text.WordWrap
+        }
+    }
+
+    GridLayout {
+        Layout.fillWidth: true
+        columns: width >= 540 ? 2 : 1
+        columnSpacing: 14
+        rowSpacing: 13
+
+        ScaleChoice {
+            caption: qsTr("Font size")
+            selectedPercent: root.fontSettings.fontSizePercent ?? 100
+            choices: root.fontSettings.fontSizeChoices
+            setter: value => root.fontSettings.setFontSizePercent(value)
+        }
+
+        ScaleChoice {
+            caption: qsTr("Interface scale")
+            selectedPercent: root.fontSettings.interfaceScalePercent ?? 100
+            choices: root.fontSettings.interfaceScaleChoices
+            setter: value => root.fontSettings.setInterfaceScalePercent(value)
+        }
+    }
+
+    Label {
+        Layout.fillWidth: true
+        text: root.fontSettings.interfaceScalePercent !== root.fontSettings.activeInterfaceScalePercent
+            ? qsTr("Restart Auralis to apply the new interface scale.")
+            : qsTr("Interface scale resizes the entire app and takes effect after restart.")
+        color: root.colors.muted
+        wrapMode: Text.WordWrap
     }
 
     Label {

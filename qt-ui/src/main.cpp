@@ -502,16 +502,27 @@ int main(int argc, char **argv)
         return 0;
     }
 #endif
+    bool smoke = false;
     for (int index = 1; index < argc; ++index) {
         if (std::strcmp(argv[index], "--engine-smoke") == 0) {
+            smoke = true;
             qInstallMessageHandler(writeSmokeLog);
             qInfo("Smoke: constructing the Qt application.");
             break;
         }
     }
+    QCoreApplication::setApplicationName(QStringLiteral("Auralis Download Manager"));
+    QCoreApplication::setOrganizationName(QStringLiteral("Auralis"));
+    const QByteArray inheritedScale = qgetenv("QT_SCALE_FACTOR");
+    const int activeInterfaceScale = smoke ? 100 : Typography::applyStartupInterfaceScale();
     QApplication app(argc, argv);
-    app.setApplicationName(QStringLiteral("Auralis Download Manager"));
-    app.setOrganizationName(QStringLiteral("Auralis"));
+    // Qt caches the factor during startup. Restore the environment for child processes.
+    if (activeInterfaceScale != 100) {
+        if (inheritedScale.isNull())
+            qunsetenv("QT_SCALE_FACTOR");
+        else
+            qputenv("QT_SCALE_FACTOR", inheritedScale);
+    }
     app.setApplicationVersion(QStringLiteral(AURALIS_VERSION));
     QIcon appIcon(QStringLiteral(":/auralis/auralis.ico"));
     if (appIcon.availableSizes().isEmpty())
@@ -520,7 +531,6 @@ int main(int argc, char **argv)
     app.setQuitOnLastWindowClosed(false);
 
     const QStringList arguments = app.arguments();
-    const bool smoke = arguments.contains(QStringLiteral("--engine-smoke"));
     if (smoke) {
         qInfo("Smoke: Qt platform initialized.");
         const QString profile = qEnvironmentVariable("MDM_DATA_DIR");
@@ -544,7 +554,7 @@ int main(int argc, char **argv)
     QQuickWindow::setDefaultAlphaBuffer(true);
 
     // QML bindings must be destroyed before their native context objects.
-    Typography typography;
+    Typography typography(activeInterfaceScale);
     std::optional<Engine> engineLifetime;
     QQmlApplicationEngine qml;
     Engine &engine = engineLifetime.emplace(&qml, startHidden, smoke);

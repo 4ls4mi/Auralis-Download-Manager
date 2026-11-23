@@ -62,6 +62,16 @@ function Test-InstalledIcon {
     Write-Host 'Verified the packaged shortcut icon and every native executable icon frame.'
 }
 
+function Test-PublisherMetadata {
+    foreach ($file in @($exe, $env:AURALIS_QT_INSTALLER)) {
+        $info = [Diagnostics.FileVersionInfo]::GetVersionInfo($file)
+        if ($info.CompanyName -ne 'Alsami') {
+            throw "Publisher metadata is missing from $file."
+        }
+    }
+    Write-Host 'Verified Alsami publisher metadata on the application and installer.'
+}
+
 Add-Type -TypeDefinition @'
 using System;
 using System.Collections.Generic;
@@ -132,6 +142,7 @@ try {
         throw 'The standalone Qt installation is incomplete.'
     }
     Test-InstalledIcon
+    Test-PublisherMetadata
     Run-Fixture $exe @('--engine-smoke', '--device=software') 90000
     if (!(Test-Path $marker)) { throw 'The installed application did not verify start, pause, resume, and transfer integrity.' }
     Get-Content -LiteralPath $marker | ForEach-Object { Write-Host $_ }

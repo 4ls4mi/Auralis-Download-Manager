@@ -19,7 +19,10 @@ AuralisWindow {
     readonly property var colors: MaterialTheme.profile(material)
     readonly property string transferLayout: colors.layout || ""
     readonly property bool sideTabs: ["fogSlate", "violetRail", "coralSlate"].includes(transferLayout)
-    readonly property bool useCompactActions: height < 470
+    readonly property bool compactWidth: width < 670
+    readonly property bool compactHeight: height < 470
+    readonly property bool railTabs: sideTabs && !compactWidth && height >= 420
+    readonly property bool useCompactActions: compactHeight
     readonly property color detailDivider: colors.surfaceLine || colors.divider
     readonly property color summaryInk: sideTabs && colors.summaryInk ? colors.summaryInk : colors.text
     readonly property int recoveryTab: 3
@@ -456,14 +459,14 @@ AuralisWindow {
             }
         }
         ToolBar {
-            visible: !root.sideTabs
+            visible: !root.railTabs
             Layout.fillWidth: true
-            padding: 8
+            padding: root.compactHeight ? 5 : 8
             leftPadding: root.resizeInset + 2
             rightPadding: root.resizeInset + 2
             background: GlassSurface { material: root.material; role: "toolbar"; backdropAvailable: root.backdropAvailable }
             contentItem: Flow {
-                spacing: 7
+                spacing: root.compactWidth ? 5 : 7
                 Repeater {
                     model: root.transferTabs
                     delegate: GlassButton {
@@ -496,11 +499,11 @@ AuralisWindow {
         id: water
         property real phase: 0
         property real slowPhase: 0
+        property real progressPhase: 0
         property real activeSeconds: 0
         property real nextPaint: 0
-        // Match display frames for the ordinary connection grid. Limit larger
-        // Canvas batches while advancing all motion at the same elapsed speed.
-        readonly property real paintInterval: 1 / (root.workerRows.length > 16 ? 30 : root.workerRows.length > 8 ? 40 : 60)
+        // Keep both eight- and sixteen-connection grids at display cadence.
+        readonly property real paintInterval: 1 / (root.workerRows.length > 16 ? 45 : 60)
         readonly property bool animateConnections: WindowAppearance.connectionAnimation !== "none"
             && root.workerRows.some(connection => connection.state === "Receiving")
         readonly property bool animateProgressPipe: root.displayFlow && WindowAppearance.progressAnimation !== "none"
@@ -512,12 +515,14 @@ AuralisWindow {
             const sample = activeSeconds + .002
             // Render each ordinary display frame. Only sample that clock on
             // very fast displays or when a larger connection grid costs more.
-            const sampleFrames = root.workerRows.length > 8 || smoothFrameTime < 1 / 75
+            const sampleFrames = root.workerRows.length > 16 || smoothFrameTime < 1 / 75
             if (sampleFrames && sample < nextPaint)
                 return
             nextPaint = (Math.floor(sample / paintInterval) + 1) * paintInterval
             const turn = Math.PI * 2
             phase = activeSeconds % 1.12 / 1.12 * turn
+            if (WindowAppearance.progressAnimation === "water")
+                progressPhase = activeSeconds % .61 / .61 * turn
             if (WindowAppearance.connectionAnimation === "jelly" || WindowAppearance.progressAnimation === "jelly")
                 slowPhase = activeSeconds % 2.84 / 2.84 * turn
         }
@@ -525,7 +530,7 @@ AuralisWindow {
 
     Pane {
         id: transferRail
-        visible: root.sideTabs
+        visible: root.railTabs
         anchors.top: parent.top
         anchors.bottom: parent.bottom
         anchors.bottomMargin: root.resizeInset
@@ -631,24 +636,41 @@ AuralisWindow {
 
     ScrollView {
         id: view
+        objectName: "downloadDetailsScroll"
         anchors.top: parent.top
         anchors.bottom: root.useCompactActions ? compactActions.top : parent.bottom
         anchors.bottomMargin: root.useCompactActions ? 0 : root.resizeInset
-        anchors.left: root.sideTabs ? transferRail.right : parent.left
+        anchors.left: root.railTabs ? transferRail.right : parent.left
         anchors.right: parent.right
         anchors.rightMargin: root.resizeInset
         clip: true
-        padding: root.transferLayout === "fogSlate" ? 10 : 12
+        padding: root.compactWidth || root.compactHeight ? 7 : root.transferLayout === "fogSlate" ? 10 : 12
         contentWidth: availableWidth
+        contentHeight: scrollContent.implicitHeight
         ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+        ScrollBar.vertical: ScrollBar {
+            id: detailsScrollBar
+            policy: ScrollBar.AsNeeded
+            implicitWidth: 7
+            padding: 1
+            contentItem: Rectangle {
+                implicitWidth: 5
+                radius: 2.5
+                color: root.colors.secondary
+                opacity: detailsScrollBar.active ? .86 : .60
+            }
+            background: Item {}
+        }
         Item {
+            id: scrollContent
             width: view.availableWidth
+            height: implicitHeight
             implicitHeight: sections.implicitHeight
 
             ColumnLayout {
                 id: sections
                 anchors.fill: parent
-                spacing: 10
+                spacing: root.compactWidth || root.compactHeight ? 6 : 8
 
                 Label {
                     visible: !root.item
@@ -657,17 +679,19 @@ AuralisWindow {
                 }
 
                 Pane {
+                    objectName: "downloadStatusCard"
                     visible: !!root.item && root.activeTab === 0
                     Layout.fillWidth: true
-                    padding: root.transferLayout === "fogSlate" ? 12 : 15
-                    leftPadding: root.displayFlow ? 27 : padding
+                    Layout.minimumWidth: 0
+                    padding: root.compactWidth || root.compactHeight ? 8 : root.transferLayout === "fogSlate" ? 11 : 13
+                    leftPadding: root.displayFlow ? 31 : padding
                     background: GlassSurface {
                         material: root.material
                         role: root.sideTabs ? "summary" : "card"
                         backdropAvailable: root.backdropAvailable
                     }
                     contentItem: ColumnLayout {
-                        spacing: root.transferLayout === "fogSlate" ? 8 : 10
+                        spacing: root.compactWidth || root.compactHeight ? 5 : 8
                         Label {
                             Layout.fillWidth: true
                             text: root.item ? root.item.file : ""
@@ -675,7 +699,7 @@ AuralisWindow {
                             elide: Text.ElideMiddle
                             color: root.summaryInk
                             font.family: root.fontFamilyForText(text)
-                            font.pixelSize: 19
+                            font.pixelSize: TypographyScale.pixels(19)
                             font.bold: true
                         }
                         Label {
@@ -688,9 +712,10 @@ AuralisWindow {
                         }
                         GridLayout {
                             Layout.fillWidth: true
-                            columns: width >= (root.sideTabs ? 540 : 560) ? 2 : 1
-                            rowSpacing: 6
-                            columnSpacing: 16
+                            Layout.minimumWidth: 0
+                            columns: width >= 432 ? 2 : 1
+                            rowSpacing: root.compactWidth || root.compactHeight ? 4 : 6
+                            columnSpacing: root.compactWidth ? 9 : 14
                             Repeater {
                                 id: measurements
                                 property var cells: {
@@ -714,13 +739,23 @@ AuralisWindow {
                                     required property int index
                                     readonly property var cell: measurements.cells[index]
                                     Layout.fillWidth: true
+                                    Layout.minimumWidth: 0
+                                    spacing: 7
                                     Label {
-                                    text: measurement.cell.label
-                                    color: root.colors.muted
-                                    Layout.preferredWidth: root.sideTabs ? 132 : 116
-                                    elide: Text.ElideRight
-                                }
-                                    Label { text: measurement.cell.value; textFormat: Text.PlainText; color: root.summaryInk; elide: Text.ElideRight; Layout.fillWidth: true }
+                                        Layout.minimumWidth: 0
+                                        Layout.preferredWidth: root.compactWidth ? 106 : 115
+                                        text: measurement.cell.label
+                                        color: root.colors.muted
+                                        wrapMode: Text.Wrap
+                                    }
+                                    Label {
+                                        Layout.fillWidth: true
+                                        Layout.minimumWidth: 0
+                                        text: measurement.cell.value
+                                        textFormat: Text.PlainText
+                                        color: root.summaryInk
+                                        wrapMode: Text.Wrap
+                                    }
                                 }
                             }
                         }
@@ -730,16 +765,17 @@ AuralisWindow {
                             implicitHeight: Math.max(38, progressPercent.implicitHeight)
                             GlassProgress {
                                 id: downloadProgress
+                                objectName: "detailProgressShape"
                                 anchors.left: parent.left
                                 anchors.verticalCenter: parent.verticalCenter
-                                width: Math.max(0, Math.min(progressLine.width * .53,
-                                    progressLine.width - progressPercent.width - progressPercent.anchors.leftMargin))
+                                width: Math.max(0, progressLine.width - progressPercent.width - progressPercent.anchors.leftMargin)
                                 height: 38
                                 value: Transfer.fraction(root.item)
                                 animated: root.animateTransfer
                                 animationStyle: WindowAppearance.progressAnimation
+                                externalPhase: animationStyle === "water" && root.displayFlow ? water.progressPhase : -1
+                                lightingStyle: WindowAppearance.progressLighting
                                 shape: root.progressShape
-                                fillStyle: WindowAppearance.progressFill
                                 startColor: root.progressColors[0]
                                 endColor: root.progressColors[1]
                                 trackColor: root.colors.background
@@ -780,22 +816,25 @@ AuralisWindow {
                     id: inlineActions
                     visible: !root.useCompactActions
                     Layout.fillWidth: true
-                    implicitHeight: visible ? downloadActions.implicitHeight + 4 : 0
+                    implicitHeight: visible ? downloadActions.implicitHeight + 1 : 0
                 }
 
                 GridLayout {
                     id: transferOverview
+                    objectName: "transferOverview"
                     visible: !!root.item && root.activeTab === 0
                     Layout.fillWidth: true
-                    columns: root.transferLayout !== "coralSlate" && width >= (root.sideTabs ? 535 : 630) ? 2 : 1
-                    columnSpacing: root.transferLayout === "fogSlate" ? 8 : 10
-                    rowSpacing: root.transferLayout === "fogSlate" ? 8 : 10
+                    Layout.minimumWidth: 0
+                    columns: root.transferLayout !== "coralSlate" && width >= (root.railTabs ? 560 : 585) ? 2 : 1
+                    columnSpacing: 8
+                    rowSpacing: root.compactWidth || root.compactHeight ? 6 : 8
                     Pane {
                         Layout.fillWidth: true
+                        Layout.minimumWidth: 0
                         Layout.preferredWidth: root.transferLayout === "violetRail" ? 315 : 355
-                        Layout.alignment: root.sideTabs ? Qt.AlignTop : Qt.AlignVCenter
-                        padding: 12
-                        leftPadding: root.displayFlow ? 27 : padding
+                        Layout.alignment: Qt.AlignTop
+                        padding: root.compactWidth || root.compactHeight ? 8 : 11
+                        leftPadding: root.displayFlow ? 31 : padding
                         background: GlassSurface {
                             material: root.material
                             role: root.sideTabs ? "connections" : "card"
@@ -818,13 +857,17 @@ AuralisWindow {
                             }
                             GridLayout {
                                 id: waterGrid
+                                objectName: "downloadConnectionGrid"
                                 Layout.fillWidth: true
-                                Layout.topMargin: root.displayFlow ? 10 : 0
-                                columns: 8
-                                rowSpacing: root.displayFlow ? 16 : 5
-                                columnSpacing: 5
+                                Layout.minimumWidth: 0
+                                Layout.topMargin: root.displayFlow && root.workerRows.length ? 15 : 0
+                                columns: Math.max(1, Math.min(8,
+                                    Math.floor((width + columnSpacing) / ((root.compactWidth ? 32 : 35) + columnSpacing))))
+                                rowSpacing: root.displayFlow ? 22 : 5
+                                columnSpacing: 4
                                 Repeater {
                                     id: waterWorkers
+                                    objectName: "downloadConnectionWorkers"
                                     model: root.workerRows.length
                                     delegate: Item {
                                         id: worker
@@ -832,17 +875,22 @@ AuralisWindow {
                                         readonly property var connection: root.workerRows[index] || {}
                                         readonly property var saved: Transfer.assigned(connection.id, root.telemetry && root.telemetry.segments)
                                         readonly property bool receiving: root.runningTransfer && connection.state === "Receiving"
-                                        readonly property real liquidSurface: chunkWater.surfaceY
+                                        readonly property real liquidSurface: chunkWater.landingY
+                                        readonly property real liquidX: chunkWater.landingX
                                         Layout.fillWidth: true
-                                        Layout.preferredWidth: 31
-                                        Layout.preferredHeight: 39
+                                        Layout.minimumWidth: 0
+                                        Layout.preferredWidth: 34
+                                        Layout.preferredHeight: root.compactWidth || root.compactHeight ? 34 : 39
+                                        onReceivingChanged: transferTubes.requestPaint()
                                         ConnectionWater {
                                             id: chunkWater
                                             anchors.fill: parent
                                             material: root.material
                                             shape: root.connectionShape
-                                            fillStyle: WindowAppearance.connectionFill
                                             animationStyle: WindowAppearance.connectionAnimation
+                                            lightingStyle: WindowAppearance.connectionLighting
+                                            channelIndex: worker.index
+                                            connected: root.displayFlow
                                             value: worker.saved
                                             paintingPaused: root.interactiveFrame
                                             receiving: worker.receiving
@@ -861,7 +909,7 @@ AuralisWindow {
                                             style: Text.Outline
                                             styleColor: root.colors.shade
                                             text: Number(worker.connection.id) + 1
-                                            font.pixelSize: 11
+                                            font.pixelSize: TypographyScale.pixels(11)
                                         }
                                         HoverHandler { id: workerHover }
                                         ToolTip.visible: workerHover.hovered
@@ -878,10 +926,10 @@ AuralisWindow {
                     }
                     Pane {
                         Layout.fillWidth: true
+                        Layout.minimumWidth: 0
                         Layout.preferredWidth: root.transferLayout === "violetRail" ? 380 : 325
-                        Layout.alignment: root.sideTabs ? Qt.AlignTop : Qt.AlignVCenter
-                        Layout.topMargin: root.transferLayout === "violetRail" && transferOverview.columns === 2 ? 19 : 0
-                        padding: 12
+                        Layout.alignment: Qt.AlignTop
+                        padding: root.compactWidth || root.compactHeight ? 8 : 11
                         background: GlassSurface { material: root.material; role: "card"; backdropAvailable: root.backdropAvailable }
                         contentItem: ColumnLayout {
                             spacing: 8
@@ -891,8 +939,11 @@ AuralisWindow {
                                 Label { text: root.item ? Transfer.rate(root.item.speed) : "—"; color: root.colors.muted }
                             }
                             TransferGraph {
+                                objectName: "downloadSpeedGraph"
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: root.transferLayout === "fogSlate" ? 92 : 106
+                                Layout.minimumWidth: 0
+                                Layout.preferredHeight: root.compactWidth || root.compactHeight ? 70
+                                    : root.transferLayout === "fogSlate" ? 88 : 104
                                 samples: root.speedSamples
                                 paintingPaused: root.interactiveFrame
                                 animationStyle: WindowAppearance.graphAnimation
@@ -919,7 +970,7 @@ AuralisWindow {
                             text: qsTr("Download recovery")
                             color: root.colors.text
                             font.bold: true
-                            font.pixelSize: 16
+                            font.pixelSize: TypographyScale.pixels(16)
                         }
                         Label {
                             visible: root.message !== ""
@@ -1124,7 +1175,10 @@ AuralisWindow {
             }
 
             TransferTubes {
-                width: Math.min(parent.width, waterWorkers.count > 0 ? waterGrid.width + 52 : 34)
+                id: transferTubes
+                objectName: "downloadTransferTubes"
+                width: Math.min(parent.width, waterWorkers.count > 0
+                    ? waterGrid.mapToItem(scrollContent, waterGrid.width, 0).x + 10 : 56)
                 height: parent.height
                 visible: root.displayFlow
                 sourceItem: transferSource
@@ -1133,10 +1187,13 @@ AuralisWindow {
                 workers: waterWorkers
                 phase: water.phase
                 slowPhase: water.slowPhase
+                progressPhase: water.progressPhase
                 paintingPaused: root.interactiveFrame
                 flowing: root.showWaterFlow
                 progressAnimation: WindowAppearance.progressAnimation
                 connectionAnimation: WindowAppearance.connectionAnimation
+                progressLighting: WindowAppearance.progressLighting
+                connectionLighting: WindowAppearance.connectionLighting
                 progressStart: root.progressColors[0]
                 progressEnd: root.progressColors[1]
                 connectionStart: root.connectionColors[0]

@@ -23,6 +23,7 @@ class Engine final : public QObject
     Q_PROPERTY(QString version READ version CONSTANT)
     Q_PROPERTY(bool startHidden READ startHidden CONSTANT)
     Q_PROPERTY(bool trayAvailable READ trayAvailable CONSTANT)
+    Q_PROPERTY(bool interactiveSetup READ interactiveSetup CONSTANT)
 
 public:
     Engine(QJSEngine *scriptEngine, bool startHidden, bool smoke, QObject *parent = nullptr);
@@ -37,6 +38,7 @@ public:
     QString version() const;
     bool startHidden() const { return m_startHidden; }
     bool trayAvailable() const;
+    bool interactiveSetup() const { return !m_smoke; }
     bool running() const { return m_service.isRunning(); }
 
     void start();
@@ -87,6 +89,7 @@ private:
     QThreadPool m_commands;
     QThreadPool m_localJobs;
     QThreadPool m_updateJobs;
+    QThreadPool m_releaseHistoryJobs;
     QThreadPool m_serviceThread;
     QFutureWatcher<QVariantMap> m_service;
     QTimer m_timer;

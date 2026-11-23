@@ -87,7 +87,7 @@ ColumnLayout {
         Label {
             Layout.fillWidth: true
             text: qsTr("Connected services")
-            font.pixelSize: 17
+            font.pixelSize: TypographyScale.pixels(17)
             font.weight: Font.DemiBold
             color: root.colors.text
         }
@@ -148,7 +148,7 @@ ColumnLayout {
                     visible: text.length > 0
                     elide: Text.ElideRight
                     text: entry.modelData.state || ""
-                    font.pixelSize: 11
+                    font.pixelSize: TypographyScale.pixels(11)
                     color: root.colors.muted
                 }
             }

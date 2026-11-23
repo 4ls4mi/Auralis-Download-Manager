@@ -77,13 +77,171 @@ pub fn help_doc(why: &str) -> String {
 /// Marks the data folder once a browser has started the host for the extension.
 const SEEN: &str = "extension-seen";
 const HANDSHAKE: &str = "extension-recent-handshake";
-const CHROME_STORE_HANDSHAKE: &str = "extension-chrome-store-handshake";
 const HANDSHAKE_LIFETIME: Duration = Duration::from_secs(120);
-const GOOGLE_CHROME: &str = "Google Chrome";
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StoreBrowser {
+    Chrome,
+    Edge,
+}
+
+impl StoreBrowser {
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::Chrome => "chrome",
+            Self::Edge => "edge",
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Chrome => "Google Chrome",
+            Self::Edge => "Microsoft Edge",
+        }
+    }
+
+    fn marker(self) -> &'static str {
+        match self {
+            Self::Chrome => "extension-chrome-store-handshake",
+            Self::Edge => "extension-edge-store-handshake",
+        }
+    }
+
+    /// The browser owning the Windows HTTPS handler or launching the native host. Chromium
+    /// forks can use chrome.exe and identify themselves as Chrome in their User-Agent.
+    pub fn from_windows_executable(program: &str) -> Option<Self> {
+        let path = program.to_ascii_lowercase().replace('/', "\\");
+        let (directory, executable) = path.rsplit_once('\\')?;
+        let (vendor, channel) = directory.strip_suffix(r"\application")?.rsplit_once('\\')?;
+        if executable == "chrome.exe"
+            && vendor.ends_with(r"\google")
+            && ["chrome", "chrome beta", "chrome dev", "chrome sxs"].contains(&channel)
+        {
+            return Some(Self::Chrome);
+        }
+        if executable == "msedge.exe"
+            && vendor.ends_with(r"\microsoft")
+            && ["edge", "edge beta", "edge dev", "edge sxs"].contains(&channel)
+        {
+            return Some(Self::Edge);
+        }
+        None
+    }
+
+    /// Discover the official store copy in the default data folder for this Windows channel.
+    /// A manifest alone does not mean the extension is enabled or connected.
+    pub fn windows_extension_present(self, program: &str) -> bool {
+        let Some(root) = std::env::var_os("LOCALAPPDATA").map(std::path::PathBuf::from) else {
+            return false;
+        };
+        if !root.is_absolute() || Self::from_windows_executable(program) != Some(self) {
+            return false;
+        }
+        let Some(channel) = program.rsplit(['\\', '/']).nth(2) else {
+            return false;
+        };
+        let vendor = match self {
+            Self::Chrome => "Google",
+            Self::Edge => "Microsoft",
+        };
+        Self::extension_present_in(&root.join(vendor).join(channel).join("User Data"))
+    }
+
+    fn extension_present_in(root: &Path) -> bool {
+        let Some(id) = store_id() else { return false };
+        if !root.ancestors().all(plain_directory) {
+            return false;
+        }
+        let profiles = std::fs::read_dir(root)
+            .into_iter()
+            .flatten()
+            .take(512)
+            .flatten();
+        for profile in profiles {
+            let name = profile.file_name();
+            let Some(name) = name.to_str() else { continue };
+            if name != "Default"
+                && !name
+                    .strip_prefix("Profile ")
+                    .is_some_and(|n| decimal(n) && n.parse::<u32>().is_ok())
+            {
+                continue;
+            }
+            let profile = profile.path();
+            let extensions = profile.join("Extensions");
+            let extension = extensions.join(id);
+            if ![&profile, &extensions, &extension]
+                .into_iter()
+                .all(|path| plain_directory(path))
+            {
+                continue;
+            }
+            let versions = std::fs::read_dir(extension)
+                .into_iter()
+                .flatten()
+                .take(128)
+                .flatten();
+            for version in versions {
+                if version
+                    .file_name()
+                    .to_str()
+                    .is_some_and(extension_version_folder)
+                    && plain_directory(&version.path())
+                    && plain_metadata(&version.path().join("manifest.json"))
+                        .is_some_and(|metadata| metadata.is_file())
+                {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+}
+
+fn plain_metadata(path: &Path) -> Option<std::fs::Metadata> {
+    let metadata = std::fs::symlink_metadata(path).ok()?;
+    if metadata.file_type().is_symlink() {
+        return None;
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        const REPARSE_POINT: u32 = 0x400;
+        if metadata.file_attributes() & REPARSE_POINT != 0 {
+            return None;
+        }
+    }
+    Some(metadata)
+}
+
+fn plain_directory(path: &Path) -> bool {
+    plain_metadata(path).is_some_and(|metadata| metadata.is_dir())
+}
+
+fn extension_version_folder(name: &str) -> bool {
+    let Some((version, generation)) = name.split_once('_') else {
+        return false;
+    };
+    decimal(generation)
+        && generation.parse::<u32>().is_ok()
+        && (1..=4).contains(&version.split('.').count())
+        && version
+            .split('.')
+            .all(|component| decimal(component) && component.parse::<u16>().is_ok())
+}
+
+fn decimal(value: &str) -> bool {
+    !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_digit())
+}
 
 /// The host, started by a browser for the extension: the extension is installed there. The
 /// file holds one line per browser (`capture::browser_named`), with the extension's version.
-pub fn mark_seen(browser: &str, version: &str, extension_id: Option<&str>) {
+pub fn mark_seen(
+    browser: &str,
+    version: &str,
+    extension_id: Option<&str>,
+    store_browser: Option<StoreBrowser>,
+) {
     let Some(dir) = crate::data_dir() else {
         return;
     };
@@ -92,8 +250,9 @@ pub fn mark_seen(browser: &str, version: &str, extension_id: Option<&str>) {
     let id = extension_id.filter(|id| valid_id(id)).unwrap_or("");
     let handshake = format!("{browser}\t{id}");
     let _ = crate::private_write(&dir.join(HANDSHAKE), handshake.as_bytes());
-    if browser == GOOGLE_CHROME && store_id() == Some(id) {
-        let _ = crate::private_write(&dir.join(CHROME_STORE_HANDSHAKE), handshake.as_bytes());
+    if let Some(store_browser) = store_browser.filter(|_| store_id() == Some(id)) {
+        let record = format!("{}\t{id}", store_browser.name());
+        let _ = crate::private_write(&dir.join(store_browser.marker()), record.as_bytes());
     }
     let file = dir.join(SEEN);
     let known = std::fs::read_to_string(&file).ok();
@@ -161,56 +320,47 @@ pub fn recently_connected_extension_id() -> Option<String> {
         })
 }
 
-/// A recent Chrome Web Store connection and separate historical familiarity with Chrome.
+/// A verified store connection and separate historical familiarity with this browser.
 #[derive(Debug, Default, PartialEq, Eq)]
-pub struct ChromeStoreStatus {
+pub struct BrowserStoreStatus {
     pub connected_recently: bool,
     pub store_previously_connected: bool,
-    pub chrome_previously_connected: bool,
+    pub browser_previously_connected: bool,
 }
 
-pub fn chrome_store_status() -> ChromeStoreStatus {
-    crate::data_dir().map_or_else(ChromeStoreStatus::default, |dir| {
-        chrome_store_status_in(&dir)
+pub fn browser_store_status(browser: StoreBrowser) -> BrowserStoreStatus {
+    crate::data_dir().map_or_else(BrowserStoreStatus::default, |dir| {
+        browser_store_status_in(&dir, browser)
     })
 }
 
-fn chrome_store_status_in(dir: &Path) -> ChromeStoreStatus {
+fn browser_store_status_in(dir: &Path, browser: StoreBrowser) -> BrowserStoreStatus {
     // The native host replaces this record atomically. Read its timestamp and both values
     // through one open handle so another browser cannot replace only half of the result.
-    let read_chrome_handshake = |name| {
-        let file = File::open(dir.join(name)).ok()?;
+    let store_handshake = (|| {
+        let file = File::open(dir.join(browser.marker())).ok()?;
         let modified = file.metadata().ok()?.modified().ok()?;
         let record = bounded_text(file, 256)?;
-        let (browser, id) = record.split_once('\t')?;
-        (browser == GOOGLE_CHROME).then_some((store_id() == Some(id), modified))
-    };
-    let handshake = read_chrome_handshake(HANDSHAKE);
-    // A different browser or unpacked extension can replace the shared record at any time.
-    // Preserve Chrome Store history separately and honor existing shared records on upgrade.
-    let store_handshake = read_chrome_handshake(CHROME_STORE_HANDSHAKE)
-        .into_iter()
-        .chain(handshake)
-        .filter_map(|(official, modified)| official.then_some(modified))
-        .max();
+        let (record_browser, id) = record.split_once('\t')?;
+        (record_browser == browser.name() && store_id() == Some(id)).then_some(modified)
+    })();
     let connected_recently = store_handshake
         .is_some_and(|modified| modified.elapsed().is_ok_and(|age| age < HANDSHAKE_LIFETIME));
     // Older records describe the browser and version only. They can prevent a repeat
     // invitation, but cannot identify which extension is installed in that browser.
-    let chrome_previously_connected = store_handshake.is_some()
-        || handshake.is_some()
+    let browser_previously_connected = store_handshake.is_some()
         || File::open(dir.join(SEEN))
             .ok()
             .and_then(|file| bounded_text(file, 16 * 1024))
             .is_some_and(|history| {
                 history
                     .lines()
-                    .any(|line| line.split('\t').next() == Some(GOOGLE_CHROME))
+                    .any(|line| line.split('\t').next() == Some(browser.name()))
             });
-    ChromeStoreStatus {
+    BrowserStoreStatus {
         connected_recently,
         store_previously_connected: store_handshake.is_some(),
-        chrome_previously_connected,
+        browser_previously_connected,
     }
 }
 
@@ -263,15 +413,20 @@ mod tests {
     }
 
     #[test]
-    fn chrome_store_status_uses_a_fresh_matching_handshake() {
+    fn store_status_requires_the_correct_browsers_verified_handshake() {
         let profile = tempfile::tempdir().unwrap();
         let profile = profile.path();
-        let handshake = profile.join(HANDSHAKE);
+        let handshake = profile.join(StoreBrowser::Chrome.marker());
         let history = profile.join(SEEN);
-        let status = || chrome_store_status_in(profile);
-        assert_eq!(status(), ChromeStoreStatus::default());
+        let status = || browser_store_status_in(profile, StoreBrowser::Chrome);
+        assert_eq!(status(), BrowserStoreStatus::default());
         std::fs::write(&history, "Google Chrome\t0.1.10\n").unwrap();
-        assert!(status().chrome_previously_connected);
+        std::fs::write(
+            profile.join(HANDSHAKE),
+            format!("Google Chrome\t{STORE_ID}"),
+        )
+        .unwrap();
+        assert!(status().browser_previously_connected);
         assert!(!status().connected_recently);
 
         for record in [
@@ -287,10 +442,10 @@ mod tests {
         std::fs::write(&handshake, format!("Google Chrome\t{STORE_ID}")).unwrap();
         assert_eq!(
             status(),
-            ChromeStoreStatus {
+            BrowserStoreStatus {
                 connected_recently: true,
                 store_previously_connected: true,
-                chrome_previously_connected: true,
+                browser_previously_connected: true,
             }
         );
         let old = std::time::SystemTime::now() - HANDSHAKE_LIFETIME - Duration::from_secs(1);
@@ -302,16 +457,62 @@ mod tests {
             .unwrap();
         assert!(!status().connected_recently);
         assert!(status().store_previously_connected);
-        assert!(status().chrome_previously_connected);
+        assert!(status().browser_previously_connected);
 
         std::fs::write(
-            profile.join(CHROME_STORE_HANDSHAKE),
-            format!("Google Chrome\t{STORE_ID}"),
+            profile.join(StoreBrowser::Edge.marker()),
+            format!("Microsoft Edge\t{STORE_ID}"),
         )
         .unwrap();
-        std::fs::write(&handshake, format!("Microsoft Edge\t{STORE_ID}")).unwrap();
-        assert!(status().connected_recently);
-        assert!(status().store_previously_connected);
+        assert!(!status().connected_recently);
+        assert!(browser_store_status_in(profile, StoreBrowser::Edge).connected_recently);
+    }
+
+    #[test]
+    fn windows_browser_requires_the_vendor_and_executable() {
+        assert_eq!(
+            StoreBrowser::from_windows_executable(
+                r"C:\Program Files\Google\Chrome\Application\chrome.exe"
+            ),
+            Some(StoreBrowser::Chrome)
+        );
+        assert_eq!(
+            StoreBrowser::from_windows_executable(
+                r"C:\Program Files (x86)\Microsoft\Edge Beta\Application\msedge.exe"
+            ),
+            Some(StoreBrowser::Edge)
+        );
+        assert_eq!(
+            StoreBrowser::from_windows_executable(r"C:\Imput\Helium\Application\chrome.exe"),
+            None
+        );
+        assert_eq!(
+            StoreBrowser::from_windows_executable(r"C:\Google\Chrome\Application\chromium.exe"),
+            None
+        );
+    }
+
+    #[test]
+    fn presence_checks_only_the_official_id_and_regular_profile_files() {
+        let root = tempfile::tempdir().unwrap();
+        let root = root.path().canonicalize().unwrap();
+        let profile = root.join("Profile 1").join("Extensions");
+        let other = profile.join(AURALIS_UNPACKED_ID).join("0.1.10_0");
+        let official = profile.join(STORE_ID).join("0.1.10_0");
+        std::fs::create_dir_all(&other).unwrap();
+        std::fs::write(other.join("manifest.json"), b"{}").unwrap();
+        assert!(!StoreBrowser::extension_present_in(&root));
+        std::fs::create_dir_all(&official).unwrap();
+        assert!(!StoreBrowser::extension_present_in(&root));
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(other.join("manifest.json"), official.join("manifest.json"))
+                .unwrap();
+            assert!(!StoreBrowser::extension_present_in(&root));
+            std::fs::remove_file(official.join("manifest.json")).unwrap();
+        }
+        std::fs::write(official.join("manifest.json"), b"{}").unwrap();
+        assert!(StoreBrowser::extension_present_in(&root));
     }
 
     #[test]

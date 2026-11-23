@@ -109,7 +109,7 @@ AuralisWindow {
             color: root.colors.ink
             font.family: root.fontFamilyForText(text)
             font.bold: true
-            font.pixelSize: 18
+            font.pixelSize: TypographyScale.pixels(18)
             elide: Text.ElideRight
             verticalAlignment: Text.AlignVCenter
         }

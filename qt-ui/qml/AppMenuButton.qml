@@ -17,7 +17,9 @@ Basic.Button {
     readonly property bool emphasized: enabled && (hovered || visualFocus || down || menuOpen)
     readonly property color actionAccent: MaterialTheme.vividControlAccent(MaterialTheme.forcedAccent || accent,
         profile.light)
-    readonly property color pigment: MaterialTheme.mix(actionAccent, profile.secondary, finish.tint, 1)
+    readonly property color pigment: MaterialTheme.controlPigment(actionAccent, profile.secondary, finish.tint)
+    readonly property real idleStrength: MaterialTheme.controlIdleStrength(profile, finish)
+    readonly property color idleFace: MaterialTheme.mix(colors.surface, pigment, idleStrength * .79, 1)
     readonly property color face: MaterialTheme.controlHighlight(pigment, down, hovered || visualFocus)
     readonly property color activeInk: MaterialTheme.contrastInk(face)
 
@@ -26,7 +28,7 @@ Basic.Button {
     rightPadding: 11
     topPadding: 4
     bottomPadding: 5
-    font.pixelSize: 14
+    font.pixelSize: TypographyScale.pixels(14)
     font.weight: Font.Medium
     palette.buttonText: railIcon.length ? "transparent" : emphasized ? activeInk : idleInk
     palette.highlightedText: activeInk
@@ -42,10 +44,9 @@ Basic.Button {
         visible: button.railIcon.length > 0
         symbol: button.railIcon
         relief: button.enabled
-        surface: button.emphasized ? button.face : button.colors.surface
+        surface: button.emphasized ? button.face : button.idleFace
         ink: !button.enabled ? button.colors.muted
-            : button.emphasized ? MaterialTheme.mix(button.activeInk, button.actionAccent, .16, 1)
-            : MaterialTheme.controlIconInk(button.actionAccent, button.colors.surface)
+            : MaterialTheme.controlIconInk(button.actionAccent, surface)
     }
 
     background: Item {
@@ -60,20 +61,20 @@ Basic.Button {
                 GradientStop {
                     position: 0
                     color: button.emphasized ? MaterialTheme.mix(button.face, button.profile.upper, button.finish.crown * .45, 1)
-                        : MaterialTheme.rgba(button.actionAccent, .21)
+                        : MaterialTheme.rgba(button.pigment, button.idleStrength)
                 }
                 GradientStop {
                     position: button.finish.shoulder
-                    color: button.emphasized ? button.face : MaterialTheme.rgba(button.actionAccent, .14)
+                    color: button.emphasized ? button.face : MaterialTheme.rgba(button.pigment, button.idleStrength * .79)
                 }
                 GradientStop {
                     position: .71
-                    color: button.emphasized ? button.face : MaterialTheme.rgba(button.actionAccent, .12)
+                    color: button.emphasized ? button.face : MaterialTheme.rgba(button.pigment, button.idleStrength * .71)
                 }
                 GradientStop {
                     position: 1
                     color: button.emphasized ? MaterialTheme.mix(button.face, button.profile.shade, button.finish.depth, 1)
-                        : MaterialTheme.rgba(button.actionAccent, .10)
+                        : MaterialTheme.rgba(button.pigment, button.idleStrength * .57)
                 }
             }
             border.width: button.visualFocus ? 1 : 0

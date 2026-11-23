@@ -176,7 +176,7 @@ ColumnLayout {
     component Heading: Label {
         Layout.fillWidth: true
         color: root.colors.text
-        font.pixelSize: 17
+        font.pixelSize: TypographyScale.pixels(17)
         font.weight: Font.DemiBold
         wrapMode: Text.WordWrap
     }

@@ -30,16 +30,16 @@ QtObject {
     }
 
     readonly property var buttonFinishes: ({
-        matte: {idle: .14, hover: .64, press: .37, selected: .53, tint: .10, opacity: .92,
-            lip: .77, crown: .15, shoulder: .29, depth: .14, light: .10, spread: .76, slant: .10},
-        satin: {idle: .15, hover: .60, press: .41, selected: .50, tint: .13, opacity: .92,
-            lip: .94, crown: .32, shoulder: .40, depth: .20, light: .15, spread: .49, slant: .73},
-        gloss: {idle: .23, hover: .82, press: .49, selected: .65, tint: .16, opacity: .76,
-            lip: 1.24, crown: .42, shoulder: .32, depth: .32, light: .22, spread: .29, slant: 1.00},
-        frosted: {idle: .19, hover: .68, press: .45, selected: .56, tint: .23, opacity: .83,
-            lip: 1.08, crown: .34, shoulder: .46, depth: .20, light: .17, spread: .66, slant: .27},
-        clear: {idle: .13, hover: .66, press: .40, selected: .52, tint: .20, opacity: .70,
-            lip: 1.11, crown: .24, shoulder: .26, depth: .28, light: .21, spread: .42, slant: .87}
+        matte: {idle: .25, hover: .77, press: .49, selected: .66, tint: .10, opacity: .92,
+            lip: .77, crown: .15, shoulder: .29, depth: .14, light: .14, spread: .76, slant: .10},
+        satin: {idle: .27, hover: .70, press: .47, selected: .61, tint: .13, opacity: .92,
+            lip: .94, crown: .32, shoulder: .40, depth: .20, light: .18, spread: .49, slant: .73},
+        gloss: {idle: .35, hover: .89, press: .56, selected: .74, tint: .16, opacity: .76,
+            lip: 1.24, crown: .42, shoulder: .32, depth: .32, light: .26, spread: .29, slant: 1.00},
+        frosted: {idle: .29, hover: .76, press: .51, selected: .65, tint: .23, opacity: .83,
+            lip: 1.08, crown: .34, shoulder: .46, depth: .20, light: .21, spread: .66, slant: .27},
+        clear: {idle: .31, hover: .82, press: .53, selected: .69, tint: .20, opacity: .70,
+            lip: 1.11, crown: .24, shoulder: .26, depth: .28, light: .24, spread: .42, slant: .87}
     })
 
     readonly property var indicatorPalettes: ({
@@ -57,7 +57,15 @@ QtObject {
         candy: { label: qsTr("Candy"), colors: ["#ff63a8", "#ffe36c"] },
         arctic: { label: qsTr("Arctic"), colors: ["#a4ffff", "#cfb5ff"] },
         fire: { label: qsTr("Fire"), colors: ["#ffdb32", "#fa3652"] },
-        forest: { label: qsTr("Forest"), colors: ["#aef244", "#049c91"] }
+        forest: { label: qsTr("Forest"), colors: ["#aef244", "#049c91"] },
+        "jade-brass": { label: qsTr("Jade & Brass"), colors: ["#087c72", "#e0ae58"] },
+        "cherry-cola": { label: qsTr("Cherry Cola"), colors: ["#a9194c", "#ff7376"] },
+        "pearl-opal": { label: qsTr("Pearl Opal"), colors: ["#a8b3e8", "#ffe2da"] },
+        "copper-sky": { label: qsTr("Copper Sky"), colors: ["#e46b39", "#6dd9fb"] },
+        "electric-lime": { label: qsTr("Electric Lime"), colors: ["#6357ff", "#c7fa43"] },
+        "blue-steel": { label: qsTr("Blue Steel"), colors: ["#527aa6", "#a1cbd6"] },
+        "grape-taffy": { label: qsTr("Grape Taffy"), colors: ["#863de2", "#ffa6db"] },
+        watermelon: { label: qsTr("Watermelon"), colors: ["#ff5271", "#70edaa"] }
     })
     readonly property var indicatorChoices: [{ value: "material", label: qsTr("Use material colors") }]
         .concat(Object.keys(indicatorPalettes).map(id => ({ value: id, label: indicatorPalettes[id].label })))
@@ -89,14 +97,14 @@ QtObject {
         }),
         "violet-rail": preset({
             name: qsTr("Violet Rail"), finish: "matte", shape: "round", opaque: true, cleanStudio: true,
-            layout: "violetRail", background: "#242634", edge: "#525069", shade: "#1c1d2a", upper: "#e7dcff",
-            accent: "#b199f7", secondary: "#9370f8", ink: "#f6f3ff", muted: "#c3bfd6",
-            divider: "#4c485e", positive: "#82dec1", caution: "#ffcf87", destructive: "#ff899b",
-            buttonFace: "#303045", surfaceLine: "#403e53", railFill: "#523a85",
+            layout: "violetRail", background: "#242634", edge: "#674f92", shade: "#1c1d2a", upper: "#e7dcff",
+            accent: "#a379ff", secondary: "#8558ff", ink: "#f6f3ff", muted: "#c3bfd6",
+            divider: "#4c485e", positive: "#4ce6a2", caution: "#ffba52", destructive: "#ff577f",
+            buttonFace: "#352751", buttonChroma: .13, surfaceLine: "#403e53", railFill: "#542da1",
             sidebarInk: "#f3efff", sidebarMuted: "#c4b6e4",
-            navigationFill: "#5a4488", navigationInk: "#fff7ff", rowSelectionFill: "#38334e",
+            navigationFill: "#54309a", navigationInk: "#fff7ff", rowSelectionFill: "#38334e",
             rowSelectionInk: "#fbf7ff", summaryFill: "#422f68", summaryInk: "#f7efff",
-            menuSurface: "#28253a", menuHighlight: "#614ba1", menuRail: "#ba9dff",
+            menuSurface: "#28253a", menuHighlight: "#7744db", menuRail: "#bc94ff",
             translucency: 0, gloss: .15, radius: 8, bevel: 1.4, panelRadius: 8,
             indicatorDefaults: {
                 progress: {palette: "violet", colors: ["#9069f8", "#ba98ff"]},
@@ -381,27 +389,57 @@ QtObject {
         return relativeLuminance(color) < .179 ? "#ffffff" : "#000000";
     }
 
+    function contrastRatio(first, second) {
+        const left = relativeLuminance(first);
+        const right = relativeLuminance(second);
+        return (Math.max(left, right) + .05) / (Math.min(left, right) + .05);
+    }
+
+    function controlTextInk(preferred, face) {
+        return contrastRatio(preferred, face) >= 4.5 ? preferred : contrastInk(face);
+    }
+
     function controlHighlight(color, pressed, hovered) {
-        return pressed ? mix(color, "#000000", .18, 1)
-            : hovered ? mix(color, "#ffffff", .16, 1) : rgba(color, 1);
+        const value = rgba(color, 1);
+        if (!pressed && !hovered) return value;
+        return Qt.hsva(Math.max(0, value.hsvHue), Math.min(.98, value.hsvSaturation * 1.08),
+            pressed ? value.hsvValue * .81 : Math.min(1, value.hsvValue * 1.12), 1);
     }
 
     function vividControlAccent(color, light) {
         const value = rgba(color, 1);
-        return Qt.hsva(Math.max(0, value.hsvHue), Math.min(.94, value.hsvSaturation * 1.10),
-            Math.min(light ? .90 : .95, value.hsvValue), 1);
+        const saturation = value.hsvSaturation;
+        return Qt.hsva(Math.max(0, value.hsvHue), saturation < .12 ? saturation
+            : Math.min(.96, saturation * 1.19 + .07), Math.min(light ? .91 : .98, value.hsvValue), 1);
+    }
+
+    function controlPigment(accent, secondary, weight) {
+        const primary = rgba(accent, 1);
+        const tint = mix(primary, secondary, weight, 1);
+        return Qt.hsva(Math.max(0, tint.hsvHue), Math.max(tint.hsvSaturation, primary.hsvSaturation * .91),
+            tint.hsvValue, 1);
+    }
+
+    function controlIdleStrength(profile, finish) {
+        return (finish.idle + (profile.buttonChroma || 0)) * (profile.light ? .65 : 1);
     }
 
     function controlIconInk(accent, face) {
+        const value = rgba(accent, 1);
         const background = relativeLuminance(face);
         const legible = color => {
             const luminance = relativeLuminance(color);
             return (Math.max(luminance, background) + .05) / (Math.min(luminance, background) + .05) >= 3;
         };
-        if (legible(accent)) return accent;
+        if (legible(value)) return value;
         const text = contrastInk(face);
-        const tinted = mix(text, accent, .66, 1);
-        return legible(tinted) ? tinted : mix(text, accent, .16, 1);
+        const onLight = background >= .179;
+        const hue = Math.max(0, value.hsvHue);
+        const saturation = value.hsvSaturation;
+        const shaded = Qt.hsva(hue, onLight ? saturation : saturation * .50, onLight ? .31 : .99, 1);
+        if (legible(shaded)) return shaded;
+        const tinted = mix(text, value, .66, 1);
+        return legible(tinted) ? tinted : mix(text, value, .16, 1);
     }
 
     function menuPalette(profile) {

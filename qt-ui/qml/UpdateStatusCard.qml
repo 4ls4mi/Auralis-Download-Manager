@@ -147,7 +147,7 @@ Frame {
                 Layout.fillWidth: true
                 text: card.headline
                 textFormat: Text.PlainText
-                font.pixelSize: 15
+                font.pixelSize: TypographyScale.pixels(15)
                 font.weight: Font.DemiBold
                 color: card.ink
                 wrapMode: Text.WordWrap
@@ -156,7 +156,7 @@ Frame {
                 Layout.fillWidth: true
                 text: card.summary
                 textFormat: Text.PlainText
-                font.pixelSize: 12
+                font.pixelSize: TypographyScale.pixels(12)
                 color: card.ink
                 wrapMode: Text.WordWrap
             }

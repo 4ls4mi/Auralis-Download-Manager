@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(AuralisQt VERSION 0.3.68 LANGUAGES CXX)
+project(AuralisQt VERSION 0.3.69 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -11,6 +11,8 @@ qt_standard_project_setup(REQUIRES 6.8)
 
 qt_add_executable(auralis-download-manager WIN32
     src/main.cpp
+    src/BrowserSetup.cpp
+    src/BrowserSetup.h
     src/Engine.cpp
     src/Engine.h
     src/FrameResize.cpp
@@ -37,7 +39,7 @@ if(WIN32)
     file(SHA256 "${auralis_icon}" AURALIS_ICON_SHA256)
     configure_file(src/WindowsIcon.rc.in "${CMAKE_CURRENT_BINARY_DIR}/WindowsIcon.rc" @ONLY)
     target_sources(auralis-download-manager PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/WindowsIcon.rc")
-    target_link_libraries(auralis-download-manager PRIVATE dwmapi comctl32 shell32 ole32)
+    target_link_libraries(auralis-download-manager PRIVATE dwmapi comctl32 shell32 shlwapi ole32)
 endif()
 
 qt_add_shaders(auralis-download-manager "glass_effects"
@@ -67,6 +69,7 @@ foreach(component IN LISTS qml_components)
 endforeach()
 set_source_files_properties(
     "${CMAKE_CURRENT_SOURCE_DIR}/qml/MaterialTheme.qml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/qml/TypographyScale.qml"
     "${CMAKE_CURRENT_SOURCE_DIR}/qml/WindowAppearance.qml"
     PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 

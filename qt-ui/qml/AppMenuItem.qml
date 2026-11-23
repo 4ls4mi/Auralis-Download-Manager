@@ -17,25 +17,27 @@ Basic.MenuItem {
     readonly property bool selected: enabled && (highlighted || hovered || activeFocus || down)
     readonly property color actionAccent: MaterialTheme.vividControlAccent(MaterialTheme.forcedAccent
         || (destructive ? colors.danger : symbol.length ? commandColor : colors.highlight), profile.light)
-    readonly property color pigment: MaterialTheme.mix(actionAccent, profile.secondary, finish.tint, 1)
+    readonly property color pigment: MaterialTheme.controlPigment(actionAccent, profile.secondary, finish.tint)
+    readonly property real idleStrength: MaterialTheme.controlIdleStrength(profile, finish) * .42
+    readonly property color idleFace: MaterialTheme.mix(colors.surface, pigment, idleStrength * .78, 1)
     readonly property color face: MaterialTheme.controlHighlight(pigment, down, hovered)
     readonly property color activeInk: MaterialTheme.contrastInk(face)
     readonly property real glyphSpace: symbol.length ? 27 : 0
     readonly property string shortcutText: subMenu ? "" : menuShortcut.nativeText
     readonly property real shortcutSpace: shortcutText.length ? shortcutBadge.width + 9 : 0
     readonly property color foreground: !enabled ? colors.muted : selected ? activeInk
-        : destructive ? colors.danger : colors.ink
+        : MaterialTheme.controlTextInk(destructive ? colors.danger : colors.ink, idleFace)
 
     hoverEnabled: true
     leftPadding: 12 + (mirrored ? shortcutSpace : glyphSpace)
     rightPadding: 12 + (mirrored ? glyphSpace : shortcutSpace)
     topPadding: 6
     bottomPadding: 6
-    font.pixelSize: 14
+    font.pixelSize: TypographyScale.pixels(14)
     font.weight: Font.Medium
     palette.windowText: foreground
     palette.text: foreground
-    icon.color: !enabled ? colors.muted : selected ? activeInk : actionAccent
+    icon.color: !enabled ? colors.muted : MaterialTheme.controlIconInk(actionAccent, selected ? face : idleFace)
 
     Shortcut {
         id: menuShortcut
@@ -53,12 +55,26 @@ Basic.MenuItem {
             anchors.topMargin: 1
             anchors.bottomMargin: 1
             radius: Math.min(9, item.profile.radius)
-            visible: item.selected
+            visible: item.enabled
             gradient: Gradient {
-                GradientStop { position: 0; color: MaterialTheme.mix(item.face, item.profile.upper, item.finish.crown * .45, 1) }
-                GradientStop { position: item.finish.shoulder; color: item.face }
-                GradientStop { position: .71; color: item.face }
-                GradientStop { position: 1; color: MaterialTheme.mix(item.face, item.profile.shade, item.finish.depth, 1) }
+                GradientStop {
+                    position: 0
+                    color: item.selected ? MaterialTheme.mix(item.face, item.profile.upper, item.finish.crown * .45, 1)
+                        : MaterialTheme.rgba(item.pigment, item.idleStrength)
+                }
+                GradientStop {
+                    position: item.finish.shoulder
+                    color: item.selected ? item.face : MaterialTheme.rgba(item.pigment, item.idleStrength * .78)
+                }
+                GradientStop {
+                    position: .71
+                    color: item.selected ? item.face : MaterialTheme.rgba(item.pigment, item.idleStrength * .70)
+                }
+                GradientStop {
+                    position: 1
+                    color: item.selected ? MaterialTheme.mix(item.face, item.profile.shade, item.finish.depth, 1)
+                        : MaterialTheme.rgba(item.pigment, item.idleStrength * .58)
+                }
             }
         }
 
@@ -103,7 +119,7 @@ Basic.MenuItem {
                 id: shortcutLabel
                 anchors.centerIn: parent
                 text: item.shortcutText
-                font.pixelSize: 11
+                font.pixelSize: TypographyScale.pixels(11)
                 color: item.foreground
                 Accessible.ignored: true
             }
@@ -118,10 +134,9 @@ Basic.MenuItem {
             symbol: item.symbol
             bold: true
             relief: item.enabled
-            surface: item.selected ? item.face : item.colors.surface
+            surface: item.selected ? item.face : item.idleFace
             ink: !item.enabled ? item.colors.muted
-                : item.selected ? MaterialTheme.mix(item.activeInk, item.actionAccent, .16, 1)
-                : MaterialTheme.controlIconInk(item.actionAccent, item.colors.surface)
+                : MaterialTheme.controlIconInk(item.actionAccent, surface)
         }
     }
 }

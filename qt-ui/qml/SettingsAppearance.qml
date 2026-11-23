@@ -36,9 +36,6 @@ GridLayout {
         {label: qsTr("Square"), value: "square"}, {label: qsTr("Bubble"), value: "bubble"},
         {label: qsTr("Faceted"), value: "prism"}, {label: qsTr("Ice"), value: "ice"}
     ]
-    readonly property var fillChoices: [
-        {label: qsTr("Sculpted Liquid Glass"), value: "sculpted"}, {label: qsTr("Default"), value: "default"}
-    ]
 
     columns: 2
     columnSpacing: sideTabs ? 10 : 0
@@ -92,7 +89,7 @@ GridLayout {
     component Heading: Label {
         Layout.fillWidth: true
         color: root.colors.text
-        font.pixelSize: 17
+        font.pixelSize: TypographyScale.pixels(17)
         font.weight: Font.DemiBold
         wrapMode: Text.WordWrap
     }
@@ -114,6 +111,7 @@ GridLayout {
         required property string label
         required property string selection
         property alias model: control.model
+        property alias colorOptionPreview: control.colorOptionPreview
         signal chosen(var value)
 
         Layout.fillWidth: true
@@ -133,6 +131,20 @@ GridLayout {
             selection: field.selection
             Accessible.name: field.label
             onActivated: field.chosen(currentValue)
+        }
+    }
+
+    component IndicatorColorChoice: IndicatorChoice {
+        id: colorsField
+        required property string indicatorRole
+
+        model: MaterialTheme.indicatorChoices
+        colorOptionPreview: value => {
+            if (typeof value !== "string")
+                return null
+            const fallback = colorsField.indicatorRole === "connections" ? "ocean" : "blue-purple"
+            return MaterialTheme.colorsFor(value,
+                MaterialTheme.resolvedPalette(value, fallback, colorsField.indicatorRole), colorsField.indicatorRole)
         }
     }
 
@@ -420,15 +432,9 @@ GridLayout {
                     selection: WindowAppearance.progressShape
                     onChosen: value => WindowAppearance.set("progressShape", value)
                 }
-                IndicatorChoice {
-                    label: qsTr("Progress fill")
-                    model: root.fillChoices
-                    selection: WindowAppearance.progressFill
-                    onChosen: value => WindowAppearance.set("progressFill", value)
-                }
-                IndicatorChoice {
+                IndicatorColorChoice {
                     label: qsTr("Progress colors")
-                    model: MaterialTheme.indicatorChoices
+                    indicatorRole: "progress"
                     selection: MaterialTheme.progressPalette
                     onChosen: value => MaterialTheme.progressPalette = value
                 }
@@ -438,6 +444,12 @@ GridLayout {
                     selection: WindowAppearance.progressAnimation
                     onChosen: value => WindowAppearance.set("progressAnimation", value)
                 }
+                IndicatorChoice {
+                    label: qsTr("Progress lighting")
+                    model: WindowAppearance.lightingChoices
+                    selection: WindowAppearance.progressLighting
+                    onChosen: value => WindowAppearance.set("progressLighting", value)
+                }
             }
             GlassProgress {
                 Layout.preferredWidth: parent.width * .53
@@ -445,7 +457,6 @@ GridLayout {
                 value: .64
                 shape: WindowAppearance.progressShape === "material" ?
                     (["bubble", "prism", "ice"].includes(profile.shape) ? profile.shape : "round") : WindowAppearance.progressShape
-                fillStyle: WindowAppearance.progressFill
                 animationStyle: WindowAppearance.progressAnimation
                 startColor: MaterialTheme.progressColors[0]
                 endColor: MaterialTheme.progressColors[1]
@@ -462,15 +473,9 @@ GridLayout {
                     selection: WindowAppearance.connectionShape
                     onChosen: value => WindowAppearance.set("connectionShape", value)
                 }
-                IndicatorChoice {
-                    label: qsTr("Connection fill")
-                    model: root.fillChoices
-                    selection: WindowAppearance.connectionFill
-                    onChosen: value => WindowAppearance.set("connectionFill", value)
-                }
-                IndicatorChoice {
+                IndicatorColorChoice {
                     label: qsTr("Connection colors")
-                    model: MaterialTheme.indicatorChoices
+                    indicatorRole: "connections"
                     selection: MaterialTheme.connectionPalette
                     onChosen: value => MaterialTheme.connectionPalette = value
                 }
@@ -479,6 +484,12 @@ GridLayout {
                     model: WindowAppearance.animationChoices
                     selection: WindowAppearance.connectionAnimation
                     onChosen: value => WindowAppearance.set("connectionAnimation", value)
+                }
+                IndicatorChoice {
+                    label: qsTr("Connection lighting")
+                    model: WindowAppearance.lightingChoices
+                    selection: WindowAppearance.connectionLighting
+                    onChosen: value => WindowAppearance.set("connectionLighting", value)
                 }
             }
             RowLayout {
@@ -493,12 +504,17 @@ GridLayout {
                         phase: root.previewPhase
                         shape: WindowAppearance.connectionShape === "material" ?
                             (["bubble", "prism", "ice"].includes(profile.shape) ? profile.shape : "round") : WindowAppearance.connectionShape
-                        fillStyle: WindowAppearance.connectionFill
                         animationStyle: WindowAppearance.connectionAnimation
                         startColor: MaterialTheme.connectionColors[0]
                         endColor: MaterialTheme.connectionColors[1]
                     }
                 }
+            }
+            Label {
+                Layout.fillWidth: true
+                text: qsTr("The pipes in the download window follow your progress and connection colors, lighting, and animation.")
+                color: root.colors.muted
+                wrapMode: Text.WordWrap
             }
             Heading { text: qsTr("Transfer speed graph") }
             GridLayout {
@@ -516,12 +532,18 @@ GridLayout {
                     selection: WindowAppearance.graphAnimation
                     onChosen: value => WindowAppearance.set("graphAnimation", value)
                 }
-            }
-            IndicatorChoice {
-                label: qsTr("Graph colors")
-                model: MaterialTheme.indicatorChoices
-                selection: MaterialTheme.graphPalette
-                onChosen: value => MaterialTheme.graphPalette = value
+                IndicatorColorChoice {
+                    label: qsTr("Graph colors")
+                    indicatorRole: "graph"
+                    selection: MaterialTheme.graphPalette
+                    onChosen: value => MaterialTheme.graphPalette = value
+                }
+                IndicatorChoice {
+                    label: qsTr("Graph lighting")
+                    model: WindowAppearance.lightingChoices
+                    selection: WindowAppearance.graphLighting
+                    onChosen: value => WindowAppearance.set("graphLighting", value)
+                }
             }
             TransferGraph {
                 Layout.fillWidth: true
