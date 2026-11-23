@@ -77,7 +77,13 @@ iconutil -c icns "$iconset" -o "$resources/auralis.icns"
 
 # Sign the Rust library before macdeployqt signs Qt libraries, plugins and the app.
 codesign --force --sign - "$bundle/Contents/MacOS/libauralis_engine.dylib"
-"$qt_prefix/bin/macdeployqt" "$bundle" -qmldir="$source_dir/qml" -codesign=-
+"$qt_prefix/bin/macdeployqt" "$bundle" -qmldir="$source_dir/qml" -appstore-compliant -codesign=-
+# Qt SQL can be an indirect framework dependency. Auralis does not load its database plugins,
+# some of which reference third-party client libraries outside the application bundle.
+if [[ -d "$bundle/Contents/PlugIns/sqldrivers" ]]; then
+    rm -rf -- "$bundle/Contents/PlugIns/sqldrivers"
+    codesign --force --sign - "$bundle"
+fi
 plutil -lint "$bundle/Contents/Info.plist"
 codesign --verify --deep --strict "$bundle"
 ln -s /Applications "$dmg_content/Applications"
@@ -92,10 +98,10 @@ hdiutil attach "$image" -readonly -nobrowse -mountpoint "$stage/mount" -quiet
 mounted=1
 installed="$stage/mount/$app_name.app"
 codesign --verify --deep --strict "$installed"
-lipo -verify_arch "$architecture" "$installed/Contents/MacOS/auralis-download-manager"
-lipo -verify_arch "$architecture" "$installed/Contents/MacOS/libauralis_engine.dylib"
+lipo "$installed/Contents/MacOS/auralis-download-manager" -verify_arch "$architecture"
+lipo "$installed/Contents/MacOS/libauralis_engine.dylib" -verify_arch "$architecture"
 smoke_status=0
-env -u DYLD_LIBRARY_PATH -u DYLD_FRAMEWORK_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH \
+env -u DYLD_LIBRARY_PATH -u DYLD_FRAMEWORK_PATH -u QT_PLUGIN_PATH -u QML_IMPORT_PATH -u QML2_IMPORT_PATH \
     MDM_DATA_DIR="$stage/smoke" QT_QPA_PLATFORM=cocoa QT_QUICK_BACKEND=software \
     "$installed/Contents/MacOS/auralis-download-manager" --engine-smoke || smoke_status=$?
 if [[ $smoke_status != 0 || ! -f "$stage/smoke/qt-engine-smoke.ok" ]]; then
