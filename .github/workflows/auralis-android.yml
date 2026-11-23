@@ -42,8 +42,15 @@ jobs:
           rustup toolchain install stable --profile minimal
           rustup target add aarch64-linux-android x86_64-linux-android
           rustc -Vv | sha256sum | cut -c1-16 | sed 's/^/version=/' >> "$GITHUB_OUTPUT"
-          sdkmanager --install 'platforms;android-35' 'build-tools;35.0.0' 'ndk;29.0.14206865'
-          if ! ldconfig -p | grep -F 'libclang.so' >/dev/null; then
+          ndk="$ANDROID_HOME/ndk/29.0.14206865"
+          if [[ ! -f "$ANDROID_HOME/platforms/android-35/android.jar" ||
+                ! -x "$ANDROID_HOME/build-tools/35.0.0/zipalign" ||
+                ! -f "$ndk/source.properties" ]]; then
+            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
+              'platforms;android-35' 'build-tools;35.0.0' 'ndk;29.0.14206865'
+          fi
+          echo "ANDROID_NDK_HOME=$ndk" >> "$GITHUB_ENV"
+          if ! ldconfig -p | grep -E 'libclang(-[0-9]+)?\.so' >/dev/null; then
             sudo apt-get update
             sudo apt-get install -y libclang-dev
           fi
@@ -73,6 +80,15 @@ jobs:
         run: |
           cd android-app
           ./gradlew --no-daemon assembleDebug assembleDebugAndroidTest
+          readelf="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
+          for abi in arm64-v8a x86_64; do
+            "$readelf" -lW "app/src/main/jniLibs/$abi/libauralis_android.so" |
+              awk '$1 == "LOAD" { found = 1; if (strtonum($NF) < 16384) bad = 1 }
+                   END { if (!found || bad) exit 1 }' || {
+                echo "Auralis native library for $abi lacks 16 KB ELF alignment" >&2
+                exit 1
+              }
+          done
           "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -P 16 4 app/build/outputs/apk/debug/app-debug.apk
 
       - name: Enable the emulator on the hosted runner
