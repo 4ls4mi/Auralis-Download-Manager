@@ -35,7 +35,7 @@ function Write-FixtureDiagnostics([DateTime]$StartedAt) {
     }
 }
 
-function Run-Fixture([string]$Process, [string[]]$Arguments, [int]$Timeout = 180000) {
+function Run-Fixture([string]$Process, [string[]]$Arguments, [int]$Timeout = 180000, [int]$ExpectedExitCode = 0) {
     $startedAt = Get-Date
     $child = Start-Process -FilePath $Process -ArgumentList $Arguments -WorkingDirectory (Split-Path -Parent $Process) -PassThru
     if (!$child.WaitForExit($Timeout)) {
@@ -43,10 +43,10 @@ function Run-Fixture([string]$Process, [string[]]$Arguments, [int]$Timeout = 180
         Write-FixtureDiagnostics $startedAt
         throw "Timed out waiting for $Process."
     }
-    if ($child.ExitCode -ne 0) {
+    if ($child.ExitCode -ne $ExpectedExitCode) {
         Start-Sleep -Seconds 2
         Write-FixtureDiagnostics $startedAt
-        throw "$Process exited with code $($child.ExitCode)."
+        throw "$Process exited with code $($child.ExitCode). Expected $ExpectedExitCode."
     }
 }
 
@@ -162,9 +162,25 @@ try {
 
     # Exercise the in-app updater's NSIS arguments and wait for the installed app
     # to verify a loopback transfer again after the installer launches it.
-    Remove-Item -LiteralPath $marker -Force
+    $upgradeArgs = @('/P', '/UPDATE', '/R', '/NOREG', '/ARGS=--engine-smoke', "/D=$fixture")
+    $console = Join-Path $data 'qt-smoke-console.log'
+    Remove-Item -LiteralPath $marker, $console -Force -ErrorAction SilentlyContinue
+    Write-Host 'Testing passive upgrade with the installed executable locked.'
+    $locked = [IO.File]::Open($exe, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    try {
+        Run-Fixture $env:AURALIS_QT_INSTALLER $upgradeArgs 20000 5
+        $relaunch = Get-Process -Name 'auralis-download-manager' -ErrorAction SilentlyContinue |
+            Where-Object { $_.Path -ieq $exe }
+        if ($relaunch -or (Test-Path -LiteralPath $console) -or (Test-Path -LiteralPath $marker)) {
+            throw 'The rejected passive upgrade relaunched the app while the installed executable was locked.'
+        }
+    } finally { $locked.Dispose() }
+    Write-Host 'Verified the in-use installer exits without relaunching.'
+
+    Remove-Item -LiteralPath $marker, $console -Force -ErrorAction SilentlyContinue
+    Write-Host 'Testing passive upgrade and relaunch after releasing the executable.'
     $upgradedAt = Get-Date
-    Run-Fixture $env:AURALIS_QT_INSTALLER @('/P', '/UPDATE', '/R', '/NOREG', '/ARGS=--engine-smoke', "/D=$fixture")
+    Run-Fixture $env:AURALIS_QT_INSTALLER $upgradeArgs
     $deadline = [DateTime]::UtcNow.AddSeconds(90)
     while (!(Test-Path $marker) -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 250 }
     if (!(Test-Path $marker)) {

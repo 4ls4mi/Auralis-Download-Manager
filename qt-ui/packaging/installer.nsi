@@ -67,6 +67,9 @@ Function .onInit
     ${GetOptions} $0 "/UPDATE" $1
     ${IfNot} ${Errors}
         StrCpy $Upgrade 1
+        # The waiting updater must get an exit code for NSIS file errors, even
+        # when Windows displays the installer on a noninteractive desktop.
+        SetSilent silent
     ${EndIf}
     ${GetOptions} $0 "/R" $1
     ${IfNot} ${Errors}
@@ -107,17 +110,31 @@ FunctionEnd
 Function AssertReplaceable
     Exch $0
     Push $1
+    Push $2
     ${If} ${FileExists} "$0"
+        StrCpy $2 0
+replace_attempt:
         System::Call 'kernel32::CreateFileW(w r0, i 0x40000000, i 7, p 0, i 3, i 0x80, p 0) i.r1'
         ${If} $1 == -1
-            MessageBox MB_ICONSTOP|MB_OK "Close Auralis and its browser connections, then run the installer again." /SD IDOK
+            ${If} $Upgrade == 1
+            ${AndIf} $2 < 8
+                IntOp $2 $2 + 1
+                Sleep 250
+                Goto replace_attempt
+            ${EndIf}
             SetErrorLevel 5
+            IfSilent replace_exit
+            MessageBox MB_ICONSTOP|MB_OK "Close Auralis and its browser connections, then run the installer again."
             Abort
         ${EndIf}
         System::Call 'kernel32::CloseHandle(i r1)'
     ${EndIf}
+    Pop $2
     Pop $1
     Pop $0
+    Return
+replace_exit:
+    Quit
 FunctionEnd
 
 Section "Install Auralis"
@@ -156,9 +173,12 @@ Section "Install Auralis"
     Goto installed
 
 install_failed:
-    MessageBox MB_ICONSTOP|MB_OK "Auralis could not write all installation files. Check free disk space and close any open Auralis windows." /SD IDOK
     SetErrorLevel 2
+    IfSilent install_exit
+    MessageBox MB_ICONSTOP|MB_OK "Auralis could not write all installation files. Check free disk space and close any open Auralis windows."
     Abort
+install_exit:
+    Quit
 installed:
 SectionEnd
 
