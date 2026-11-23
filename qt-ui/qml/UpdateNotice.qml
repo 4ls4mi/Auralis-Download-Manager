@@ -9,6 +9,9 @@ import QtQuick.Window
 Window {
     id: popup
 
+    LayoutMirroring.enabled: Qt.application.layoutDirection === Qt.RightToLeft
+    LayoutMirroring.childrenInherit: true
+
     required property var backend
     required property Window anchorWindow
     property bool automaticChecks: true

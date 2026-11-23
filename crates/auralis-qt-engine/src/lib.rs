@@ -54,6 +54,9 @@ pub unsafe extern "C" fn auralis_engine_request(input: *const u8, length: usize)
         let input = unsafe { std::slice::from_raw_parts(input, length) };
         let request: Value = serde_json::from_slice(input).map_err(|e| e.to_string())?;
         if let Some(action) = request.get("shellAction").and_then(Value::as_str) {
+            if action == "interface-language" {
+                return Ok(json!(mdm_app::embedded_interface_language()));
+            }
             #[cfg(windows)]
             if action.starts_with("update-") {
                 return updater::dispatch(action, &request);
@@ -65,13 +68,17 @@ pub unsafe extern "C" fn auralis_engine_request(input: *const u8, length: usize)
                     return Ok(json!({"browserSupported": false}));
                 };
                 let status = mdm_ipc::extension::browser_store_status(browser);
+                let presence = browser.windows_extension_presence(executable);
                 return Ok(json!({
                     "browserId": browser.id(),
                     "browser": browser.name(),
                     "browserSupported": true,
                     "storeUrl": mdm_ipc::extension::store_page(),
-                    "extensionPresent": browser.windows_extension_present(executable),
+                    "extensionPresent": presence.source().is_some(),
+                    "extensionDiscovery": presence.discovery(),
+                    "extensionSource": status.connected_source.or(presence.source()),
                     "connectedRecently": status.connected_recently,
+                    "extensionPreviouslyConnected": status.extension_previously_connected,
                     "storePreviouslyConnected": status.store_previously_connected,
                     "browserPreviouslyConnected": status.browser_previously_connected,
                 }));

@@ -310,6 +310,12 @@ pub fn run_embedded_downloader() -> Result<(), String> {
     headless::run_embedded()
 }
 
+/// Read the embedded interface's language before loading its first window.
+pub fn embedded_interface_language() -> &'static str {
+    let saved = store::settings_only().and_then(|settings| settings.language);
+    i18n::qt_interface_code(saved.as_deref())
+}
+
 pub fn run_application() -> std::process::ExitCode {
     renderer::mark_start();
     // PAC's myIpAddress from the routing table, not a UDP socket (a firewall prompt, #35).

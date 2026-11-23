@@ -1562,7 +1562,12 @@ impl App {
             settings.language_asked = true;
         }
         let ask_language = !settings.language_asked;
-        crate::i18n::set_lang(settings.language.as_deref());
+        let language = if crate::headless::embedded() {
+            Some(crate::i18n::qt_interface_code(settings.language.as_deref()))
+        } else {
+            settings.language.as_deref()
+        };
+        crate::i18n::set_lang(language);
         crate::theme::language_fonts(ctx);
         crate::regional::set(&settings.regional);
         crate::webmark::set(settings.mark_downloads);
@@ -6246,6 +6251,8 @@ impl App {
                             "downloaded": conn.downloaded,
                             "speed": conn.speed,
                             "state": state,
+                            "receiving_data": state == "Receiving"
+                                && conn.waiting_for_data_since.is_none_or(|at| at.elapsed().as_millis() < 2500),
                             "recent_disconnect": conn.last_disconnect.is_some_and(|at| at.elapsed().as_millis() < 2500),
                             "reconnecting_after_loss": conn.reconnecting_after_loss
                         })
@@ -6301,6 +6308,7 @@ impl App {
             return serde_json::json!({
                 "downloads": files,
                 "browserDownload": self.glass_browser_download,
+                "interfaceLanguage": crate::i18n::qt_interface_code(self.settings.language.as_deref()),
             }).to_string();
         }
         if !cmd.remote && cmd.query.as_deref() == Some("glass-network-adapters") {
@@ -6316,6 +6324,7 @@ impl App {
                 return line(&ErrorAnswer { error: "glass backend not active".into(), code: None });
             }
             return serde_json::json!({
+                "language": crate::i18n::qt_interface_code(self.settings.language.as_deref()),
                 "max_connections": self.settings.max_connections,
                 "speed_limit_on": self.settings.speed_limit_on,
                 "speed_limit_kb": self.settings.speed_limit_kb,
@@ -6357,6 +6366,14 @@ impl App {
                 _ => None,
             };
             let changed = match key {
+                "language" if crate::headless::embedded()
+                    && matches!(value, "en" | "ar" | "es" | "zh-hans") =>
+                {
+                    self.settings.language = Some(value.into());
+                    self.settings.language_asked = true;
+                    crate::i18n::set_lang(Some(value));
+                    Some(())
+                }
                 "max_connections" => value.parse::<u32>()
                     .ok().filter(|n| (1..=128).contains(n))
                     .map(|n| { self.settings.max_connections = n; }),
@@ -6941,6 +6958,9 @@ impl App {
 
     /// Options → OK: keep the new settings and act on what changed.
     fn apply_options(&mut self, new: Settings) {
+        if crate::headless::embedded() && new.language != self.settings.language {
+            crate::i18n::set_lang(Some(crate::i18n::qt_interface_code(new.language.as_deref())));
+        }
         new.publish_categories();
         // Portable mode writes nothing outside its folder (the option is off there).
         if new.launch_on_startup != self.settings.launch_on_startup

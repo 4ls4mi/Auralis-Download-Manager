@@ -172,7 +172,7 @@ impl App {
                 view["size"]=json!(video.size);view["probing"]=json!(false);view["error"]=Value::Null;view["video"]=json!(true);
             }
             return Some(json!({"id": serial, "info": info,
-                "categories":Category::all().into_iter().map(|c|json!({"key":c.key(),"name":c.label()})).collect::<Vec<_>>(), "waiting": self.file_info_waiting.len()+self.glass_video_waiting.len()}).to_string());
+                "categories":Category::all().into_iter().map(|c|json!({"key":c.key(),"name":c.shown()})).collect::<Vec<_>>(), "waiting": self.file_info_waiting.len()+self.glass_video_waiting.len()}).to_string());
         }
         if cmd.query.as_deref() == Some("glass-completion-details") {
             let Some(item) = cmd.ids.first().and_then(|id| {

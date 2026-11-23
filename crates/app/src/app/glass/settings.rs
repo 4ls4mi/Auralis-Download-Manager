@@ -97,7 +97,7 @@ impl App {
         fields.push(json!({"key":"cnl_sites","label":"Remembered Click’n’Load sites","section":"Advanced","kind":"table","columns":[{"label":"Site","kind":"text"},{"label":"Allowed","kind":"boolean"}],"value":self.settings.cnl_sites}));
         fields.push(json!({"key":"proxy_pass","label":"Proxy password","section":"Connection","kind":"password","value":"","saved":!self.settings.proxy_pass.is_empty()}));
         if let Some(field)=fields.iter_mut().find(|f|f["key"]=="category_dirs") {
-            field["columns"][0]["options"]=json!(Category::all().into_iter().map(|c|json!({"label":c.label(),"value":c.key()})).collect::<Vec<_>>());
+            field["columns"][0]["options"]=json!(Category::all().into_iter().map(|c|json!({"label":c.shown(),"value":c.key()})).collect::<Vec<_>>());
         }
         json!({"fields":fields})
     }

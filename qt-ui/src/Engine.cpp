@@ -8,11 +8,15 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QGuiApplication>
 #include <QJSEngine>
 #include <QJsonDocument>
+#include <QLocale>
 #include <QProcess>
+#include <QQmlEngine>
 #include <QSettings>
 #include <QSystemTrayIcon>
+#include <QTranslator>
 #include <QWindow>
 #include <QtConcurrentRun>
 
@@ -113,6 +117,50 @@ Engine::~Engine()
 
 QString Engine::version() const { return QStringLiteral(AURALIS_VERSION); }
 
+void Engine::initializeInterfaceLanguage()
+{
+    const auto preference = exchange({{QStringLiteral("shellAction"), QStringLiteral("interface-language")}});
+    applyInterfaceLanguage(preference.value(QStringLiteral("result")).toString());
+    setStatus(tr("Starting download engine"));
+}
+
+void Engine::applyInterfaceLanguage(const QString &language)
+{
+    QString code = language;
+    QString localeName;
+    if (code == QStringLiteral("ar") || code == QStringLiteral("es")) {
+        localeName = code;
+    } else if (code == QStringLiteral("zh-hans")) {
+        localeName = QStringLiteral("zh_CN");
+    } else {
+        code = QStringLiteral("en");
+        localeName = code;
+    }
+    if (m_interfaceLanguage == code)
+        return;
+
+    std::unique_ptr<QTranslator> translator;
+    if (code != QStringLiteral("en")) {
+        translator = std::make_unique<QTranslator>();
+        if (!translator->load(QStringLiteral(":/auralis/i18n/auralis_%1.qm").arg(localeName))) {
+            qWarning("Could not load the bundled Auralis translation for %s", qPrintable(localeName));
+            return;
+        }
+    }
+    if (m_translator)
+        QCoreApplication::removeTranslator(m_translator.get());
+    m_translator = std::move(translator);
+    if (m_translator)
+        QCoreApplication::installTranslator(m_translator.get());
+    const QLocale locale(localeName);
+    QLocale::setDefault(locale);
+    QGuiApplication::setLayoutDirection(locale.textDirection());
+    m_interfaceLanguage = code;
+    if (auto *qml = qobject_cast<QQmlEngine *>(m_scriptEngine))
+        qml->retranslate();
+    emit interfaceLanguageChanged();
+}
+
 bool Engine::trayAvailable() const
 {
     return !m_smoke && QSystemTrayIcon::isSystemTrayAvailable();
@@ -177,7 +225,8 @@ QVariantMap Engine::dispatch(const QVariantMap &command) const
                            {QStringLiteral("browserSupported"), false}, {QStringLiteral("extensionPresent"), false},
                            {QStringLiteral("connectedRecently"), false}, {QStringLiteral("storePreviouslyConnected"), false},
                            {QStringLiteral("browserPreviouslyConnected"), false}, {QStringLiteral("storeUrl"), QString()},
-                           {QStringLiteral("nativeHostRegistered"), false}, {QStringLiteral("nativeHostProblem"), QString()},
+                           {QStringLiteral("nativeHostRegistered"), false}, {QStringLiteral("nativeHostCanRegister"), false},
+                           {QStringLiteral("nativeHostProblem"), QString()},
                            {QStringLiteral("silentInstallAvailable"), false}, {QStringLiteral("policyInstalled"), false},
                            {QStringLiteral("policyRemovable"), false}, {QStringLiteral("policyProblem"), QString()},
                            {QStringLiteral("policyState"), QStringLiteral("unsupported")}};
@@ -215,6 +264,7 @@ QVariantMap Engine::dispatch(const QVariantMap &command) const
                 const bool canPrepare = host.registered || (host.canRegister && !host.anotherApplication);
                 status.insert(QStringLiteral("storeUrl"), store);
                 status.insert(QStringLiteral("nativeHostRegistered"), host.registered);
+                status.insert(QStringLiteral("nativeHostCanRegister"), host.canRegister);
                 status.insert(QStringLiteral("nativeHostProblem"), host.problem);
                 status.insert(QStringLiteral("silentInstallAvailable"), policy.available && canPrepare);
                 status.insert(QStringLiteral("policyInstalled"), policy.configured);
@@ -391,6 +441,9 @@ void Engine::applySnapshot(const QVariantMap &response)
     }
     const auto dashboard = response.value(QStringLiteral("dashboard")).toMap();
     const auto visuals = response.value(QStringLiteral("visuals")).toMap();
+    const QString language = visuals.value(QStringLiteral("interfaceLanguage")).toString();
+    if (!language.isEmpty())
+        applyInterfaceLanguage(language);
     if (m_dashboard != dashboard) {
         m_dashboard = dashboard;
         emit dashboardChanged();

@@ -35,9 +35,9 @@ Canvas {
     readonly property bool animateFlow: visible && flowing && !paintingPaused && !MaterialTheme.reducedMotion
     // The content cards reserve this lane for the vertical portion.
     property real gutter: 13
-    readonly property real mainDiameter: 13
-    readonly property real branchDiameter: 10
-    readonly property real hoseDiameter: 9
+    readonly property real mainDiameter: 8.5
+    readonly property real branchDiameter: 6.5
+    readonly property real hoseDiameter: 5.5
     readonly property real nozzleOffset: 3
     readonly property real manifoldOffset: 15
 
@@ -123,10 +123,10 @@ Canvas {
             trace(ctx, run, false)
         ctx.lineJoin = "round"
         ctx.lineCap = "round"
-        ctx.lineWidth = diameter + 5
+        ctx.lineWidth = diameter * 1.38
         ctx.strokeStyle = MaterialTheme.rgba(channelEdge, .63)
         ctx.stroke()
-        ctx.lineWidth = diameter + 3.3
+        ctx.lineWidth = diameter * 1.25
         ctx.strokeStyle = MaterialTheme.mix(channelColor, "#050812", .63, .92)
         ctx.stroke()
         ctx.restore()
@@ -136,7 +136,7 @@ Canvas {
         const radius = diameter * .49
         ctx.beginPath()
         ctx.arc(point.x, point.y, radius, 0, Math.PI * 2)
-        ctx.lineWidth = 1.3
+        ctx.lineWidth = diameter * .10
         ctx.strokeStyle = MaterialTheme.rgba(tone.edge, active ? .72 : .44)
         ctx.fillStyle = MaterialTheme.mix(tone.body, channelColor, .45, 1)
         ctx.fill()
@@ -451,15 +451,18 @@ Canvas {
 
     function nozzle(ctx, outlet, active) {
         const bore = hoseDiameter * .58
+        const boreHeight = hoseDiameter * .285
         const collar = hoseDiameter * .62
+        const collarHeight = hoseDiameter * .56
+        const collarTop = outlet.y - collarHeight * .8
         const first = connectionStartTone
         const last = connectionEndTone
         const optic = connectionFinish.optic || 0
         const darkCollar = optic === 4 || optic >= 11
         ctx.beginPath()
-        ctx.ellipse(outlet.x - collar, outlet.y - 4, collar * 2, 5)
+        ctx.ellipse(outlet.x - collar, collarTop, collar * 2, collarHeight)
         if (optic === 3) {
-            const lowerLight = ctx.createLinearGradient(outlet.x, outlet.y - 4, outlet.x, outlet.y + 1)
+            const lowerLight = ctx.createLinearGradient(outlet.x, collarTop, outlet.x, collarTop + collarHeight)
             lowerLight.addColorStop(0, MaterialTheme.rgba(first.core, .92))
             lowerLight.addColorStop(.62, MaterialTheme.rgba(first.body, .82))
             lowerLight.addColorStop(1, MaterialTheme.rgba(last.glow, active ? .98 : .65))
@@ -475,7 +478,7 @@ Canvas {
             : MaterialTheme.rgba(last.edge, rimAlpha)
         ctx.stroke()
         ctx.beginPath()
-        ctx.ellipse(outlet.x - bore * .5, outlet.y - 1.45, bore, 2.55)
+        ctx.ellipse(outlet.x - bore * .5, outlet.y - boreHeight * .57, bore, boreHeight)
         ctx.fillStyle = optic === 11 ? MaterialTheme.mix(first.glow, last.glow, .5, active ? .92 : .60)
             : MaterialTheme.mix(first.core, last.core, .5, .94)
         ctx.fill()
@@ -485,7 +488,7 @@ Canvas {
         const jelly = connectionAnimation === "jelly"
         const cycle = Lighting.dropCycle(phase, slowPhase, index, connectionAnimation)
         const fall = surfaceY - outlet.y
-        const radius = Math.min(2.9, cellWidth * .09, fall * .38)
+        const radius = Math.min(hoseDiameter * .32, cellWidth * .09, fall * .38)
         if (fall < 2.5 || radius < .85 || cycle >= Lighting.dropContact)
             return
 
@@ -513,19 +516,19 @@ Canvas {
         ctx.bezierCurveTo(x - radius, y + radius * 1.58, x + radius, y + radius * 1.58, x + radius, y + radius * .30)
         ctx.bezierCurveTo(x + radius, y - radius * .18, x + radius * .36, y - radius, x, y - length)
         ctx.closePath()
-        ctx.lineWidth = 1.8
+        ctx.lineWidth = radius * .62
         ctx.strokeStyle = ink(last.glow, .22 * connectionFinish.halo)
         ctx.stroke()
         ctx.fillStyle = liquid
         ctx.fill()
-        ctx.lineWidth = .54
+        ctx.lineWidth = Math.max(.38, radius * .19)
         ctx.strokeStyle = ink(last.edge, .73 * connectionFinish.reflection)
         ctx.stroke()
         ctx.beginPath()
         ctx.moveTo(x - radius * .40, y - radius * .14)
         ctx.quadraticCurveTo(x - radius * .63, y + radius * .16, x - radius * .42, y + radius * .44)
         ctx.lineCap = "round"
-        ctx.lineWidth = .48
+        ctx.lineWidth = Math.max(.34, radius * .17)
         ctx.strokeStyle = ink(first.edge, .73)
         ctx.stroke()
         ctx.restore()

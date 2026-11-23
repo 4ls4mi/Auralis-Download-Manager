@@ -10,6 +10,7 @@ Basic.ComboBox {
     readonly property var colors: MaterialTheme.palette
     property var fontOptionPreview: null
     property var colorOptionPreview: null
+    property var optionAvailable: null
 
     hoverEnabled: true
     font.pixelSize: TypographyScale.pixels(13)
@@ -60,6 +61,7 @@ Basic.ComboBox {
         implicitHeight: Math.max(32, font.pixelSize + 12)
         text: control.textAt(index)
         highlighted: control.highlightedIndex === index
+        enabled: control.optionAvailable === null || control.optionAvailable(control.valueAt(index))
         hoverEnabled: true
         font: control.font
         contentItem: RowLayout {
@@ -85,19 +87,19 @@ Basic.ComboBox {
                 text: option.text
                 font: option.font
                 verticalAlignment: Text.AlignVCenter
-                color: control.colors.text
+                color: option.enabled ? control.colors.text : control.colors.muted
                 elide: Text.ElideRight
             }
         }
         background: Rectangle {
             radius: 5
-            color: option.highlighted || option.hovered
+            color: option.enabled && (option.highlighted || option.hovered)
                 ? MaterialTheme.rgba(control.colors.accent, .23)
                 : "transparent"
         }
 
         Loader {
-            active: control.fontOptionPreview !== null && control.popup.visible && option.hovered
+            active: option.enabled && control.fontOptionPreview !== null && control.popup.visible && option.hovered
             sourceComponent: Basic.ToolTip {
                 id: preview
                 readonly property var sample: control.fontOptionPreview(control.valueAt(option.index))

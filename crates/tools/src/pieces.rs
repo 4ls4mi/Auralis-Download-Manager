@@ -643,6 +643,7 @@ pub async fn download(
             id: i as u32,
             downloaded: 0,
             status: ConnStatus::Connecting,
+            waiting_for_data_since: None,
             last_disconnect: None,
             reconnecting_after_loss: false,
             speed: 0,

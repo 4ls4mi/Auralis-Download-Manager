@@ -36,11 +36,23 @@ AuralisWindow {
     readonly property string connectionShape: selectedShape(WindowAppearance.connectionShape)
     readonly property var item: Transfer.find(engine.dashboard.downloads, downloadId)
     readonly property var telemetry: Transfer.find(engine.visuals.downloads, downloadId)
-    readonly property var workerRows: !torrent && telemetry && telemetry.connections ? telemetry.connections.slice(0, 32) : []
+    readonly property bool transferPaused: !!item && item.status === "Stopped"
+    readonly property var workerRows: {
+        if (torrent || !telemetry)
+            return []
+        const observed = telemetry.connections || []
+        if (observed.length || !transferPaused)
+            return observed.slice(0, 32)
+        // A restarted app has no live meters for a paused file. Its configured
+        // slots can still show Paused, without guessing per-connection progress.
+        const slots = Math.max(0, Math.min(32, Number(telemetry.chunk_count) || 0))
+        return Array.from({length: slots}, (_, id) => ({id}))
+    }
     readonly property var torrent: telemetry && telemetry.torrent ? telemetry.torrent : null
     readonly property bool mixed: !!(telemetry && telemetry.direct_recovery)
     readonly property bool ordinary: !!(telemetry && !telemetry.is_torrent && !telemetry.is_video && !telemetry.is_gallery && !telemetry.is_remote)
     readonly property bool runningTransfer: !!(item && item.status === "Downloading")
+    readonly property bool feedingConnections: runningTransfer && workerRows.some(connectionHasData)
     readonly property bool displayFlow: activeTab === 0 && !!item && !!item.url
     readonly property bool displayConnectionFlow: displayFlow && workerRows.length > 0
     readonly property int pipeInset: 32
@@ -66,6 +78,10 @@ AuralisWindow {
     property var speedSamples: []
     property var details: ({})
     property int activeTab: 0
+
+    function connectionHasData(connection) {
+        return connection.state === "Receiving" && connection.receiving_data !== false
+    }
 
     width: 790
     height: 625
@@ -507,7 +523,7 @@ AuralisWindow {
         // Keep both eight- and sixteen-connection grids at display cadence.
         readonly property real paintInterval: 1 / (root.workerRows.length > 16 ? 45 : 60)
         readonly property bool animateConnections: WindowAppearance.connectionAnimation !== "none"
-            && root.workerRows.some(connection => connection.state === "Receiving")
+            && root.feedingConnections
         readonly property bool animateProgressPipe: root.displayFlow && WindowAppearance.progressAnimation !== "none"
         running: root.animateTransfer && !MaterialTheme.reducedMotion && (animateConnections || animateProgressPipe)
         onRunningChanged: nextPaint = activeSeconds
@@ -522,11 +538,11 @@ AuralisWindow {
                 return
             nextPaint = (Math.floor(sample / paintInterval) + 1) * paintInterval
             const turn = Math.PI * 2
-            phase = activeSeconds % 1.12 / 1.12 * turn
+            phase = activeSeconds % 1.72 / 1.72 * turn
             if (WindowAppearance.progressAnimation === "water")
-                progressPhase = activeSeconds % .61 / .61 * turn
+                progressPhase = activeSeconds % 1.48 / 1.48 * turn
             if (WindowAppearance.connectionAnimation === "jelly" || WindowAppearance.progressAnimation === "jelly")
-                slowPhase = activeSeconds % 2.84 / 2.84 * turn
+                slowPhase = activeSeconds % 3.7 / 3.7 * turn
         }
     }
 
@@ -696,6 +712,7 @@ AuralisWindow {
                         }
                         TransferTubes {
                             objectName: "downloadProgressInlet"
+                            LayoutMirroring.enabled: false
                             anchors.left: parent.left
                             anchors.top: parent.top
                             anchors.bottom: parent.bottom
@@ -748,7 +765,7 @@ AuralisWindow {
                                     const t = root.telemetry || {}
                                     const server = t.server || {}
                                     return [
-                                        {label: qsTr("Status"), value: d.status || "—"},
+                                        {label: qsTr("Status"), value: Transfer.statusLabel(d.status)},
                                         {label: qsTr("Transfer method"), value: root.mixed ? qsTr("Direct → BitTorrent") : t.is_torrent ? qsTr("BitTorrent") : t.is_video ? qsTr("Video") : qsTr("Direct download")},
                                         {label: qsTr("Downloaded"), value: Transfer.bytes(d.downloaded) + " / " + Transfer.bytes(d.size)},
                                         {label: qsTr("Transfer rate"), value: Transfer.rate(d.speed)},
@@ -786,19 +803,23 @@ AuralisWindow {
                         }
                         Item {
                             id: progressLine
+                            LayoutMirroring.enabled: false
+                            LayoutMirroring.childrenInherit: true
                             Layout.fillWidth: true
-                            implicitHeight: Math.max(38, progressPercent.implicitHeight)
+                            implicitHeight: Math.max(downloadProgress.height, progressPercent.implicitHeight)
                             GlassProgress {
                                 id: downloadProgress
                                 objectName: "detailProgressShape"
                                 anchors.left: parent.left
                                 anchors.verticalCenter: parent.verticalCenter
                                 width: Math.max(0, progressLine.width - progressPercent.width - progressPercent.anchors.leftMargin)
-                                height: 38
+                                height: 26
                                 value: Transfer.fraction(root.item)
                                 animated: root.animateTransfer
                                 animationStyle: WindowAppearance.progressAnimation
-                                externalPhase: animationStyle === "water" && root.displayFlow ? water.progressPhase : -1
+                                externalPhase: !root.displayFlow ? -1
+                                    : animationStyle === "water" ? water.progressPhase
+                                    : animationStyle === "jelly" ? water.slowPhase : -1
                                 lightingStyle: WindowAppearance.progressLighting
                                 shape: root.progressShape
                                 startColor: root.progressColors[0]
@@ -853,6 +874,9 @@ AuralisWindow {
                 GridLayout {
                     id: transferOverview
                     objectName: "transferOverview"
+                    // Keep the chart and vessel coordinates aligned with the physical pipe gutter.
+                    LayoutMirroring.enabled: false
+                    LayoutMirroring.childrenInherit: true
                     visible: !!root.item && root.activeTab === 0
                     Layout.fillWidth: true
                     Layout.minimumWidth: 0
@@ -926,14 +950,36 @@ AuralisWindow {
                                         id: worker
                                         required property int index
                                         readonly property var connection: root.workerRows[index] || {}
-                                        readonly property var saved: Transfer.assigned(connection.id, root.telemetry && root.telemetry.segments)
-                                        readonly property bool receiving: root.runningTransfer && connection.state === "Receiving"
+                                        readonly property var sample: {
+                                            const row = connection
+                                            return {key: String(root.downloadId) + "/" + row.id,
+                                                receiving: root.runningTransfer && root.connectionHasData(row),
+                                                amount: Transfer.assigned(row.id, root.telemetry && root.telemetry.segments, true)}
+                                        }
+                                        readonly property bool receiving: sample.receiving
+                                        readonly property string connectionState: root.transferPaused ? qsTr("Paused")
+                                            : connection.state === "Receiving" && !receiving ? qsTr("Stalled")
+                                            : Transfer.connectionLabel(connection.state)
+                                        property var retainedId: null
+                                        property var saved: null
                                         readonly property real liquidSurface: chunkWater.landingY
                                         readonly property real liquidX: chunkWater.landingX
                                         Layout.fillWidth: true
                                         Layout.minimumWidth: 0
                                         Layout.preferredWidth: 34
                                         Layout.preferredHeight: root.compactWidth || root.compactHeight ? 34 : 39
+                                        function retainReceivedFill() {
+                                            if (retainedId !== sample.key) {
+                                                retainedId = sample.key
+                                                saved = null
+                                            }
+                                            // Released ranges may be shortened or reassigned. Keep the
+                                            // last measured appearance of this connection while it is idle.
+                                            if (sample.amount !== null && (sample.receiving || saved === null))
+                                                saved = sample.amount
+                                        }
+                                        onSampleChanged: retainReceivedFill()
+                                        Component.onCompleted: retainReceivedFill()
                                         onReceivingChanged: transferTubes.requestPaint()
                                         ConnectionWater {
                                             id: chunkWater
@@ -947,6 +993,8 @@ AuralisWindow {
                                             value: worker.saved
                                             paintingPaused: root.interactiveFrame
                                             receiving: worker.receiving
+                                            interrupted: !worker.receiving
+                                            paused: root.transferPaused
                                             phase: worker.receiving ? water.phase : 0
                                             slowPhase: worker.receiving ? water.slowPhase : 0
                                             startColor: root.connectionColors[0]
@@ -968,9 +1016,9 @@ AuralisWindow {
                                         ToolTip.visible: workerHover.hovered
                                         ToolTip.text: saved === null
                                             ? qsTr("Connection %1 · %2 · %3").arg(Number(connection.id) + 1)
-                                                .arg(connection.state).arg(Transfer.rate(connection.speed))
+                                                .arg(connectionState).arg(Transfer.rate(connection.speed))
                                             : qsTr("Connection %1 · %2 · %3 · %4%").arg(Number(connection.id) + 1)
-                                                .arg(connection.state).arg(Transfer.rate(connection.speed)).arg(Math.round(saved * 100))
+                                                .arg(connectionState).arg(Transfer.rate(connection.speed)).arg(Math.round(saved * 100))
                                         Accessible.name: ToolTip.text
                                     }
                                 }
@@ -1229,6 +1277,7 @@ AuralisWindow {
 
             TransferTubes {
                 objectName: "downloadPipeTrunk"
+                LayoutMirroring.enabled: false
                 anchors.left: parent.left
                 anchors.top: parent.top
                 anchors.bottom: parent.bottom
@@ -1245,7 +1294,7 @@ AuralisWindow {
                 progressPhase: water.progressPhase
                 paintingPaused: root.interactiveFrame
                 flowing: root.showWaterFlow
-                feedingConnections: root.workerRows.some(connection => connection.state === "Receiving")
+                feedingConnections: root.feedingConnections
                 progressAnimation: WindowAppearance.progressAnimation
                 connectionAnimation: WindowAppearance.connectionAnimation
                 progressLighting: WindowAppearance.progressLighting

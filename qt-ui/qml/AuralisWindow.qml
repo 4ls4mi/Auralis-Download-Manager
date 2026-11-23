@@ -6,6 +6,9 @@ import QtQuick.Controls
 ApplicationWindow {
     id: window
 
+    LayoutMirroring.enabled: Qt.application.layoutDirection === Qt.RightToLeft
+    LayoutMirroring.childrenInherit: true
+
     readonly property var fontSettings: typeof typography === "undefined" ? null : typography
 
     Binding on font {

@@ -7,6 +7,8 @@ Canvas {
 
     property var value: null
     property bool receiving: false
+    property bool interrupted: false
+    property bool paused: false
     property real phase: 0
     // The progress window shares a separate, slower clock for Jelly. Other
     // callers can still feed a single phase for previews and dashboard rows.
@@ -28,24 +30,25 @@ Canvas {
     readonly property int optic: lighting.optic || 0
     readonly property color frostTint: MaterialTheme.mix(startTone.edge, "#f1fbff", .51, 1)
     readonly property color smokedTint: MaterialTheme.mix(endTone.glow, "#070912", .87, 1)
+    readonly property color stateRed: MaterialTheme.mix("#cc2038", profile.destructive, .25, 1)
     readonly property real amount: typeof value === "number" && Number.isFinite(value)
         ? Math.max(0, Math.min(1, value)) : 0
     readonly property real surfaceY: 1.7 + (height - 3.4) * (1 - amount)
     readonly property bool water: animationStyle === "water"
     readonly property bool jelly: animationStyle === "jelly"
-    readonly property bool animating: visible && receiving && !paintingPaused
+    readonly property bool animating: visible && receiving && !paused && !paintingPaused
         && !MaterialTheme.reducedMotion && animationStyle !== "none"
         && (!Window.window || (Window.window.visible && Window.window.visibility !== Window.Minimized))
     readonly property bool movingLiquid: animating && amount > 0 && (amount < 1 || water || jelly)
     readonly property real waterPhase: !movingLiquid ? 0 : water ? phase * 2
         : jelly ? (slowPhase >= 0 ? slowPhase : jellyPhase) : phase
     readonly property real fillDepth: height - surfaceY
-    readonly property real amplitude: amount > 0 && amount < 1
+    readonly property real amplitude: receiving && amount > 0 && amount < 1
         ? Math.min(fillDepth * .26, height * (animationStyle === "none" ? 0 : !movingLiquid ? .026
             : water ? .092 : jelly ? .117 : .061)) : 0
     readonly property real meniscusY: surfaceY + Math.sin(waterPhase) * amplitude * (jelly ? .16 : .30)
     readonly property real landingX: width * Lighting.outletPosition
-    readonly property real landingY: centerOfSurface(meniscusY, amplitude, waterPhase)
+    readonly property real landingY: centerOfSurface(meniscusY, amplitude, waterPhase) + impactBend(landingX)
     readonly property real dropCycle: connected && animating && width >= 12 && height >= 14 && amount > 0
         ? Lighting.dropCycle(phase, slowPhase >= 0 ? slowPhase : jellyPhase, channelIndex, animationStyle) : -1
     readonly property real impactAge: dropCycle >= Lighting.dropContact
@@ -77,6 +80,8 @@ Canvas {
         lastPhase = phase
     }
     onReceivingChanged: requestPaint()
+    onInterruptedChanged: requestPaint()
+    onPausedChanged: requestPaint()
     onValueChanged: requestPaint()
     onShapeChanged: requestPaint()
     onProfileChanged: requestPaint()
@@ -134,29 +139,46 @@ Canvas {
         return y + Math.sin(motion) * amplitude * (water ? .48 : .65)
     }
 
+    function impactBend(x) {
+        if (impactAge < 0 || amount <= 0 || amount >= 1)
+            return 0
+        const age = impactAge
+        const distance = Math.abs(x - landingX)
+        const waveWidth = Math.max(1.25, width * .10)
+        const front = (distance - age * width * .50) / waveWidth
+        const pressure = Math.max(0, 1 - age * 5) * Math.exp(-Math.pow(distance / waveWidth, 2))
+        const wave = Math.sin(front * 2.4) * Math.exp(-front * front * .49)
+        const decay = Math.min(1, age * 10) * Math.pow(1 - age, 1.35)
+        return Math.min(height * .13, fillDepth * .32) * decay * (pressure + wave)
+    }
+
     function traceSurface(ctx, w, y, amplitude, offset = 0) {
         const motion = waterPhase + offset
         const sway = Math.sin(motion)
         const lift = Math.cos(motion)
-        const centerY = centerOfSurface(y, amplitude, motion)
+        const bend = x => impactBend(x) * (offset === 0 ? 1 : .43)
+        const centerY = centerOfSurface(y, amplitude, motion) + bend(landingX)
         ctx.beginPath()
         if (water) {
-            ctx.moveTo(0, y + amplitude * lift * .43)
-            ctx.bezierCurveTo(w * .15, y - amplitude * (.82 + sway * .56),
-                w * .34, y - amplitude * (.49 + lift * .56), landingX, centerY)
-            ctx.bezierCurveTo(w * .73, y + amplitude * (.86 - lift * .50),
-                w * .83, y - amplitude * (.12 - sway * .86), w, y - amplitude * lift * .38)
+            ctx.moveTo(0, y + amplitude * lift * .43 + bend(0))
+            ctx.bezierCurveTo(w * .15, y - amplitude * (.82 + sway * .56) + bend(w * .15),
+                w * .34, y - amplitude * (.49 + lift * .56) + bend(w * .34), landingX, centerY)
+            ctx.bezierCurveTo(w * .73, y + amplitude * (.86 - lift * .50) + bend(w * .73),
+                w * .83, y - amplitude * (.12 - sway * .86) + bend(w * .83), w, y - amplitude * lift * .38 + bend(w))
         } else if (jelly) {
-            ctx.moveTo(0, y + amplitude * (.26 - .39 * sway))
-            ctx.bezierCurveTo(w * (.19 + .08 * sway), y + amplitude * .49,
+            const shoulder = w * (.19 + .08 * sway)
+            ctx.moveTo(0, y + amplitude * (.26 - .39 * sway) + bend(0))
+            ctx.bezierCurveTo(shoulder, y + amplitude * .49 + bend(shoulder),
                 landingX - w * .23, centerY, landingX, centerY)
-            ctx.bezierCurveTo(landingX + w * (.16 + .04 * sway), centerY, w * .87, y + amplitude * .55,
-                w, y + amplitude * (.25 + .35 * sway))
+            ctx.bezierCurveTo(landingX + w * (.16 + .04 * sway), centerY,
+                w * .87, y + amplitude * .55 + bend(w * .87), w, y + amplitude * (.25 + .35 * sway) + bend(w))
         } else {
-            ctx.moveTo(0, y)
-            ctx.bezierCurveTo(w * .22, y - amplitude * lift, w * .36, y - amplitude,
+            ctx.moveTo(0, y + bend(0))
+            ctx.bezierCurveTo(w * .22, y - amplitude * lift + bend(w * .22),
+                w * .36, y - amplitude + bend(w * .36),
                 landingX, centerY)
-            ctx.bezierCurveTo(w * .75, y + amplitude, w * .88, y, w, y - amplitude * .25)
+            ctx.bezierCurveTo(w * .75, y + amplitude + bend(w * .75),
+                w * .88, y + bend(w * .88), w, y - amplitude * .25 + bend(w))
         }
     }
 
@@ -379,30 +401,35 @@ Canvas {
         if (impactAge < 0)
             return
         const age = impactAge
-        const energy = Math.pow(1 - age, 1.45)
-        const spread = Math.min(width * .34, 12)
+        const spread = Math.min(width * .42, 15)
         const gap = Math.max(0, landingY - 1.7)
-        const y = Math.min(height - 2.2, landingY + Math.min(3, fillDepth * .27) * age)
-        const radius = Math.max(1, spread * (.13 + age * .87))
-        const perspective = Math.max(.48, radius * .24)
         const ink = MaterialTheme.rgba
-        ctx.beginPath()
-        ctx.ellipse(landingX - radius, y - perspective, 2 * radius, 2 * perspective)
-        ctx.lineWidth = Math.min(2.8, width * .10) * lighting.haloWidth
-        ctx.strokeStyle = ink(endTone.glow, energy * .43)
-        ctx.stroke()
-        ctx.lineWidth = .78
-        ctx.strokeStyle = ink(startTone.edge, energy * .83)
-        ctx.stroke()
+        for (let ring = 0; ring < 2; ++ring) {
+            const travel = age - ring * .19
+            if (travel < 0)
+                continue
+            const energy = Math.pow(1 - travel, 1.5) * (1 - ring * .36) * Math.min(1, (1 - age) * 6)
+            const y = Math.min(height - 2.2, landingY + Math.min(2.8, fillDepth * .30) * travel)
+            const radius = Math.max(1, spread * (.13 + travel * .87))
+            const perspective = Math.max(.58, radius * .27)
+            ctx.beginPath()
+            ctx.ellipse(landingX - radius, y - perspective, 2 * radius, 2 * perspective)
+            ctx.lineWidth = Math.min(2.8, width * .10) * lighting.haloWidth
+            ctx.strokeStyle = ink(endTone.glow, energy * .54)
+            ctx.stroke()
+            ctx.lineWidth = .96
+            ctx.strokeStyle = ink(startTone.edge, energy * .93)
+            ctx.stroke()
+        }
 
         // The ring expands along the surface; small droplets briefly arc above it.
         if (age >= .67 || gap < 2)
             return
         const flight = age / .67
-        const lift = Math.min(gap, Math.min(height * .19, 9)) * 4 * flight * (1 - flight)
-        const radiusOfDrop = Math.max(.55, Math.min(1.25, width * .037)) * (1 - flight * .46)
-        ctx.fillStyle = ink(endTone.glow, (1 - flight) * .72)
-        ctx.strokeStyle = ink(startTone.edge, (1 - flight) * .85)
+        const lift = Math.min(gap - 1, Math.min(height * .28, 11)) * 4 * flight * (1 - flight)
+        const radiusOfDrop = Math.max(.65, Math.min(1.45, width * .045)) * (1 - flight * .46)
+        ctx.fillStyle = ink(endTone.glow, (1 - flight) * .86)
+        ctx.strokeStyle = ink(startTone.edge, (1 - flight) * .94)
         ctx.lineWidth = .5
         for (let side = -1; side <= 1; side += 2) {
             const x = landingX + side * spread * (.11 + flight * .52)
@@ -431,12 +458,26 @@ Canvas {
         const color = MaterialTheme.rgba
         const first = startTone
         const last = endTone
-        const track = ctx.createLinearGradient(0, 0, w, h)
-        track.addColorStop(0, optic === 1 ? color(frostTint, .29) : color(profile.upper, profile.light ? .37 : .16))
-        track.addColorStop(.30, optic === 4 ? color(smokedTint, .68) : color(trackColor, .16))
-        track.addColorStop(.70, optic === 4 ? color(smokedTint, .73) : color(trackColor, .23))
-        track.addColorStop(1, color(last.core, profile.light ? .53 : .37))
         outline(ctx, w, h)
+        if (paused) {
+            ctx.fillStyle = stateRed
+            ctx.fill()
+            ctx.strokeStyle = MaterialTheme.mix(stateRed, "#ffa7b0", .39, .9)
+            ctx.lineWidth = .85
+            ctx.stroke()
+            return
+        }
+        const track = ctx.createLinearGradient(0, 0, w, h)
+        if (interrupted) {
+            track.addColorStop(0, color(stateRed, .84))
+            track.addColorStop(.67, MaterialTheme.mix(stateRed, "#610d28", .36, .88))
+            track.addColorStop(1, MaterialTheme.mix(stateRed, "#400c23", .63, .92))
+        } else {
+            track.addColorStop(0, optic === 1 ? color(frostTint, .29) : color(profile.upper, profile.light ? .37 : .16))
+            track.addColorStop(.30, optic === 4 ? color(smokedTint, .68) : color(trackColor, .16))
+            track.addColorStop(.70, optic === 4 ? color(smokedTint, .73) : color(trackColor, .23))
+            track.addColorStop(1, color(last.core, profile.light ? .53 : .37))
+        }
         ctx.fillStyle = track
         ctx.fill()
 
@@ -528,7 +569,7 @@ Canvas {
         rim.addColorStop(1, color(amount > 0 ? last.edge : profile.upper,
             amount > 0 ? optic === 3 || optic === 12 ? 1 : optic === 4 ? .52 : .85 : .34))
         ctx.lineWidth = optic === 12 ? 1.15 : .8
-        ctx.strokeStyle = rim
+        ctx.strokeStyle = interrupted ? MaterialTheme.mix(stateRed, "#ffa7b0", .35, .92) : rim
         ctx.stroke()
     }
 }

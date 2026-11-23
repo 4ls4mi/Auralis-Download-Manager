@@ -16,14 +16,7 @@ ColumnLayout {
     readonly property bool previewActive: visible && (!Window.window || Window.window.visible)
     readonly property bool hasChanges: draftEnglishFamily !== (fontSettings.englishFamily ?? "")
         || draftArabicFamily !== (fontSettings.arabicFamily ?? "") || draftSizePercent !== (fontSettings.fontSizePercent ?? 100)
-    readonly property var sizeOptions: Array.from(fontSettings.fontSizeChoices ?? [100], value => ({
-        label: qsTr("%1%").arg(value), value: value
-    }))
-    readonly property int sizeIndex: Math.max(0, sizeOptions.findIndex(option => option.value === draftSizePercent))
     readonly property var colors: MaterialTheme.palette
-    readonly property var englishCurated: ["Talina", "Milkyway", "Mochi Boom", "Qilka", "Qurova"]
-    readonly property var arabicCurated: ["Kidzhood Arabic", "Tinta Arabic", "Madani Arabic",
-        "Mahameru Arabic", "Gumela Arabic", "Tufuli Arabic", "Lutfey Arabic"]
 
     spacing: 13
 
@@ -47,36 +40,13 @@ ColumnLayout {
     onDraftArabicFamilyChanged: applyFailed = false
     onDraftSizePercentChanged: applyFailed = false
 
-    function familyKey(name) {
-        return name.toLowerCase().replace(/[^a-z0-9]/g, "")
-    }
-
-    function familyChoices(curated, installed) {
-        const detected = new Map()
-        for (const family of installed) {
-            const key = familyKey(family)
-            if (key && !detected.has(key))
-                detected.set(key, family)
-        }
-
-        const options = [{label: qsTr("System default"), value: ""}]
-        const missing = []
-        const included = new Set()
-        for (const name of curated) {
-            const key = familyKey(name)
-            const family = detected.get(key)
-            if (family) {
-                options.push({label: name, value: family})
-                included.add(key)
-            } else {
-                missing.push(name)
-            }
-        }
-        for (const family of installed) {
-            if (family && !included.has(familyKey(family)))
-                options.push({label: family, value: family})
-        }
-        return {options: options, missing: missing}
+    function familyChoices(fontOptions) {
+        return [{label: qsTr("System default"), value: "", available: true}].concat(
+            Array.from(fontOptions ?? [], entry => ({
+                label: entry.available ? entry.label : qsTr("%1 (not installed)").arg(entry.label),
+                value: entry.value,
+                available: entry.available
+            })))
     }
 
     function previewFont(family, size, weight) {
@@ -90,14 +60,13 @@ ColumnLayout {
 
         required property string caption
         required property string family
-        required property var installed
-        required property var curated
+        required property var fontOptions
         required property string sampleTitle
         required property string sampleDetail
         required property string sampleStatus
         property bool rightToLeft: false
-        readonly property var choices: root.familyChoices(curated, installed)
-        readonly property int selectedIndex: Math.max(0, choices.options.findIndex(option => option.value === family))
+        readonly property var choices: root.familyChoices(fontOptions)
+        readonly property int selectedIndex: Math.max(0, choices.findIndex(option => option.value === family))
         signal familyRequested(string value)
 
         Layout.fillWidth: true
@@ -116,16 +85,22 @@ ColumnLayout {
         GlassComboBox {
             objectName: script.rightToLeft ? "arabicFontChoice" : "englishFontChoice"
             Layout.fillWidth: true
-            model: script.choices.options
+            model: script.choices
             textRole: "label"
             valueRole: "value"
             currentIndex: script.selectedIndex
             Accessible.name: script.caption
+            optionAvailable: family => script.choices.some(option => option.value === family && option.available)
             fontOptionPreview: family => ({
                 text: script.sampleTitle,
                 font: root.previewFont(family, 19, Font.DemiBold)
             })
-            onActivated: script.familyRequested(currentValue)
+            onActivated: {
+                if (optionAvailable(currentValue))
+                    script.familyRequested(currentValue)
+                else
+                    currentIndex = Qt.binding(() => script.selectedIndex)
+            }
         }
 
         Frame {
@@ -165,15 +140,6 @@ ColumnLayout {
                 }
             }
         }
-
-        Label {
-            Layout.fillWidth: true
-            visible: script.choices.missing.length > 0
-            text: qsTr("Available after installation (%1).").arg(script.choices.missing.join(", "))
-            textFormat: Text.PlainText
-            color: root.colors.muted
-            wrapMode: Text.Wrap
-        }
     }
 
     Label {
@@ -190,17 +156,22 @@ ColumnLayout {
             color: root.colors.text
             font.weight: Font.DemiBold
         }
-        GlassComboBox {
+        Slider {
             objectName: "fontSizeChoice"
-            Layout.preferredWidth: 135
-            model: root.sizeOptions
-            textRole: "label"
-            valueRole: "value"
-            currentIndex: root.sizeIndex
+            Layout.fillWidth: true
+            from: root.fontSettings.fontSizeMinimum ?? 85
+            to: root.fontSettings.fontSizeMaximum ?? 130
+            stepSize: 1
+            snapMode: Slider.SnapAlways
+            value: root.draftSizePercent
+            palette.highlight: root.colors.accent
             Accessible.name: qsTr("Font size")
-            onActivated: root.draftSizePercent = currentValue
+            onMoved: root.draftSizePercent = Math.round(value)
         }
-        Item { Layout.fillWidth: true }
+        Label {
+            text: qsTr("%1%").arg(root.draftSizePercent)
+            color: root.colors.text
+        }
     }
 
     GridLayout {
@@ -212,8 +183,7 @@ ColumnLayout {
         ScriptFonts {
             caption: qsTr("English interface font")
             family: root.draftEnglishFamily
-            installed: root.fontSettings.englishFonts
-            curated: root.englishCurated
+            fontOptions: root.fontSettings.englishFontOptions
             sampleTitle: "Download queue"
             sampleDetail: "Archive.zip · 42 MB of 108 MB"
             sampleStatus: "Downloading · 3.2 MB/s"
@@ -223,8 +193,7 @@ ColumnLayout {
         ScriptFonts {
             caption: qsTr("Arabic interface font")
             family: root.draftArabicFamily
-            installed: root.fontSettings.arabicFonts
-            curated: root.arabicCurated
+            fontOptions: root.fontSettings.arabicFontOptions
             rightToLeft: true
             sampleTitle: "قائمة التنزيلات"
             sampleDetail: "ملف مضغوط · ٤٢ من ١٠٨ ميغابايت"

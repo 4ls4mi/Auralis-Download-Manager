@@ -23,10 +23,13 @@ DetachedDialogWindow {
     readonly property bool canCheck: automatic && engine.ready && Boolean(hostWindow?.visible)
         && hostWindow.active && hostWindow.visibility !== Window.Minimized
     readonly property bool checksComplete: helpersChecked && browserSetup.checked
-    readonly property var tools: helperStatus?.tools || []
-    readonly property var missingHelpers: tools.filter(tool => !tool.path).map(tool => tool.name)
+    readonly property var tools: Array.from(helperStatus?.tools ?? [])
+    readonly property var missingHelpers: helperProblem ? [] : tools.filter(tool => tool?.name
+        && (tool.path === null || tool.path === "")).map(tool => tool.name)
     readonly property bool installerBusy: helperStatus?.job?.state === "installing"
     readonly property bool batchRunning: requestingHelper || Boolean(activeHelper) || queuedHelpers.length > 0
+    readonly property bool missingPrerequisite: (missingHelpers.length > 0 && !installerBusy)
+        || browserSetup.confirmedMissing
 
     title: qsTr("Set up Auralis")
     objectName: "startupSetupWindow"
@@ -45,10 +48,7 @@ DetachedDialogWindow {
     }
 
     function offerIfNeeded() {
-        const missingBrowser = browserSetup.needsSetup && !browserSetup.status?.storePreviouslyConnected
-        if (canCheck && checksComplete && !offered && !deferred
-            && (missingHelpers.length > 0 || helperProblem || missingBrowser || browserSetup.problem
-                || browserSetup.needsHostRepair)) {
+        if (canCheck && checksComplete && missingPrerequisite && !offered && !deferred) {
             offered = true
             open()
         }
@@ -66,13 +66,21 @@ DetachedDialogWindow {
         checkingHelpers = true
         engine.request({query: "glass-helpers"}, function(result, error) {
             checkingHelpers = false
-            if (error || !result?.tools) {
+            if (error || typeof result?.tools?.length !== "number") {
                 helperProblem = error || qsTr("Could not check the installed helpers.")
                 helpersChecked = true
                 return
             }
-            helperProblem = ""
             helperStatus = result
+            helperProblem = ""
+            if (Object.keys(failures).length > 0) {
+                const updated = Object.assign({}, failures)
+                for (const tool of tools) {
+                    if (tool?.path)
+                        delete updated[tool.name]
+                }
+                failures = updated
+            }
             helpersChecked = true
             if (activeHelper && !requestingHelper && !installerBusy) {
                 if (missingHelpers.includes(activeHelper)) {

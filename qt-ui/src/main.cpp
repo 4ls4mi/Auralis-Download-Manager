@@ -214,6 +214,8 @@ QIcon trayActionIcon(TrayGlyph glyph, const QColor &color, const QColor &activeI
 
 class TrayMenus final : public QObject
 {
+    Q_DECLARE_TR_FUNCTIONS(TrayMenus)
+
 public:
     TrayMenus(Engine &engine, QObject &root, QObject *materialTheme, const QIcon &icon,
               std::function<void()> activate, bool registerIcons)
@@ -587,6 +589,7 @@ int main(int argc, char **argv)
     if (!local.listen(serverName))
         return 1;
 
+    engine.initializeInterfaceLanguage();
     qml.rootContext()->setContextProperty(QStringLiteral("engine"), &engine);
     qml.rootContext()->setContextProperty(QStringLiteral("typography"), &typography);
     if (smoke) qInfo("Smoke: loading the Qt interface.");

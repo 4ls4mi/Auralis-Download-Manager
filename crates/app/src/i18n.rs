@@ -375,6 +375,16 @@ pub fn system_code() -> &'static str {
     i18n().code(i18n().system_lang())
 }
 
+/// Resolve a saved preference against the languages bundled by the Qt interface.
+pub(crate) fn qt_interface_code(saved: Option<&str>) -> &'static str {
+    match saved.unwrap_or_else(|| system_code()) {
+        "ar" => "ar",
+        "es" | "es-mx" => "es",
+        "zh-hans" => "zh-hans",
+        _ => "en",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,11 +1,11 @@
 cmake_minimum_required(VERSION 3.21)
-project(AuralisQt VERSION 0.3.70 LANGUAGES CXX)
+project(AuralisQt VERSION 0.3.71 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(Qt6 6.8 REQUIRED COMPONENTS
-    Core Gui Widgets Qml Quick QuickControls2 Quick3D Concurrent Network Multimedia ShaderTools
+    Core Gui Widgets Qml Quick QuickControls2 Quick3D Concurrent Network Multimedia ShaderTools LinguistTools
 )
 qt_standard_project_setup(REQUIRES 6.8)
 
@@ -77,4 +77,10 @@ qt_add_qml_module(auralis-download-manager
     URI Auralis
     VERSION 1.0
     QML_FILES ${qml_components}
+)
+
+qt_add_translations(auralis-download-manager
+    SOURCE_TARGETS auralis-download-manager
+    TS_FILES i18n/auralis_ar.ts i18n/auralis_es.ts i18n/auralis_zh_CN.ts
+    RESOURCE_PREFIX "/auralis/i18n"
 )

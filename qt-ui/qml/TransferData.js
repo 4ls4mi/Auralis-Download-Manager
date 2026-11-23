@@ -47,14 +47,41 @@ function fraction(item) {
 }
 
 function problem(reply, error) {
-    return error ? String(error) : reply && reply.error ? String(reply.error) : ""
+    const message = error ? String(error) : reply && reply.error ? String(reply.error) : ""
+    return message ? qsTranslate("BackendErrors", message) : ""
 }
 
-function assigned(id, segments) {
+function statusLabel(state) {
+    switch (state) {
+    case "Queued": return qsTranslate("Main", "Queued")
+    case "Downloading": return qsTranslate("Main", "Downloading")
+    case "Stopped": return qsTranslate("Main", "Paused")
+    case "Complete": return qsTranslate("Main", "Completed")
+    case "Error": return qsTranslate("Main", "Failed")
+    default: return state || "—"
+    }
+}
+
+function connectionLabel(state) {
+    switch (state) {
+    case "Connecting": return qsTranslate("DownloadWindow", "Connecting")
+    case "Receiving": return qsTranslate("DownloadWindow", "Receiving")
+    case "Retrying": return qsTranslate("DownloadWindow", "Retrying")
+    case "Finished": return qsTranslate("DownloadWindow", "Finished")
+    case "Failed": return qsTranslate("Main", "Failed")
+    case "Retired": return qsTranslate("DownloadWindow", "Retired")
+    default: return qsTranslate("DownloadWindow", "Unknown")
+    }
+}
+
+function assigned(id, segments, includeLastOwner = false) {
+    if (id === null || id === undefined)
+        return null
     let total = 0
     let saved = 0
     for (let piece of segments || []) {
-        if (piece.worker === null || piece.worker === undefined || Number(piece.worker) !== Number(id))
+        const owner = piece.worker ?? (includeLastOwner ? piece.last_worker : null)
+        if (owner === null || owner === undefined || Number(owner) !== Number(id))
             continue
         total += Math.max(0, piece.end - piece.start)
         saved += Math.min(Math.max(0, piece.cursor - piece.start), Math.max(0, piece.end - piece.start))

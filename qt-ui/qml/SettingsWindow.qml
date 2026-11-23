@@ -45,7 +45,7 @@ AuralisWindow {
     readonly property string term: search.text.trim().toLowerCase()
     readonly property var sections: [
         {id: "General", name: qsTr("General"), detail: qsTr("Startup, notifications, and backups"), terms: qsTr("start backup restore preferences notification window popup"),
-            keys: ["start_immediately", "only_add_to_queue", "confirm_delete", "show_progress", "show_complete", "double_click_open",
+            keys: ["language", "start_immediately", "only_add_to_queue", "confirm_delete", "show_progress", "show_complete", "double_click_open",
                 "minimize_to_tray", "close_to_tray", "progress_minimize_to_tray"]},
         {id: "Display", name: qsTr("Display & fonts"), detail: qsTr("Interface size, text size, and font previews"), terms: qsTr("interface app UI window scale size zoom DPI fonts typography preview"), keys: []},
         {id: "Downloads", name: qsTr("Downloads"), detail: qsTr("File rules, folders, and archive extraction"), terms: qsTr("file folder category archive duplicates extract"), keys: []},
@@ -67,6 +67,12 @@ AuralisWindow {
         {label: qsTr("Continue automatically when unambiguous"), value: "auto"}
     ]
     readonly property var common: ({
+        language: {label: qsTr("Interface language"), kind: "select", options: [
+            {label: "English", value: "en"},
+            {label: "العربية", value: "ar"},
+            {label: "Español", value: "es"},
+            {label: "简体中文", value: "zh-hans"}
+        ]},
         start_immediately: {label: qsTr("Start new downloads automatically"), kind: "boolean"},
         only_add_to_queue: {label: qsTr("Add new requests to the queue"), kind: "boolean"},
         confirm_delete: {label: qsTr("Confirm before deleting"), kind: "boolean"},
@@ -200,6 +206,21 @@ AuralisWindow {
         }
     }
 
+    function localizeBackendField(field, translateOptions = true) {
+        const entry = Object.assign({}, field)
+        if (entry.label)
+            entry.label = qsTranslate("BackendSettings", entry.label)
+        if (entry.description)
+            entry.description = qsTranslate("BackendSettings", entry.description)
+        if (entry.options && translateOptions) {
+            entry.options = entry.options.map(option => typeof option === "string"
+                ? qsTranslate("BackendSettings", option) : localizeBackendField(option))
+        }
+        if (entry.columns)
+            entry.columns = entry.columns.map(column => localizeBackendField(column, field.key !== "category_dirs"))
+        return entry
+    }
+
     function matchingFields() {
         const entries = []
         if (config) {
@@ -226,14 +247,14 @@ AuralisWindow {
             if (hiddenEngineFields.includes(field.key)) continue
             if (!term && field.section !== category) continue
             const details = extraDetails[field.key]
-            const entry = details ? Object.assign({}, field, details) : field
+            const entry = Object.assign(localizeBackendField(field), details || {})
             if (field.key === "video_cookies") {
                 const stored = String(entry.value || "").trim().toLowerCase()
                 entry.value = stored
                 entry.options = stored && !browserChoices.some(browser => browser.value === stored)
                     ? browserChoices.concat([{label: stored, value: stored}]) : browserChoices
             }
-            if (matchesText(entry.key + " " + entry.label + " " + (entry.description || "")))
+            if (matchesText(entry.key + " " + entry.label + " " + field.label + " " + (entry.description || "")))
                 entries.push(entry)
         }
         return entries
@@ -249,8 +270,18 @@ AuralisWindow {
             : {action: "glass-original-setting", queue: JSON.stringify(payload)}
         engine.request(command, function(reply, error) {
             saving = false
-            if (error || !reply || reply.ok === false) problem = error || qsTr("Could not save this setting.")
-            else { notice = qsTr("Settings saved"); load() }
+            if (error || !reply || reply.ok === false) {
+                if (field.key === "language") {
+                    problem = qsTr("Could not change the interface language.")
+                    load()
+                } else {
+                    problem = error || qsTr("Could not save this setting.")
+                }
+                return
+            }
+            if (field.key !== "language")
+                notice = qsTr("Settings saved")
+            load()
         })
     }
 
@@ -563,33 +594,46 @@ AuralisWindow {
                                             font.weight: Font.DemiBold
                                         }
 
-                                        GlassComboBox {
-                                            id: interfaceSize
-                                            objectName: "settingsInterfaceSize"
-                                            property bool saveFailed: false
-                                            readonly property int selectedIndex: Math.max(0, model.findIndex(option =>
-                                                option.value === root.fontSettings?.interfaceScalePercent))
-
+                                        RowLayout {
                                             Layout.fillWidth: true
-                                            Layout.maximumWidth: 200
-                                            model: Array.from(root.fontSettings?.interfaceScaleChoices ?? [100], value => ({
-                                                label: qsTr("%1%").arg(value), value: value
-                                            }))
-                                            textRole: "label"
-                                            valueRole: "value"
-                                            currentIndex: selectedIndex
-                                            Accessible.name: qsTr("Interface size")
-                                            onActivated: {
-                                                saveFailed = !root.fontSettings.setInterfaceScalePercent(currentValue)
-                                                if (saveFailed)
-                                                    currentIndex = Qt.binding(() => selectedIndex)
+
+                                            Slider {
+                                                id: interfaceSize
+                                                objectName: "settingsInterfaceSize"
+                                                property bool saveFailed: false
+
+                                                Layout.fillWidth: true
+                                                from: root.fontSettings?.interfaceScaleMinimum ?? 85
+                                                to: root.fontSettings?.interfaceScaleMaximum ?? 150
+                                                stepSize: 1
+                                                snapMode: Slider.SnapAlways
+                                                live: false
+                                                value: root.fontSettings?.interfaceScalePercent ?? 100
+                                                palette.highlight: root.colors.accent
+                                                Accessible.name: qsTr("Interface size")
+
+                                                function saveSelection() {
+                                                    const percent = Math.round(value)
+                                                    if (percent === root.fontSettings.interfaceScalePercent)
+                                                        return
+                                                    saveFailed = !root.fontSettings.setInterfaceScalePercent(percent)
+                                                    if (saveFailed)
+                                                        value = Qt.binding(() => root.fontSettings.interfaceScalePercent)
+                                                }
+                                                onMoved: if (!pressed) saveSelection()
+                                                onPressedChanged: if (!pressed) saveSelection()
+                                            }
+
+                                            Label {
+                                                text: qsTr("%1%").arg(Math.round(interfaceSize.valueAt(interfaceSize.position)))
+                                                color: root.colors.text
                                             }
                                         }
 
                                         PaneCopy {
                                             text: root.fontSettings?.interfaceScalePercent === root.fontSettings?.activeInterfaceScalePercent
                                                 ? qsTr("Resizes controls, text, and spacing throughout Auralis after you quit and reopen the app.")
-                                                : qsTr("Current size is %1%. Fully quit Auralis and reopen it to apply %2%.")
+                                                : qsTr("Saved %2% for the next launch. The current size is %1%. Quit Auralis and reopen it to apply.")
                                                     .arg(root.fontSettings?.activeInterfaceScalePercent)
                                                     .arg(root.fontSettings?.interfaceScalePercent)
                                         }

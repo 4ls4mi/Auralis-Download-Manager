@@ -784,6 +784,8 @@ pub struct ConnView {
     pub id: WorkerId,
     pub downloaded: u64,
     pub status: ConnStatus,
+    /// When a body read started waiting for data, excluding disk and speed-limiter waits.
+    pub waiting_for_data_since: Option<std::time::Instant>,
     /// Last actual network retry/failure, retained briefly for sampled Glass displays.
     pub last_disconnect: Option<std::time::Instant>,
     /// A failed connection has not yet resumed receiving.
@@ -1415,6 +1417,7 @@ impl Shared {
                     id,
                     downloaded: 0,
                     status: ConnStatus::Connecting,
+                    waiting_for_data_since: None,
                     last_disconnect: None,
                     reconnecting_after_loss: false,
                     speed: 0,
@@ -1424,6 +1427,9 @@ impl Shared {
         };
         let was_disconnected = matches!(v.connections[i].status, ConnStatus::Retrying(_) | ConnStatus::Failed(_));
         f(&mut v.connections[i]);
+        if !matches!(v.connections[i].status, ConnStatus::Receiving) {
+            v.connections[i].waiting_for_data_since = None;
+        }
         if !was_disconnected && matches!(v.connections[i].status, ConnStatus::Retrying(_) | ConnStatus::Failed(_)) {
             v.connections[i].last_disconnect = Some(std::time::Instant::now());
             v.connections[i].reconnecting_after_loss = true;
@@ -1431,6 +1437,21 @@ impl Shared {
         if matches!(v.connections[i].status, ConnStatus::Receiving | ConnStatus::Finished | ConnStatus::Retired { .. }) {
             v.connections[i].reconnecting_after_loss = false;
         }
+    }
+
+    async fn read_connection_chunk(&self, id: WorkerId, body: &mut Body) -> Result<Option<Bytes>, Error> {
+        let mut read = std::pin::pin!(body.chunk());
+        let mut waiting = false;
+        std::future::poll_fn(|cx| {
+            let result = std::future::Future::poll(read.as_mut(), cx);
+            if result.is_pending() != waiting {
+                waiting = result.is_pending();
+                self.conn(id, |connection| {
+                    connection.waiting_for_data_since = waiting.then(std::time::Instant::now);
+                });
+            }
+            result
+        }).await
     }
 
     fn with_planner<T>(&self, f: impl FnOnce(&mut Planner) -> T) -> T {
@@ -4630,7 +4651,7 @@ async fn receive(
                 out.finish(&mut pace).await?;
                 return Err(Error::Cancelled);
             }
-            n = body.chunk() => n,
+            n = ctx.shared.read_connection_chunk(id, &mut body) => n,
         };
         // `complete`: the segment ended where this connection had written (a split shortened it).
         let (ended, err, complete) = match next {
@@ -5192,7 +5213,7 @@ async fn single_stream(
     loop {
         let next = tokio::select! {
             _ = cancel.cancelled() => return Err(Error::Cancelled),
-            n = body.chunk() => n,
+            n = shared.read_connection_chunk(0, &mut body) => n,
         };
         let Some(chunk) = next? else { break };
         // Stop ends a limiter's wait too (under a low limit it is seconds long).

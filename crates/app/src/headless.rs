@@ -28,8 +28,12 @@ use std::time::Duration;
 // The embedded host must not mutate process-wide environment variables after
 // Tauri has started threads. Existing standalone launches still use their env flag.
 static EMBEDDED_GLASS: AtomicBool = AtomicBool::new(false);
-pub(crate) fn glass_owned() -> bool {
+pub(crate) fn embedded() -> bool {
     EMBEDDED_GLASS.load(Ordering::SeqCst)
+}
+
+pub(crate) fn glass_owned() -> bool {
+    embedded()
         || std::env::var_os("MDM_GLASS_HEADLESS").is_some_and(|value| value == "1")
 }
 

@@ -8,8 +8,10 @@
 #include <QTimer>
 #include <QUrl>
 #include <QVariantMap>
+#include <memory>
 
 class QJSEngine;
+class QTranslator;
 class QWindow;
 
 class Engine final : public QObject
@@ -21,6 +23,7 @@ class Engine final : public QObject
     Q_PROPERTY(QString status READ status NOTIFY statusChanged)
     Q_PROPERTY(QString dataDirectory READ dataDirectory CONSTANT)
     Q_PROPERTY(QString version READ version CONSTANT)
+    Q_PROPERTY(QString interfaceLanguage READ interfaceLanguage NOTIFY interfaceLanguageChanged)
     Q_PROPERTY(bool startHidden READ startHidden CONSTANT)
     Q_PROPERTY(bool trayAvailable READ trayAvailable CONSTANT)
     Q_PROPERTY(bool interactiveSetup READ interactiveSetup CONSTANT)
@@ -36,11 +39,13 @@ public:
     QString status() const { return m_status; }
     QString dataDirectory() const { return m_profile; }
     QString version() const;
+    QString interfaceLanguage() const { return m_interfaceLanguage; }
     bool startHidden() const { return m_startHidden; }
     bool trayAvailable() const;
     bool interactiveSetup() const { return !m_smoke; }
     bool running() const { return m_service.isRunning(); }
 
+    void initializeInterfaceLanguage();
     void start();
     Q_INVOKABLE void request(const QVariantMap &command);
     Q_INVOKABLE void request(const QVariantMap &command, const QJSValue &callback);
@@ -63,6 +68,7 @@ signals:
     void trayDownloadItemsChanged(const QVariantList &items);
     void readyChanged();
     void statusChanged();
+    void interfaceLanguageChanged();
     void operationFailed(const QString &message);
     void browserWindowRequested(const QString &target);
     void serviceStopped(bool clean);
@@ -78,6 +84,7 @@ private:
     QVariantMap dispatch(const QVariantMap &command) const;
     void setReady(bool ready);
     void setStatus(const QString &status);
+    void applyInterfaceLanguage(const QString &language);
     void applySnapshot(const QVariantMap &response);
     void finishService();
 
@@ -97,6 +104,8 @@ private:
     QVariantMap m_visuals;
     QString m_profile;
     QString m_status;
+    QString m_interfaceLanguage;
+    std::unique_ptr<QTranslator> m_translator;
     bool m_ready = false;
     bool m_refreshing = false;
     bool m_quitting = false;

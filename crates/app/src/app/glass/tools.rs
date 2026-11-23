@@ -80,7 +80,7 @@ impl App {
             return Some(json!({"version":self.glass_import_serial,"data":self.grabber.as_mut().map(crate::grabber::Grabber::glass_view)}).to_string());
         }
         if cmd.query.as_deref()==Some("glass-categories") {
-            return Some(json!({"categories":Category::all().into_iter().map(|c|json!({"key":c.key(),"name":c.label(),"types":c.types_text(),"folder":self.settings.category_dir(c,&self.downloads),"editable":c.editable()})).collect::<Vec<_>>()} ).to_string());
+            return Some(json!({"categories":Category::all().into_iter().map(|c|json!({"key":c.key(),"name":c.shown(),"types":c.types_text(),"folder":self.settings.category_dir(c,&self.downloads),"editable":c.editable()})).collect::<Vec<_>>()} ).to_string());
         }
         let action=cmd.action.as_deref()?;
         if !matches!(action,"glass-batch"|"glass-grabber"|"glass-category"|"glass-gallery"){return None;}

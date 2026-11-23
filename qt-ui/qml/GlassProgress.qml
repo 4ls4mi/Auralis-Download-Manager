@@ -24,7 +24,7 @@ Item {
     readonly property var finish: Lighting.style(lightingStyle)
     readonly property var firstTone: MaterialTheme.neonTone(startColor)
     readonly property var lastTone: MaterialTheme.neonTone(endColor)
-    readonly property real glowMargin: Math.round((height >= 28 ? 5 : 3) * finish.haloWidth)
+    readonly property real glowMargin: Math.round(Math.max(3, Math.min(5, height * .14)) * finish.haloWidth)
     readonly property int contour: shape === "bubble" ? 1 : ["prism", "ice", "chamfer"].includes(shape) ? 2
         : ["square", "plain"].includes(shape) ? 3 : 0
     readonly property bool renderWithShader: width >= 12 && height >= 7
@@ -52,7 +52,7 @@ Item {
     NumberAnimation on localPhase {
         from: 0
         to: Math.PI * 2
-        duration: progress.motionKind === 1 ? 580 : progress.motionKind === 2 ? 2840 : 1850
+        duration: progress.motionKind === 1 ? 1480 : progress.motionKind === 2 ? 3700 : 2450
         loops: Animation.Infinite
         running: progress.liquidMoving && progress.externalPhase < 0
     }

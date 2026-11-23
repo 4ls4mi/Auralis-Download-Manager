@@ -1171,7 +1171,7 @@ fn serve() -> io::Result<()> {
             .map(|id| id.trim_end_matches('/').to_owned())
     });
     #[cfg(windows)]
-    let store_browser = if caller.as_deref() == store_id() {
+    let store_browser = if caller.as_deref().is_some_and(mdm_ipc::extension::is_auralis_chromium_id) {
         win32::launching_store_browser()
     } else {
         None

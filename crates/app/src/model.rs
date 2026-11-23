@@ -728,6 +728,7 @@ fn tool_snapshot(p: mdm_tools::video::Progress, url: &Url) -> mdm_engine::Snapsh
         } else {
             ConnStatus::Connecting
         },
+        waiting_for_data_since: None,
         last_disconnect: None,
             reconnecting_after_loss: false,
         speed: p.speed as u64,
@@ -2117,6 +2118,7 @@ mod helper_connection_tests {
             id,
             downloaded: 100,
             status: ConnStatus::Receiving,
+            waiting_for_data_since: None,
             last_disconnect: None,
             reconnecting_after_loss: false,
             speed: 10,

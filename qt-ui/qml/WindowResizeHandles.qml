@@ -23,6 +23,8 @@ Item {
     z: 20
     objectName: "windowResizeHandles"
     visible: hostWindow.visibility === Window.Windowed
+    LayoutMirroring.enabled: false
+    LayoutMirroring.childrenInherit: true
 
     onVisibleChanged: if (!visible && activeHandle) finishResize(activeHandle, false)
 

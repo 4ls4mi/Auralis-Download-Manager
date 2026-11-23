@@ -13,15 +13,23 @@ const auto ArabicFontKey = QStringLiteral("Typography/arabicFamily");
 const auto FontSizeKey = QStringLiteral("Typography/fontSizePercent");
 const auto FontPreferencesKey = QStringLiteral("Typography/fontPreferences");
 const auto InterfaceScaleKey = QStringLiteral("Typography/interfaceScalePercent");
-const QList<int> FontSizeChoices{85, 90, 100, 110, 120, 130};
-const QList<int> InterfaceScaleChoices{85, 90, 100, 110, 125, 150};
+const QStringList EnglishFonts{
+    QStringLiteral("Talina"), QStringLiteral("Milkyway"), QStringLiteral("Mochi Boom"),
+    QStringLiteral("Qilka"), QStringLiteral("Qurova")};
+const QStringList ArabicFonts{
+    QStringLiteral("Kidzhood Arabic"), QStringLiteral("Tinta Arabic"), QStringLiteral("Madani Arabic"),
+    QStringLiteral("Mahameru Arabic"), QStringLiteral("Gumela Arabic"), QStringLiteral("Tufuli Arabic"),
+    QStringLiteral("Lutfey Arabic")};
+constexpr int MinimumPercent = 85;
 constexpr int DefaultPercent = 100;
+constexpr int MaximumFontPercent = 130;
+constexpr int MaximumInterfacePercent = 150;
 
-int savedPercent(const QVariant &value, const QList<int> &choices)
+int savedPercent(const QVariant &value, int maximum)
 {
     bool valid = false;
     const int percent = value.toString().toInt(&valid);
-    return valid && choices.contains(percent) ? percent : DefaultPercent;
+    return valid && percent >= MinimumPercent && percent <= maximum ? percent : DefaultPercent;
 }
 
 bool savePreference(const QString &key, const QVariant &value)
@@ -34,21 +42,44 @@ bool savePreference(const QString &key, const QVariant &value)
     return settings.status() == QSettings::NoError;
 }
 
-QStringList installedFamilies(QFontDatabase::WritingSystem script)
+QString familyKey(QString name)
 {
-    QStringList families = QFontDatabase::families(script);
-    families.removeDuplicates();
-    families.sort(Qt::CaseInsensitive);
-    return families;
+    name.remove(QLatin1Char(' '));
+    name.remove(QLatin1Char('-'));
+    name.remove(QLatin1Char('_'));
+    return name.toCaseFolded();
 }
 
-QString installedFamily(const QString &requested, const QStringList &installed)
+QVariantList fontOptions(const QStringList &catalog, QFontDatabase::WritingSystem script)
 {
-    const auto index = installed.indexOf(requested);
-    if (index >= 0)
-        return installed.at(index);
-    for (const auto &family : installed) {
-        if (family.compare(requested, Qt::CaseInsensitive) == 0)
+    const auto installed = QFontDatabase::families(script);
+    QVariantList options;
+    for (const auto &name : catalog) {
+        QString family;
+        const auto key = familyKey(name);
+        for (const auto &candidate : installed) {
+            if (candidate.compare(name, Qt::CaseInsensitive) == 0) {
+                family = candidate;
+                break;
+            }
+            if (family.isEmpty() && familyKey(candidate) == key)
+                family = candidate;
+        }
+        options.append(QVariantMap{{QStringLiteral("label"), name}, {QStringLiteral("available"), !family.isEmpty()},
+                                   {QStringLiteral("value"), family.isEmpty() ? name : family}});
+    }
+    return options;
+}
+
+QString installedFamily(const QString &requested, const QVariantList &options)
+{
+    if (requested.isEmpty())
+        return {};
+    const auto key = familyKey(requested);
+    for (const auto &value : options) {
+        const auto option = value.toMap();
+        const auto family = option.value(QStringLiteral("value")).toString();
+        if (option.value(QStringLiteral("available")).toBool() && familyKey(family) == key)
             return family;
     }
     return {};
@@ -74,7 +105,7 @@ void applyScriptFallback(QChar::Script script, const QStringList &inherited,
 
 int Typography::applyStartupInterfaceScale()
 {
-    const int percent = savedPercent(QSettings().value(InterfaceScaleKey), InterfaceScaleChoices);
+    const int percent = savedPercent(QSettings().value(InterfaceScaleKey), MaximumInterfacePercent);
     if (percent == DefaultPercent)
         return percent;
 
@@ -95,8 +126,8 @@ Typography::Typography(int activeInterfaceScalePercent, QObject *parent)
       m_systemFont(QApplication::font()),
       m_latinFallbacks(QFontDatabase::applicationFallbackFontFamilies(QChar::Script_Latin)),
       m_arabicFallbacks(QFontDatabase::applicationFallbackFontFamilies(QChar::Script_Arabic)),
-      m_englishFonts(installedFamilies(QFontDatabase::Latin)),
-      m_arabicFonts(installedFamilies(QFontDatabase::Arabic)),
+      m_englishFontOptions(fontOptions(EnglishFonts, QFontDatabase::Latin)),
+      m_arabicFontOptions(fontOptions(ArabicFonts, QFontDatabase::Arabic)),
       m_fontSizePercent(DefaultPercent),
       m_interfaceScalePercent(DefaultPercent),
       m_activeInterfaceScalePercent(activeInterfaceScalePercent)
@@ -106,11 +137,11 @@ Typography::Typography(int activeInterfaceScalePercent, QObject *parent)
     // Preserve an unavailable preference on disk so it can apply after the font is reinstalled.
     m_preferredEnglishFamily = fonts.value(QStringLiteral("englishFamily"), settings.value(EnglishFontKey)).toString();
     m_preferredArabicFamily = fonts.value(QStringLiteral("arabicFamily"), settings.value(ArabicFontKey)).toString();
-    m_englishFamily = installedFamily(m_preferredEnglishFamily, m_englishFonts);
-    m_arabicFamily = installedFamily(m_preferredArabicFamily, m_arabicFonts);
+    m_englishFamily = installedFamily(m_preferredEnglishFamily, m_englishFontOptions);
+    m_arabicFamily = installedFamily(m_preferredArabicFamily, m_arabicFontOptions);
     m_fontSizePercent = savedPercent(fonts.value(QStringLiteral("sizePercent"), settings.value(FontSizeKey)),
-                                     FontSizeChoices);
-    m_interfaceScalePercent = savedPercent(settings.value(InterfaceScaleKey), InterfaceScaleChoices);
+                                     MaximumFontPercent);
+    m_interfaceScalePercent = savedPercent(settings.value(InterfaceScaleKey), MaximumInterfacePercent);
     applyInterfaceFont();
 }
 
@@ -148,27 +179,22 @@ QFont Typography::fontWithFamily(const QString &family) const
 
 QFont Typography::previewFont(const QString &family) const
 {
-    const auto latin = installedFamily(family, m_englishFonts);
-    return fontWithFamily(latin.isEmpty() ? installedFamily(family, m_arabicFonts) : latin);
+    const auto latin = installedFamily(family, m_englishFontOptions);
+    return fontWithFamily(latin.isEmpty() ? installedFamily(family, m_arabicFontOptions) : latin);
 }
 
-QList<int> Typography::fontSizeChoices() const
-{
-    return FontSizeChoices;
-}
-
-QList<int> Typography::interfaceScaleChoices() const
-{
-    return InterfaceScaleChoices;
-}
+int Typography::fontSizeMinimum() const { return MinimumPercent; }
+int Typography::fontSizeMaximum() const { return MaximumFontPercent; }
+int Typography::interfaceScaleMinimum() const { return MinimumPercent; }
+int Typography::interfaceScaleMaximum() const { return MaximumInterfacePercent; }
 
 bool Typography::applyFontPreferences(const QString &englishFamily, const QString &arabicFamily, int sizePercent)
 {
-    const auto english = installedFamily(englishFamily, m_englishFonts);
-    const auto arabic = installedFamily(arabicFamily, m_arabicFonts);
+    const auto english = installedFamily(englishFamily, m_englishFontOptions);
+    const auto arabic = installedFamily(arabicFamily, m_arabicFontOptions);
     if ((!englishFamily.isEmpty() && english.isEmpty())
         || (!arabicFamily.isEmpty() && arabic.isEmpty())
-        || !FontSizeChoices.contains(sizePercent))
+        || sizePercent < MinimumPercent || sizePercent > MaximumFontPercent)
         return false;
 
     if (english == m_englishFamily && arabic == m_arabicFamily && sizePercent == m_fontSizePercent)
@@ -194,7 +220,8 @@ bool Typography::applyFontPreferences(const QString &englishFamily, const QStrin
 
 bool Typography::setInterfaceScalePercent(int percent)
 {
-    if (!InterfaceScaleChoices.contains(percent) || !savePreference(InterfaceScaleKey, percent))
+    if (percent < MinimumPercent || percent > MaximumInterfacePercent
+        || !savePreference(InterfaceScaleKey, percent))
         return false;
     if (m_interfaceScalePercent != percent) {
         m_interfaceScalePercent = percent;

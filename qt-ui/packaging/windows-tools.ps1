@@ -152,7 +152,11 @@ foreach ($package in $qtArchives) {
     try { Invoke-Checked $cmake @('-E','tar','xf',$archive) } finally { Pop-Location }
     New-Item -ItemType File -Path $mark -Force | Out-Null
 }
-foreach ($file in @('bin/windeployqt.exe','bin/qtpaths.exe','lib/cmake/Qt6/Qt6Config.cmake','lib/cmake/Qt6Quick3D/Qt6Quick3DConfig.cmake','qml/QtMultimedia/qmldir')) {
+foreach ($file in @(
+    'bin/windeployqt.exe','bin/qtpaths.exe','bin/lrelease.exe',
+    'lib/cmake/Qt6/Qt6Config.cmake','lib/cmake/Qt6Quick3D/Qt6Quick3DConfig.cmake',
+    'lib/cmake/Qt6LinguistTools/Qt6LinguistToolsConfig.cmake','qml/QtMultimedia/qmldir'
+)) {
     if (!(Test-Path (Join-Path $sdk $file))) { throw "Qt SDK package is incomplete: $file" }
 }
 "[Paths]`nPrefix=.." | Set-Content -LiteralPath (Join-Path $sdk 'bin/qt.conf') -Encoding ascii
