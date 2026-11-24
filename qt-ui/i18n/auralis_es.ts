@@ -588,8 +588,8 @@
             <translation>Abrir Chrome Web Store</translation>
         </message>
         <message>
-            <source>Install manually</source>
-            <translation>Instalar manualmente</translation>
+            <source>Install</source>
+            <translation>Instalar</translation>
         </message>
         <message>
             <source>Manage browser extensions</source>

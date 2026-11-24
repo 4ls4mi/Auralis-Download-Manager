@@ -588,8 +588,8 @@
             <translation>打开 Chrome 网上应用店</translation>
         </message>
         <message>
-            <source>Install manually</source>
-            <translation>手动安装</translation>
+            <source>Install</source>
+            <translation>安装</translation>
         </message>
         <message>
             <source>Manage browser extensions</source>

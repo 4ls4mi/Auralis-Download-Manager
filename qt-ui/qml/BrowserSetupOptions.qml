@@ -213,7 +213,7 @@ ColumnLayout {
 
         GlassButton {
             objectName: "openBrowserExtensionStore"
-            text: root.installed ? qsTr("Open Chrome Web Store") : qsTr("Install manually")
+            text: root.installed ? qsTr("Open Chrome Web Store") : qsTr("Install")
             visible: root.hasStore
             enabled: !root.acting && !root.checking
             accent: root.colors.positive

@@ -588,8 +588,8 @@
             <translation>فتح سوق Chrome الإلكتروني</translation>
         </message>
         <message>
-            <source>Install manually</source>
-            <translation>التثبيت يدويًا</translation>
+            <source>Install</source>
+            <translation>تثبيت</translation>
         </message>
         <message>
             <source>Manage browser extensions</source>
