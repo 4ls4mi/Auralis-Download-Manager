@@ -40,7 +40,6 @@ Var LaunchArguments
 Var DeleteAppData
 Var DeleteSharedProfile
 Var AppDataCheckbox
-Var SharedProfileCheckbox
 
 !define MUI_PAGE_CUSTOMFUNCTION_PRE SkipInPassiveMode
 !insertmacro MUI_PAGE_DIRECTORY
@@ -218,27 +217,17 @@ Function un.Confirm
     ${NSD_CreateLabel} 0 0 100% 25u "Installation folder:$\r$\n$INSTDIR"
     Pop $0
     StrCpy $AppDataCheckbox ""
-    StrCpy $SharedProfileCheckbox ""
 
     Call un.CanDeleteAppData
     ${If} $1 == 1
-        ${NSD_CreateCheckbox} 0 30u 100% 12u "Delete app data"
+        ${NSD_CreateCheckbox} 0 30u 100% 12u "Remove all app data and settings (fresh reinstall)"
         Pop $AppDataCheckbox
         ${NSD_SetState} $AppDataCheckbox ${BST_UNCHECKED}
-        ${NSD_CreateLabel} 12u 45u 93% 23u "Remove Auralis preferences, managed font copies, helper tools and update cache."
+        ${NSD_CreateLabel} 12u 45u 93% 35u "Remove preferences, setup choices, fonts, helper tools, caches, and download history. Downloaded files are kept."
         Pop $0
-
         Call un.FindSharedProfile
         ${If} $1 == 1
-            ${NSD_CreateCheckbox} 0 70u 100% 12u "Also clear shared download history and settings"
-            Pop $SharedProfileCheckbox
-            ${NSD_SetState} $SharedProfileCheckbox ${BST_UNCHECKED}
-            EnableWindow $SharedProfileCheckbox 0
-            ${NSD_CreateLabel} 12u 85u 93% 32u "Mister Download Manager may also use this history and these settings. Your downloaded files and custom or portable profiles are kept."
-            Pop $0
-            ${NSD_OnClick} $AppDataCheckbox un.ToggleSharedProfile
-        ${Else}
-            ${NSD_CreateLabel} 0 75u 100% 24u "Downloaded files and custom or portable profiles are kept."
+            ${NSD_CreateLabel} 12u 85u 93% 32u "This also clears the shared Mister Download Manager history and settings. Custom and portable profiles are kept."
             Pop $0
         ${EndIf}
     ${Else}
@@ -249,24 +238,11 @@ Function un.Confirm
     nsDialogs::Show
 FunctionEnd
 
-Function un.ToggleSharedProfile
-    Pop $0
-    ${NSD_GetState} $AppDataCheckbox $0
-    ${If} $0 == ${BST_CHECKED}
-        EnableWindow $SharedProfileCheckbox 1
-    ${Else}
-        ${NSD_SetState} $SharedProfileCheckbox ${BST_UNCHECKED}
-        EnableWindow $SharedProfileCheckbox 0
-    ${EndIf}
-FunctionEnd
-
 Function un.ConfirmLeave
     ${If} $AppDataCheckbox != ""
         ${NSD_GetState} $AppDataCheckbox $DeleteAppData
     ${EndIf}
-    ${If} $SharedProfileCheckbox != ""
-        ${NSD_GetState} $SharedProfileCheckbox $DeleteSharedProfile
-    ${EndIf}
+    StrCpy $DeleteSharedProfile $DeleteAppData
 FunctionEnd
 
 # Do not clean shared user data from an unregistered, superseded or portable copy.
@@ -360,6 +336,9 @@ Function un.RemoveManagedDirectory
 FunctionEnd
 
 Function un.RemoveAppData
+    SetRegView 64
+    DeleteRegKey HKCU "${PREFERENCES_KEY}"
+    SetRegView 32
     DeleteRegKey HKCU "${PREFERENCES_KEY}"
 
     StrCpy $0 "$APPDATA"
@@ -369,19 +348,10 @@ Function un.RemoveAppData
         Call un.IsOrdinaryDirectory
         ${If} $1 == 1
             StrCpy $0 "$APPDATA\Auralis\tools"
-            Call un.IsOrdinaryDirectory
-            ${If} $1 == 1
-                Delete "$0\programs.json"
-                Delete "$0\.legacy-helpers-checked"
-                StrCpy $0 "$APPDATA\Auralis\tools\yt-dlp"
-                Call un.RemoveManagedDirectory
-                StrCpy $0 "$APPDATA\Auralis\tools\ffmpeg"
-                Call un.RemoveManagedDirectory
-                StrCpy $0 "$APPDATA\Auralis\tools\gallery-dl"
-                Call un.RemoveManagedDirectory
-                RMDir "$APPDATA\Auralis\tools"
-                RMDir "$APPDATA\Auralis"
-            ${EndIf}
+            Call un.RemoveManagedDirectory
+            StrCpy $0 "$APPDATA\Auralis\${PRODUCT}"
+            Call un.RemoveManagedDirectory
+            RMDir "$APPDATA\Auralis"
         ${EndIf}
     ${EndIf}
 
@@ -389,40 +359,13 @@ Function un.RemoveAppData
     Call un.IsOrdinaryDirectory
     ${If} $1 == 1
         StrCpy $0 "$LOCALAPPDATA\${PRODUCT} Updates"
-        Call un.IsOrdinaryDirectory
-        ${If} $1 == 1
-            Delete "$0\auralis-update-*.exe"
-            Delete "$0\auralis-update-*.part"
-            RMDir "$0"
-        ${EndIf}
-
+        Call un.RemoveManagedDirectory
         StrCpy $0 "$LOCALAPPDATA\Auralis"
         Call un.IsOrdinaryDirectory
         ${If} $1 == 1
             StrCpy $0 "$LOCALAPPDATA\Auralis\${PRODUCT}"
-            Call un.IsOrdinaryDirectory
-            ${If} $1 == 1
-                StrCpy $0 "$LOCALAPPDATA\Auralis\${PRODUCT}\fonts"
-                Call un.IsOrdinaryDirectory
-                ${If} $1 == 1
-                    # Keep these copy basenames in sync with Typography.cpp.
-                    Delete "$0\talina-demo.font"
-                    Delete "$0\milkyway.font"
-                    Delete "$0\mochi-boom-demo.font"
-                    Delete "$0\qilka.font"
-                    Delete "$0\qurova-demo.font"
-                    Delete "$0\kidzhood-arabic-demo.font"
-                    Delete "$0\tinta-arabic.font"
-                    Delete "$0\madani-arabic-demo.font"
-                    Delete "$0\mahameru-arabic-demo.font"
-                    Delete "$0\gumela-arabic-demo.font"
-                    Delete "$0\tufuli-arabic-demo.font"
-                    Delete "$0\lutfey-arabic-demo.font"
-                    RMDir "$0"
-                    RMDir "$LOCALAPPDATA\Auralis\${PRODUCT}"
-                    RMDir "$LOCALAPPDATA\Auralis"
-                ${EndIf}
-            ${EndIf}
+            Call un.RemoveManagedDirectory
+            RMDir "$LOCALAPPDATA\Auralis"
         ${EndIf}
     ${EndIf}
 FunctionEnd
@@ -449,6 +392,13 @@ Function un.RemoveSharedProfile
     Delete "$0\downloads.json.2.bak"
     Delete "$0\downloads.json.corrupt-*.bak"
     Delete "$0\rss.json"
+    Delete "$0\ipc.json"
+    Delete "$0\extension-seen"
+    Delete "$0\extension-recent-handshake"
+    Delete "$0\extension-chrome-store-handshake"
+    Delete "$0\extension-edge-store-handshake"
+    Delete "$0\extension-chrome-auralis-unpacked-handshake"
+    Delete "$0\extension-edge-auralis-unpacked-handshake"
     Delete "$0\auralis-interface-version"
     System::Call 'kernel32::CloseHandle(p r1)'
     RMDir "$0"
