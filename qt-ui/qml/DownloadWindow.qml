@@ -5,6 +5,7 @@ import QtQuick.Controls
 import QtQuick.Dialogs
 import QtQuick.Layouts
 import QtQuick.Window
+import QtCore
 import "TransferData.js" as Transfer
 
 AuralisWindow {
@@ -21,8 +22,9 @@ AuralisWindow {
     readonly property bool sideTabs: ["fogSlate", "violetRail", "coralSlate"].includes(transferLayout)
     readonly property bool compactWidth: width < 670
     readonly property bool compactHeight: height < 470
-    readonly property bool railTabs: sideTabs && !compactWidth && height >= 420
-    readonly property bool useCompactActions: compactHeight
+    readonly property bool compactView: transferWindowSettings.compactView
+    readonly property bool railTabs: !compactView && sideTabs && !compactWidth && height >= 420
+    readonly property bool useCompactActions: compactView || compactHeight
     readonly property color detailDivider: colors.surfaceLine || colors.divider
     readonly property color summaryInk: sideTabs && colors.summaryInk ? colors.summaryInk : colors.text
     readonly property int recoveryTab: 3
@@ -55,7 +57,8 @@ AuralisWindow {
     readonly property bool feedingConnections: runningTransfer && workerRows.some(connectionHasData)
     readonly property bool displayFlow: activeTab === 0 && !!item && !!item.url
     readonly property bool displayConnectionFlow: displayFlow && workerRows.length > 0
-    readonly property int pipeInset: 32
+    readonly property real pipeScale: compactView ? .68 : 1
+    readonly property int pipeInset: Math.round(32 * pipeScale)
     readonly property bool interactiveFrame: resizeHandles.resizing || downloadCaption.dragging
     readonly property bool animateTransfer: visible && visibility !== Window.Minimized && activeTab === 0
         && runningTransfer && !interactiveFrame
@@ -66,6 +69,7 @@ AuralisWindow {
     readonly property bool recoveryAvailable: !!item && ordinary && !runningTransfer && !finished
     readonly property string recoveryStage: telemetry && telemetry.recovery_stage || ""
     readonly property bool recoveryBusy: !!pendingResult || recoveryStage === "searching" || recoveryStage === "preparing"
+    readonly property bool canOpenAddressEditor: recoveryAvailable && !busy && !recoveryBusy
     readonly property bool torrentRecoveryAllowed: !details.checksum
     readonly property bool backdropAvailable: windowBackdrop.backdropAvailable || windowBackdrop.pictureReady || windowBackdrop.movieReady
     property string message: ""
@@ -78,15 +82,17 @@ AuralisWindow {
     property var speedSamples: []
     property var details: ({})
     property int activeTab: 0
+    property size expandedWindowSize: Qt.size(790, 625)
+    property size compactWindowSize: Qt.size(465, 320)
 
     function connectionHasData(connection) {
         return connection.state === "Receiving" && connection.receiving_data !== false
     }
 
-    width: 790
-    height: 625
-    minimumWidth: 450
-    minimumHeight: 340
+    width: expandedWindowSize.width
+    height: expandedWindowSize.height
+    minimumWidth: compactView ? 395 : 450
+    minimumHeight: compactView ? 270 : 340
     color: "transparent"
     flags: Qt.Window | Qt.FramelessWindowHint
     transientParent: null
@@ -96,6 +102,44 @@ AuralisWindow {
     palette.base: colors.background
     palette.highlight: colors.accent
     title: item ? Math.round(Transfer.fraction(item) * 100) + "%  " + item.file : qsTr("Download details")
+
+    Settings {
+        id: transferWindowSettings
+        category: "TransferWindowLayout"
+        property bool compactView: false
+    }
+
+    Component.onCompleted: {
+        if (compactView)
+            applyViewSize(true)
+    }
+
+    function applyViewSize(compact) {
+        Qt.callLater(() => {
+            if (root.compactView !== compact || (root.visibility !== Window.Windowed && root.visibility !== Window.Hidden))
+                return
+            const size = compact ? root.compactWindowSize : root.expandedWindowSize
+            root.setGeometry(root.x, root.y, size.width, size.height)
+        })
+    }
+
+    function setCompactView(compact) {
+        if (compact === compactView)
+            return
+        if (visibility === Window.Windowed) {
+            const size = Qt.size(width, height)
+            if (compactView)
+                compactWindowSize = size
+            else
+                expandedWindowSize = size
+        }
+        if (visibility === Window.Maximized)
+            showNormal()
+        if (compact)
+            activeTab = 0
+        transferWindowSettings.compactView = compact
+        applyViewSize(compact)
+    }
 
     function hideToTray() {
         if (trayEnabled && downloadId !== null && !finished)
@@ -130,6 +174,14 @@ AuralisWindow {
     function openRecovery() {
         if (recoveryAvailable)
             activeTab = recoveryTab
+    }
+
+    function openAddressEditor() {
+        if (!canOpenAddressEditor)
+            return
+        if (!addressPrompt.visible)
+            updatedAddress.text = item.url
+        addressPrompt.open()
     }
 
     function selectedShape(choice) {
@@ -383,7 +435,7 @@ AuralisWindow {
                 spacing: 7
                 Item {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 43
+                    Layout.preferredHeight: root.compactView ? 36 : 43
                     BrandMark {
                         id: transferBrand
                         anchors.left: parent.left
@@ -413,6 +465,27 @@ AuralisWindow {
                         onDoubleClickRequested: root.toggleMaximized()
                     }
                 }
+                GlassButton {
+                    id: compactButton
+                    objectName: "toggleCompactTransferView"
+                    material: root.material
+                    readonly property string viewLabel: root.compactView ? qsTr("Full view") : qsTr("Compact view")
+                    Layout.preferredWidth: 32
+                    Layout.preferredHeight: 30
+                    filled: root.compactView
+                    padding: 3
+                    Accessible.name: viewLabel
+                    contentItem: DashboardIcon {
+                        symbol: root.compactView ? "fullView" : "compactView"
+                        ink: compactButton.iconInk
+                        surface: compactButton.faceColor
+                        relief: compactButton.enabled
+                    }
+                    ToolTip.visible: hovered
+                    ToolTip.text: viewLabel
+                    ToolTip.delay: 420
+                    onClicked: root.setCompactView(!root.compactView)
+                }
                 CaptionControls {
                     material: root.material
                     trayEnabled: root.trayEnabled && root.downloadId !== null && !root.finished
@@ -430,22 +503,16 @@ AuralisWindow {
         }
         ToolBar {
             objectName: "transferCommands"
+            visible: !root.compactView
             Layout.fillWidth: true
             leftPadding: root.resizeInset + 2
             rightPadding: root.resizeInset + 2
-            topPadding: 7
-            bottomPadding: 7
+            topPadding: root.compactView ? 3 : 7
+            bottomPadding: root.compactView ? 3 : 7
             background: GlassSurface { material: root.material; role: "toolbar"; backdropAvailable: root.backdropAvailable }
             contentItem: Flow {
+                id: transferCommandFlow
                 spacing: 7
-                GlassButton { material: root.material; text: qsTr("Open folder"); enabled: !!root.item; onClicked: root.openLocation(true) }
-                GlassButton {
-                    material: root.material
-                    text: qsTr("Open file")
-                    visible: root.finished
-                    accent: root.colors.positive
-                    onClicked: root.openLocation(false)
-                }
                 GlassButton {
                     material: root.material
                     text: qsTr("Open with…")
@@ -477,7 +544,7 @@ AuralisWindow {
             }
         }
         ToolBar {
-            visible: !root.railTabs
+            visible: !root.railTabs && (!root.compactView || root.activeTab !== 0)
             Layout.fillWidth: true
             padding: root.compactHeight ? 5 : 8
             leftPadding: root.resizeInset + 2
@@ -612,7 +679,7 @@ AuralisWindow {
         anchors.bottom: parent.bottom
         anchors.bottomMargin: root.resizeInset
         implicitHeight: downloadActions.implicitHeight + topPadding + bottomPadding
-        padding: 6
+        padding: root.compactView ? 4 : 6
         background: GlassSurface { material: root.material; role: "toolbar"; backdropAvailable: root.backdropAvailable }
     }
 
@@ -622,10 +689,14 @@ AuralisWindow {
         parent: root.useCompactActions ? compactActions.contentItem : inlineActionArea
         anchors.centerIn: parent
         width: parent ? Math.min(implicitWidth, parent.width) : implicitWidth
-        columns: pauseResume.visible && parent && parent.width < Math.max(96, pauseResume.implicitWidth)
-            + Math.max(96, stopClose.implicitWidth) + columnSpacing ? 1 : 2
-        columnSpacing: 9
-        rowSpacing: 6
+        readonly property real actionWidth: [pauseResume, openFile, openFolder, stopClose]
+            .filter(button => button.parent === downloadActions && button.visible)
+            .reduce((total, button) => total + Math.max(button.Layout.minimumWidth, button.implicitWidth) + columnSpacing,
+                -columnSpacing)
+        columns: parent && parent.width < actionWidth ? (root.compactView && parent.width >= 223 ? 2 : 1)
+            : root.compactView ? 3 : 2
+        columnSpacing: root.compactView ? 5 : 9
+        rowSpacing: root.compactView ? 4 : 6
 
         GlassButton {
             id: pauseResume
@@ -635,10 +706,31 @@ AuralisWindow {
             visible: !!root.item && !root.finished
             enabled: !root.busy && (root.runningTransfer || (!root.recoveryBusy && !(root.telemetry && root.telemetry.recovery_damaged)))
             Layout.minimumWidth: 96
-            Layout.minimumHeight: 36
+            Layout.minimumHeight: root.compactView ? 32 : 36
             filled: true
             accent: MaterialTheme.actionColor(root.runningTransfer ? "pause" : "start", root.colors.light)
             onClicked: root.perform(root.runningTransfer ? "pause" : "start", false)
+        }
+        GlassButton {
+            id: openFolder
+            objectName: "openDownloadFolder"
+            parent: root.compactView ? downloadActions : transferCommandFlow
+            Layout.minimumHeight: 32
+            material: root.material
+            text: qsTr("Open folder")
+            enabled: !!root.item
+            onClicked: root.openLocation(true)
+        }
+        GlassButton {
+            id: openFile
+            objectName: "openDownloadedFile"
+            parent: root.compactView ? downloadActions : transferCommandFlow
+            Layout.minimumHeight: 32
+            material: root.material
+            text: qsTr("Open file")
+            visible: root.finished
+            accent: root.colors.positive
+            onClicked: root.openLocation(false)
         }
         GlassButton {
             id: stopClose
@@ -646,7 +738,7 @@ AuralisWindow {
             material: root.material
             text: root.runningTransfer ? qsTr("Cancel…") : qsTr("Close")
             Layout.minimumWidth: 96
-            Layout.minimumHeight: 36
+            Layout.minimumHeight: root.compactView ? 32 : 36
             accent: root.runningTransfer ? root.colors.destructive : root.colors.accent
             onClicked: root.runningTransfer ? stopConsent.open() : root.close()
         }
@@ -662,7 +754,7 @@ AuralisWindow {
         anchors.right: parent.right
         anchors.rightMargin: root.resizeInset
         clip: true
-        padding: root.compactWidth || root.compactHeight ? 7 : root.transferLayout === "fogSlate" ? 10 : 12
+        padding: root.compactView ? 5 : root.compactWidth || root.compactHeight ? 7 : root.transferLayout === "fogSlate" ? 10 : 12
         contentWidth: availableWidth
         contentHeight: scrollContent.implicitHeight
         ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
@@ -688,7 +780,7 @@ AuralisWindow {
             ColumnLayout {
                 id: sections
                 anchors.fill: parent
-                spacing: root.compactWidth || root.compactHeight ? 6 : 8
+                spacing: root.compactView ? 4 : root.compactWidth || root.compactHeight ? 6 : 8
 
                 Label {
                     visible: !root.item
@@ -701,7 +793,7 @@ AuralisWindow {
                     visible: !!root.item && root.activeTab === 0
                     Layout.fillWidth: true
                     Layout.minimumWidth: 0
-                    padding: root.compactWidth || root.compactHeight ? 8 : root.transferLayout === "fogSlate" ? 11 : 13
+                    padding: root.compactView ? 5 : root.compactWidth || root.compactHeight ? 8 : root.transferLayout === "fogSlate" ? 11 : 13
                     leftPadding: root.displayFlow ? root.pipeInset : padding
                     background: Item {
                         GlassSurface {
@@ -712,11 +804,12 @@ AuralisWindow {
                         }
                         TransferTubes {
                             objectName: "downloadProgressInlet"
+                            sizeScale: root.pipeScale
                             LayoutMirroring.enabled: false
                             anchors.left: parent.left
                             anchors.top: parent.top
                             anchors.bottom: parent.bottom
-                            width: Math.min(parent.width, root.pipeInset + 17)
+                            width: Math.min(parent.width, root.pipeInset + Math.round(17 * root.pipeScale))
                             visible: root.displayFlow
                             progressItem: downloadProgress
                             phase: water.phase
@@ -733,19 +826,21 @@ AuralisWindow {
                         }
                     }
                     contentItem: ColumnLayout {
-                        spacing: root.compactWidth || root.compactHeight ? 5 : 8
+                        spacing: root.compactView ? 3 : root.compactWidth || root.compactHeight ? 5 : 8
                         Label {
+                            id: transferName
                             Layout.fillWidth: true
                             text: root.item ? root.item.file : ""
                             textFormat: Text.PlainText
                             elide: Text.ElideMiddle
                             color: root.summaryInk
                             font.family: root.fontFamilyForText(text)
-                            font.pixelSize: TypographyScale.pixels(19)
+                            font.pixelSize: TypographyScale.pixels(root.compactView ? 16 : 19)
                             font.bold: true
                         }
                         Label {
                             id: transferSource
+                            visible: !root.compactView
                             Layout.fillWidth: true
                             text: root.item ? root.item.url : ""
                             textFormat: Text.PlainText
@@ -755,25 +850,26 @@ AuralisWindow {
                         GridLayout {
                             Layout.fillWidth: true
                             Layout.minimumWidth: 0
-                            columns: width >= 432 ? 2 : 1
-                            rowSpacing: root.compactWidth || root.compactHeight ? 4 : 6
-                            columnSpacing: root.compactWidth ? 9 : 14
+                            columns: width >= (root.compactView ? 300 : 432) ? 2 : 1
+                            rowSpacing: root.compactView ? 2 : root.compactWidth || root.compactHeight ? 4 : 6
+                            columnSpacing: root.compactView ? 6 : root.compactWidth ? 9 : 14
                             Repeater {
                                 id: measurements
                                 property var cells: {
                                     const d = root.item || {}
                                     const t = root.telemetry || {}
                                     const server = t.server || {}
-                                    return [
+                                    const cells = [
                                         {label: qsTr("Status"), value: Transfer.statusLabel(d.status)},
-                                        {label: qsTr("Transfer method"), value: root.mixed ? qsTr("Direct → BitTorrent") : t.is_torrent ? qsTr("BitTorrent") : t.is_video ? qsTr("Video") : qsTr("Direct download")},
+                                        {label: qsTr("Transfer method"), value: root.mixed ? qsTr("Direct → BitTorrent") : t.is_torrent ? qsTr("BitTorrent") : t.is_video ? qsTr("Video") : qsTr("Direct download"), optional: true},
                                         {label: qsTr("Downloaded"), value: Transfer.bytes(d.downloaded) + " / " + Transfer.bytes(d.size)},
                                         {label: qsTr("Transfer rate"), value: Transfer.rate(d.speed)},
                                         {label: qsTr("Time left"), value: Transfer.timeLeft(d)},
-                                        {label: qsTr("Resume capability"), value: t.resumable === true ? qsTr("Yes") : t.resumable === false ? qsTr("No") : qsTr("Unknown")},
+                                        {label: qsTr("Resume capability"), value: t.resumable === true ? qsTr("Yes") : t.resumable === false ? qsTr("No") : qsTr("Unknown"), optional: true},
                                         {label: root.torrent ? qsTr("Connected peers") : qsTr("Server"), value: root.torrent ? String(root.torrent.peers || 0)
-                                            : (server.place && server.place.name || server.country_code || server.hostname || "—") + (server.rtt_ms != null ? " · " + server.rtt_ms + " ms" : "")}
+                                            : (server.place && server.place.name || server.country_code || server.hostname || "—") + (server.rtt_ms != null ? " · " + server.rtt_ms + " ms" : ""), optional: !root.torrent}
                                     ]
+                                    return root.compactView ? cells.filter(cell => !cell.optional) : cells
                                 }
                                 model: cells.length
                                 delegate: RowLayout {
@@ -782,10 +878,10 @@ AuralisWindow {
                                     readonly property var cell: measurements.cells[index]
                                     Layout.fillWidth: true
                                     Layout.minimumWidth: 0
-                                    spacing: 7
+                                    spacing: root.compactView ? 4 : 7
                                     Label {
                                         Layout.minimumWidth: 0
-                                        Layout.preferredWidth: root.compactWidth ? 106 : 115
+                                        Layout.preferredWidth: root.compactView ? 82 : root.compactWidth ? 106 : 115
                                         text: measurement.cell.label
                                         color: root.colors.muted
                                         wrapMode: Text.Wrap
@@ -813,7 +909,7 @@ AuralisWindow {
                                 anchors.left: parent.left
                                 anchors.verticalCenter: parent.verticalCenter
                                 width: Math.max(0, progressLine.width - progressPercent.width - progressPercent.anchors.leftMargin)
-                                height: 26
+                                height: root.compactView ? 18 : 26
                                 value: Transfer.fraction(root.item)
                                 animated: root.animateTransfer
                                 animationStyle: WindowAppearance.progressAnimation
@@ -839,7 +935,7 @@ AuralisWindow {
                             }
                         }
                         Label {
-                            visible: root.mixed
+                            visible: root.mixed && !root.compactView
                             Layout.fillWidth: true
                             color: root.colors.positive
                             wrapMode: Text.WordWrap
@@ -880,16 +976,18 @@ AuralisWindow {
                     visible: !!root.item && root.activeTab === 0
                     Layout.fillWidth: true
                     Layout.minimumWidth: 0
-                    columns: root.transferLayout !== "coralSlate" && width >= (root.railTabs ? 560 : 585) ? 2 : 1
-                    columnSpacing: 8
-                    rowSpacing: root.compactWidth || root.compactHeight ? 6 : 8
+                    columns: root.compactView ? (connectionPane.visible && width >= 345 ? 2 : 1)
+                        : root.transferLayout !== "coralSlate" && width >= (root.railTabs ? 560 : 585) ? 2 : 1
+                    columnSpacing: root.compactView ? 5 : 8
+                    rowSpacing: root.compactView ? 4 : root.compactWidth || root.compactHeight ? 6 : 8
                     Pane {
                         id: connectionPane
+                        visible: !root.compactView || !!root.torrent || root.workerRows.length > 0
                         Layout.fillWidth: true
                         Layout.minimumWidth: 0
-                        Layout.preferredWidth: root.transferLayout === "violetRail" ? 315 : 355
+                        Layout.preferredWidth: root.compactView ? 1 : root.transferLayout === "violetRail" ? 315 : 355
                         Layout.alignment: Qt.AlignTop
-                        padding: root.compactWidth || root.compactHeight ? 8 : 11
+                        padding: root.compactView ? 5 : root.compactWidth || root.compactHeight ? 8 : 11
                         leftPadding: root.displayConnectionFlow ? root.pipeInset : padding
                         background: Item {
                             GlassSurface {
@@ -901,6 +999,7 @@ AuralisWindow {
                             TransferTubes {
                                 id: transferTubes
                                 objectName: "downloadTransferTubes"
+                                sizeScale: root.pipeScale
                                 anchors.fill: parent
                                 visible: root.displayConnectionFlow
                                 gridItem: waterGrid
@@ -918,17 +1017,23 @@ AuralisWindow {
                             }
                         }
                         contentItem: ColumnLayout {
-                            spacing: 8
-                            Label { text: root.torrent ? qsTr("BitTorrent swarm") : qsTr("Connections"); color: root.colors.text; font.bold: true }
+                            spacing: root.compactView ? 4 : 8
                             Label {
-                                visible: !!root.torrent
+                                Layout.fillWidth: true
+                                text: root.torrent ? qsTr("BitTorrent swarm") : qsTr("Connections")
+                                color: root.colors.text
+                                font.bold: true
+                                wrapMode: Text.WordWrap
+                            }
+                            Label {
+                                visible: !!root.torrent && !root.compactView
                                 Layout.fillWidth: true
                                 color: root.colors.muted
                                 wrapMode: Text.WordWrap
                                 text: root.torrent ? qsTr("Upload %1  ·  Sent %2\nInfo hash %3").arg(Transfer.rate(root.torrent.upload_speed)).arg(Transfer.bytes(root.torrent.uploaded)).arg(root.torrent.info_hash || "—") : ""
                             }
                             Label {
-                                visible: !root.torrent && !(root.telemetry && root.telemetry.connections && root.telemetry.connections.length)
+                                visible: !root.compactView && !root.torrent && !(root.telemetry && root.telemetry.connections && root.telemetry.connections.length)
                                 text: qsTr("No active connection data")
                                 color: root.colors.muted
                             }
@@ -937,11 +1042,11 @@ AuralisWindow {
                                 objectName: "downloadConnectionGrid"
                                 Layout.fillWidth: true
                                 Layout.minimumWidth: 0
-                                Layout.topMargin: root.displayConnectionFlow ? 19 : 0
+                                Layout.topMargin: root.displayConnectionFlow ? Math.round(19 * root.pipeScale) : 0
                                 columns: Math.max(1, Math.min(8,
-                                    Math.floor((width + columnSpacing) / ((root.compactWidth ? 32 : 35) + columnSpacing))))
-                                rowSpacing: root.displayConnectionFlow ? 26 : 5
-                                columnSpacing: 4
+                                    Math.floor((width + columnSpacing) / ((root.compactView ? 16 : root.compactWidth ? 32 : 35) + columnSpacing))))
+                                rowSpacing: root.displayConnectionFlow ? Math.round(26 * root.pipeScale) : 5
+                                columnSpacing: root.compactView ? 3 : 4
                                 Repeater {
                                     id: waterWorkers
                                     objectName: "downloadConnectionWorkers"
@@ -960,14 +1065,19 @@ AuralisWindow {
                                         readonly property string connectionState: root.transferPaused ? qsTr("Paused")
                                             : connection.state === "Receiving" && !receiving ? qsTr("Stalled")
                                             : Transfer.connectionLabel(connection.state)
+                                        readonly property string connectionHint: saved === null
+                                            ? qsTr("Connection %1 · %2 · %3").arg(Number(connection.id) + 1)
+                                                .arg(connectionState).arg(Transfer.rate(connection.speed))
+                                            : qsTr("Connection %1 · %2 · %3 · %4%").arg(Number(connection.id) + 1)
+                                                .arg(connectionState).arg(Transfer.rate(connection.speed)).arg(Math.round(saved * 100))
                                         property var retainedId: null
                                         property var saved: null
                                         readonly property real liquidSurface: chunkWater.landingY
                                         readonly property real liquidX: chunkWater.landingX
                                         Layout.fillWidth: true
                                         Layout.minimumWidth: 0
-                                        Layout.preferredWidth: 34
-                                        Layout.preferredHeight: root.compactWidth || root.compactHeight ? 34 : 39
+                                        Layout.preferredWidth: root.compactView ? 20 : 34
+                                        Layout.preferredHeight: root.compactView ? 23 : root.compactWidth || root.compactHeight ? 34 : 39
                                         function retainReceivedFill() {
                                             if (retainedId !== sample.key) {
                                                 retainedId = sample.key
@@ -1003,23 +1113,19 @@ AuralisWindow {
                                         }
                                         Label {
                                             anchors.left: parent.left
-                                            anchors.leftMargin: 4
+                                            anchors.leftMargin: root.compactView ? 2 : 4
                                             anchors.bottom: parent.bottom
-                                            anchors.bottomMargin: 3
+                                            anchors.bottomMargin: root.compactView ? 2 : 3
                                             color: root.colors.text
                                             style: Text.Outline
                                             styleColor: root.colors.shade
                                             text: Number(worker.connection.id) + 1
-                                            font.pixelSize: TypographyScale.pixels(11)
+                                            font.pixelSize: TypographyScale.pixels(root.compactView ? 9 : 11)
                                         }
                                         HoverHandler { id: workerHover }
                                         ToolTip.visible: workerHover.hovered
-                                        ToolTip.text: saved === null
-                                            ? qsTr("Connection %1 · %2 · %3").arg(Number(connection.id) + 1)
-                                                .arg(connectionState).arg(Transfer.rate(connection.speed))
-                                            : qsTr("Connection %1 · %2 · %3 · %4%").arg(Number(connection.id) + 1)
-                                                .arg(connectionState).arg(Transfer.rate(connection.speed)).arg(Math.round(saved * 100))
-                                        Accessible.name: ToolTip.text
+                                        ToolTip.text: worker.connectionHint
+                                        Accessible.name: worker.connectionHint
                                     }
                                 }
                             }
@@ -1028,23 +1134,34 @@ AuralisWindow {
                     Pane {
                         Layout.fillWidth: true
                         Layout.minimumWidth: 0
-                        Layout.preferredWidth: root.transferLayout === "violetRail" ? 380 : 325
+                        Layout.preferredWidth: root.compactView ? 1 : root.transferLayout === "violetRail" ? 380 : 325
                         Layout.alignment: Qt.AlignTop
-                        padding: root.compactWidth || root.compactHeight ? 8 : 11
+                        padding: root.compactView ? 5 : root.compactWidth || root.compactHeight ? 8 : 11
                         background: GlassSurface { material: root.material; role: "card"; backdropAvailable: root.backdropAvailable }
                         contentItem: ColumnLayout {
-                            spacing: 8
+                            spacing: root.compactView ? 4 : 8
                             RowLayout {
-                                Label { text: qsTr("Transfer speed"); color: root.colors.text; font.bold: true }
-                                Item { Layout.fillWidth: true }
-                                Label { text: root.item ? Transfer.rate(root.item.speed) : "—"; color: root.colors.muted }
+                                Layout.fillWidth: true
+                                Label {
+                                    Layout.fillWidth: true
+                                    text: qsTr("Transfer speed")
+                                    color: root.colors.text
+                                    font.bold: true
+                                    wrapMode: Text.WordWrap
+                                }
+                                Label {
+                                    visible: !root.compactView
+                                    text: root.item ? Transfer.rate(root.item.speed) : "—"
+                                    color: root.colors.muted
+                                }
                             }
                             TransferGraph {
                                 objectName: "downloadSpeedGraph"
                                 Layout.fillWidth: true
                                 Layout.minimumWidth: 0
-                                Layout.preferredHeight: root.compactWidth || root.compactHeight ? 70
+                                Layout.preferredHeight: root.compactView ? 44 : root.compactWidth || root.compactHeight ? 70
                                     : root.transferLayout === "fogSlate" ? 88 : 104
+                                compactStyle: root.compactView
                                 samples: root.speedSamples
                                 paintingPaused: root.interactiveFrame
                                 animationStyle: WindowAppearance.graphAnimation
@@ -1106,12 +1223,9 @@ AuralisWindow {
                             }
                             GlassButton {
                                 text: qsTr("Update address…")
-                                enabled: !root.busy && !root.recoveryBusy
+                                enabled: root.canOpenAddressEditor
                                 material: root.material
-                                onClicked: {
-                                    updatedAddress.text = root.item.url
-                                    addressPrompt.open()
-                                }
+                                onClicked: root.openAddressEditor()
                             }
                         }
                         Label {
@@ -1277,6 +1391,7 @@ AuralisWindow {
 
             TransferTubes {
                 objectName: "downloadPipeTrunk"
+                sizeScale: root.pipeScale
                 LayoutMirroring.enabled: false
                 anchors.left: parent.left
                 anchors.top: parent.top
@@ -1284,7 +1399,7 @@ AuralisWindow {
                 width: root.pipeInset - 2
                 visible: root.displayFlow
                 mainTrunk: true
-                sourceItem: transferSource
+                sourceItem: root.compactView ? transferName : transferSource
                 progressItem: downloadProgress
                 connectionCard: connectionPane
                 gridItem: waterGrid
@@ -1351,6 +1466,7 @@ AuralisWindow {
     }
     DetachedDialogWindow {
         id: addressPrompt
+        objectName: "updateDownloadAddressWindow"
         hostWindow: root
         material: root.material
         title: qsTr("Update download address")

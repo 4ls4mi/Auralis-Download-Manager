@@ -8,6 +8,7 @@ Canvas {
     property var samples: []
     property bool paintingPaused: false
     property bool flowActive: false
+    property bool compactStyle: false
     property string animationStyle: "classic"
     property string lightingStyle: WindowAppearance.graphLighting || "polished"
     property color lineColor: MaterialTheme.graphColors[0]
@@ -23,7 +24,7 @@ Canvas {
     readonly property color frostEnd: MaterialTheme.mix(endpointTone.edge, "#f1fbff", .46, 1)
     readonly property color smokeStart: MaterialTheme.mix(lineTone.glow, "#070912", .88, 1)
     readonly property color smokeEnd: MaterialTheme.mix(endpointTone.glow, "#070912", .88, 1)
-    readonly property bool compact: height < 38
+    readonly property bool compact: compactStyle || height < 38
     readonly property bool jellyFlow: animationStyle === "jelly"
     readonly property bool flowEnabled: flowActive && visible && available && !paintingPaused
         && !MaterialTheme.reducedMotion && samples.length > 1 && width >= 2 && height >= 3
@@ -33,6 +34,7 @@ Canvas {
 
     renderTarget: Canvas.Image
     onSamplesChanged: requestPaint()
+    onCompactChanged: requestPaint()
     onPaintingPausedChanged: if (!paintingPaused) requestPaint()
     onLineColorChanged: requestPaint()
     onEndpointColorChanged: requestPaint()

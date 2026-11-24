@@ -119,6 +119,18 @@
             <source>Torrent files (*.torrent)</source>
             <translation>ملفات تورنت (*.torrent)</translation>
         </message>
+        <message>
+            <source>Checking drive space…</source>
+            <translation>جارٍ التحقّق من مساحة القرص…</translation>
+        </message>
+        <message>
+            <source>Drive capacity %1 · Free space %2</source>
+            <translation>سعة القرص %1 · المساحة المتاحة %2</translation>
+        </message>
+        <message>
+            <source>Drive space unavailable</source>
+            <translation>مساحة القرص غير متاحة</translation>
+        </message>
     </context>
     <context>
         <name>BatchDownloadDialog</name>
@@ -327,6 +339,62 @@
         <message>
             <source>Could not remove browser setup for the current Windows user.</source>
             <translation>تعذّر إزالة إعداد المتصفح لمستخدم Windows الحالي.</translation>
+        </message>
+        <message>
+            <source>The Chrome policy changed before approval. Check browser setup again.</source>
+            <translation>تغيّرت سياسة Chrome قبل الموافقة. تحقّق من إعداد المتصفح مجددًا.</translation>
+        </message>
+        <message>
+            <source>Windows administrator approval was cancelled.</source>
+            <translation>أُلغي طلب موافقة مسؤول Windows.</translation>
+        </message>
+        <message>
+            <source>Could not start Windows administrator approval (Windows error %1).</source>
+            <translation>تعذّر بدء طلب موافقة مسؤول Windows (خطأ Windows رقم %1).</translation>
+        </message>
+        <message>
+            <source>Could not read the result of Windows administrator approval.</source>
+            <translation>تعذّرت قراءة نتيجة طلب موافقة مسؤول Windows.</translation>
+        </message>
+        <message>
+            <source>Approve with the same Windows account that is running Auralis. Setup did not change another account.</source>
+            <translation>وافق باستخدام حساب Windows نفسه الذي يشغّل Auralis. لم يغيّر الإعداد أي حساب آخر.</translation>
+        </message>
+        <message>
+            <source>Windows did not grant administrator approval.</source>
+            <translation>لم يمنح Windows موافقة المسؤول.</translation>
+        </message>
+        <message>
+            <source>Windows could not change the Chrome policy with this approval. Use the browser’s supported setup or contact your administrator.</source>
+            <translation>تعذّر على Windows تغيير سياسة Chrome بهذه الموافقة. استخدم طريقة الإعداد التي يدعمها المتصفح أو تواصل مع مسؤول النظام.</translation>
+        </message>
+        <message>
+            <source>Windows administrator approval ended unexpectedly (exit code %1).</source>
+            <translation>انتهى طلب موافقة مسؤول Windows بشكل غير متوقّع (رمز الخروج %1).</translation>
+        </message>
+        <message>
+            <source>Windows did not retain the Auralis browser policy change.</source>
+            <translation>لم يحفظ Windows تغيير سياسة المتصفح الخاصة بـ Auralis.</translation>
+        </message>
+        <message>
+            <source>Auralis could not save the undo information for Windows approval.</source>
+            <translation>تعذّر على Auralis حفظ المعلومات اللازمة للتراجع عن الإعداد الذي يتطلّب موافقة Windows.</translation>
+        </message>
+        <message>
+            <source>Auralis could not verify its Windows approval helper. Reinstall Auralis from its official Windows installer.</source>
+            <translation>تعذّر على Auralis التحقّق من أداة طلب موافقة Windows. أعد تثبيت Auralis باستخدام برنامج التثبيت الرسمي المخصّص لـ Windows.</translation>
+        </message>
+        <message>
+            <source>Chrome setup changed, but Auralis could not save its undo information.</source>
+            <translation>تغيّر إعداد Chrome، لكن تعذّر على Auralis حفظ المعلومات اللازمة للتراجع عن التغيير.</translation>
+        </message>
+        <message>
+            <source>Windows approval requires an installed Auralis application and an administrator account with its own approval token.</source>
+            <translation>تتطلّب موافقة Windows تثبيت تطبيق Auralis واستخدام حساب مسؤول له رمز وصول خاص به للموافقة.</translation>
+        </message>
+        <message>
+            <source>Windows approval timed out. Check Chrome setup before trying again.</source>
+            <translation>انتهت مهلة طلب موافقة Windows. تحقّق من إعداد Chrome قبل إعادة المحاولة.</translation>
         </message>
     </context>
     <context>
@@ -1208,6 +1276,14 @@ Info hash %3</source>
             <source>Stalled</source>
             <translation>متوقف مؤقتًا عن استقبال البيانات</translation>
         </message>
+        <message>
+            <source>Compact view</source>
+            <translation>عرض مدمج</translation>
+        </message>
+        <message>
+            <source>Full view</source>
+            <translation>عرض كامل</translation>
+        </message>
     </context>
     <context>
         <name>Engine</name>
@@ -2062,6 +2138,18 @@ Info hash %3</source>
         <message>
             <source>Auralis %1</source>
             <translation>Auralis %1</translation>
+        </message>
+        <message>
+            <source>Compact view</source>
+            <translation>عرض مدمج</translation>
+        </message>
+        <message>
+            <source>Full view</source>
+            <translation>عرض كامل</translation>
+        </message>
+        <message>
+            <source>Refresh download address</source>
+            <translation>تحديث عنوان التنزيل</translation>
         </message>
     </context>
     <context>

@@ -29,6 +29,8 @@ bool isInstalledApplication();
 NativeHostStatus nativeHostStatus(const QString &browserId);
 QString registerNativeHost(const QString &browserId, bool repair);
 PolicyStatus policyStatus(const QString &browserId);
-QString installPolicy(const QString &browserId);
-QString removePolicy(const QString &browserId);
+QString installPolicy(const QString &browserId, bool *windowsApprovalRequired = nullptr);
+QString removePolicy(const QString &browserId, bool *windowsApprovalRequired = nullptr);
+bool chromeWindowsApprovalAvailable();
+QString installChromePolicyWithAdministratorApproval(bool remove = false);
 }

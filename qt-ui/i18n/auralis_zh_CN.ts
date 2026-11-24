@@ -119,6 +119,18 @@
             <source>Torrent files (*.torrent)</source>
             <translation>种子文件 (*.torrent)</translation>
         </message>
+        <message>
+            <source>Checking drive space…</source>
+            <translation>正在检查磁盘空间…</translation>
+        </message>
+        <message>
+            <source>Drive capacity %1 · Free space %2</source>
+            <translation>磁盘容量 %1 · 可用空间 %2</translation>
+        </message>
+        <message>
+            <source>Drive space unavailable</source>
+            <translation>无法获取磁盘空间</translation>
+        </message>
     </context>
     <context>
         <name>BatchDownloadDialog</name>
@@ -327,6 +339,62 @@
         <message>
             <source>Could not remove browser setup for the current Windows user.</source>
             <translation>无法移除当前 Windows 用户的浏览器设置。</translation>
+        </message>
+        <message>
+            <source>The Chrome policy changed before approval. Check browser setup again.</source>
+            <translation>Chrome 策略在批准前发生了变化。请重新检查浏览器设置。</translation>
+        </message>
+        <message>
+            <source>Windows administrator approval was cancelled.</source>
+            <translation>已取消 Windows 管理员批准请求。</translation>
+        </message>
+        <message>
+            <source>Could not start Windows administrator approval (Windows error %1).</source>
+            <translation>无法发起 Windows 管理员批准请求（Windows 错误 %1）。</translation>
+        </message>
+        <message>
+            <source>Could not read the result of Windows administrator approval.</source>
+            <translation>无法读取 Windows 管理员批准请求的结果。</translation>
+        </message>
+        <message>
+            <source>Approve with the same Windows account that is running Auralis. Setup did not change another account.</source>
+            <translation>请使用运行 Auralis 的同一 Windows 帐户批准请求。设置操作未更改其他帐户。</translation>
+        </message>
+        <message>
+            <source>Windows did not grant administrator approval.</source>
+            <translation>Windows 未授予管理员批准。</translation>
+        </message>
+        <message>
+            <source>Windows could not change the Chrome policy with this approval. Use the browser’s supported setup or contact your administrator.</source>
+            <translation>Windows 无法通过本次批准更改 Chrome 策略。请使用浏览器支持的设置方式，或联系管理员。</translation>
+        </message>
+        <message>
+            <source>Windows administrator approval ended unexpectedly (exit code %1).</source>
+            <translation>Windows 管理员批准请求意外结束（退出代码 %1）。</translation>
+        </message>
+        <message>
+            <source>Windows did not retain the Auralis browser policy change.</source>
+            <translation>Windows 未保存 Auralis 的浏览器策略更改。</translation>
+        </message>
+        <message>
+            <source>Auralis could not save the undo information for Windows approval.</source>
+            <translation>Auralis 无法保存撤销这项需经 Windows 批准的设置所需的信息。</translation>
+        </message>
+        <message>
+            <source>Auralis could not verify its Windows approval helper. Reinstall Auralis from its official Windows installer.</source>
+            <translation>Auralis 无法验证其 Windows 批准辅助程序。请使用官方 Windows 安装程序重新安装 Auralis。</translation>
+        </message>
+        <message>
+            <source>Chrome setup changed, but Auralis could not save its undo information.</source>
+            <translation>Chrome 设置已更改，但 Auralis 无法保存撤销此更改所需的信息。</translation>
+        </message>
+        <message>
+            <source>Windows approval requires an installed Auralis application and an administrator account with its own approval token.</source>
+            <translation>请求 Windows 批准需要安装 Auralis，并使用具备自身授权令牌的管理员帐户。</translation>
+        </message>
+        <message>
+            <source>Windows approval timed out. Check Chrome setup before trying again.</source>
+            <translation>Windows 批准请求已超时。请先检查 Chrome 设置，再重试。</translation>
         </message>
     </context>
     <context>
@@ -1208,6 +1276,14 @@ Info hash %3</source>
             <source>Stalled</source>
             <translation>接收停滞</translation>
         </message>
+        <message>
+            <source>Compact view</source>
+            <translation>紧凑视图</translation>
+        </message>
+        <message>
+            <source>Full view</source>
+            <translation>完整视图</translation>
+        </message>
     </context>
     <context>
         <name>Engine</name>
@@ -2062,6 +2138,18 @@ Info hash %3</source>
         <message>
             <source>Auralis %1</source>
             <translation>Auralis %1</translation>
+        </message>
+        <message>
+            <source>Compact view</source>
+            <translation>紧凑视图</translation>
+        </message>
+        <message>
+            <source>Full view</source>
+            <translation>完整视图</translation>
+        </message>
+        <message>
+            <source>Refresh download address</source>
+            <translation>刷新下载地址</translation>
         </message>
     </context>
     <context>

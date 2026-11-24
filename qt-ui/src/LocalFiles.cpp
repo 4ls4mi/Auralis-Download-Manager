@@ -9,8 +9,12 @@
 #include <QRegularExpression>
 #include <QSaveFile>
 #include <QStandardPaths>
+#include <QStorageInfo>
 #include <QTemporaryFile>
 #include <QUrl>
+#ifdef Q_OS_WIN
+#include <qt_windows.h>
+#endif
 
 namespace {
 constexpr qsizetype MaxPreferencesBytes = 4 * 1024 * 1024;
@@ -37,6 +41,73 @@ QString localPath(const QVariant &value)
         return url.isLocalFile() ? QDir::toNativeSeparators(url.toLocalFile()) : QString();
     }
     return QDir::isAbsolutePath(text) ? QDir::toNativeSeparators(text) : QString();
+}
+
+#ifdef Q_OS_WIN
+bool localDrive(const QString &path)
+{
+    if (path.size() < 3 || !path[0].isLetter() || path[1] != QLatin1Char(':') || path[2] != QLatin1Char('/'))
+        return false;
+    const auto root = QDir::toNativeSeparators(path.first(3));
+    const auto type = GetDriveTypeW(reinterpret_cast<LPCWSTR>(root.utf16()));
+    return type != DRIVE_REMOTE && type != DRIVE_UNKNOWN && type != DRIVE_NO_ROOT_DIR;
+}
+#endif
+
+QVariantMap downloadDestinationSpace(const QVariant &value)
+{
+    const auto unavailable = success(QVariantMap{});
+    auto path = QDir::fromNativeSeparators(value.toString().trimmed());
+    if (path.isEmpty() || path.size() > 32760 || path.contains(QChar::Null)
+        || path.contains(QStringLiteral("://")) || path.endsWith(QLatin1Char('/')))
+        return unavailable;
+#ifdef Q_OS_WIN
+    if (path.startsWith(QStringLiteral("//"))
+        || (path.size() >= 2 && path[1] == QLatin1Char(':')
+            && (path.size() < 3 || path[2] != QLatin1Char('/'))))
+        return unavailable;
+    if (path.startsWith(QLatin1Char('/'))) {
+        const auto home = QDir::fromNativeSeparators(QDir::homePath());
+        if (home.size() < 2 || home[1] != QLatin1Char(':'))
+            return unavailable;
+        path.prepend(home.first(2));
+    }
+#endif
+    // The download engine interprets relative "Save as" paths under the user's home.
+    if (QDir::isRelativePath(path))
+        path = QDir::home().filePath(path);
+#ifdef Q_OS_WIN
+    if (!localDrive(path))
+        return unavailable;
+#endif
+    if (QFileInfo(path).fileName().isEmpty())
+        return unavailable;
+
+    auto folderPath = QFileInfo(path).path();
+    for (;;) {
+        const QFileInfo folder(folderPath);
+        if (folder.isDir()) {
+            const auto resolved = folder.canonicalFilePath();
+            if (resolved.isEmpty())
+                return unavailable;
+#ifdef Q_OS_WIN
+            if (!localDrive(QDir::fromNativeSeparators(resolved)))
+                return unavailable;
+#endif
+            const QStorageInfo volume(resolved);
+            const auto capacity = volume.bytesTotal();
+            const auto available = volume.bytesAvailable();
+            if (!volume.isValid() || !volume.isReady() || capacity <= 0 || available < 0)
+                return unavailable;
+            return success(QVariantMap{{QStringLiteral("capacity"), capacity}, {QStringLiteral("available"), available}});
+        }
+        if (folder.exists() || folder.isSymLink() || folder.isJunction())
+            return unavailable;
+        const auto parent = folder.path();
+        if (parent == folderPath)
+            return unavailable;
+        folderPath = parent;
+    }
 }
 
 QVariantMap browserProfiles(const QString &browser)
@@ -304,6 +375,8 @@ QVariantMap discardBackupManifest(const QString &path, const QDir &profile)
 QVariantMap requestLocalFile(const QVariantMap &command, const QString &dataDirectory)
 {
     const auto action = command.value(QStringLiteral("local")).toString();
+    if (action == QStringLiteral("downloadDestinationSpace"))
+        return downloadDestinationSpace(command.value(QStringLiteral("file")));
     const auto path = localPath(command.value(QStringLiteral("file")));
     const QDir profile(dataDirectory);
 

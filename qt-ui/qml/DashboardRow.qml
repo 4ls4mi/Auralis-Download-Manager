@@ -25,6 +25,7 @@ Item {
     property bool cursorFocused: false
     property bool transferring: false
     property bool animationsAllowed: true
+    property bool compactView: false
     property real waterPhase: 0
     readonly property bool studioChrome: colors.cleanStudio === true
     readonly property string fileSymbol: mixed ? "mixed" : torrent ? "peers"
@@ -48,7 +49,8 @@ Item {
     signal opened()
     signal optionsRequested()
 
-    implicitHeight: recoveryLabel.length ? 78 : colors.layout === "violetRail" ? 59 : 64
+    implicitHeight: compactView ? (recoveryLabel.length ? 52 : 40)
+        : recoveryLabel.length ? 78 : colors.layout === "violetRail" ? 59 : 64
     Accessible.role: Accessible.ListItem
     Accessible.name: [fileName, sizeLabel, statusLabel, speedLabel, connectionLabel].filter(Boolean).join(", ")
     Accessible.selected: chosen
@@ -125,7 +127,7 @@ Item {
         ColumnLayout {
             Layout.fillWidth: true
             Layout.minimumWidth: 85
-            spacing: 2
+            spacing: row.compactView ? 0 : 2
             Label {
                 id: fileNameLabel
                 Layout.fillWidth: true
@@ -137,6 +139,7 @@ Item {
                 font.weight: Font.DemiBold
             }
             Label {
+                visible: !row.compactView
                 Layout.fillWidth: true
                 text: row.sizeLabel + (row.mixed ? "  ·  " + qsTr("Direct → Torrent") : row.torrent ? "  ·  " + qsTr("Torrent") : "")
                 elide: Text.ElideRight
@@ -192,7 +195,7 @@ Item {
                 spacing: 4
                 GlassProgress {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 22
+                    Layout.preferredHeight: row.compactView ? 14 : 22
                     value: row.progress
                     animated: row.transferring && row.animationsAllowed
                     animationStyle: WindowAppearance.progressAnimation
@@ -215,12 +218,12 @@ Item {
             ColumnLayout {
                 Layout.fillWidth: false
                 Layout.preferredWidth: Math.floor(row.indicatorWidth * .24)
-                Layout.minimumWidth: 46
+                Layout.minimumWidth: row.compactView ? 41 : 46
                 spacing: 1
                 RowLayout {
                     visible: row.workers.length > 0
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 19
+                    Layout.preferredHeight: row.compactView ? 13 : 19
                     spacing: 1
                     Repeater {
                         model: row.workers.length
@@ -228,8 +231,8 @@ Item {
                             required property int index
                             readonly property var worker: row.workers[index] || ({})
                             Layout.fillWidth: true
-                            Layout.preferredWidth: 16
-                            Layout.preferredHeight: 18
+                            Layout.preferredWidth: row.compactView ? 10 : 16
+                            Layout.preferredHeight: row.compactView ? 12 : 18
                             value: TransferData.assigned(worker.id, row.telemetry.segments)
                             receiving: row.transferring && worker.state === "Receiving"
                             phase: row.waterPhase
@@ -253,7 +256,7 @@ Item {
             Loader {
                 Layout.fillWidth: true
                 Layout.preferredWidth: Math.max(25, row.indicatorWidth * .23)
-                Layout.preferredHeight: 31
+                Layout.preferredHeight: row.compactView ? 20 : 31
                 active: row.speedSamples.length > 1 && row.speedSamples.some(sample => sample > 0)
                 sourceComponent: TransferGraph {
                     samples: row.speedSamples

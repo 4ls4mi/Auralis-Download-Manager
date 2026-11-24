@@ -50,8 +50,6 @@ DetachedDialogWindow {
     function offerIfNeeded() {
         if (canCheck && checksComplete && missingPrerequisite && !offered && !deferred) {
             offered = true
-            if (browserSetup.offerAtStartup)
-                browserSetup.offerInstall(browserSetup.status.browserId)
             open()
         }
     }
@@ -202,7 +200,7 @@ DetachedDialogWindow {
             Layout.fillWidth: true
             Layout.topMargin: 8
             monitoring: root.visible && root.visibility !== Window.Minimized
-            installConfirmationDetails: root.missingHelpers.length > 0 && !root.batchRunning && !root.installerBusy
+            installDetails: root.missingHelpers.length > 0 && !root.batchRunning && !root.installerBusy
                 ? qsTr("This also starts installing the missing video and gallery helpers.") : ""
             onInstallAccepted: root.installMissing()
         },

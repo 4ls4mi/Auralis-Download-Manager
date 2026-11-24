@@ -71,6 +71,7 @@ try {
 
     Invoke-Checked 'cmake' @('--build',$build,'--config','Release','--target','auralis-download-manager')
     Copy-Item -LiteralPath (Join-Path $builtApp 'auralis-download-manager.exe') -Destination $stage
+    Copy-Item -LiteralPath (Join-Path $builtApp 'auralis-chrome-approval.exe') -Destination $stage
     Copy-Item -LiteralPath (Join-Path $rust 'auralis_engine.dll') -Destination $stage
     Copy-Item -LiteralPath (Join-Path $rust 'misterdownloadmanager-nmhost.exe') -Destination (Join-Path $stage 'auralis-browser-host.exe')
     Copy-Item -LiteralPath (Join-Path $env:AURALIS_QT_DENO 'deno.exe') -Destination $stage
@@ -114,7 +115,7 @@ try {
     if (!$crt) { throw 'The x64 MSVC redistributable files were not found.' }
     Copy-Item -Path (Join-Path $crt.FullName '*.dll') -Destination $stage
 
-    foreach ($file in @('auralis-download-manager.exe','auralis_engine.dll','auralis-browser-host.exe','deno.exe',
+    foreach ($file in @('auralis-download-manager.exe','auralis-chrome-approval.exe','auralis_engine.dll','auralis-browser-host.exe','deno.exe',
         'dxcompiler.dll','dxil.dll','directx-shader-compiler/LICENCE-MIT.txt','directx-shader-compiler/LICENSE-LLVM.txt',
         'directx-shader-compiler/LICENSE-MS.txt',
         'Qt6Core.dll','Qt6Quick3D.dll','Qt6Multimedia.dll','platforms/qwindows.dll','qml/QtQuick3D/qmldir',

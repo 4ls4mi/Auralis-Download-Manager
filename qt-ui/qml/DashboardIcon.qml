@@ -49,6 +49,8 @@ Item {
         minimize: "M4 12 H20",
         maximize: "M6 6 H18 V18 H6 Z",
         restore: "M9 6 H18 V15 M6 9 H15 V18 H6 Z",
+        compactView: "M4 4 L9 9 M4 9 H9 V4 M20 4 L15 9 M15 4 V9 H20 M4 20 L9 15 M4 15 H9 V20 M20 20 L15 15 M15 20 V15 H20",
+        fullView: "M9 9 L4 4 M4 9 V4 H9 M15 9 L20 4 M15 4 H20 V9 M9 15 L4 20 M4 15 V20 H9 M15 15 L20 20 M15 20 H20 V15",
         close: "M6 6 L18 18 M18 6 L6 18",
         peers: "M12 3 L21 18 H3 Z M12 3 V13 M3 18 L12 13 L21 18",
         mixed: "M4 4 H10 V10 H4 Z M10 7 H17 L20 10 L17 13 M17 10 V16 H21 V21 H16 V16",

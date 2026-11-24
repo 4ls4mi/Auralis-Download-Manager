@@ -119,6 +119,18 @@
             <source>Torrent files (*.torrent)</source>
             <translation>Archivos torrent (*.torrent)</translation>
         </message>
+        <message>
+            <source>Checking drive space…</source>
+            <translation>Comprobando el espacio en disco…</translation>
+        </message>
+        <message>
+            <source>Drive capacity %1 · Free space %2</source>
+            <translation>Capacidad de la unidad %1 · Espacio libre %2</translation>
+        </message>
+        <message>
+            <source>Drive space unavailable</source>
+            <translation>Espacio en disco no disponible</translation>
+        </message>
     </context>
     <context>
         <name>BatchDownloadDialog</name>
@@ -327,6 +339,62 @@
         <message>
             <source>Could not remove browser setup for the current Windows user.</source>
             <translation>No se pudo eliminar la configuración del navegador de la cuenta actual de Windows.</translation>
+        </message>
+        <message>
+            <source>The Chrome policy changed before approval. Check browser setup again.</source>
+            <translation>La política de Chrome cambió antes de la aprobación. Comprueba de nuevo la configuración del navegador.</translation>
+        </message>
+        <message>
+            <source>Windows administrator approval was cancelled.</source>
+            <translation>Se canceló la solicitud de aprobación del administrador de Windows.</translation>
+        </message>
+        <message>
+            <source>Could not start Windows administrator approval (Windows error %1).</source>
+            <translation>No se pudo iniciar la solicitud de aprobación del administrador de Windows (error de Windows %1).</translation>
+        </message>
+        <message>
+            <source>Could not read the result of Windows administrator approval.</source>
+            <translation>No se pudo leer el resultado de la solicitud de aprobación del administrador de Windows.</translation>
+        </message>
+        <message>
+            <source>Approve with the same Windows account that is running Auralis. Setup did not change another account.</source>
+            <translation>Usa para aprobar la misma cuenta de Windows con la que ejecutas Auralis. La configuración no modificó ninguna otra cuenta.</translation>
+        </message>
+        <message>
+            <source>Windows did not grant administrator approval.</source>
+            <translation>Windows no concedió la aprobación del administrador.</translation>
+        </message>
+        <message>
+            <source>Windows could not change the Chrome policy with this approval. Use the browser’s supported setup or contact your administrator.</source>
+            <translation>Windows no pudo cambiar la política de Chrome con esta aprobación. Usa el método de configuración admitido por el navegador o ponte en contacto con tu administrador.</translation>
+        </message>
+        <message>
+            <source>Windows administrator approval ended unexpectedly (exit code %1).</source>
+            <translation>La solicitud de aprobación del administrador de Windows terminó de forma inesperada (código de salida %1).</translation>
+        </message>
+        <message>
+            <source>Windows did not retain the Auralis browser policy change.</source>
+            <translation>Windows no guardó el cambio en la política de navegador de Auralis.</translation>
+        </message>
+        <message>
+            <source>Auralis could not save the undo information for Windows approval.</source>
+            <translation>Auralis no pudo guardar la información necesaria para deshacer la configuración que requiere la aprobación de Windows.</translation>
+        </message>
+        <message>
+            <source>Auralis could not verify its Windows approval helper. Reinstall Auralis from its official Windows installer.</source>
+            <translation>Auralis no pudo verificar su asistente para solicitar la aprobación de Windows. Reinstala Auralis con su instalador oficial para Windows.</translation>
+        </message>
+        <message>
+            <source>Chrome setup changed, but Auralis could not save its undo information.</source>
+            <translation>La configuración de Chrome cambió, pero Auralis no pudo guardar la información necesaria para deshacer el cambio.</translation>
+        </message>
+        <message>
+            <source>Windows approval requires an installed Auralis application and an administrator account with its own approval token.</source>
+            <translation>La aprobación de Windows requiere que Auralis esté instalado y que uses una cuenta de administrador con su propio token de autorización.</translation>
+        </message>
+        <message>
+            <source>Windows approval timed out. Check Chrome setup before trying again.</source>
+            <translation>Se agotó el tiempo de espera de la aprobación de Windows. Comprueba la configuración de Chrome antes de volver a intentarlo.</translation>
         </message>
     </context>
     <context>
@@ -1208,6 +1276,14 @@ Identificador del torrent %3</translation>
             <source>Stalled</source>
             <translation>Sin recibir datos</translation>
         </message>
+        <message>
+            <source>Compact view</source>
+            <translation>Vista compacta</translation>
+        </message>
+        <message>
+            <source>Full view</source>
+            <translation>Vista completa</translation>
+        </message>
     </context>
     <context>
         <name>Engine</name>
@@ -2062,6 +2138,18 @@ Identificador del torrent %3</translation>
         <message>
             <source>Auralis %1</source>
             <translation>Auralis %1</translation>
+        </message>
+        <message>
+            <source>Compact view</source>
+            <translation>Vista compacta</translation>
+        </message>
+        <message>
+            <source>Full view</source>
+            <translation>Vista completa</translation>
+        </message>
+        <message>
+            <source>Refresh download address</source>
+            <translation>Actualizar dirección de descarga</translation>
         </message>
     </context>
     <context>

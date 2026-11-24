@@ -335,7 +335,10 @@ QVariantMap Engine::dispatch(const QVariantMap &command) const
                         if (browserResult.value(QStringLiteral("extensionDiscovery")).toString() != QStringLiteral("missing"))
                             return failure(tr("Auralis could not confirm that the extension is missing."));
                     }
-                    const auto policyError = BrowserSetup::removePolicy(browserId);
+                    bool permissionDenied = false;
+                    auto policyError = BrowserSetup::removePolicy(browserId, &permissionDenied);
+                    if (permissionDenied)
+                        policyError = BrowserSetup::installChromePolicyWithAdministratorApproval(true);
                     if (!policyError.isEmpty())
                         return failure(policyError);
                     return result(QVariantMap{{QStringLiteral("ok"), true},
@@ -356,7 +359,10 @@ QVariantMap Engine::dispatch(const QVariantMap &command) const
                     return rechecked;
                 if (extensionDetected(rechecked.value(QStringLiteral("result")).toMap()))
                     return failure(extensionDetectedMessage);
-                const auto policyError = BrowserSetup::installPolicy(browserId);
+                bool permissionDenied = false;
+                auto policyError = BrowserSetup::installPolicy(browserId, &permissionDenied);
+                if (permissionDenied)
+                    policyError = BrowserSetup::installChromePolicyWithAdministratorApproval();
                 if (!policyError.isEmpty())
                     return failure(policyError);
                 // A newly installed Chrome may never have opened its normal profile. Open its

@@ -4,16 +4,17 @@ import QtQuick.Controls.Basic as Basic
 import QtQuick.Layouts
 import QtQuick.Dialogs
 import QtQuick.Window
+import QtCore
 import "TransferData.js" as TransferData
 
 AuralisWindow {
     id: root
     objectName: "mainWindow"
     title: qsTr("Auralis Download Manager")
-    width: 1120
-    height: 735
-    minimumWidth: 680
-    minimumHeight: 450
+    width: windowPreferences.fullWidth
+    height: windowPreferences.fullHeight
+    minimumWidth: compactView ? 500 : 680
+    minimumHeight: compactView ? 320 : 450
     visible: !engine.startHidden || !engine.trayAvailable
     color: "transparent"
     flags: Qt.Window | Qt.FramelessWindowHint
@@ -25,8 +26,9 @@ AuralisWindow {
     readonly property bool fogSlate: materialLayout === "fogSlate"
     readonly property bool coralSlate: materialLayout === "coralSlate"
     readonly property bool materialDashboard: fogSlate || violetRail || coralSlate
-    readonly property bool sideMenus: materialDashboard && showSidebar
-    readonly property bool groupedQueue: violetRail && filterType === "status" && filterKey === "all"
+    readonly property bool compactView: windowPreferences.compactView
+    readonly property bool sideMenus: materialDashboard && showSidebar && !compactView
+    readonly property bool groupedQueue: !compactView && violetRail && filterType === "status" && filterKey === "all"
     readonly property color sidebarInk: colors.sidebarInk || colors.ink
     readonly property color sidebarMuted: colors.sidebarMuted || colors.muted
     palette.window: colors.background
@@ -64,7 +66,7 @@ AuralisWindow {
         return queues.length ? queues[0] : null
     }
     readonly property bool compact: width < 920
-    readonly property int layoutInset: visibility === Window.Maximized ? 0 : 8
+    readonly property int layoutInset: visibility === Window.Maximized ? 0 : compactView ? 5 : 8
     readonly property bool online: engine.ready
     readonly property string filterTitle: filterType === "category"
         ? ((categories.find(category => category.key === filterKey) || {}).name || filterKey)
@@ -100,8 +102,8 @@ AuralisWindow {
     readonly property var currentItem: chosenItems.find(item => String(item.id) === focusedTransferId) || chosenItems[0] || null
     readonly property var currentVisual: currentItem ? visualById[currentItem.id] || ({}) : ({})
     readonly property var chosenSet: new Set(chosenIds)
-    readonly property int indicatorColumnWidth: violetRail && width < 740 ? 183 : compact ? 207 : 330
-    readonly property int timeColumnWidth: compact ? 57 : 72
+    readonly property int indicatorColumnWidth: compactView ? 174 : violetRail && width < 740 ? 183 : compact ? 207 : 330
+    readonly property int timeColumnWidth: compactView ? 51 : compact ? 57 : 72
     readonly property int listGutter: list.contentHeight > list.height ? 8 : 0
     property var detailWindows: ({})
     property var hiddenProgressIds: []
@@ -478,6 +480,14 @@ AuralisWindow {
         return Boolean(visual) && !visual.is_torrent && !visual.is_video && !visual.is_gallery && !visual.is_remote
     }
 
+    function canRefreshDownloadAddress(item) {
+        if (!canRecoverDownload(item))
+            return false
+        const details = detailWindows[String(item.id)]
+        return details ? details.canOpenAddressEditor
+            : !["searching", "preparing"].includes(visualById[item.id].recovery_stage)
+    }
+
     function showDownload(id, recovery) {
         const key = String(id)
         const wasHidden = hiddenProgressIds.includes(key)
@@ -499,6 +509,28 @@ AuralisWindow {
             details.openRecovery()
         details.raise()
         details.requestActivate()
+        return details
+    }
+
+    Settings {
+        id: windowPreferences
+        category: "MainWindow"
+        property bool compactView: false
+        property int fullWidth: 1120
+        property int fullHeight: 735
+    }
+
+    function toggleCompactView() {
+        if (!compactView && visibility === Window.Windowed) {
+            windowPreferences.fullWidth = width
+            windowPreferences.fullHeight = height
+        }
+        if (visibility === Window.Maximized)
+            showNormal()
+        windowPreferences.compactView = !compactView
+        width = compactView ? 540 : windowPreferences.fullWidth
+        height = compactView ? 390 : windowPreferences.fullHeight
+        synchronizeRows()
     }
 
     function toggleMaximized() {
@@ -527,6 +559,10 @@ AuralisWindow {
     onSortOrderChanged: synchronizeRows()
     onVioletRailChanged: synchronizeRows()
     Component.onCompleted: {
+        if (compactView) {
+            width = 540
+            height = 390
+        }
         synchronizeRows()
         engine.refresh()
         if (engine.startHidden && !engine.trayAvailable)
@@ -857,6 +893,18 @@ AuralisWindow {
         parent: root.contentItem
         AppMenuItem { symbol: "details"; action: detailsAction }
         AppMenuItem {
+            objectName: "refreshDownloadAddressMenuItem"
+            symbol: "refresh"
+            text: qsTr("Refresh download address")
+            visible: root.canRecoverDownload(root.currentItem)
+            enabled: root.online && !root.busy && root.canRefreshDownloadAddress(root.currentItem)
+            onTriggered: {
+                const entry = root.currentItem
+                if (root.canRefreshDownloadAddress(entry))
+                    root.showDownload(entry.id, true)?.openAddressEditor()
+            }
+        }
+        AppMenuItem {
             objectName: "downloadRecoveryMenuItem"
             symbol: "refresh"
             text: qsTr("Download recovery…")
@@ -1041,11 +1089,11 @@ AuralisWindow {
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: root.layoutInset
-        spacing: 7
+        spacing: root.compactView ? 4 : 7
 
         Item {
             Layout.fillWidth: true
-            Layout.preferredHeight: 43
+            Layout.preferredHeight: root.compactView ? 36 : 43
             GlassSurface { anchors.fill: parent; role: "title"; roundedPanel: true }
             CaptionMoveArea {
                 objectName: "titleDragArea"
@@ -1061,8 +1109,8 @@ AuralisWindow {
                 anchors.rightMargin: 6
                 spacing: 8
                 BrandMark {
-                    Layout.preferredWidth: 29
-                    Layout.preferredHeight: 29
+                    Layout.preferredWidth: root.compactView ? 24 : 29
+                    Layout.preferredHeight: root.compactView ? 24 : 29
                 }
                 ColumnLayout {
                     Layout.fillWidth: true
@@ -1076,6 +1124,7 @@ AuralisWindow {
                         elide: Text.ElideRight
                     }
                     Label {
+                        visible: !root.compactView
                         Layout.fillWidth: true
                         text: qsTr("Download Manager")
                         color: root.colors.muted
@@ -1090,6 +1139,7 @@ AuralisWindow {
                     color: root.online ? root.colors.positive : root.colors.caution
                 }
                 Label {
+                    visible: !root.compactView
                     text: root.online ? qsTr("Connected") : qsTr("Offline")
                     color: root.colors.muted
                     font.pixelSize: TypographyScale.pixels(12)
@@ -1100,12 +1150,34 @@ AuralisWindow {
 
                     GlassButton {
                         objectName: "mainDonatePatreon"
+                        visible: !root.compactView
                         Layout.preferredHeight: 34
                         text: qsTr("Donate on Patreon")
                         filled: true
                         accent: root.colors.light ? "#a64f25" : "#ffbd7d"
                         font.weight: Font.DemiBold
                         onClicked: Qt.openUrlExternally("https://www.patreon.com/c/Alsamii")
+                    }
+                    GlassButton {
+                        id: compactButton
+                        objectName: "mainCompactView"
+                        readonly property string viewLabel: root.compactView ? qsTr("Full view") : qsTr("Compact view")
+                        Layout.preferredWidth: 32
+                        Layout.preferredHeight: 30
+                        accent: root.colors.accent
+                        filled: root.compactView
+                        padding: 3
+                        Accessible.name: viewLabel
+                        contentItem: DashboardIcon {
+                            symbol: root.compactView ? "fullView" : "compactView"
+                            ink: compactButton.iconInk
+                            surface: compactButton.faceColor
+                            relief: compactButton.enabled
+                        }
+                        ToolTip.visible: hovered
+                        ToolTip.text: viewLabel
+                        ToolTip.delay: 420
+                        onClicked: root.toggleCompactView()
                     }
                     CaptionControls {
                         trayEnabled: Boolean(engine.trayAvailable)
@@ -1125,7 +1197,7 @@ AuralisWindow {
             id: topMenuDock
             visible: !root.sideMenus
             Layout.fillWidth: true
-            Layout.preferredHeight: 31
+            Layout.preferredHeight: root.compactView ? 27 : 31
 
             Item {
                 id: menuPanel
@@ -1219,7 +1291,8 @@ AuralisWindow {
                             y: root.sideMenus ? 0 : viewMenuButton.height
                             AppMenuItem { symbol: "refresh"; action: refreshAction }
                             AppMenuItem { symbol: "search"; action: findAction }
-                            AppMenuItem { text: root.showSidebar ? qsTr("Hide sidebar") : qsTr("Show sidebar"); onTriggered: root.showSidebar = !root.showSidebar }
+                            AppMenuItem { visible: !root.compactView; text: root.showSidebar ? qsTr("Hide sidebar") : qsTr("Show sidebar"); onTriggered: root.showSidebar = !root.showSidebar }
+                            AppMenuItem { text: compactButton.viewLabel; onTriggered: root.toggleCompactView() }
                             MenuRule {}
                             AppMenuItem { symbol: "settings"; text: qsTr("Appearance"); onTriggered: settingsWindow.showCategory("Appearance") }
                             AppMenuItem { symbol: "settings"; text: qsTr("Display & fonts"); onTriggered: settingsWindow.showCategory("Display") }
@@ -1240,6 +1313,7 @@ AuralisWindow {
                             AppMenuItem { symbol: "refresh"; text: qsTr("Check for updates"); enabled: updateNotice.updateSupported; onTriggered: updateNotice.manualCheck() }
                             AppMenuItem { symbol: "details"; text: qsTr("Updates & about"); onTriggered: settingsWindow.showCategory("Updates") }
                             AppMenuItem { symbol: "details"; text: qsTr("Project guide"); onTriggered: Qt.openUrlExternally("https://github.com/4ls4mi/Auralis-Download-Manager#guides-and-recovery") }
+                            AppMenuItem { visible: root.compactView; text: qsTr("Donate on Patreon"); onTriggered: Qt.openUrlExternally("https://www.patreon.com/c/Alsamii") }
                         }
                     }
                     Item { Layout.fillWidth: true; Layout.fillHeight: root.sideMenus }
@@ -1249,12 +1323,12 @@ AuralisWindow {
 
         Item {
             id: topActionDock
-            visible: !root.materialDashboard
+            visible: !root.materialDashboard || root.compactView
             Layout.fillWidth: true
-            Layout.preferredHeight: 51
+            Layout.preferredHeight: root.compactView ? 37 : 51
             Item {
                 id: actionPanel
-                parent: root.materialDashboard ? workspaceActionDock : topActionDock
+                parent: root.materialDashboard && !root.compactView ? workspaceActionDock : topActionDock
                 anchors.fill: parent
 
                 GlassSurface { anchors.fill: parent; role: "toolbar"; roundedPanel: true }
@@ -1267,16 +1341,16 @@ AuralisWindow {
                     Repeater {
                         model: [
                             {command: addUrl, icon: "add"},
-                            {command: addTorrent, icon: "torrent"},
+                            {command: addTorrent, icon: "torrent", secondary: true},
                             {command: resumeTransfers, icon: "start"},
                             {command: pauseTransfers, icon: "pause"},
                             {command: stopAll, icon: "stop"},
                             {command: removeSelection, icon: "remove"},
-                            {command: removeCompleted, icon: "check"},
+                            {command: removeCompleted, icon: "check", secondary: true},
                             {command: settingsAction, icon: "settings"},
-                            {command: schedulerAction, icon: "clock"},
-                            {command: startQueue, icon: "start", accentKey: "queueStart"},
-                            {command: stopQueue, icon: "pause", accentKey: "queueStop"}
+                            {command: schedulerAction, icon: "clock", secondary: true},
+                            {command: startQueue, icon: "start", accentKey: "queueStart", secondary: true},
+                            {command: stopQueue, icon: "pause", accentKey: "queueStop", secondary: true}
                         ]
                         delegate: GlassButton {
                             id: actionButton
@@ -1286,12 +1360,13 @@ AuralisWindow {
                             readonly property bool fogResume: root.fogSlate && modelData.command === resumeTransfers
                             readonly property bool fogPause: root.fogSlate && modelData.command === pauseTransfers
                             readonly property string label: fogResume ? qsTr("Resume") : qsTr("Pause")
-                            readonly property bool showLabel: (fogResume || fogPause) && actionControls.width >= 730
-                            Layout.preferredWidth: root.materialDashboard
+                            readonly property bool showLabel: !root.compactView && (fogResume || fogPause) && actionControls.width >= 730
+                            visible: !root.compactView || !modelData.secondary
+                            Layout.preferredWidth: root.compactView ? 36 : root.materialDashboard
                                 ? (showLabel ? Math.max(102, buttonLabel.implicitWidth + 40)
                                     : Math.min(43, Math.floor((actionControls.width - 48) / 11)))
                                 : root.compact ? 41 : 54
-                            Layout.preferredHeight: root.fogSlate ? 39 : 36
+                            Layout.preferredHeight: root.compactView ? 30 : root.fogSlate ? 39 : 36
                             action: modelData.command
                             filled: (root.materialDashboard && primaryCommand) || fogResume
                             leftPadding: showLabel ? 13 : 4
@@ -1306,8 +1381,8 @@ AuralisWindow {
                                 transform: Translate { y: actionButton.faceOffset }
                                 DashboardIcon {
                                     Layout.fillWidth: !actionButton.showLabel
-                                    Layout.preferredWidth: 24
-                                    Layout.preferredHeight: 24
+                                    Layout.preferredWidth: root.compactView ? 19 : 24
+                                    Layout.preferredHeight: root.compactView ? 19 : 24
                                     symbol: actionButton.modelData.icon
                                     bold: true
                                     solid: symbol === "start" || symbol === "stop"
@@ -1381,7 +1456,7 @@ AuralisWindow {
 
         RowLayout {
             Layout.fillHeight: true
-            Layout.minimumHeight: 155
+            Layout.minimumHeight: root.compactView ? 95 : 155
             Layout.fillWidth: true
             spacing: 7
 
@@ -1398,7 +1473,7 @@ AuralisWindow {
             }
 
             Frame {
-                visible: root.showSidebar
+                visible: root.showSidebar && !root.compactView
                 Layout.preferredWidth: root.compact ? 151 : 184
                 Layout.fillHeight: true
                 padding: 6
@@ -1498,14 +1573,14 @@ AuralisWindow {
                 Layout.fillHeight: true
                 Layout.fillWidth: true
                 Layout.minimumWidth: 0
-                padding: 9
+                padding: root.compactView ? 5 : 9
                 background: GlassSurface { role: "content"; roundedPanel: true }
                 ColumnLayout {
                     anchors.fill: parent
-                    spacing: root.materialDashboard ? 8 : 5
+                    spacing: root.compactView ? 3 : root.materialDashboard ? 8 : 5
                     Item {
                         id: workspaceActionDock
-                        visible: root.materialDashboard
+                        visible: root.materialDashboard && !root.compactView
                         Layout.fillWidth: true
                         Layout.preferredHeight: 44
                     }
@@ -1519,19 +1594,27 @@ AuralisWindow {
                                 Layout.fillWidth: true
                                 text: root.filterTitle
                                 color: root.colors.ink
-                                font.pixelSize: TypographyScale.pixels(root.studioChrome ? (root.compact ? 20 : 24) : (root.compact ? 17 : 22))
+                                font.pixelSize: TypographyScale.pixels(root.compactView ? 15
+                                    : root.studioChrome ? (root.compact ? 20 : 24) : (root.compact ? 17 : 22))
                                 font.weight: Font.Bold
                                 elide: Text.ElideRight
                             }
                             Label {
+                                visible: !root.compactView
                                 Layout.fillWidth: true
                                 text: qsTr("%1 of %2 downloads").arg(rows.count).arg(root.downloads.length)
                                 color: root.colors.muted
                                 font.pixelSize: TypographyScale.pixels(11)
                             }
                         }
+                        GlassButton {
+                            visible: root.compactView && (root.filterType !== "status" || root.filterKey !== "all")
+                            text: qsTr("All Downloads")
+                            onClicked: root.chooseFilter("status", "all")
+                        }
                         GlassComboBox {
                             id: sortSelector
+                            visible: !root.compactView
                             Layout.preferredWidth: root.compact ? 115 : 132
                             model: [qsTr("Newest first"), qsTr("Oldest first"), qsTr("Name"), qsTr("Size"), qsTr("Status")]
                             currentIndex: root.sortOrder
@@ -1555,7 +1638,7 @@ AuralisWindow {
                     }
                     RowLayout {
                         Layout.fillWidth: true
-                        visible: root.chosenIds.length > 0
+                        visible: !root.compactView && root.chosenIds.length > 0
                         Label {
                             text: qsTr("%1 selected").arg(root.chosenItems.length)
                             color: root.colors.ink
@@ -1567,7 +1650,7 @@ AuralisWindow {
                         Item { Layout.fillWidth: true }
                     }
                     RowLayout {
-                        visible: root.coralSlate && root.height >= 580
+                        visible: !root.compactView && root.coralSlate && root.height >= 580
                         Layout.fillWidth: true
                         Layout.minimumHeight: 76
                         Layout.maximumHeight: 76
@@ -1667,7 +1750,7 @@ AuralisWindow {
                         }
                     }
                     Item {
-                        Layout.preferredHeight: 30
+                        Layout.preferredHeight: root.compactView ? 25 : 30
                         Layout.fillWidth: true
                         GlassSurface { anchors.fill: parent; role: "field"; roundedPanel: true }
                         RowLayout {
@@ -1713,7 +1796,7 @@ AuralisWindow {
                                 }
                                 Label {
                                     Layout.fillWidth: true
-                                    text: root.compact && root.materialDashboard ? qsTr("Speed") : qsTr("Activity")
+                                    text: root.compactView || (root.compact && root.materialDashboard) ? qsTr("Speed") : qsTr("Activity")
                                     elide: Text.ElideRight
                                     color: root.colors.muted
                                 }
@@ -1763,6 +1846,7 @@ AuralisWindow {
                             colors: root.colors
                             indicatorWidth: root.indicatorColumnWidth
                             timeWidth: root.timeColumnWidth
+                            compactView: root.compactView
                             fileName: file
                             sizeLabel: TransferData.bytes(bytes) + (length >= 0 ? " / " + TransferData.bytes(length) : "")
                             statusLabel: root.statusText(status)
@@ -1926,24 +2010,25 @@ AuralisWindow {
 
         Item {
             Layout.fillWidth: true
-            Layout.preferredHeight: 55
+            Layout.preferredHeight: root.compactView ? 36 : 55
             GlassSurface { anchors.fill: parent; role: "footer"; roundedPanel: true }
             RowLayout {
                 anchors.fill: parent
                 anchors.leftMargin: 11
                 anchors.rightMargin: 9
-                spacing: 13
+                spacing: root.compactView ? 8 : 13
                 Repeater {
                     model: [
                         {title: qsTr("Total speed"), value: TransferData.rate(engine.dashboard.speed || 0)},
-                        {title: qsTr("Active"), value: String(root.counts.downloading)},
+                        {title: qsTr("Active"), value: String(root.counts.downloading)}
+                    ].concat(root.compactView ? [] : [
                         {title: qsTr("Completed"), value: String(root.counts.finished)}
-                    ]
+                    ])
                     delegate: Item {
                         required property var modelData
-                        Layout.preferredWidth: footerMetric.implicitWidth + (root.fogSlate ? 20 : 0)
-                        Layout.preferredHeight: footerMetric.implicitHeight + (root.fogSlate ? 12 : 0)
-                        GlassSurface { anchors.fill: parent; visible: root.fogSlate; role: "card" }
+                        Layout.preferredWidth: footerMetric.implicitWidth + (root.fogSlate && !root.compactView ? 20 : 0)
+                        Layout.preferredHeight: footerMetric.implicitHeight + (root.fogSlate && !root.compactView ? 12 : 0)
+                        GlassSurface { anchors.fill: parent; visible: root.fogSlate && !root.compactView; role: "card" }
                         ColumnLayout {
                             id: footerMetric
                             anchors.centerIn: parent
@@ -1956,7 +2041,7 @@ AuralisWindow {
                 TransferGraph {
                     Layout.fillWidth: true
                     Layout.minimumWidth: 85
-                    Layout.preferredHeight: 35
+                    Layout.preferredHeight: root.compactView ? 24 : 35
                     samples: root.graphValues
                     animationStyle: WindowAppearance.graphAnimation
                     flowActive: root.animateThroughput
@@ -1967,7 +2052,8 @@ AuralisWindow {
                 }
                 Label {
                     id: statusMessage
-                    Layout.preferredWidth: Math.min(240, Math.ceil(implicitWidth))
+                    visible: !root.compactView || Boolean(root.actionError)
+                    Layout.preferredWidth: Math.min(root.compactView ? 134 : 240, Math.ceil(implicitWidth))
                     text: root.actionError || (root.online ? qsTr("Auralis %1").arg(engine.version) : engine.status || qsTr("Offline"))
                     textFormat: Text.PlainText
                     color: root.actionError ? root.colors.destructive : root.colors.muted

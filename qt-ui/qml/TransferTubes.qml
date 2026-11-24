@@ -34,16 +34,18 @@ Canvas {
     readonly property var connectionFinish: Lighting.style(connectionLighting)
     readonly property bool animateFlow: visible && flowing && !paintingPaused && !MaterialTheme.reducedMotion
     // The content cards reserve this lane for the vertical portion.
-    property real gutter: 13
-    readonly property real mainDiameter: 8.5
-    readonly property real branchDiameter: 6.5
-    readonly property real hoseDiameter: 5.5
-    readonly property real nozzleOffset: 3
-    readonly property real manifoldOffset: 15
+    property real sizeScale: 1
+    property real gutter: 13 * sizeScale
+    readonly property real mainDiameter: 8.5 * sizeScale
+    readonly property real branchDiameter: 6.5 * sizeScale
+    readonly property real hoseDiameter: 5.5 * sizeScale
+    readonly property real nozzleOffset: 3 * sizeScale
+    readonly property real manifoldOffset: 15 * sizeScale
 
     Accessible.ignored: true
 
     onAvailableChanged: requestPaint()
+    onSizeScaleChanged: requestPaint()
     onPaintingPausedChanged: if (!paintingPaused) requestPaint()
     onWidthChanged: requestPaint()
     onHeightChanged: requestPaint()
@@ -472,7 +474,7 @@ Canvas {
                 darkCollar ? first.body : first.glow, darkCollar ? last.body : last.glow, active ? .92 : .48)
         }
         ctx.fill()
-        ctx.lineWidth = .8
+        ctx.lineWidth = .8 * sizeScale
         const rimAlpha = optic === 12 ? (active ? .96 : .68) : (active ? .84 : .48) * connectionFinish.reflection
         ctx.strokeStyle = optic === 2 ? MaterialTheme.mix(last.edge, "#f3faff", .63, active ? .97 : .76)
             : MaterialTheme.rgba(last.edge, rimAlpha)
@@ -489,7 +491,7 @@ Canvas {
         const cycle = Lighting.dropCycle(phase, slowPhase, index, connectionAnimation)
         const fall = surfaceY - outlet.y
         const radius = Math.min(hoseDiameter * .32, cellWidth * .09, fall * .38)
-        if (fall < 2.5 || radius < .85 || cycle >= Lighting.dropContact)
+        if (fall < 2.5 * sizeScale || radius < .85 * sizeScale || cycle >= Lighting.dropContact)
             return
 
         const first = connectionStartTone
@@ -560,7 +562,7 @@ Canvas {
     }
 
     function progressOutlet() {
-        return progressItem ? progressItem.mapToItem(tubes, Math.min(8, progressItem.width * .12), progressItem.height * .5)
+        return progressItem ? progressItem.mapToItem(tubes, Math.min(8 * sizeScale, progressItem.width * .12), progressItem.height * .5)
             : Qt.point(0, 0)
     }
 
@@ -574,7 +576,7 @@ Canvas {
 
         const junction = Qt.point(gutter, outlet.y)
         const branch = Qt.point(gutter + mainDiameter * .5, outlet.y)
-        const mouth = progressItem.mapToItem(tubes, -3, progressItem.height * .5)
+        const mouth = progressItem.mapToItem(tubes, -3 * sizeScale, progressItem.height * .5)
         channel(ctx, [[junction, mouth]], mainDiameter)
         pipe(ctx, [branch, outlet], progressEndTone, progressEndTone,
             flowing, 0, progressAnimation, progressFinish, mainDiameter, true)
@@ -584,7 +586,7 @@ Canvas {
         if (!sourceItem || sourceItem.width <= 0 || !progressItem || progressItem.width <= 0)
             return
 
-        const inlet = sourceItem.mapToItem(tubes, -10, sourceItem.height * .5)
+        const inlet = sourceItem.mapToItem(tubes, -10 * sizeScale, sourceItem.height * .5)
         const outlet = progressOutlet()
         if (outlet.y <= inlet.y)
             return
@@ -616,7 +618,7 @@ Canvas {
             row.headerEnd = Qt.point(end, row.y)
             slots.push([Qt.point(gutter, row.y), row.headerEnd])
             for (const port of row.ports)
-                slots.push([Qt.point(port.point.x, row.y), Qt.point(port.point.x, port.point.y - 3)])
+                slots.push([Qt.point(port.point.x, row.y), Qt.point(port.point.x, port.point.y - 3 * sizeScale)])
         }
         // The junctions share one recessed channel. Their individual lit faces stop at the seams.
         channel(ctx, slots, branchDiameter)

@@ -18,12 +18,10 @@ ColumnLayout {
     property string problem: ""
     property string feedback: ""
     property bool feedbackFailed: false
-    property string confirmationBrowserId: ""
-    property string confirmationBrowserName: ""
     property string removalBrowserId: ""
     property string removalBrowserName: ""
     property bool removalForReset: false
-    property string installConfirmationDetails: ""
+    property string installDetails: ""
     property bool advancedOpen: false
     property var attempts: ({})
     readonly property var colors: MaterialTheme.palette
@@ -61,7 +59,7 @@ ColumnLayout {
         }
         return hostNeedsAttention && (installed || status?.policyInstalled) ? status.nativeHostProblem : ""
     }
-    readonly property bool confirming: Boolean(confirmationBrowserId || removalBrowserId)
+    readonly property bool confirming: Boolean(removalBrowserId)
 
     signal installAccepted()
 
@@ -94,8 +92,6 @@ ColumnLayout {
                 problem = ""
                 const browserId = value.browserId
                 const previous = attempts[browserId]
-                if (confirmationBrowserId && !automaticAvailable)
-                    cancelConfirmation()
                 if (removalBrowserId && !canConfirmRemoval)
                     cancelConfirmation()
                 if (installed) {
@@ -126,18 +122,14 @@ ColumnLayout {
         })
     }
 
-    function offerInstall(browserId) {
-        if (!automaticAvailable || pending || acting || checking || status?.browserId !== browserId)
+    function installAutomatically() {
+        if (!automaticAvailable || pending || acting || checking || confirming)
             return
-        feedback = ""
-        feedbackFailed = false
-        confirmationBrowserId = browserId
-        confirmationBrowserName = status.browser
+        perform("installBrowserExtensionPolicy", status.browserId)
+        installAccepted()
     }
 
     function cancelConfirmation() {
-        confirmationBrowserId = ""
-        confirmationBrowserName = ""
         removalBrowserId = ""
         removalBrowserName = ""
         removalForReset = false
@@ -187,7 +179,7 @@ ColumnLayout {
                     recordAttempt(browserId, "failed", error || value?.message || "")
                 } else {
                     feedbackFailed = true
-                    feedback = undo ? qsTr("Could not undo the automatic extension setup.")
+                    feedback = undo ? (error || value?.message || qsTr("Could not undo the automatic extension setup."))
                         : repair ? qsTr("Could not repair the browser connection.")
                         : qsTr("Could not open your browser.")
                 }
@@ -273,8 +265,6 @@ ColumnLayout {
             if (root.attemptNeedsAttention) {
                 if (root.attemptError)
                     return root.attemptError
-                if (root.attempt.state === "timeout" && root.status?.policyInstalled && root.status?.browserId === "chrome")
-                    return qsTr("Setup was saved. Check Chrome’s Extensions page for Auralis.")
                 if (root.attempt.state === "timeout" && root.status?.policyInstalled)
                     return qsTr("Automatic setup was saved for %1, but Auralis could not verify the installation. You can install the extension manually.").arg(browser)
                 if (root.attempt.state === "timeout")
@@ -302,9 +292,14 @@ ColumnLayout {
 
     Label {
         Layout.fillWidth: true
-        visible: root.status?.browserId === "chrome" && root.status?.policyInstalled
-            && !root.installed && root.attempt?.state === "timeout" && !root.confirming
-        text: qsTr("If Auralis is missing, open chrome://policy in Chrome and choose Reload policies, then check chrome://extensions again.")
+        visible: root.automaticAvailable && !root.confirming && !root.acting && !root.pending
+            && !root.attemptNeedsAttention
+        text: {
+            if (!visible)
+                return ""
+            const description = qsTr("Auralis will save an extension installation setting for %1 in your Windows account. The browser may show a notice that it is managed and ask you to restart or approve the installation.").arg(root.status.browser)
+            return root.installDetails ? description + "\n" + root.installDetails : description
+        }
         textFormat: Text.PlainText
         wrapMode: Text.WordWrap
         color: root.colors.muted
@@ -322,7 +317,7 @@ ColumnLayout {
             enabled: root.automaticAvailable && !root.pending && !root.confirming && !root.acting && !root.checking
             accent: root.colors.positive
             filled: true
-            onClicked: root.offerInstall(root.status?.browserId)
+            onClicked: root.installAutomatically()
         }
 
         GlassButton {
@@ -391,38 +386,12 @@ ColumnLayout {
             color: root.colors.ink
             wrapMode: Text.WordWrap
             textFormat: Text.PlainText
-            text: root.removalBrowserId
-                ? qsTr("Remove the Auralis extension setup setting for %1 from your Windows account? Reopen the browser to apply the change.").arg(root.removalBrowserName)
-                : qsTr("Auralis will save an extension installation setting for %1 in your Windows account. The browser may show a notice that it is managed and ask you to restart or approve the installation.").arg(root.confirmationBrowserName)
-        }
-
-        Label {
-            Layout.fillWidth: true
-            visible: Boolean(root.confirmationBrowserId && root.installConfirmationDetails)
-            text: root.installConfirmationDetails
-            color: root.colors.muted
-            wrapMode: Text.WordWrap
-            textFormat: Text.PlainText
+            text: qsTr("Remove the Auralis extension setup setting for %1 from your Windows account? Reopen the browser to apply the change.").arg(root.removalBrowserName)
         }
 
         Flow {
             Layout.fillWidth: true
             spacing: 8
-            GlassButton {
-                objectName: "confirmBrowserPolicyInstall"
-                text: qsTr("Install extension")
-                visible: Boolean(root.confirmationBrowserId)
-                enabled: root.automaticAvailable && !root.acting && !root.checking
-                    && root.confirmationBrowserId === root.status?.browserId
-                accent: root.colors.positive
-                filled: true
-                onClicked: {
-                    const browserId = root.confirmationBrowserId
-                    root.cancelConfirmation()
-                    root.perform("installBrowserExtensionPolicy", browserId)
-                    root.installAccepted()
-                }
-            }
             GlassButton {
                 objectName: "confirmBrowserPolicyRemoval"
                 text: qsTr("Undo setup")
@@ -437,6 +406,7 @@ ColumnLayout {
                 }
             }
             GlassButton {
+                objectName: "cancelBrowserSetupConfirmation"
                 text: qsTr("Cancel")
                 onClicked: root.cancelConfirmation()
             }

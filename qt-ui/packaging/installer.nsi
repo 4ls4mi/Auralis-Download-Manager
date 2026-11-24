@@ -142,6 +142,8 @@ Section "Install Auralis"
     Call AssertReplaceable
     Push "$INSTDIR\auralis-browser-host.exe"
     Call AssertReplaceable
+    Push "$INSTDIR\auralis-chrome-approval.exe"
+    Call AssertReplaceable
     SetAutoClose true
     ClearErrors
     SetOutPath "$INSTDIR"

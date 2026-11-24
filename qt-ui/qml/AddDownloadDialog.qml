@@ -16,6 +16,11 @@ DetachedDialogWindow {
     property bool descriptionEdited: false
     property var categoryOptions: []
     property int clipboardRead: 0
+    readonly property string spaceDestination: visible && confirming && visibility !== Window.Minimized
+        ? destination.text.trim() : ""
+    property var destinationSpace: null
+    property int destinationSpaceRevision: 0
+    property bool checkingDestinationSpace: false
     signal downloadAdded(var id, bool later)
 
     width: 595
@@ -24,6 +29,36 @@ DetachedDialogWindow {
     modality: Qt.NonModal
     title: confirming ? (requestInfo.info.video ? qsTr("Confirm video download") : qsTr("Download File Info"))
                       : torrentMode ? qsTr("Add torrent") : qsTr("Add URL")
+
+    onSpaceDestinationChanged: {
+        ++destinationSpaceRevision
+        destinationSpace = null
+        if (spaceDestination)
+            spaceTimer.restart()
+        else
+            spaceTimer.stop()
+    }
+
+    Timer {
+        id: spaceTimer
+        interval: 250
+        onTriggered: root.checkDestinationSpace()
+    }
+
+    function checkDestinationSpace() {
+        if (!spaceDestination || checkingDestinationSpace)
+            return
+        const revision = destinationSpaceRevision
+        checkingDestinationSpace = true
+        engine.request({local: "downloadDestinationSpace", file: spaceDestination}, function (reply, error) {
+            checkingDestinationSpace = false
+            if (revision === destinationSpaceRevision) {
+                destinationSpace = error ? {} : reply || {}
+            } else if (!spaceTimer.running) {
+                checkDestinationSpace()
+            }
+        })
+    }
 
     function openAddress(torrent) {
         const switchedWhileOpen = visible && !confirming && !busy && torrentMode !== torrent
@@ -238,6 +273,23 @@ DetachedDialogWindow {
                 material: root.material
                 text: qsTr("Browse…")
                 onClicked: savePicker.open()
+            }
+        },
+        Label {
+            objectName: "downloadDestinationSpace"
+            visible: root.confirming
+            Layout.fillWidth: true
+            color: root.colors.muted
+            wrapMode: Text.WordWrap
+            textFormat: Text.PlainText
+            text: {
+                const space = root.destinationSpace
+                if (root.spaceDestination && space === null)
+                    return qsTr("Checking drive space…")
+                if (space?.capacity > 0 && space.available >= 0)
+                    return qsTr("Drive capacity %1 · Free space %2")
+                        .arg(Transfer.bytes(space.capacity)).arg(Transfer.bytes(space.available))
+                return qsTr("Drive space unavailable")
             }
         },
         Label { visible: root.confirming; text: qsTr("Description"); color: root.colors.muted },
