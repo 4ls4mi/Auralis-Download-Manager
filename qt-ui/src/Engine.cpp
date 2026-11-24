@@ -374,10 +374,13 @@ QVariantMap Engine::dispatch(const QVariantMap &command) const
                     auto policyError = BrowserSetup::installPolicy(browserId, &approvalRequired);
                     if (approvalRequired && !BrowserSetup::policyStatus(browserId).configured)
                         policyError = BrowserSetup::installChromePolicyWithAdministratorApproval();
-                    // A previous or concurrent setup can have saved the request already.
-                    if (!policyError.isEmpty() && !BrowserSetup::policyStatus(browserId).configured)
+                    if (!policyError.isEmpty())
                         return failure(policyError);
                 }
+                const auto savedPolicy = BrowserSetup::policyStatus(browserId);
+                if (!savedPolicy.configured)
+                    return failure(savedPolicy.problem.isEmpty()
+                        ? tr("Auralis could no longer find the saved automatic setup.") : savedPolicy.problem);
                 if (!browserStillSelected())
                     return failure(tr("The Windows default browser changed. Review browser setup again."));
                 const auto launchArguments = BrowserSetup::browserPolicyRefreshArguments(browserId, handler.executable);

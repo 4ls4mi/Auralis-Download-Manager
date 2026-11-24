@@ -424,6 +424,14 @@
             <source>Could not remove automatic browser setup for this Windows account (Windows error %1).</source>
             <translation>تعذّرت إزالة الإعداد التلقائي للمتصفح من حساب Windows هذا (خطأ Windows رقم %1).</translation>
         </message>
+        <message>
+            <source>Auralis could not save its undo information. Use Install manually.</source>
+            <translation>تعذّر على Auralis حفظ البيانات اللازمة للتراجع عن الإعداد. اختر «التثبيت يدويًا».</translation>
+        </message>
+        <message>
+            <source>Auralis could not save its undo information or confirm that the browser policy was restored. Check browser setup before trying again.</source>
+            <translation>تعذّر على Auralis حفظ البيانات اللازمة للتراجع عن الإعداد أو التأكد من استعادة سياسة المتصفح. تحقّق من إعداد المتصفح قبل إعادة المحاولة.</translation>
+        </message>
     </context>
     <context>
         <name>BrowserSetupOptions</name>
@@ -666,6 +674,10 @@
         <message>
             <source>Automatic setup was removed. Auralis asked %1 to reload its settings.</source>
             <translation>أُزيل الإعداد التلقائي. طلب Auralis من %1 إعادة تحميل إعداداته.</translation>
+        </message>
+        <message>
+            <source>To remove the extension from %1, first choose “%2” in Auralis Settings under “%3”.</source>
+            <translation>لإزالة الإضافة من %1، اختر أولًا «%2» ضمن «%3» في إعدادات Auralis.</translation>
         </message>
     </context>
     <context>
@@ -1474,6 +1486,10 @@ Info hash %3</source>
         <message>
             <source>Wait for Auralis to finish preparing the update.</source>
             <translation>انتظر حتى ينتهي Auralis من تحضير التحديث.</translation>
+        </message>
+        <message>
+            <source>Auralis could no longer find the saved automatic setup.</source>
+            <translation>تعذّر على Auralis العثور على الإعداد التلقائي المحفوظ.</translation>
         </message>
     </context>
     <context>

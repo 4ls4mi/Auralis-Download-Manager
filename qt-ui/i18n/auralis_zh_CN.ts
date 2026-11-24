@@ -424,6 +424,14 @@
             <source>Could not remove automatic browser setup for this Windows account (Windows error %1).</source>
             <translation>无法移除此 Windows 账户的浏览器自动设置（Windows 错误 %1）。</translation>
         </message>
+        <message>
+            <source>Auralis could not save its undo information. Use Install manually.</source>
+            <translation>Auralis 无法保存用于撤销设置的信息。请选择“手动安装”。</translation>
+        </message>
+        <message>
+            <source>Auralis could not save its undo information or confirm that the browser policy was restored. Check browser setup before trying again.</source>
+            <translation>Auralis 无法保存用于撤销设置的信息，也无法确认浏览器策略是否已恢复。请检查浏览器设置后再试。</translation>
+        </message>
     </context>
     <context>
         <name>BrowserSetupOptions</name>
@@ -666,6 +674,10 @@
         <message>
             <source>Automatic setup was removed. Auralis asked %1 to reload its settings.</source>
             <translation>已移除自动设置。Auralis 已请求 %1 重新加载设置。</translation>
+        </message>
+        <message>
+            <source>To remove the extension from %1, first choose “%2” in Auralis Settings under “%3”.</source>
+            <translation>要从 %1 移除扩展程序，请先在 Auralis 设置的“%3”中选择“%2”。</translation>
         </message>
     </context>
     <context>
@@ -1474,6 +1486,10 @@ Info hash %3</source>
         <message>
             <source>Wait for Auralis to finish preparing the update.</source>
             <translation>请等待 Auralis 准备好更新。</translation>
+        </message>
+        <message>
+            <source>Auralis could no longer find the saved automatic setup.</source>
+            <translation>Auralis 已找不到保存的自动设置。</translation>
         </message>
     </context>
     <context>

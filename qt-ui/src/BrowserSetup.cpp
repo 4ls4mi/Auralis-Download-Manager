@@ -126,9 +126,8 @@ std::optional<bool> existingReadablePolicyKey(HKEY hive, const QString &path, RE
 // QSettings opens a registry key for both reading and writing, including permission to
 // create subkeys. Request only the rights needed to compare and change this value.
 LSTATUS writeUserPolicy(const QString &path, const PolicyValue &expected,
-                        const QJsonObject &settings, bool removeValue)
+                        const QString &json, bool removeValue)
 {
-    const QString json = removeValue ? QString() : QString::fromUtf8(QJsonDocument(settings).toJson(QJsonDocument::Compact));
     const auto bytes = (json.size() + 1) * sizeof(wchar_t);
     if (bytes > PolicySizeLimit)
         return ERROR_INVALID_DATA;
@@ -675,9 +674,17 @@ QString BrowserSetup::installPolicy(const QString &browserId, bool *windowsAppro
     auto review = reviewPolicy(browserId, path, user);
     if (review.status.configured || !review.status.available)
         return review.status.problem;
+    QSettings ownership;
+    ownership.setFallbacksEnabled(false);
+    const auto undoError = QCoreApplication::translate("BrowserSetup",
+        "Auralis could not save its undo information. Use Install manually.");
+    if (!ownership.isWritable())
+        return undoError;
+
     auto settings = review.policy.settings;
     settings.insert(StoreId, auralisPolicy());
-    const auto error = writeUserPolicy(path, review.policy, settings, false);
+    const auto json = QString::fromUtf8(QJsonDocument(settings).toJson(QJsonDocument::Compact));
+    const auto error = writeUserPolicy(path, review.policy, json, false);
     if (error == ERROR_RETRY)
         return QCoreApplication::translate("BrowserSetup", "The browser policy changed while saving. Check browser setup and try again.");
     if (error == ERROR_ACCESS_DENIED) {
@@ -709,14 +716,44 @@ QString BrowserSetup::installPolicy(const QString &browserId, bool *windowsAppro
     const auto saved = readPolicy(HKEY_CURRENT_USER, path, RRF_SUBKEY_WOW6464KEY);
     if (saved.error != ERROR_SUCCESS || saved.settings.value(StoreId).toObject() != auralisPolicy())
         return QCoreApplication::translate("BrowserSetup", "Windows did not retain the Auralis browser policy for this user.");
-    QSettings ownership;
-    ownership.setValue(ownershipKey(browserId), review.policy.exists);
+
+    const auto key = ownershipKey(browserId);
+    const auto previousMarker = ownership.value(key);
+    ownership.setValue(key, review.policy.exists);
 #ifdef AURALIS_CHROME_APPROVAL_ENABLED
-    if (browserId == QStringLiteral("chrome"))
-        ownership.remove(chromeApprovalOwnershipKey());
+    const auto approvalKey = browserId == QStringLiteral("chrome") ? chromeApprovalOwnershipKey() : QString();
+    QVariant previousApprovalMarker;
+    if (!approvalKey.isEmpty()) {
+        previousApprovalMarker = ownership.value(approvalKey);
+        ownership.remove(approvalKey);
+    }
 #endif
     ownership.sync();
-    return {};
+    if (ownership.status() == QSettings::NoError)
+        return {};
+
+    const auto rollbackError = QCoreApplication::translate("BrowserSetup",
+        "Auralis could not save its undo information or confirm that the browser policy was restored. Check browser setup before trying again.");
+    // Restore the original value only when the complete policy is still our write.
+    if (saved.raw != json || writeUserPolicy(path, saved, review.policy.raw, !review.policy.exists) != ERROR_SUCCESS)
+        return rollbackError;
+    const auto restored = readPolicy(HKEY_CURRENT_USER, path, RRF_SUBKEY_WOW6464KEY);
+    if (restored.error != ERROR_SUCCESS || restored.exists != review.policy.exists || restored.raw != review.policy.raw)
+        return rollbackError;
+
+    const auto restoreMarker = [&ownership](const QString &name, const QVariant &value) {
+        if (value.isValid())
+            ownership.setValue(name, value);
+        else
+            ownership.remove(name);
+    };
+    restoreMarker(key, previousMarker);
+#ifdef AURALIS_CHROME_APPROVAL_ENABLED
+    if (!approvalKey.isEmpty())
+        restoreMarker(approvalKey, previousApprovalMarker);
+#endif
+    ownership.sync();
+    return undoError;
 }
 
 QString BrowserSetup::removePolicy(const QString &browserId, bool *windowsApprovalRequired)
@@ -731,11 +768,13 @@ QString BrowserSetup::removePolicy(const QString &browserId, bool *windowsApprov
     if (!review.status.removable)
         return QCoreApplication::translate("BrowserSetup", "The existing browser policy was changed or was configured outside Auralis.");
     QSettings ownership;
+    ownership.setFallbacksEnabled(false);
     const auto key = ownershipKey(browserId);
     auto settings = review.policy.settings;
     settings.remove(StoreId);
     const bool removeValue = settings.isEmpty() && !ownership.value(key).toBool();
-    const auto error = writeUserPolicy(path, review.policy, settings, removeValue);
+    const auto json = removeValue ? QString() : QString::fromUtf8(QJsonDocument(settings).toJson(QJsonDocument::Compact));
+    const auto error = writeUserPolicy(path, review.policy, json, removeValue);
 #ifdef AURALIS_CHROME_APPROVAL_ENABLED
     if (windowsApprovalRequired && error == ERROR_ACCESS_DENIED && browserId == QStringLiteral("chrome")
         && isApprovalOwnedPolicy(review))
@@ -744,6 +783,9 @@ QString BrowserSetup::removePolicy(const QString &browserId, bool *windowsApprov
     if (error != ERROR_SUCCESS)
         return QCoreApplication::translate("BrowserSetup",
             "Could not remove automatic browser setup for this Windows account (Windows error %1).").arg(error);
+    const auto saved = readPolicy(HKEY_CURRENT_USER, path, RRF_SUBKEY_WOW6464KEY);
+    if (saved.error != ERROR_SUCCESS || saved.settings.contains(StoreId))
+        return QCoreApplication::translate("BrowserSetup", "Windows did not retain the Auralis browser policy change.");
     ownership.remove(key);
 #ifdef AURALIS_CHROME_APPROVAL_ENABLED
     if (browserId == QStringLiteral("chrome"))

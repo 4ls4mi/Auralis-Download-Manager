@@ -424,6 +424,14 @@
             <source>Could not remove automatic browser setup for this Windows account (Windows error %1).</source>
             <translation>No se pudo eliminar la configuración automática del navegador de esta cuenta de Windows (error de Windows %1).</translation>
         </message>
+        <message>
+            <source>Auralis could not save its undo information. Use Install manually.</source>
+            <translation>Auralis no pudo guardar la información necesaria para deshacer la configuración. Selecciona «Instalar manualmente».</translation>
+        </message>
+        <message>
+            <source>Auralis could not save its undo information or confirm that the browser policy was restored. Check browser setup before trying again.</source>
+            <translation>Auralis no pudo guardar la información necesaria para deshacer la configuración ni confirmar que se restauró la política del navegador. Comprueba la configuración del navegador antes de volver a intentarlo.</translation>
+        </message>
     </context>
     <context>
         <name>BrowserSetupOptions</name>
@@ -666,6 +674,10 @@
         <message>
             <source>Automatic setup was removed. Auralis asked %1 to reload its settings.</source>
             <translation>Se eliminó la configuración automática. Auralis pidió a %1 que volviera a cargar sus ajustes.</translation>
+        </message>
+        <message>
+            <source>To remove the extension from %1, first choose “%2” in Auralis Settings under “%3”.</source>
+            <translation>Para eliminar la extensión de %1, elige primero «%2» en la sección «%3» de los ajustes de Auralis.</translation>
         </message>
     </context>
     <context>
@@ -1474,6 +1486,10 @@ Identificador del torrent %3</translation>
         <message>
             <source>Wait for Auralis to finish preparing the update.</source>
             <translation>Espera a que Auralis termine de preparar la actualización.</translation>
+        </message>
+        <message>
+            <source>Auralis could no longer find the saved automatic setup.</source>
+            <translation>Auralis ya no encuentra la configuración automática guardada.</translation>
         </message>
     </context>
     <context>

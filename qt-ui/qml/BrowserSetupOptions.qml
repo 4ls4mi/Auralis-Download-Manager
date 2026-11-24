@@ -127,7 +127,7 @@ ColumnLayout {
                         recordAttempt(browserId, "failed", qsTr("Auralis could no longer find the saved automatic setup."))
                     else if (Date.now() >= previous.expires)
                         recordAttempt(browserId, "timeout")
-                } else if (previous?.state === "failed" && newlySaved) {
+                } else if (previous?.state === "failed" && newlySaved && value.policyRemovable) {
                     recordAttempt(browserId, "")
                 }
                 if (resetRemoval && extensionMissing) {
@@ -338,6 +338,18 @@ ColumnLayout {
         color: root.colors.muted
     }
 
+    Label {
+        objectName: "browserExtensionRemovalNotice"
+        Layout.fillWidth: true
+        visible: !root.confirming && ((root.canReset && root.canUndo)
+            || (root.automaticAvailable && !root.savedSetup && !root.pending && !root.acting))
+        text: qsTr("To remove the extension from %1, first choose “%2” in Auralis Settings under “%3”.")
+            .arg(root.status?.browser || "").arg(resetButton.text).arg(qsTranslate("SettingsWindow", "Browser integration"))
+        textFormat: Text.PlainText
+        wrapMode: Text.WordWrap
+        color: root.colors.muted
+    }
+
     Flow {
         Layout.fillWidth: true
         spacing: 8
@@ -367,6 +379,7 @@ ColumnLayout {
         }
 
         GlassButton {
+            id: resetButton
             objectName: "resetBrowserSetup"
             text: qsTr("Reset extension setup")
             visible: root.canReset && !root.confirming
