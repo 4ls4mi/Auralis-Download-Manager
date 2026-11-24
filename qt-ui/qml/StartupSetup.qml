@@ -10,7 +10,6 @@ DetachedDialogWindow {
     id: root
 
     property bool automatic: false
-    property bool manualSetup: false
     required property var languages
     property bool started: false
     property bool deferred: false
@@ -34,8 +33,8 @@ DetachedDialogWindow {
         && (tool.path === null || tool.path === "")).map(tool => tool.name)
     readonly property bool installerBusy: helperStatus?.job?.state === "installing"
     readonly property bool batchRunning: requestingHelper || Boolean(activeHelper) || queuedHelpers.length > 0
-    readonly property bool needHelpers: !preferences.helpersDone && (manualSetup || missingHelpers.length > 0)
-    readonly property bool needBrowser: !preferences.browserDone && (manualSetup || browserSetup.offerAtStartup)
+    readonly property bool needHelpers: !preferences.helpersDone
+    readonly property bool needBrowser: !preferences.browserDone
     readonly property bool hasFollowingPage: page === "language" ? !checksComplete || needHelpers || needBrowser
         : page === "browser" && needHelpers
     readonly property bool canAdvance: !busy && (page === "language" ? engine.ready && languageSelector.currentIndex >= 0
@@ -61,7 +60,6 @@ DetachedDialogWindow {
             open()
             return
         }
-        manualSetup = true
         deferred = false
         started = true
         preferences.languagePending = true
@@ -248,11 +246,11 @@ DetachedDialogWindow {
     onCanCheckChanged: if (canCheck) Qt.callLater(checkAtStartup)
     onChecksCompleteChanged: offerIfNeeded()
     Component.onCompleted: {
-        if (automatic && preferences.wizardVersion < 1) {
+        if (automatic && preferences.wizardVersion < 2) {
             preferences.languagePending = true
             preferences.helpersDone = false
             preferences.browserDone = false
-            preferences.wizardVersion = 1
+            preferences.wizardVersion = 2
             preferences.sync()
         }
         if (canCheck)
