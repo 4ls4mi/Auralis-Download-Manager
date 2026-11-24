@@ -6,11 +6,7 @@ Auralis is a free, open-source download manager with customizable glass material
 
 [**Download for Windows x64**](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest#assets) · [Debian 13 and macOS installers](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest#assets) · [Release notes](https://github.com/4ls4mi/Auralis-Download-Manager/releases)
 
-![Auralis download library with sample files in Violet Rail Wide Sweep](docs/images/auralis/wide-sweep-library.png)
-
-![An active download with Grape Taffy Pill Segments, live connections, and a speed graph](docs/images/auralis/grape-taffy-transfer.gif)
-
-Recorded in the Debian desktop app with sample downloads and the v0.3.88 appearance preset.
+![Auralis on Windows with the Unfinished filter selected in Violet Rail Wide Sweep](docs/images/auralis/windows-gallery/download-library.png)
 
 ## What Auralis adds
 
@@ -31,15 +27,56 @@ Saved-data checks cover blocks with recorded hashes. HTTP repair needs a compati
 
 Starting in v0.3.88, a fresh profile opens with **Violet Rail Wide Sweep** and a **Grape Taffy** progress bar in **Pill Segments**. Open **Settings → Appearance** to adjust colors, opacity, and motion, or export your choices to a theme file. [Theme file format](docs/auralis-theme-format.md)
 
-![Appearance settings in Violet Rail Wide Sweep](docs/images/auralis/wide-sweep-appearance.png)
-
-![Moving between Settings sections as the Wide Sweep curve follows the selected tab](docs/images/auralis/wide-sweep-navigation.gif)
-
 - **Set up in your language.** Choose a language on first launch and switch it from the main window. The setup wizard has separate pages for browser integration and video or gallery helpers. Browser connection is available on Windows.
 - **Check your destination.** The add-download window displays the drive’s total and free space. Use **Refresh download address** to replace an expired link when the host supports resuming it.
 - **Choose what to save.** Use the extension and optional yt-dlp and FFmpeg helpers for supported video or audio sources. For torrents, select the files you want and monitor peer activity.
 - **Keep an eye on transfers.** Open a download for live connections and speed history, or use compact view and tray controls. On Windows, the updater can be hidden while progress remains visible in the main window.
 - **Move to another installation.** Stop transfers, checks, and queues before creating a download backup. Backups exclude passwords and browser cookies.
+
+## Screenshots and demos
+
+Captured on Windows. Expand a demo to see the controls in motion.
+
+### Appearance
+
+| Surface materials | Progress styling |
+| --- | --- |
+| ![Appearance settings with Violet Rail Wide Sweep selected](docs/images/auralis/windows-gallery/appearance-materials.png) | ![Progress layout, colors, shape, animation, and lighting settings](docs/images/auralis/windows-gallery/appearance-progress.png) |
+
+<details>
+<summary>Watch filters, compact view, and appearance changes</summary>
+
+![Switching download filters, toggling compact view, and customizing the interface](docs/images/auralis/windows-gallery/library-and-appearance.gif)
+
+</details>
+
+### Transfers and recovery
+
+![Full transfer window with live connection activity and a speed graph](docs/images/auralis/windows-gallery/transfer-details.png)
+
+| Recovery options | Completed download |
+| --- | --- |
+| ![Download recovery controls for checking saved data, repairing the source, and finding a torrent](docs/images/auralis/windows-gallery/download-recovery.png) | ![Download completion dialog with actions for the saved file](docs/images/auralis/windows-gallery/download-complete.png) |
+
+<details>
+<summary>Watch a transfer, its recovery controls, and completion</summary>
+
+![Download changing views, showing recovery controls, and reaching completion](docs/images/auralis/windows-gallery/transfer-and-recovery.gif)
+
+</details>
+
+### Browser video download
+
+| Confirm video download | Compact transfer |
+| --- | --- |
+| ![Video download confirmation with destination and available drive space](docs/images/auralis/windows-gallery/video-confirmation.png) | ![Video downloading in compact view with the segmented bar, connections, and speed graph](docs/images/auralis/windows-gallery/video-compact-transfer.png) |
+
+<details>
+<summary>Watch the compact video transfer</summary>
+
+![A video downloading with live pill segments, connection blocks, and transfer speed](docs/images/auralis/windows-gallery/video-download.gif)
+
+</details>
 
 ## Install and connect a browser
 
