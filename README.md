@@ -1,71 +1,64 @@
 # Auralis Download Manager
 
-[English](README.md) · [العربية](README.ar.md) · [Español](README.es.md) · [Français](README.fr.md) · [Deutsch](README.de.md) · [Português](README.pt-BR.md) · [简体中文](README.zh-CN.md)
+[العربية](https://github.com/4ls4mi/Auralis-Download-Manager/blob/main/README.ar.md) · [Español](https://github.com/4ls4mi/Auralis-Download-Manager/blob/main/README.es.md) · [Français](https://github.com/4ls4mi/Auralis-Download-Manager/blob/main/README.fr.md) · [Deutsch](https://github.com/4ls4mi/Auralis-Download-Manager/blob/main/README.de.md) · [Português](https://github.com/4ls4mi/Auralis-Download-Manager/blob/main/README.pt-BR.md) · [简体中文](https://github.com/4ls4mi/Auralis-Download-Manager/blob/main/README.zh-CN.md)
 
-Auralis is a free Windows x64 download manager with a glass-inspired interface, detailed transfer controls and its own browser extension. It is an independent GPL-3.0 fork of [Mister Download Manager](https://github.com/anefzaoui/misterdownloadmanager); it is not an official upstream release.
+Auralis is a free, open-source download manager with customizable glass materials, tools to check and repair interrupted downloads, and a right-to-left Arabic interface with selectable fonts. It is a GPL-3.0 fork of Mister Download Manager. [Upstream project](https://github.com/anefzaoui/misterdownloadmanager)
 
-[Download Auralis for Windows](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest) · [Download the Auralis browser extension](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest) · [Release notes](https://github.com/4ls4mi/Auralis-Download-Manager/releases)
+[**Download for Windows x64**](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest#assets) · [Debian 13 and macOS installers](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest#assets) · [Release notes](https://github.com/4ls4mi/Auralis-Download-Manager/releases)
+
+![Auralis download library with sample files in Violet Rail Wide Sweep](docs/images/auralis/wide-sweep-library.png)
+
+![An active download with Grape Taffy Pill Segments, live connections, and a speed graph](docs/images/auralis/grape-taffy-transfer.gif)
+
+Recorded in the Debian desktop app with sample downloads and the v0.3.88 appearance preset.
+
+## What Auralis adds
+
+Auralis and Mister Download Manager both offer multi-connection downloads, pause and resume, browser capture, queues, scheduling, speed limits, and torrents. The differences below are based on the documented features in MDM v0.5.2. [MDM v0.5.2 documentation](https://github.com/anefzaoui/misterdownloadmanager/tree/v0.5.2/docs)
+
+| Feature | Auralis | Mister Download Manager v0.5.2 |
+| --- | --- | --- |
+| Interface and themes | Glass and solid materials, a compact view, separate image or video backgrounds for the main and detail windows, and editable JSON theme import and export. | Desktop-style themes, dark mode, scaling, and editable theme files. |
+| Transfer indicators | Choose independent materials and colors for progress bars, connections, and speed graphs. Progress layouts include Pill Segments and other shapes. | Download progress and connection activity with theme-level progress shape and color controls. |
+| Saved-data check and repair | Verify downloaded blocks against recorded hashes and re-download changed ranges from a compatible HTTP source. | Resume and refresh download links, verify a file against a known checksum, and recheck torrent pieces. |
+| Direct-to-torrent recovery | Find an Internet Archive candidate or compare a torrent or magnet for an interrupted direct download. Reuse verified pieces and keep the original partial. | Reuse existing bytes when starting a torrent against matching files. |
+| Download backup | Export preferences, history, queues, completed files, and supported partials in an archive you can restore to a new destination. A settings-only JSON is also available. | Portable profile folder and link-list import and export. |
+| Arabic typography and scaling | Arabic right-to-left layout, separate English and Arabic font pickers with live previews, and independent text and interface scaling. The Windows installer bundles fonts for both. | Arabic RTL and broad language support, with theme-level font sizing. |
+
+Saved-data checks cover blocks with recorded hashes. HTTP repair needs a compatible source that supports byte ranges. Auralis can only reuse torrent pieces that verify, and recovery needs available peers. Automatic fallback is off by default. It can continue after direct retries fail if a single candidate passes verification and at least two saved pieces can be reused. Internet Archive searches send filename terms to the service.
+
+## Explore the app
+
+Starting in v0.3.88, a fresh profile opens with **Violet Rail Wide Sweep** and a **Grape Taffy** progress bar in **Pill Segments**. Open **Settings → Appearance** to adjust colors, opacity, and motion, or export your choices to a theme file. [Theme file format](docs/auralis-theme-format.md)
+
+![Appearance settings in Violet Rail Wide Sweep](docs/images/auralis/wide-sweep-appearance.png)
+
+![Moving between Settings sections as the Wide Sweep curve follows the selected tab](docs/images/auralis/wide-sweep-navigation.gif)
+
+- **Set up in your language.** Choose a language on first launch and switch it from the main window. The setup wizard has separate pages for browser integration and video or gallery helpers. Browser connection is available on Windows.
+- **Check your destination.** The add-download window displays the drive’s total and free space. Use **Refresh download address** to replace an expired link when the host supports resuming it.
+- **Choose what to save.** Use the extension and optional yt-dlp and FFmpeg helpers for supported video or audio sources. For torrents, select the files you want and monitor peer activity.
+- **Keep an eye on transfers.** Open a download for live connections and speed history, or use compact view and tray controls. On Windows, the updater can be hidden while progress remains visible in the main window.
+- **Move to another installation.** Stop transfers, checks, and queues before creating a download backup. Backups exclude passwords and browser cookies.
+
+## Install and connect a browser
+
+1. Open the latest release and choose the Windows x64 installer, Debian 13 amd64 package, or Intel macOS disk image. GitHub lists SHA-256 digests for the release assets. [Desktop downloads](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest#assets)
+2. On Windows, follow the setup wizard or open **Settings → Browser integration**. Install the Auralis extension from the Chrome Web Store in Chrome or Edge and follow the browser’s prompts. The release includes ZIPs for unpacked Chromium installation and temporary Firefox testing. [Auralis Chrome Web Store listing](https://chromewebstore.google.com/detail/auralis-download-manager/bobmhloppnfipdjjncalidjenegfgebg)
+3. Select **Add URL** or send a supported download from a connected browser. Double-click the item to view its progress, connections, and speed graph.
+
+## Guides and feedback
+
+[English](docs/auralis-guide-drafts/en.md) · [العربية](docs/auralis-guide-drafts/ar.md) · [Español](docs/auralis-guide-drafts/es.md) · [Français](docs/auralis-guide-drafts/fr.md) · [Deutsch](docs/auralis-guide-drafts/de.md) · [Português](docs/auralis-guide-drafts/pt-BR.md) · [简体中文](docs/auralis-guide-drafts/zh-CN.md)
+
+For a bug report, include the Auralis version, operating system, and steps to reproduce it. [Report an issue](https://github.com/4ls4mi/Auralis-Download-Manager/issues/new)
+
+Planned distribution improvements include a bilingual download page, Windows package-manager listings, and an evaluation of installer signing. The latest stable packages are available on GitHub Releases. [All releases](https://github.com/4ls4mi/Auralis-Download-Manager/releases)
+
+## Support and attribution
+
+Patreon support is optional and helps me build more apps and tools and localize games into Arabic.
 
 [![Donate on Patreon](https://img.shields.io/badge/Donate%20on-Patreon-C83740?style=for-the-badge&logo=patreon&logoColor=white)](https://www.patreon.com/c/Alsamii)
 
-Your support helps me build new apps and tools and localize games.
-
-## Auralis in action
-
-### Download manager
-
-![Auralis download queue in the default Violet Rail material, with the Patreon button in the title bar](docs/images/auralis/violet-rail-downloads.png)
-
-### Current download
-
-![Auralis showing animated liquid progress, connection activity, and a transfer speed graph](docs/images/auralis/violet-rail-transfer.gif)
-
-### Appearance settings
-
-![Auralis Settings showing the Violet Rail material and its appearance controls](docs/images/auralis/violet-rail-appearance.png)
-
-## What you can do with Auralis
-
-### Downloads, queues and speed
-
-- Add an HTTP, HTTPS or FTP link, or send a supported download from your browser. See the file's progress, speed, connection activity and remaining time in its download window.
-- Pause and resume where the source supports it, group downloads into queues, schedule them and set speed limits. The system tray keeps controls available while a window is hidden.
-- Multi-connection downloads write received bytes to their positions in one temporary file as they arrive. Ordinary segmented files therefore do not normally need separate chunk files joined at the end; disk flushing and verification can still take time.
-
-### Check and recover an interrupted download
-
-- **Check saved data** compares downloaded blocks with recorded local hashes. It can identify later changes to those blocks; local hashes do not prove the server originally sent the correct data, and older data without hashes cannot be checked this way.
-- **Check source and repair** can prepare changed ranges for re-download when a compatible HTTP source supports the required ranges and validation. A server that does not provide ranges cannot be forced to resume from an arbitrary position. Expired or changed links can also prevent a resume.
-- Under **Find a torrent for recovery**, you can request a search of Internet Archive, choose a `.torrent` file or compare a magnet link. Matching complete pieces can be copied into a separate recovery folder and the download continued from torrent peers; the original partial file is kept. Matching some pieces does not prove the rest of the file is identical. Searches disclose filename terms to Internet Archive, and magnet checks contact peers. Private downloads and downloads with an expected whole-file checksum are currently excluded from this fallback.
-- Supported whole-file checksums supplied by a server can be used to verify a completed download. Automatic torrent fallback and full-file backup are still in development.
-
-### Video, audio and torrents
-
-- With the browser extension and yt-dlp set up, look up available video and audio qualities on supported pages and choose subtitles where offered. Some sources need FFmpeg for final audio/video processing; availability depends on the site.
-- Add a `.torrent` file or magnet, review the files and destination, and download from available peers. Torrent pieces can be rechecked using the torrent's hashes.
-
-### Appearance, settings and backup
-
-- Choose themes, surface materials, progress bars, connection indicators and graphs independently. Liquid styles animate the progress, connections and graph using the downloader's actual values; colors can be adjusted in Appearance settings.
-- Export the current theme to an editable JSON file and import it again. The export includes the palette, surface material, typography and independent indicator choices. Wallpaper files are not embedded. See the [theme format](docs/auralis-theme-format.md) if you or an assistant want to edit it.
-- Save and restore appearance and download **preferences**. The current preferences backup does **not** include downloaded files, partial files or download history, and excludes passwords, account credentials and browser cookies. A full-file backup is in development.
-- Choose whether Auralis starts with Windows and use update notices and the system tray to keep downloads accessible.
-
-## Guides and recovery
-
-Read the [English guide](docs/auralis-guide-drafts/en.md) or [Arabic guide](docs/auralis-guide-drafts/ar.md). Short guides are also available in [French](docs/auralis-guide-drafts/fr.md), [German](docs/auralis-guide-drafts/de.md), [Spanish](docs/auralis-guide-drafts/es.md), [Portuguese](docs/auralis-guide-drafts/pt-BR.md) and [Simplified Chinese](docs/auralis-guide-drafts/zh-CN.md). These guides are being updated alongside the app.
-
-Ordinary segmented downloads write their received bytes directly into a single temporary file. Saved-data checking can detect changes in blocks that have recorded hashes; repair depends on a compatible server and cannot make a server support byte ranges. For a stopped direct download, the recovery window can compare a chosen torrent or magnet, or search Internet Archive after you request it. Matching saved pieces do not prove the remaining content is identical. Torrent recovery needs peers and retains the original partial file. Automatic fallback is still in development.
-
-Appearance settings can export and import an editable theme JSON; indicator choices are included. Preferences backup does not yet include downloaded files, partial files or download history. A full-file backup is being developed.
-
-## Installation
-
-1. Download and run the Windows x64 installer from the [latest release](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest).
-2. Open **Settings → Browser Integration** to prepare the connection and media helpers, and install the matching browser extension. Approve the browser's installation prompt when required.
-3. Choose a destination in **Settings → Downloads**, then use **Add URL** or send a supported link from the browser. Double-click a download to open its progress window.
-4. Open **Settings → Appearance** to choose themes, materials and indicator styles; use **Export current theme…** and **Import theme…** to save and load an editable theme.
-
-## License and attribution
-
-Auralis is distributed under the [GNU GPL v3](LICENSE). It is a fork of Mister Download Manager by Ahmed Nefzaoui and contributors; see [ATTRIBUTION.md](ATTRIBUTION.md) and the [upstream project](https://github.com/anefzaoui/misterdownloadmanager).
+Auralis is distributed under the GNU GPL v3 and builds on Mister Download Manager by Ahmed Nefzaoui and contributors. [License](LICENSE) · [Attribution](ATTRIBUTION.md) · [Upstream project](https://github.com/anefzaoui/misterdownloadmanager)
