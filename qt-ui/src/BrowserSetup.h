@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QString>
+#include <QStringList>
 #include <QUrl>
 
 namespace BrowserSetup {
@@ -25,6 +26,7 @@ struct NativeHostStatus {
 
 Handler defaultHttpsHandler();
 QUrl storeUrl();
+QStringList browserPolicyRefreshArguments(const QString &browserId, const QString &executable);
 bool isInstalledApplication();
 NativeHostStatus nativeHostStatus(const QString &browserId);
 QString registerNativeHost(const QString &browserId, bool repair);

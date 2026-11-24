@@ -647,6 +647,26 @@
             <source>Reset setup</source>
             <translation>Restablecer configuración</translation>
         </message>
+        <message>
+            <source>Finish setup</source>
+            <translation>Completar configuración</translation>
+        </message>
+        <message>
+            <source>An installation request was saved for %1. If the extension doesn’t appear, close and reopen the browser to apply the request.</source>
+            <translation>Se guardó una solicitud de instalación para %1. Si la extensión no aparece, cierra y vuelve a abrir el navegador para aplicar la solicitud.</translation>
+        </message>
+        <message>
+            <source>Auralis asked %1 to check the saved installation request. If the extension doesn’t appear, close and reopen the browser.</source>
+            <translation>Auralis pidió a %1 que compruebe la solicitud de instalación guardada. Si la extensión no aparece, cierra y vuelve a abrir el navegador.</translation>
+        </message>
+        <message>
+            <source>If Auralis is still listed, remove it from the Extensions page in %1.</source>
+            <translation>Si Auralis sigue en la lista, elimínalo desde la página Extensiones de %1.</translation>
+        </message>
+        <message>
+            <source>Automatic setup was removed. Auralis asked %1 to reload its settings.</source>
+            <translation>Se eliminó la configuración automática. Auralis pidió a %1 que volviera a cargar sus ajustes.</translation>
+        </message>
     </context>
     <context>
         <name>CaptionControls</name>

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(AuralisQt VERSION 0.3.79 LANGUAGES CXX)
+project(AuralisQt VERSION 0.3.80 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -42,7 +42,7 @@ if(WIN32)
     set(auralis_original_filename "auralis-download-manager.exe")
     configure_file(src/WindowsIcon.rc.in "${CMAKE_CURRENT_BINARY_DIR}/WindowsIcon.rc" @ONLY)
     target_sources(auralis-download-manager PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/WindowsIcon.rc")
-    target_link_libraries(auralis-download-manager PRIVATE Qt6::WebSockets advapi32 dwmapi comctl32 shell32 shlwapi ole32)
+    target_link_libraries(auralis-download-manager PRIVATE Qt6::WebSockets advapi32 dwmapi comctl32 shell32 shlwapi ole32 version)
 
     if(MSVC)
         set(auralis_file_description "Auralis Chrome Setup")

@@ -30,14 +30,15 @@ ColumnLayout {
     readonly property bool hasStore: Boolean(!problem && status?.browserSupported && status?.storeUrl)
     readonly property bool installed: status?.extensionDiscovery !== "missing"
         && Boolean(status?.connectedRecently || status?.extensionPresent)
-    readonly property bool needsSetup: hasStore && !installed && !status?.policyInstalled
+    readonly property bool needsSetup: hasStore && !installed
+    readonly property bool savedSetup: needsSetup && Boolean(status?.policyInstalled)
     readonly property bool extensionMissing: !installed && status?.extensionDiscovery === "missing"
     readonly property bool supportedBrowser: status?.browserId === "chrome" || status?.browserId === "edge"
     readonly property bool hostNeedsAttention: Boolean(!problem && status?.browserSupported && supportedBrowser
         && status?.nativeHostRegistered === false && status?.nativeHostProblem)
     readonly property bool automaticAvailable: needsSetup && supportedBrowser
         && Boolean(status?.silentInstallAvailable)
-    readonly property bool offerAtStartup: needsSetup && (extensionMissing || automaticAvailable)
+    readonly property bool offerAtStartup: needsSetup && !savedSetup && (extensionMissing || automaticAvailable)
         && !status?.extensionPreviouslyConnected && !status?.storePreviouslyConnected
         && !status?.browserPreviouslyConnected
     readonly property bool canUndo: showManualTools && !problem && supportedBrowser && Boolean(status?.policyRemovable)
@@ -45,7 +46,7 @@ ColumnLayout {
     readonly property bool canConfirmRemoval: removalForReset ? canReset : canUndo
     readonly property var attempt: attempts[status?.browserId]
     readonly property bool pending: !installed && attempt?.state === "pending"
-    readonly property bool automaticBlocked: needsSetup && supportedBrowser && !automaticAvailable
+    readonly property bool automaticBlocked: needsSetup && !savedSetup && supportedBrowser && !automaticAvailable
     readonly property bool attemptNeedsAttention: !installed && Boolean(attempt?.state && !pending)
     readonly property string attemptError: attempt?.state === "failed" ? attempt.detail || "" : ""
     readonly property bool needsHostRepair: hostNeedsAttention && status?.nativeHostCanRegister === true
@@ -65,21 +66,24 @@ ColumnLayout {
         if (!resetRemoval)
             return feedback
         const browser = status?.browser || ""
-        const instructions = resetRemoval.browserOpened
-            ? qsTr("Remove Auralis from the Extensions page in %1 and confirm in the browser.").arg(browser)
-            : qsTr("Open the Extensions page in %1, remove Auralis, and confirm in the browser.").arg(browser)
         if (resetRemoval.setupRemoved)
-            return qsTr("Automatic setup was removed. Reopen your browser to apply the change.") + " " + instructions
-        return instructions
+            return removedSetupMessage(browser, resetRemoval.refreshRequested) + " "
+                + qsTr("If Auralis is still listed, remove it from the Extensions page in %1.").arg(browser)
+        return qsTr("Open the Extensions page in %1, remove Auralis, and confirm in the browser.").arg(browser)
     }
 
     signal installAccepted()
 
     spacing: 8
 
-    function recordAttempt(browserId, state, detail = "") {
+    function removedSetupMessage(browser, refreshRequested) {
+        return refreshRequested ? qsTr("Automatic setup was removed. Auralis asked %1 to reload its settings.").arg(browser)
+            : qsTr("Automatic setup was removed. Reopen your browser to apply the change.")
+    }
+
+    function recordAttempt(browserId, state, detail = "", refreshRequested = false) {
         const expires = state === "pending" ? Date.now() + verificationTimeout : 0
-        attempts = Object.assign({}, attempts, {[browserId]: state ? {state, expires, detail} : null})
+        attempts = Object.assign({}, attempts, {[browserId]: state ? {state, expires, detail, refreshRequested} : null})
     }
 
     function refresh(afterCheck = null) {
@@ -92,9 +96,12 @@ ColumnLayout {
         checking = true
         engine.request({local: "browserExtensionStatus"}, function(value, error) {
             if (!error && value) {
+                const browserId = value.browserId
+                const sameBrowser = status?.browserId === browserId
+                const newlySaved = sameBrowser && !status?.policyInstalled && value.policyInstalled
                 const previouslyInstalled = installed
                 const previouslyConnected = Boolean(status?.connectedRecently)
-                if (status?.browserId !== value.browserId) {
+                if (!sameBrowser) {
                     cancelConfirmation()
                     advancedOpen = false
                     feedback = ""
@@ -103,7 +110,6 @@ ColumnLayout {
                 }
                 status = value
                 problem = ""
-                const browserId = value.browserId
                 const previous = attempts[browserId]
                 if (removalBrowserId && !canConfirmRemoval)
                     cancelConfirmation()
@@ -121,9 +127,8 @@ ColumnLayout {
                         recordAttempt(browserId, "failed", qsTr("Auralis could no longer find the saved automatic setup."))
                     else if (Date.now() >= previous.expires)
                         recordAttempt(browserId, "timeout")
-                } else if (browserId && value.policyInstalled && value.policyRemovable && !previous && !value.extensionPreviouslyConnected
-                    && !value.storePreviouslyConnected) {
-                    recordAttempt(browserId, "pending")
+                } else if (previous?.state === "failed" && newlySaved) {
+                    recordAttempt(browserId, "")
                 }
                 if (resetRemoval && extensionMissing) {
                     resetRemoval = null
@@ -206,7 +211,10 @@ ColumnLayout {
                         : qsTr("Could not open your browser.")
                 }
             } else if (install) {
-                recordAttempt(browserId, "pending")
+                if (value.pending && !value.alreadyInstalled)
+                    recordAttempt(browserId, "pending", "", Boolean(value.refreshRequested))
+                else
+                    recordAttempt(browserId, "")
             } else if (openStore) {
                 feedback = installed ? qsTr("Opened the Auralis extension page.")
                     : browserId === "edge" ? qsTr("Open the Chrome Web Store in Edge and follow its prompts. If Edge asks, allow extensions from other stores, then add Auralis.")
@@ -215,13 +223,13 @@ ColumnLayout {
                     feedback += " " + qsTr("If it cannot connect, return here to repair the connection.")
             } else if (undo) {
                 recordAttempt(browserId, "")
-                feedback = qsTr("Automatic setup was removed. Reopen your browser to apply the change.")
+                feedback = removedSetupMessage(status.browser, value.refreshRequested)
             } else if (reset) {
                 recordAttempt(browserId, "")
                 if (value.removalNeeded)
-                    resetRemoval = {browserOpened: Boolean(value.browserOpened), setupRemoved: Boolean(value.setupRemoved)}
+                    resetRemoval = {refreshRequested: Boolean(value.refreshRequested), setupRemoved: Boolean(value.setupRemoved)}
                 else if (value.setupRemoved)
-                    feedback = qsTr("Automatic setup was removed. Reopen your browser to apply the change.")
+                    feedback = removedSetupMessage(status.browser, value.refreshRequested)
                 else
                     feedback = qsTr("Browser setup checked again.")
             } else if (repair) {
@@ -290,9 +298,11 @@ ColumnLayout {
                 return qsTr("Auralis found the extension in %1. Open its toolbar icon to verify the connection.").arg(browser)
             if (root.activeAction === "installBrowserExtensionPolicy")
                 return qsTr("Starting extension installation in %1…").arg(browser)
-            if (root.pending)
-                return qsTr("An installation request was saved for %1. Waiting for the browser to install the extension.").arg(browser)
-            if (root.attemptNeedsAttention) {
+            if (root.pending && root.attempt?.refreshRequested)
+                return qsTr("Auralis asked %1 to check the saved installation request. If the extension doesn’t appear, close and reopen the browser.").arg(browser)
+            if (root.pending || (root.savedSetup && !root.attemptNeedsAttention))
+                return qsTr("An installation request was saved for %1. If the extension doesn’t appear, close and reopen the browser to apply the request.").arg(browser)
+            if (root.attemptNeedsAttention && root.attempt) {
                 if (root.attemptError)
                     return root.attemptError
                 if (root.attempt.state === "timeout" && root.status?.policyInstalled)
@@ -314,10 +324,12 @@ ColumnLayout {
     Label {
         Layout.fillWidth: true
         visible: root.automaticAvailable && !root.confirming && !root.acting && !root.pending
-            && !root.attemptNeedsAttention
+            && !root.attemptNeedsAttention && (!root.savedSetup || Boolean(root.installDetails))
         text: {
             if (!visible)
                 return ""
+            if (root.savedSetup)
+                return root.installDetails
             const description = qsTr("Auralis will save an extension installation setting for %1 in your Windows account. The browser may show a notice that it is managed and ask you to restart or approve the installation.").arg(root.status.browser)
             return root.installDetails ? description + "\n" + root.installDetails : description
         }
@@ -333,7 +345,7 @@ ColumnLayout {
 
         GlassButton {
             objectName: "installBrowserExtension"
-            text: qsTr("Install automatically")
+            text: root.savedSetup ? qsTr("Finish setup") : qsTr("Install automatically")
             visible: root.hasStore && root.supportedBrowser && !root.installed
             enabled: root.automaticAvailable && !root.pending && !root.confirming && !root.acting && !root.checking
             accent: root.colors.positive

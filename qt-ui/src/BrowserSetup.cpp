@@ -19,6 +19,7 @@
 #include <sddl.h>
 #include <shellapi.h>
 #include <shlwapi.h>
+#include <winver.h>
 #include <array>
 #include <optional>
 #include <utility>
@@ -183,6 +184,30 @@ bool isLocalFilePath(const QString &path)
 {
     return path.size() >= 3 && path[0].isLetter() && path[1] == QLatin1Char(':')
         && (path[2] == QLatin1Char('\\') || path[2] == QLatin1Char('/'));
+}
+
+bool supportsChromePolicyRefresh(const QString &executable)
+{
+    if (!isLocalFilePath(executable)
+        || QFileInfo(executable).fileName().compare(QStringLiteral("chrome.exe"), Qt::CaseInsensitive) != 0)
+        return false;
+
+    const auto path = reinterpret_cast<LPCWSTR>(executable.utf16());
+    DWORD legacyHandle = 0;
+    const DWORD size = GetFileVersionInfoSizeW(path, &legacyHandle);
+    if (!size || size > 1024 * 1024)
+        return false;
+    std::vector<BYTE> version(size);
+    if (!GetFileVersionInfoW(path, 0, size, version.data()))
+        return false;
+
+    LPVOID raw = nullptr;
+    UINT bytes = 0;
+    if (!VerQueryValueW(version.data(), L"\\", &raw, &bytes) || !raw || bytes < sizeof(VS_FIXEDFILEINFO))
+        return false;
+    const auto fixed = static_cast<const VS_FIXEDFILEINFO *>(raw);
+    // Chrome M142 introduced the running instance's platform policy refresh switch.
+    return fixed->dwSignature == VS_FFI_SIGNATURE && HIWORD(fixed->dwFileVersionMS) >= 142;
 }
 
 QString manifestPath(HKEY hive, DWORD registryView, const QString &key, bool &unreadable)
@@ -500,6 +525,13 @@ BrowserSetup::Handler BrowserSetup::defaultHttpsHandler()
 QUrl BrowserSetup::storeUrl()
 {
     return QUrl(QStringLiteral("https://chromewebstore.google.com/detail/auralis-download-manager/") + StoreId);
+}
+
+QStringList BrowserSetup::browserPolicyRefreshArguments(const QString &browserId, const QString &executable)
+{
+    if (browserId == QStringLiteral("chrome") && supportsChromePolicyRefresh(executable))
+        return {QStringLiteral("--refresh-platform-policy")};
+    return {};
 }
 
 bool BrowserSetup::isInstalledApplication()

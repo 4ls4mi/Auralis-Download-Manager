@@ -647,6 +647,26 @@
             <source>Reset setup</source>
             <translation>重置设置</translation>
         </message>
+        <message>
+            <source>Finish setup</source>
+            <translation>完成设置</translation>
+        </message>
+        <message>
+            <source>An installation request was saved for %1. If the extension doesn’t appear, close and reopen the browser to apply the request.</source>
+            <translation>已保存 %1 的安装请求。如果未看到扩展程序，请关闭浏览器后重新打开以应用该请求。</translation>
+        </message>
+        <message>
+            <source>Auralis asked %1 to check the saved installation request. If the extension doesn’t appear, close and reopen the browser.</source>
+            <translation>Auralis 已请求 %1 检查保存的安装请求。如果未看到扩展程序，请关闭浏览器后重新打开。</translation>
+        </message>
+        <message>
+            <source>If Auralis is still listed, remove it from the Extensions page in %1.</source>
+            <translation>如果列表中仍有 Auralis，请在 %1 的“扩展程序”页面将其移除。</translation>
+        </message>
+        <message>
+            <source>Automatic setup was removed. Auralis asked %1 to reload its settings.</source>
+            <translation>已移除自动设置。Auralis 已请求 %1 重新加载设置。</translation>
+        </message>
     </context>
     <context>
         <name>CaptionControls</name>

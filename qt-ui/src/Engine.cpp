@@ -310,7 +310,7 @@ QVariantMap Engine::dispatch(const QVariantMap &command) const
                 status.insert(QStringLiteral("nativeHostRegistered"), host.registered);
                 status.insert(QStringLiteral("nativeHostCanRegister"), host.canRegister);
                 status.insert(QStringLiteral("nativeHostProblem"), host.problem);
-                status.insert(QStringLiteral("silentInstallAvailable"), policy.available && canPrepare);
+                status.insert(QStringLiteral("silentInstallAvailable"), (policy.available || policy.configured) && canPrepare);
                 status.insert(QStringLiteral("policyInstalled"), policy.configured);
                 status.insert(QStringLiteral("policyRemovable"), policy.removable);
                 status.insert(QStringLiteral("policyProblem"), policy.available && !canPrepare ? host.problem : policy.problem);
@@ -329,9 +329,6 @@ QVariantMap Engine::dispatch(const QVariantMap &command) const
                         && (value.value(QStringLiteral("extensionPresent")).toBool()
                             || value.value(QStringLiteral("connectedRecently")).toBool());
                 };
-                const QString extensionManager = browserId == QStringLiteral("chrome")
-                    ? QStringLiteral("chrome://extensions/") : QStringLiteral("edge://extensions/");
-                const auto extensionDetectedMessage = tr("The browser has the extension. Open its toolbar menu to verify the Auralis connection.");
                 const auto browserStillSelected = [&handler] {
                     return BrowserSetup::defaultHttpsHandler().executable.compare(handler.executable, Qt::CaseInsensitive) == 0;
                 };
@@ -345,19 +342,20 @@ QVariantMap Engine::dispatch(const QVariantMap &command) const
                         if (!policyError.isEmpty())
                             return failure(policyError);
                     }
-                    if (resetExtensionSetup) {
-                        const bool removalNeeded = extensionDetected(browserResult);
-                        const bool browserOpened = removalNeeded && browserStillSelected()
-                            && QProcess::startDetached(handler.executable, {extensionManager});
-                        return result(QVariantMap{{QStringLiteral("ok"), true},
-                            {QStringLiteral("setupRemoved"), setupRemoved}, {QStringLiteral("removalNeeded"), removalNeeded},
-                            {QStringLiteral("browserOpened"), browserOpened}});
-                    }
+                    const auto refreshArguments = setupRemoved
+                        ? BrowserSetup::browserPolicyRefreshArguments(browserId, handler.executable) : QStringList{};
+                    const bool refreshRequested = !refreshArguments.isEmpty() && browserStillSelected()
+                        && QProcess::startDetached(handler.executable, refreshArguments);
                     return result(QVariantMap{{QStringLiteral("ok"), true},
-                        {QStringLiteral("message"), tr("Auralis removed its automatic extension setup. Reopen your browser to apply the change.")}});
+                        {QStringLiteral("setupRemoved"), setupRemoved},
+                        {QStringLiteral("removalNeeded"), resetExtensionSetup && extensionDetected(browserResult)},
+                        {QStringLiteral("refreshRequested"), refreshRequested}});
                 }
+                const auto alreadyInstalled = [] {
+                    return result(QVariantMap{{QStringLiteral("ok"), true}, {QStringLiteral("alreadyInstalled"), true}});
+                };
                 if (extensionDetected(browserResult))
-                    return failure(extensionDetectedMessage);
+                    return alreadyInstalled();
                 const auto policy = BrowserSetup::policyStatus(browserId);
                 if (!policy.available && !policy.configured)
                     return failure(policy.problem);
@@ -370,17 +368,23 @@ QVariantMap Engine::dispatch(const QVariantMap &command) const
                 if (rechecked.contains(QStringLiteral("error")))
                     return rechecked;
                 if (extensionDetected(rechecked.value(QStringLiteral("result")).toMap()))
-                    return failure(extensionDetectedMessage);
-                bool permissionDenied = false;
-                auto policyError = BrowserSetup::installPolicy(browserId, &permissionDenied);
-                if (permissionDenied)
-                    policyError = BrowserSetup::installChromePolicyWithAdministratorApproval();
-                if (!policyError.isEmpty())
-                    return failure(policyError);
-                // Launch the selected browser only after saving its automatic install request.
-                const bool browserOpened = browserStillSelected() && QProcess::startDetached(handler.executable, {extensionManager});
+                    return alreadyInstalled();
+                if (!policy.configured) {
+                    bool approvalRequired = false;
+                    auto policyError = BrowserSetup::installPolicy(browserId, &approvalRequired);
+                    if (approvalRequired && !BrowserSetup::policyStatus(browserId).configured)
+                        policyError = BrowserSetup::installChromePolicyWithAdministratorApproval();
+                    // A previous or concurrent setup can have saved the request already.
+                    if (!policyError.isEmpty() && !BrowserSetup::policyStatus(browserId).configured)
+                        return failure(policyError);
+                }
+                if (!browserStillSelected())
+                    return failure(tr("The Windows default browser changed. Review browser setup again."));
+                const auto launchArguments = BrowserSetup::browserPolicyRefreshArguments(browserId, handler.executable);
+                const bool browserOpened = QProcess::startDetached(handler.executable, launchArguments);
                 return result(QVariantMap{{QStringLiteral("ok"), true},
-                    {QStringLiteral("browserOpened"), browserOpened}, {QStringLiteral("pending"), true}});
+                    {QStringLiteral("browserOpened"), browserOpened}, {QStringLiteral("pending"), true},
+                    {QStringLiteral("refreshRequested"), browserOpened && !launchArguments.isEmpty()}});
             }
             const auto registrationError = BrowserSetup::registerNativeHost(browserId, false);
             if (!QProcess::startDetached(handler.executable, {store}))
