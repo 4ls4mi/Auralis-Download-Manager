@@ -210,7 +210,17 @@ try {
 } finally {
     Get-Process -Name 'auralis-download-manager' -ErrorAction SilentlyContinue |
         Where-Object { $_.Path -ieq $exe } | Stop-Process -Force -ErrorAction SilentlyContinue
-    Remove-Item -LiteralPath $fixture, $data -Recurse -Force -ErrorAction SilentlyContinue
+    # NSIS can finish removing temporary files while this cleanup walks the tree.
+    # Cleanup must not replace a verification failure or turn a passing test red.
+    foreach ($temporaryDirectory in @($fixture, $data)) {
+        try {
+            if (Test-Path -LiteralPath $temporaryDirectory) {
+                Remove-Item -LiteralPath $temporaryDirectory -Recurse -Force -ErrorAction Stop
+            }
+        } catch {
+            Write-Warning "Temporary test cleanup was incomplete: $($_.Exception.Message)"
+        }
+    }
     $env:MDM_DATA_DIR = $previousData
     $env:MDM_DOWNLOADS = $previousDownloads
     $env:AURALIS_TEST_SKIP_HOST = $previousSkipHost
