@@ -432,6 +432,10 @@
             <source>Auralis could not save its undo information or confirm that the browser policy was restored. Check browser setup before trying again.</source>
             <translation>Auralis no pudo guardar la información necesaria para deshacer la configuración ni confirmar que se restauró la política del navegador. Comprueba la configuración del navegador antes de volver a intentarlo.</translation>
         </message>
+        <message>
+            <source>Auralis could not read the browser’s native messaging policy.</source>
+            <translation>Auralis no pudo leer la política de mensajería nativa del navegador.</translation>
+        </message>
     </context>
     <context>
         <name>BrowserSetupOptions</name>

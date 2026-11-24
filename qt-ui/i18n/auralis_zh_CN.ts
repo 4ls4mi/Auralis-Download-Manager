@@ -432,6 +432,10 @@
             <source>Auralis could not save its undo information or confirm that the browser policy was restored. Check browser setup before trying again.</source>
             <translation>Auralis 无法保存用于撤销设置的信息，也无法确认浏览器策略是否已恢复。请检查浏览器设置后再试。</translation>
         </message>
+        <message>
+            <source>Auralis could not read the browser’s native messaging policy.</source>
+            <translation>Auralis 无法读取浏览器的原生消息传递策略。</translation>
+        </message>
     </context>
     <context>
         <name>BrowserSetupOptions</name>

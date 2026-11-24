@@ -298,6 +298,23 @@ struct Review {
     PolicyValue policy;
 };
 
+struct OwnedUserPolicy {
+    PolicyValue policy;
+    bool previouslyExisted;
+};
+
+std::optional<OwnedUserPolicy> ownedUserPolicy(QSettings &ownership, const QString &browserId, const QString &path)
+{
+    // QSettings on Windows stores booleans as strings. Require an explicit recorded value.
+    const auto prior = ownership.value(ownershipKey(browserId)).toString();
+    if (prior != QStringLiteral("true") && prior != QStringLiteral("false"))
+        return std::nullopt;
+    auto policy = readPolicy(HKEY_CURRENT_USER, path, RRF_SUBKEY_WOW6464KEY);
+    if (policy.error != ERROR_SUCCESS || !policy.exists || policy.settings.value(StoreId).toObject() != auralisPolicy())
+        return std::nullopt;
+    return OwnedUserPolicy{std::move(policy), prior == QStringLiteral("true")};
+}
+
 Review reviewPolicy(const QString &browserId, const QString &path, QSettings &user)
 {
     const QString governed = QCoreApplication::translate("BrowserSetup",
@@ -343,13 +360,8 @@ Review reviewPolicy(const QString &browserId, const QString &path, QSettings &us
 
     const auto existing = settings.value(StoreId);
     const auto entry = existing.toObject();
-    if (usesOfficialStore(entry)) {
-        QSettings ownership;
-        ownership.setFallbacksEnabled(false);
-        const bool removable = userForceList == StoreForceList::Unlisted && entry == auralisPolicy()
-            && ownership.contains(ownershipKey(browserId));
-        return {{false, true, {}, removable}, configured};
-    }
+    if (usesOfficialStore(entry))
+        return {{false, true, {}}, configured};
 
     // Adding a specific extension can change how a browser inherits wildcard permissions.
     // Leave any existing wildcard restrictions and store-level policy in full control.
@@ -431,12 +443,10 @@ QString approvedChromePolicyValue()
     return QString::fromUtf8(QJsonDocument(QJsonObject{{StoreId, auralisPolicy()}}).toJson(QJsonDocument::Compact));
 }
 
-bool isApprovalOwnedPolicy(const Review &review)
+bool canApproveOwnedRemoval(const OwnedUserPolicy &owned)
 {
-    QSettings ownership;
-    ownership.setFallbacksEnabled(false);
-    return review.status.removable && review.policy.raw == approvedChromePolicyValue()
-        && ownership.value(chromeApprovalOwnershipKey()).toBool();
+    // The helper can delete the entire exact value only if Auralis created it.
+    return !owned.previouslyExisted && owned.policy.raw == approvedChromePolicyValue();
 }
 
 // Keep the verified file and each directory open without delete sharing while
@@ -555,14 +565,26 @@ BrowserSetup::NativeHostStatus BrowserSetup::nativeHostStatus(const QString &bro
     bool userHostsAllowed = true;
     const auto path = policyPath(browserId);
     const auto userHostsPolicy = QStringLiteral("NativeMessagingUserLevelHosts");
-    for (const auto &root : {QStringLiteral("HKEY_LOCAL_MACHINE"), QStringLiteral("HKEY_CURRENT_USER")}) {
+    const auto unreadablePolicy = QCoreApplication::translate("BrowserSetup",
+        "Auralis could not read the browser’s native messaging policy.");
+    for (const auto hive : {HKEY_LOCAL_MACHINE, HKEY_CURRENT_USER}) {
+        const auto root = hive == HKEY_LOCAL_MACHINE ? QStringLiteral("HKEY_LOCAL_MACHINE") : QStringLiteral("HKEY_CURRENT_USER");
         for (const auto format : {QSettings::Registry64Format, QSettings::Registry32Format}) {
+            const auto view = format == QSettings::Registry64Format ? KEY_WOW64_64KEY : KEY_WOW64_32KEY;
+            const auto existing = existingReadablePolicyKey(hive, path, view);
+            if (!existing)
+                return {false, false, false, unreadablePolicy};
+            // A settings lookup can create its base key. Status checks skip absent keys.
+            if (!*existing)
+                continue;
             QSettings policy(root + path, format);
             if (blocksNativeHost(policy))
                 return {false, false, false, QCoreApplication::translate("BrowserSetup",
                     "Browser policy blocks the Auralis native messaging host.")};
             if (policy.contains(userHostsPolicy) && !policy.value(userHostsPolicy).toBool())
                 userHostsAllowed = false;
+            if (policy.status() != QSettings::NoError)
+                return {false, false, false, unreadablePolicy};
         }
     }
 
@@ -660,7 +682,11 @@ BrowserSetup::PolicyStatus BrowserSetup::policyStatus(const QString &browserId)
     if (path.isEmpty())
         return {};
     QSettings user(QStringLiteral("HKEY_CURRENT_USER") + path, QSettings::Registry64Format);
-    return reviewPolicy(browserId, path, user).status;
+    auto status = reviewPolicy(browserId, path, user).status;
+    QSettings ownership;
+    ownership.setFallbacksEnabled(false);
+    status.removable = ownedUserPolicy(ownership, browserId, path).has_value();
+    return status;
 }
 
 QString BrowserSetup::installPolicy(const QString &browserId, bool *windowsApprovalRequired)
@@ -763,21 +789,20 @@ QString BrowserSetup::removePolicy(const QString &browserId, bool *windowsApprov
     const auto path = policyPath(browserId);
     if (path.isEmpty())
         return QCoreApplication::translate("BrowserSetup", "Managed setup is unavailable for this browser.");
-    QSettings user(QStringLiteral("HKEY_CURRENT_USER") + path, QSettings::Registry64Format);
-    auto review = reviewPolicy(browserId, path, user);
-    if (!review.status.removable)
-        return QCoreApplication::translate("BrowserSetup", "The existing browser policy was changed or was configured outside Auralis.");
     QSettings ownership;
     ownership.setFallbacksEnabled(false);
+    const auto owned = ownedUserPolicy(ownership, browserId, path);
+    if (!owned)
+        return QCoreApplication::translate("BrowserSetup", "The existing browser policy was changed or was configured outside Auralis.");
     const auto key = ownershipKey(browserId);
-    auto settings = review.policy.settings;
+    auto settings = owned->policy.settings;
     settings.remove(StoreId);
-    const bool removeValue = settings.isEmpty() && !ownership.value(key).toBool();
+    const bool removeValue = settings.isEmpty() && !owned->previouslyExisted;
     const auto json = removeValue ? QString() : QString::fromUtf8(QJsonDocument(settings).toJson(QJsonDocument::Compact));
-    const auto error = writeUserPolicy(path, review.policy, json, removeValue);
+    const auto error = writeUserPolicy(path, owned->policy, json, removeValue);
 #ifdef AURALIS_CHROME_APPROVAL_ENABLED
     if (windowsApprovalRequired && error == ERROR_ACCESS_DENIED && browserId == QStringLiteral("chrome")
-        && isApprovalOwnedPolicy(review))
+        && canApproveOwnedRemoval(*owned))
         *windowsApprovalRequired = chromeWindowsApprovalAvailable();
 #endif
     if (error != ERROR_SUCCESS)
@@ -816,13 +841,18 @@ QString BrowserSetup::installChromePolicyWithAdministratorApproval(bool remove)
     const auto path = policyPath(browser);
     if (!existingReadablePolicyKey(HKEY_CURRENT_USER, path, KEY_WOW64_64KEY).value_or(false))
         return QCoreApplication::translate("BrowserSetup", "The Chrome policy changed before approval. Check browser setup again.");
-    QSettings user(QStringLiteral("HKEY_CURRENT_USER") + path, QSettings::Registry64Format);
-    const auto review = reviewPolicy(browser, path, user);
-    if (remove ? !isApprovalOwnedPolicy(review) : (!review.status.available || review.policy.exists))
-        return QCoreApplication::translate("BrowserSetup", "The Chrome policy changed before approval. Check browser setup again.");
-
     QSettings ownership;
     ownership.setFallbacksEnabled(false);
+    if (remove) {
+        const auto owned = ownedUserPolicy(ownership, browser, path);
+        if (!owned || !canApproveOwnedRemoval(*owned))
+            return QCoreApplication::translate("BrowserSetup", "The Chrome policy changed before approval. Check browser setup again.");
+    } else {
+        QSettings user(QStringLiteral("HKEY_CURRENT_USER") + path, QSettings::Registry64Format);
+        const auto review = reviewPolicy(browser, path, user);
+        if (!review.status.available || review.policy.exists)
+            return QCoreApplication::translate("BrowserSetup", "The Chrome policy changed before approval. Check browser setup again.");
+    }
     if (!ownership.isWritable())
         return QCoreApplication::translate("BrowserSetup", "Auralis could not save the undo information for Windows approval.");
 
