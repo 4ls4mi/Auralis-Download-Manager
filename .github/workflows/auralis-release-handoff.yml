@@ -1,0 +1,82 @@
+name: Publish verified Auralis 0.3.86 desktop packages
+
+on:
+  push:
+    branches: [release/auralis-0.3.86-handoff]
+    paths: [.github/workflows/auralis-release-handoff.yml]
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: auralis-qt-desktop-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Verify and publish Windows, Debian, and Intel macOS
+    if: github.repository == '4ls4mi/Auralis-Download-Manager'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_RUN: '45377151024'
+      SOURCE_SHA: 13ea403b4022f95b400efcfca364e538323262d2
+      AURALIS_DESKTOP_RELEASE: '1'
+      AURALIS_INSTALLER_ARTIFACT_ID: '14914506173'
+      AURALIS_INSTALLER_ARTIFACT_DIGEST: 'sha256:41ad2c4f7269e520952cebc9393a88cd157b4938bd1646ac1d716ee67eb68c3f'
+      AURALIS_EXTENSIONS_ARTIFACT_ID: '14912874001'
+      AURALIS_EXTENSIONS_ARTIFACT_DIGEST: 'sha256:7ed62c5442b9b032f95c7f826f804947d0355652309df1dc0b77edc8bb9cab3e'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 13ea403b4022f95b400efcfca364e538323262d2
+          persist-credentials: false
+      - name: Confirm successful package jobs from the original release run
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/$GH_REPO/actions/runs/$SOURCE_RUN" |
+            jq -e --arg sha "$SOURCE_SHA" '
+              .status == "completed" and .head_sha == $sha and
+              .path == ".github/workflows/auralis-qt-desktop-release.yml" and
+              .head_branch == "wip/auralis-qt-shell" and .head_repository.id == .repository.id
+            ' >/dev/null
+          verified_job() {
+            local job="$1" expected="$2"
+            gh api "repos/$GH_REPO/actions/jobs/$job" |
+              jq -e --arg sha "$SOURCE_SHA" --argjson run "$SOURCE_RUN" --argjson expected "$expected" '
+                .status == "completed" and .conclusion == "success" and .head_sha == $sha and
+                .run_id == $run and ([.steps[] | select(.conclusion == "success") | .name] | contains($expected))
+              ' >/dev/null
+          }
+          verified_job 138386762877 '["Verify Windows installation and update relaunch","Upload the verified installer","Upload the browser extension packages"]'
+          verified_job 138386762743 '["Build and smoke-test the packaged application","Upload the verified Debian package and checksum"]'
+          verified_job 138386762931 '["Build, package and test the macOS application","Upload the verified macOS package"]'
+      - name: Publish the verified package set
+        shell: bash
+        run: |
+          set -euo pipefail
+          publisher="$RUNNER_TEMP/publish-auralis-0386.sh"
+          python3 - "$publisher" <<'PY'
+          import sys
+          from pathlib import Path
+
+          script = Path("qt-ui/packaging/publish-windows.sh").read_text()
+          changes = {
+              "for platform in debian13_amd64.deb macos-arm64.dmg macos-x86_64.dmg; do":
+                  "for platform in debian13_amd64.deb macos-x86_64.dmg; do",
+              "    fetch_desktop_artifact auralis-macos-arm64 macos-arm64.dmg\n": "",
+              'git show "$build_commit:docs/glass-releases/$tag.md" > "$notes"':
+                  'git show "$build_commit:docs/glass-releases/$tag.md" > "$notes"\n'
+                  'printf "%s\\n" "" "The macOS download is the Intel (x86_64) package." >> "$notes"',
+          }
+          for original, revised in changes.items():
+              if script.count(original) != 1:
+                  raise SystemExit("The verified source publisher does not match the handoff.")
+              script = script.replace(original, revised, 1)
+          Path(sys.argv[1]).write_text(script)
+          PY
+          GITHUB_RUN_ID="$SOURCE_RUN" GITHUB_SHA="$SOURCE_SHA" bash "$publisher"
