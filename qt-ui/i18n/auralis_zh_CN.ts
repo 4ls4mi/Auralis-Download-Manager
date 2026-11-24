@@ -396,6 +396,34 @@
             <source>Windows approval timed out. Check Chrome setup before trying again.</source>
             <translation>Windows 批准请求已超时。请先检查 Chrome 设置，再重试。</translation>
         </message>
+        <message>
+            <source>The browser policy changed while saving. Check browser setup and try again.</source>
+            <translation>保存时浏览器策略发生了变化。请检查浏览器设置后重试。</translation>
+        </message>
+        <message>
+            <source>Windows denied changes to an existing Chrome policy. Use Install manually, or ask your administrator to update Chrome’s policy.</source>
+            <translation>Windows 拒绝修改现有的 Chrome 策略。请选择“手动安装”，或请管理员更新 Chrome 策略。</translation>
+        </message>
+        <message>
+            <source>Auralis could not open Chrome’s Windows policy key for approval. Use Install manually, or ask your administrator to configure Chrome.</source>
+            <translation>Auralis 无法打开 Windows 注册表中的 Chrome 策略项以请求审批。请选择“手动安装”，或请管理员配置 Chrome。</translation>
+        </message>
+        <message>
+            <source>Windows approval requires an installed copy of Auralis and an administrator account that can approve for itself. Use Install manually, or ask your administrator to configure Chrome.</source>
+            <translation>要获得 Windows 审批，必须已安装 Auralis，并使用可在自身账户下批准此操作的管理员账户。请选择“手动安装”，或请管理员配置 Chrome。</translation>
+        </message>
+        <message>
+            <source>Windows denied permission to save automatic setup for this account. Use Install manually, or ask your administrator to configure the extension.</source>
+            <translation>Windows 拒绝为此账户保存自动安装设置。请选择“手动安装”，或请管理员配置该扩展程序。</translation>
+        </message>
+        <message>
+            <source>Could not save browser setup for this Windows account (Windows error %1).</source>
+            <translation>无法保存此 Windows 账户的浏览器设置（Windows 错误 %1）。</translation>
+        </message>
+        <message>
+            <source>Could not remove automatic browser setup for this Windows account (Windows error %1).</source>
+            <translation>无法移除此 Windows 账户的浏览器自动设置（Windows 错误 %1）。</translation>
+        </message>
     </context>
     <context>
         <name>BrowserSetupOptions</name>
@@ -574,6 +602,50 @@
         <message>
             <source>Opened the Auralis extension page.</source>
             <translation>已打开 Auralis 扩展页面。</translation>
+        </message>
+        <message>
+            <source>Remove Auralis from the Extensions page in %1 and confirm in the browser.</source>
+            <translation>请在 %1 的“扩展程序”页面移除 Auralis，并在浏览器中确认。</translation>
+        </message>
+        <message>
+            <source>Open the Extensions page in %1, remove Auralis, and confirm in the browser.</source>
+            <translation>请打开 %1 的“扩展程序”页面，移除 Auralis，然后在浏览器中确认。</translation>
+        </message>
+        <message>
+            <source>The Auralis extension is no longer detected in %1.</source>
+            <translation>在 %1 中已检测不到 Auralis 扩展程序。</translation>
+        </message>
+        <message>
+            <source>Auralis found no extension setup to reset in %1.</source>
+            <translation>Auralis 在 %1 中未找到可重置的扩展程序设置。</translation>
+        </message>
+        <message>
+            <source>Could not reset the Auralis extension setup.</source>
+            <translation>无法重置 Auralis 扩展程序设置。</translation>
+        </message>
+        <message>
+            <source>Resetting Auralis extension setup in %1…</source>
+            <translation>正在重置 %1 中的 Auralis 扩展程序设置…</translation>
+        </message>
+        <message>
+            <source>Waiting for %1 to confirm removal.</source>
+            <translation>正在等待 %1 确认移除。</translation>
+        </message>
+        <message>
+            <source>An installation request was saved for %1. Waiting for the browser to install the extension.</source>
+            <translation>已保存 %1 的安装请求，正在等待浏览器安装扩展程序。</translation>
+        </message>
+        <message>
+            <source>Reset extension setup</source>
+            <translation>重置扩展程序设置</translation>
+        </message>
+        <message>
+            <source>Reset Auralis extension setup for %1? Auralis will clear any automatic setup it created. If the extension is installed, remove it from the browser’s Extensions page and confirm in the browser.</source>
+            <translation>要重置 %1 的 Auralis 扩展程序设置吗？Auralis 会清除自己创建的自动安装设置。如果已安装该扩展程序，请在浏览器的“扩展程序”页面将其移除并确认。</translation>
+        </message>
+        <message>
+            <source>Reset setup</source>
+            <translation>重置设置</translation>
         </message>
     </context>
     <context>

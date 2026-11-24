@@ -384,6 +384,19 @@ QString chromeApprovalAccountSid()
     return sid;
 }
 
+enum class ChromeApprovalAvailability { Ready, PolicyKeyUnavailable, IneligibleApplicationOrAccount };
+
+ChromeApprovalAvailability chromeApprovalAvailability()
+{
+    const auto chromePath = policyPath(QStringLiteral("chrome"));
+    // The elevated helper opens an existing policy key without following registry links.
+    if (!existingReadablePolicyKey(HKEY_CURRENT_USER, chromePath, KEY_WOW64_64KEY).value_or(false))
+        return ChromeApprovalAvailability::PolicyKeyUnavailable;
+    if (!BrowserSetup::isInstalledApplication() || chromeApprovalAccountSid().isEmpty())
+        return ChromeApprovalAvailability::IneligibleApplicationOrAccount;
+    return ChromeApprovalAvailability::Ready;
+}
+
 QString chromeApprovalOwnershipKey()
 {
     return QStringLiteral("BrowserIntegration/approvedChromeExtension");
@@ -633,16 +646,31 @@ QString BrowserSetup::installPolicy(const QString &browserId, bool *windowsAppro
     auto settings = review.policy.settings;
     settings.insert(StoreId, auralisPolicy());
     const auto error = writeUserPolicy(path, review.policy, settings, false);
-#ifdef AURALIS_CHROME_APPROVAL_ENABLED
-    if (windowsApprovalRequired && error == ERROR_ACCESS_DENIED && !review.policy.exists
-        && browserId == QStringLiteral("chrome"))
-        *windowsApprovalRequired = chromeWindowsApprovalAvailable();
-#endif
     if (error == ERROR_RETRY)
         return QCoreApplication::translate("BrowserSetup", "The browser policy changed while saving. Check browser setup and try again.");
-    if (error == ERROR_ACCESS_DENIED)
+    if (error == ERROR_ACCESS_DENIED) {
+#ifdef AURALIS_CHROME_APPROVAL_ENABLED
+        if (browserId == QStringLiteral("chrome")) {
+            if (review.policy.exists)
+                return QCoreApplication::translate("BrowserSetup",
+                    "Windows denied changes to an existing Chrome policy. Use Install manually, or ask your administrator to update Chrome’s policy.");
+            switch (chromeApprovalAvailability()) {
+            case ChromeApprovalAvailability::PolicyKeyUnavailable:
+                return QCoreApplication::translate("BrowserSetup",
+                    "Auralis could not open Chrome’s Windows policy key for approval. Use Install manually, or ask your administrator to configure Chrome.");
+            case ChromeApprovalAvailability::IneligibleApplicationOrAccount:
+                return QCoreApplication::translate("BrowserSetup",
+                    "Windows approval requires an installed copy of Auralis and an administrator account that can approve for itself. Use Install manually, or ask your administrator to configure Chrome.");
+            case ChromeApprovalAvailability::Ready:
+                if (windowsApprovalRequired)
+                    *windowsApprovalRequired = true;
+                break;
+            }
+        }
+#endif
         return QCoreApplication::translate("BrowserSetup",
             "Windows denied permission to save automatic setup for this account. Use Install manually, or ask your administrator to configure the extension.");
+    }
     if (error != ERROR_SUCCESS)
         return QCoreApplication::translate("BrowserSetup",
             "Could not save browser setup for this Windows account (Windows error %1).").arg(error);
@@ -695,10 +723,7 @@ QString BrowserSetup::removePolicy(const QString &browserId, bool *windowsApprov
 bool BrowserSetup::chromeWindowsApprovalAvailable()
 {
 #ifdef AURALIS_CHROME_APPROVAL_ENABLED
-    const auto path = policyPath(QStringLiteral("chrome"));
-    // The elevated helper opens an existing policy key without following registry links.
-    return isInstalledApplication() && existingReadablePolicyKey(HKEY_CURRENT_USER, path, KEY_WOW64_64KEY).value_or(false)
-        && !chromeApprovalAccountSid().isEmpty();
+    return chromeApprovalAvailability() == ChromeApprovalAvailability::Ready;
 #else
     return false;
 #endif

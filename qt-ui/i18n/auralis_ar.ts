@@ -396,6 +396,34 @@
             <source>Windows approval timed out. Check Chrome setup before trying again.</source>
             <translation>انتهت مهلة طلب موافقة Windows. تحقّق من إعداد Chrome قبل إعادة المحاولة.</translation>
         </message>
+        <message>
+            <source>The browser policy changed while saving. Check browser setup and try again.</source>
+            <translation>تغيّرت سياسة المتصفح أثناء الحفظ. تحقّق من إعداد المتصفح ثم أعد المحاولة.</translation>
+        </message>
+        <message>
+            <source>Windows denied changes to an existing Chrome policy. Use Install manually, or ask your administrator to update Chrome’s policy.</source>
+            <translation>لم يسمح Windows بتعديل سياسة Chrome الحالية. اختر «التثبيت يدويًا» أو اطلب من مسؤول النظام تحديث سياسة Chrome.</translation>
+        </message>
+        <message>
+            <source>Auralis could not open Chrome’s Windows policy key for approval. Use Install manually, or ask your administrator to configure Chrome.</source>
+            <translation>تعذّر على Auralis فتح مفتاح سياسة Chrome في سجل Windows لطلب الموافقة. اختر «التثبيت يدويًا» أو اطلب من مسؤول النظام ضبط Chrome.</translation>
+        </message>
+        <message>
+            <source>Windows approval requires an installed copy of Auralis and an administrator account that can approve for itself. Use Install manually, or ask your administrator to configure Chrome.</source>
+            <translation>تتطلّب موافقة Windows نسخة مثبّتة من Auralis وحساب مسؤول يمكنه منح الموافقة من حسابه نفسه. اختر «التثبيت يدويًا» أو اطلب من مسؤول النظام ضبط Chrome.</translation>
+        </message>
+        <message>
+            <source>Windows denied permission to save automatic setup for this account. Use Install manually, or ask your administrator to configure the extension.</source>
+            <translation>لم يسمح Windows بحفظ الإعداد التلقائي لهذا الحساب. اختر «التثبيت يدويًا» أو اطلب من مسؤول النظام إعداد الإضافة.</translation>
+        </message>
+        <message>
+            <source>Could not save browser setup for this Windows account (Windows error %1).</source>
+            <translation>تعذّر حفظ إعداد المتصفح لحساب Windows هذا (خطأ Windows رقم %1).</translation>
+        </message>
+        <message>
+            <source>Could not remove automatic browser setup for this Windows account (Windows error %1).</source>
+            <translation>تعذّرت إزالة الإعداد التلقائي للمتصفح من حساب Windows هذا (خطأ Windows رقم %1).</translation>
+        </message>
     </context>
     <context>
         <name>BrowserSetupOptions</name>
@@ -574,6 +602,50 @@
         <message>
             <source>Opened the Auralis extension page.</source>
             <translation>تم فتح صفحة إضافة Auralis.</translation>
+        </message>
+        <message>
+            <source>Remove Auralis from the Extensions page in %1 and confirm in the browser.</source>
+            <translation>أزل Auralis من صفحة الإضافات في %1، ثم أكّد الإزالة في المتصفح.</translation>
+        </message>
+        <message>
+            <source>Open the Extensions page in %1, remove Auralis, and confirm in the browser.</source>
+            <translation>افتح صفحة الإضافات في %1، وأزل Auralis، ثم أكّد الإزالة في المتصفح.</translation>
+        </message>
+        <message>
+            <source>The Auralis extension is no longer detected in %1.</source>
+            <translation>لم يعد Auralis يرصد إضافته في %1.</translation>
+        </message>
+        <message>
+            <source>Auralis found no extension setup to reset in %1.</source>
+            <translation>لم يعثر Auralis في %1 على إعداد للإضافة يمكن إعادة ضبطه.</translation>
+        </message>
+        <message>
+            <source>Could not reset the Auralis extension setup.</source>
+            <translation>تعذّرت إعادة ضبط إعداد إضافة Auralis.</translation>
+        </message>
+        <message>
+            <source>Resetting Auralis extension setup in %1…</source>
+            <translation>جارٍ إعادة ضبط إعداد إضافة Auralis في %1…</translation>
+        </message>
+        <message>
+            <source>Waiting for %1 to confirm removal.</source>
+            <translation>في انتظار أن يؤكّد %1 الإزالة.</translation>
+        </message>
+        <message>
+            <source>An installation request was saved for %1. Waiting for the browser to install the extension.</source>
+            <translation>حُفظ طلب تثبيت لـ %1. في انتظار أن يثبّت المتصفح الإضافة.</translation>
+        </message>
+        <message>
+            <source>Reset extension setup</source>
+            <translation>إعادة ضبط إعداد الإضافة</translation>
+        </message>
+        <message>
+            <source>Reset Auralis extension setup for %1? Auralis will clear any automatic setup it created. If the extension is installed, remove it from the browser’s Extensions page and confirm in the browser.</source>
+            <translation>هل تريد إعادة ضبط إعداد إضافة Auralis في %1؟ سيمحو Auralis أي إعداد تلقائي أنشأه. إذا كانت الإضافة مثبّتة، فأزلها من صفحة الإضافات وأكّد الإزالة في المتصفح.</translation>
+        </message>
+        <message>
+            <source>Reset setup</source>
+            <translation>إعادة ضبط الإعداد</translation>
         </message>
     </context>
     <context>

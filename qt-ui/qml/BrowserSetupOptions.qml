@@ -21,15 +21,16 @@ ColumnLayout {
     property string removalBrowserId: ""
     property string removalBrowserName: ""
     property bool removalForReset: false
+    property var resetRemoval: null
     property string installDetails: ""
     property bool advancedOpen: false
     property var attempts: ({})
     readonly property var colors: MaterialTheme.palette
     readonly property bool acting: activeAction.length > 0
     readonly property bool hasStore: Boolean(!problem && status?.browserSupported && status?.storeUrl)
-    readonly property bool installed: Boolean(status?.connectedRecently || status?.extensionPresent)
+    readonly property bool installed: status?.extensionDiscovery !== "missing"
+        && Boolean(status?.connectedRecently || status?.extensionPresent)
     readonly property bool needsSetup: hasStore && !installed && !status?.policyInstalled
-    readonly property bool edgeStoreSetup: hasStore && !installed && status?.browserId === "edge"
     readonly property bool extensionMissing: !installed && status?.extensionDiscovery === "missing"
     readonly property bool supportedBrowser: status?.browserId === "chrome" || status?.browserId === "edge"
     readonly property bool hostNeedsAttention: Boolean(!problem && status?.browserSupported && supportedBrowser
@@ -41,7 +42,7 @@ ColumnLayout {
         && !status?.browserPreviouslyConnected
     readonly property bool canUndo: showManualTools && !problem && supportedBrowser && Boolean(status?.policyRemovable)
     readonly property bool canReset: showManualTools && hasStore && supportedBrowser
-    readonly property bool canConfirmRemoval: canUndo && (!removalForReset || extensionMissing)
+    readonly property bool canConfirmRemoval: removalForReset ? canReset : canUndo
     readonly property var attempt: attempts[status?.browserId]
     readonly property bool pending: !installed && attempt?.state === "pending"
     readonly property bool automaticBlocked: needsSetup && supportedBrowser && !automaticAvailable
@@ -60,17 +61,28 @@ ColumnLayout {
         return hostNeedsAttention && (installed || status?.policyInstalled) ? status.nativeHostProblem : ""
     }
     readonly property bool confirming: Boolean(removalBrowserId)
+    readonly property string feedbackText: {
+        if (!resetRemoval)
+            return feedback
+        const browser = status?.browser || ""
+        const instructions = resetRemoval.browserOpened
+            ? qsTr("Remove Auralis from the Extensions page in %1 and confirm in the browser.").arg(browser)
+            : qsTr("Open the Extensions page in %1, remove Auralis, and confirm in the browser.").arg(browser)
+        if (resetRemoval.setupRemoved)
+            return qsTr("Automatic setup was removed. Reopen your browser to apply the change.") + " " + instructions
+        return instructions
+    }
 
     signal installAccepted()
 
     spacing: 8
 
-    function recordAttempt(browserId, state, detail = "", browserOpened = false) {
+    function recordAttempt(browserId, state, detail = "") {
         const expires = state === "pending" ? Date.now() + verificationTimeout : 0
-        attempts = Object.assign({}, attempts, {[browserId]: state ? {state, expires, detail, browserOpened} : null})
+        attempts = Object.assign({}, attempts, {[browserId]: state ? {state, expires, detail} : null})
     }
 
-    function refresh(reportReset = false) {
+    function refresh(afterCheck = null) {
         if (!platformSupported) {
             checked = true
             return
@@ -87,6 +99,7 @@ ColumnLayout {
                     advancedOpen = false
                     feedback = ""
                     feedbackFailed = false
+                    resetRemoval = null
                 }
                 status = value
                 problem = ""
@@ -107,18 +120,22 @@ ColumnLayout {
                     else if (!value.policyInstalled)
                         recordAttempt(browserId, "failed", qsTr("Auralis could no longer find the saved automatic setup."))
                     else if (Date.now() >= previous.expires)
-                        recordAttempt(browserId, "timeout", "", previous.browserOpened)
-                } else if (browserId && value.policyInstalled && !previous && !value.extensionPreviouslyConnected
+                        recordAttempt(browserId, "timeout")
+                } else if (browserId && value.policyInstalled && value.policyRemovable && !previous && !value.extensionPreviouslyConnected
                     && !value.storePreviouslyConnected) {
                     recordAttempt(browserId, "pending")
                 }
-                if (reportReset)
-                    feedback = qsTr("Browser setup checked again.")
+                if (resetRemoval && extensionMissing) {
+                    resetRemoval = null
+                    feedback = qsTr("The Auralis extension is no longer detected in %1.").arg(value.browser)
+                }
             } else {
                 problem = qsTr("Could not check your browser setup.")
             }
             checking = false
             checked = true
+            if (afterCheck && !error && value)
+                afterCheck()
         })
     }
 
@@ -136,7 +153,7 @@ ColumnLayout {
     }
 
     function offerRemoval(forReset = false) {
-        if (!canUndo || acting || checking || (forReset && !extensionMissing))
+        if (acting || checking || !(forReset ? canReset : canUndo))
             return
         cancelConfirmation()
         removalForReset = forReset
@@ -145,34 +162,38 @@ ColumnLayout {
     }
 
     function resetSetup() {
-        if (!canReset || acting || checking)
+        if (!canReset || acting || checking || confirming)
             return
-        if (canUndo && extensionMissing) {
-            offerRemoval(true)
-            return
-        }
-        cancelConfirmation()
-        recordAttempt(status.browserId, "")
-        feedback = ""
-        feedbackFailed = false
-        problem = ""
-        checked = false
-        refresh(true)
+        const browserId = status.browserId
+        refresh(function() {
+            if (!visible || !canReset || status?.browserId !== browserId)
+                return
+            if (installed || status.policyRemovable) {
+                offerRemoval(true)
+            } else {
+                recordAttempt(browserId, "")
+                resetRemoval = null
+                feedbackFailed = false
+                feedback = extensionMissing
+                    ? qsTr("Auralis found no extension setup to reset in %1.").arg(status.browser)
+                    : qsTr("Browser setup checked again.")
+            }
+        })
     }
 
-    function perform(action, browserId, forReset = false) {
+    function perform(action, browserId) {
         if (acting || checking || !browserId || status?.browserId !== browserId)
             return
         const install = action === "installBrowserExtensionPolicy"
         const undo = action === "removeBrowserExtensionPolicy"
+        const reset = action === "resetBrowserExtensionSetup"
         const openStore = action === "openBrowserExtensionStore"
         const repair = action === "registerBrowserHost"
         activeAction = action
         feedback = ""
         feedbackFailed = false
+        resetRemoval = null
         const command = {local: action, expectedBrowser: browserId}
-        if (undo && forReset)
-            command.requireUnverifiedExtension = true
         engine.request(command, function(value, error) {
             if (error || !value?.ok) {
                 if (install) {
@@ -180,19 +201,29 @@ ColumnLayout {
                 } else {
                     feedbackFailed = true
                     feedback = undo ? (error || value?.message || qsTr("Could not undo the automatic extension setup."))
+                        : reset ? (error || value?.message || qsTr("Could not reset the Auralis extension setup."))
                         : repair ? qsTr("Could not repair the browser connection.")
                         : qsTr("Could not open your browser.")
                 }
             } else if (install) {
-                recordAttempt(browserId, "pending", "", Boolean(value.browserOpened))
+                recordAttempt(browserId, "pending")
             } else if (openStore) {
                 feedback = installed ? qsTr("Opened the Auralis extension page.")
+                    : browserId === "edge" ? qsTr("Open the Chrome Web Store in Edge and follow its prompts. If Edge asks, allow extensions from other stores, then add Auralis.")
                     : qsTr("Follow the browser prompts to add the extension, then open the Auralis toolbar icon to verify the connection.")
                 if (value.nativeHostRegistered === false)
                     feedback += " " + qsTr("If it cannot connect, return here to repair the connection.")
             } else if (undo) {
                 recordAttempt(browserId, "")
                 feedback = qsTr("Automatic setup was removed. Reopen your browser to apply the change.")
+            } else if (reset) {
+                recordAttempt(browserId, "")
+                if (value.removalNeeded)
+                    resetRemoval = {browserOpened: Boolean(value.browserOpened), setupRemoved: Boolean(value.setupRemoved)}
+                else if (value.setupRemoved)
+                    feedback = qsTr("Automatic setup was removed. Reopen your browser to apply the change.")
+                else
+                    feedback = qsTr("Browser setup checked again.")
             } else if (repair) {
                 feedback = qsTr("Browser connection repaired. Reopen your browser and open the Auralis toolbar icon.")
             }
@@ -232,7 +263,7 @@ ColumnLayout {
         wrapMode: Text.WordWrap
         textFormat: Text.PlainText
         color: root.problem || root.attemptNeedsAttention || root.automaticBlocked ? root.colors.destructive
-            : root.status?.connectedRecently ? root.colors.positive : root.colors.muted
+            : !root.resetRemoval && root.installed && root.status?.connectedRecently ? root.colors.positive : root.colors.muted
         text: {
             const browser = root.status?.browser
             if (!root.platformSupported)
@@ -245,23 +276,22 @@ ColumnLayout {
                 return qsTr("Auralis could not detect your default browser.")
             if (!root.status?.browserSupported)
                 return qsTr("Guided extension setup is unavailable for your default browser, %1.").arg(browser)
-            if (root.status?.connectedRecently)
+            if (root.activeAction === "resetBrowserExtensionSetup")
+                return qsTr("Resetting Auralis extension setup in %1…").arg(browser)
+            if (root.resetRemoval)
+                return qsTr("Waiting for %1 to confirm removal.").arg(browser)
+            if (root.installed && root.status?.connectedRecently)
                 return qsTr("Verified the Auralis extension connection in %1.").arg(browser)
-            if (root.status?.extensionPresent && root.needsHostRepair)
+            if (root.installed && root.status?.extensionPresent && root.needsHostRepair)
                 return qsTr("Auralis found the extension in %1. Repair the browser connection, then open the Auralis toolbar icon to verify it.").arg(browser)
-            if (root.status?.extensionPresent && root.hostNeedsAttention)
+            if (root.installed && root.status?.extensionPresent && root.hostNeedsAttention)
                 return qsTr("Auralis found the extension in %1, but its browser connection is unavailable.").arg(browser)
-            if (root.status?.extensionPresent)
+            if (root.installed)
                 return qsTr("Auralis found the extension in %1. Open its toolbar icon to verify the connection.").arg(browser)
             if (root.activeAction === "installBrowserExtensionPolicy")
                 return qsTr("Starting extension installation in %1…").arg(browser)
-            if (root.pending && root.status?.browserId === "chrome") {
-                return root.attempt.browserOpened
-                    ? qsTr("Setup was saved and Chrome opened. Waiting to detect the Auralis extension.")
-                    : qsTr("Setup was saved. Open Google Chrome to finish installing the Auralis extension.")
-            }
             if (root.pending)
-                return qsTr("Close all %1 windows, then reopen the browser to finish installing. Open the Auralis toolbar icon to verify the connection.").arg(browser)
+                return qsTr("An installation request was saved for %1. Waiting for the browser to install the extension.").arg(browser)
             if (root.attemptNeedsAttention) {
                 if (root.attemptError)
                     return root.attemptError
@@ -279,15 +309,6 @@ ColumnLayout {
                 return qsTr("%1 has connected before. Open the Auralis toolbar icon to verify the extension.").arg(browser)
             return qsTr("Install the extension in %1 to send browser downloads to Auralis.").arg(browser)
         }
-    }
-
-    Label {
-        Layout.fillWidth: true
-        visible: root.edgeStoreSetup && !root.confirming
-        text: qsTr("Open the Chrome Web Store in Edge and follow its prompts. If Edge asks, allow extensions from other stores, then add Auralis.")
-        textFormat: Text.PlainText
-        wrapMode: Text.WordWrap
-        color: root.colors.muted
     }
 
     Label {
@@ -335,7 +356,7 @@ ColumnLayout {
 
         GlassButton {
             objectName: "resetBrowserSetup"
-            text: qsTr("Reset setup status")
+            text: qsTr("Reset extension setup")
             visible: root.canReset && !root.confirming
             enabled: !root.acting && !root.checking
             onClicked: root.resetSetup()
@@ -386,7 +407,9 @@ ColumnLayout {
             color: root.colors.ink
             wrapMode: Text.WordWrap
             textFormat: Text.PlainText
-            text: qsTr("Remove the Auralis extension setup setting for %1 from your Windows account? Reopen the browser to apply the change.").arg(root.removalBrowserName)
+            text: root.removalForReset
+                ? qsTr("Reset Auralis extension setup for %1? Auralis will clear any automatic setup it created. If the extension is installed, remove it from the browser’s Extensions page and confirm in the browser.").arg(root.removalBrowserName)
+                : qsTr("Remove the Auralis extension setup setting for %1 from your Windows account? Reopen the browser to apply the change.").arg(root.removalBrowserName)
         }
 
         Flow {
@@ -394,7 +417,7 @@ ColumnLayout {
             spacing: 8
             GlassButton {
                 objectName: "confirmBrowserPolicyRemoval"
-                text: qsTr("Undo setup")
+                text: root.removalForReset ? qsTr("Reset setup") : qsTr("Undo setup")
                 visible: Boolean(root.removalBrowserId)
                 enabled: root.canConfirmRemoval && !root.acting && !root.checking && root.removalBrowserId === root.status?.browserId
                 accent: root.colors.destructive
@@ -402,7 +425,7 @@ ColumnLayout {
                     const browserId = root.removalBrowserId
                     const forReset = root.removalForReset
                     root.cancelConfirmation()
-                    root.perform("removeBrowserExtensionPolicy", browserId, forReset)
+                    root.perform(forReset ? "resetBrowserExtensionSetup" : "removeBrowserExtensionPolicy", browserId)
                 }
             }
             GlassButton {
@@ -415,8 +438,8 @@ ColumnLayout {
 
     Label {
         Layout.fillWidth: true
-        visible: Boolean(root.feedback)
-        text: root.feedback
+        visible: Boolean(root.feedbackText)
+        text: root.feedbackText
         wrapMode: Text.WordWrap
         textFormat: Text.PlainText
         color: root.feedbackFailed ? root.colors.destructive : root.colors.muted

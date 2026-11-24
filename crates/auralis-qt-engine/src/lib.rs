@@ -67,8 +67,8 @@ pub unsafe extern "C" fn auralis_engine_request(input: *const u8, length: usize)
                 let Some(browser) = StoreBrowser::from_windows_executable(executable) else {
                     return Ok(json!({"browserSupported": false}));
                 };
-                let status = mdm_ipc::extension::browser_store_status(browser);
                 let presence = browser.windows_extension_presence(executable);
+                let status = mdm_ipc::extension::browser_store_status(browser, presence);
                 return Ok(json!({
                     "browserId": browser.id(),
                     "browser": browser.name(),

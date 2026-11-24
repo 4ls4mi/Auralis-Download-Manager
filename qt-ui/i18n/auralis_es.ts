@@ -396,6 +396,34 @@
             <source>Windows approval timed out. Check Chrome setup before trying again.</source>
             <translation>Se agotó el tiempo de espera de la aprobación de Windows. Comprueba la configuración de Chrome antes de volver a intentarlo.</translation>
         </message>
+        <message>
+            <source>The browser policy changed while saving. Check browser setup and try again.</source>
+            <translation>La política del navegador cambió durante el guardado. Comprueba la configuración del navegador y vuelve a intentarlo.</translation>
+        </message>
+        <message>
+            <source>Windows denied changes to an existing Chrome policy. Use Install manually, or ask your administrator to update Chrome’s policy.</source>
+            <translation>Windows impidió modificar una política existente de Chrome. Selecciona «Instalar manualmente» o pide a tu administrador que actualice la política de Chrome.</translation>
+        </message>
+        <message>
+            <source>Auralis could not open Chrome’s Windows policy key for approval. Use Install manually, or ask your administrator to configure Chrome.</source>
+            <translation>Auralis no pudo abrir la clave de la política de Chrome en el Registro de Windows para solicitar la aprobación. Selecciona «Instalar manualmente» o pide a tu administrador que configure Chrome.</translation>
+        </message>
+        <message>
+            <source>Windows approval requires an installed copy of Auralis and an administrator account that can approve for itself. Use Install manually, or ask your administrator to configure Chrome.</source>
+            <translation>La aprobación de Windows requiere una copia instalada de Auralis y una cuenta de administrador que pueda conceder la aprobación desde su propia sesión. Selecciona «Instalar manualmente» o pide a tu administrador que configure Chrome.</translation>
+        </message>
+        <message>
+            <source>Windows denied permission to save automatic setup for this account. Use Install manually, or ask your administrator to configure the extension.</source>
+            <translation>Windows denegó el permiso para guardar la configuración automática de esta cuenta. Selecciona «Instalar manualmente» o pide a tu administrador que configure la extensión.</translation>
+        </message>
+        <message>
+            <source>Could not save browser setup for this Windows account (Windows error %1).</source>
+            <translation>No se pudo guardar la configuración del navegador para esta cuenta de Windows (error de Windows %1).</translation>
+        </message>
+        <message>
+            <source>Could not remove automatic browser setup for this Windows account (Windows error %1).</source>
+            <translation>No se pudo eliminar la configuración automática del navegador de esta cuenta de Windows (error de Windows %1).</translation>
+        </message>
     </context>
     <context>
         <name>BrowserSetupOptions</name>
@@ -574,6 +602,50 @@
         <message>
             <source>Opened the Auralis extension page.</source>
             <translation>Se abrió la página de la extensión de Auralis.</translation>
+        </message>
+        <message>
+            <source>Remove Auralis from the Extensions page in %1 and confirm in the browser.</source>
+            <translation>Elimina Auralis en la página Extensiones de %1 y confirma la eliminación en el navegador.</translation>
+        </message>
+        <message>
+            <source>Open the Extensions page in %1, remove Auralis, and confirm in the browser.</source>
+            <translation>Abre la página Extensiones de %1, elimina Auralis y confirma la eliminación en el navegador.</translation>
+        </message>
+        <message>
+            <source>The Auralis extension is no longer detected in %1.</source>
+            <translation>Ya no se detecta la extensión de Auralis en %1.</translation>
+        </message>
+        <message>
+            <source>Auralis found no extension setup to reset in %1.</source>
+            <translation>Auralis no encontró ninguna configuración de la extensión que restablecer en %1.</translation>
+        </message>
+        <message>
+            <source>Could not reset the Auralis extension setup.</source>
+            <translation>No se pudo restablecer la configuración de la extensión de Auralis.</translation>
+        </message>
+        <message>
+            <source>Resetting Auralis extension setup in %1…</source>
+            <translation>Restableciendo la configuración de la extensión de Auralis en %1…</translation>
+        </message>
+        <message>
+            <source>Waiting for %1 to confirm removal.</source>
+            <translation>Esperando a que %1 confirme la eliminación.</translation>
+        </message>
+        <message>
+            <source>An installation request was saved for %1. Waiting for the browser to install the extension.</source>
+            <translation>Se guardó una solicitud de instalación para %1. Esperando a que el navegador instale la extensión.</translation>
+        </message>
+        <message>
+            <source>Reset extension setup</source>
+            <translation>Restablecer la configuración de la extensión</translation>
+        </message>
+        <message>
+            <source>Reset Auralis extension setup for %1? Auralis will clear any automatic setup it created. If the extension is installed, remove it from the browser’s Extensions page and confirm in the browser.</source>
+            <translation>¿Quieres restablecer la configuración de la extensión de Auralis para %1? Auralis borrará cualquier configuración automática que haya creado. Si la extensión está instalada, elimínala en la página Extensiones y confirma la eliminación en el navegador.</translation>
+        </message>
+        <message>
+            <source>Reset setup</source>
+            <translation>Restablecer configuración</translation>
         </message>
     </context>
     <context>

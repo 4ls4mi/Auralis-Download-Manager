@@ -2,6 +2,8 @@
 //! host (which serves it and notes each browser that starts it) and the app (which offers to
 //! install it until one has).
 
+use serde::Deserialize;
+use serde::de::{IgnoredAny, MapAccess, Visitor, value::MapAccessDeserializer};
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
@@ -90,28 +92,50 @@ pub enum StoreBrowser {
     Edge,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum BrowserExtensionPresence {
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum BrowserExtensionPresence {
+    #[default]
     Unverified,
     Missing,
-    Store,
-    Unpacked,
+    Present,
 }
 
-impl BrowserExtensionPresence {
+/// Browser records are checked independently for the Store and local development IDs.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct BrowserExtensionEvidence {
+    store: BrowserExtensionPresence,
+    unpacked: BrowserExtensionPresence,
+}
+
+impl BrowserExtensionEvidence {
     pub fn source(self) -> Option<&'static str> {
-        match self {
-            Self::Store => Some("store"),
-            Self::Unpacked => Some("unpacked"),
-            Self::Unverified | Self::Missing => None,
+        use BrowserExtensionPresence::Present;
+        match (self.store, self.unpacked) {
+            (Present, _) => Some("store"),
+            (_, Present) => Some("unpacked"),
+            _ => None,
         }
     }
 
     pub fn discovery(self) -> &'static str {
-        match self {
-            Self::Unverified => "unverified",
-            Self::Missing => "missing",
-            Self::Store | Self::Unpacked => "present",
+        use BrowserExtensionPresence::{Missing, Present};
+        match (self.store, self.unpacked) {
+            (Present, _) | (_, Present) => "present",
+            (Missing, Missing) => "missing",
+            _ => "unverified",
+        }
+    }
+
+    fn merge(self, other: Self) -> Self {
+        use BrowserExtensionPresence::{Missing, Present, Unverified};
+        let merge = |a, b| match (a, b) {
+            (Present, _) | (_, Present) => Present,
+            (Missing, Missing) => Missing,
+            _ => Unverified,
+        };
+        Self {
+            store: merge(self.store, other.store),
+            unpacked: merge(self.unpacked, other.unpacked),
         }
     }
 }
@@ -167,16 +191,16 @@ impl StoreBrowser {
     }
 
     /// Discover a project copy in the default data folder for this Windows channel.
-    /// A manifest alone does not mean the extension is enabled or connected.
-    pub fn windows_extension_presence(self, program: &str) -> BrowserExtensionPresence {
+    /// A remaining manifest can belong to an extension the browser has already removed.
+    pub fn windows_extension_presence(self, program: &str) -> BrowserExtensionEvidence {
         let Some(root) = std::env::var_os("LOCALAPPDATA").map(std::path::PathBuf::from) else {
-            return BrowserExtensionPresence::Unverified;
+            return BrowserExtensionEvidence::default();
         };
         if !root.is_absolute() || Self::from_windows_executable(program) != Some(self) {
-            return BrowserExtensionPresence::Unverified;
+            return BrowserExtensionEvidence::default();
         }
         let Some(channel) = program.rsplit(['\\', '/']).nth(2) else {
-            return BrowserExtensionPresence::Unverified;
+            return BrowserExtensionEvidence::default();
         };
         let vendor = match self {
             Self::Chrome => "Google",
@@ -185,19 +209,18 @@ impl StoreBrowser {
         Self::extension_presence_in(&root.join(vendor).join(channel).join("User Data"))
     }
 
-    fn extension_presence_in(root: &Path) -> BrowserExtensionPresence {
-        use BrowserExtensionPresence::*;
+    fn extension_presence_in(root: &Path) -> BrowserExtensionEvidence {
         if !root.ancestors().all(plain_directory) {
-            return Unverified;
+            return BrowserExtensionEvidence::default();
         }
         let Ok(profiles) = std::fs::read_dir(root) else {
-            return Unverified;
+            return BrowserExtensionEvidence::default();
         };
-        let mut checked_profile = false;
+        let mut budget = 16 * 1024 * 1024;
+        let mut found: Option<BrowserExtensionEvidence> = None;
         let mut uncertain = false;
-        let mut unpacked = false;
         for (index, profile) in profiles.enumerate() {
-            if index >= 512 {
+            if index >= 512 || budget == 0 {
                 uncertain = true;
                 break;
             }
@@ -214,45 +237,183 @@ impl StoreBrowser {
             {
                 continue;
             }
-            let profile = profile.path();
-            let extensions = profile.join("Extensions");
-            if !plain_directory(&profile) {
-                uncertain = true;
-                continue;
-            }
-            match optional_directory(&extensions) {
-                Ok(true) => {}
-                Ok(false) if plain_file(&profile.join("Preferences")) => {
-                    // Inspect only the existence of the profile marker, never its contents.
-                    checked_profile = true;
-                    continue;
-                }
-                Ok(false) | Err(()) => {
-                    uncertain = true;
-                    continue;
-                }
-            }
-            checked_profile = true;
-            if let Some(id) = store_id() {
-                match installed_manifest(&extensions.join(id)) {
-                    Ok(true) => return Store,
-                    Ok(false) => {}
-                    Err(()) => uncertain = true,
-                }
-            }
-            match installed_manifest(&extensions.join(AURALIS_UNPACKED_ID)) {
-                Ok(found) => unpacked |= found,
-                Err(()) => uncertain = true,
-            }
+            let evidence = profile_extension_evidence(&profile.path(), &mut budget);
+            found = Some(found.map_or(evidence, |known| known.merge(evidence)));
         }
-        if unpacked {
-            Unpacked
-        } else if checked_profile && !uncertain {
-            Missing
+        let evidence = found.unwrap_or_default();
+        if uncertain {
+            evidence.merge(BrowserExtensionEvidence::default())
         } else {
-            Unverified
+            evidence
         }
     }
+}
+
+#[derive(Default, Deserialize)]
+struct ProfilePreferences {
+    #[serde(default)]
+    extensions: PreferenceObject<ExtensionPreferences>,
+}
+
+#[derive(Default, Deserialize)]
+struct ExtensionPreferences {
+    #[serde(default)]
+    settings: AuralisPreferences,
+}
+
+#[derive(Default)]
+struct AuralisPreferences {
+    store: Option<RegisteredExtension>,
+    unpacked: Option<RegisteredExtension>,
+}
+
+#[derive(Deserialize)]
+struct RegisteredExtension {
+    location: Option<u32>,
+    path: Option<String>,
+    state: Option<u32>,
+}
+
+/// Serde also accepts a positional array for a derived struct. A browser
+/// preference file must instead contain dictionaries to support absence checks.
+#[derive(Default)]
+struct PreferenceObject<T>(T);
+
+impl<'de, T: Deserialize<'de>> Deserialize<'de> for PreferenceObject<T> {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Dictionary<T>(std::marker::PhantomData<T>);
+        impl<'de, T: Deserialize<'de>> Visitor<'de> for Dictionary<T> {
+            type Value = PreferenceObject<T>;
+
+            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("a browser preference dictionary")
+            }
+
+            fn visit_map<M: MapAccess<'de>>(self, map: M) -> Result<Self::Value, M::Error> {
+                T::deserialize(MapAccessDeserializer::new(map)).map(PreferenceObject)
+            }
+        }
+        deserializer.deserialize_map(Dictionary(std::marker::PhantomData))
+    }
+}
+
+impl<'de> Deserialize<'de> for AuralisPreferences {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct SelectedIds;
+        impl<'de> Visitor<'de> for SelectedIds {
+            type Value = AuralisPreferences;
+
+            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("a browser extension settings dictionary")
+            }
+
+            fn visit_map<M: MapAccess<'de>>(self, mut map: M) -> Result<Self::Value, M::Error> {
+                let mut result = AuralisPreferences::default();
+                while let Some(id) = map.next_key::<String>()? {
+                    if store_id() == Some(id.as_str()) {
+                        result.store =
+                            Some(map.next_value::<PreferenceObject<RegisteredExtension>>()?.0);
+                    } else if id == AURALIS_UNPACKED_ID {
+                        result.unpacked =
+                            Some(map.next_value::<PreferenceObject<RegisteredExtension>>()?.0);
+                    } else {
+                        map.next_value::<IgnoredAny>()?;
+                    }
+                }
+                Ok(result)
+            }
+        }
+        deserializer.deserialize_map(SelectedIds)
+    }
+}
+
+fn profile_extension_evidence(profile: &Path, budget: &mut usize) -> BrowserExtensionEvidence {
+    use BrowserExtensionPresence::{Missing, Present, Unverified};
+    if !plain_directory(profile) {
+        return BrowserExtensionEvidence::default();
+    }
+    // Chromium stores ordinary and protected preferences separately. Never keep
+    // unrelated preferences or read a path taken from either document.
+    let snapshots = ["Preferences", "Secure Preferences"]
+        .map(|name| read_profile_preferences(&profile.join(name), budget));
+    if !snapshots
+        .iter()
+        .any(|snapshot| matches!(snapshot, Ok(Some(_))))
+    {
+        return BrowserExtensionEvidence::default();
+    }
+    let presence = |select: fn(&AuralisPreferences) -> &Option<RegisteredExtension>| {
+        let mut state = Missing;
+        for snapshot in &snapshots {
+            match snapshot {
+                Ok(Some(prefs)) => match select(&prefs.extensions.0.settings) {
+                    // Older Chromium releases persisted state 2 for removed external copies.
+                    Some(record) if record.state == Some(2) => {}
+                    Some(record)
+                        if record.location.is_some_and(|n| (1..=10).contains(&n))
+                            && record.path.as_ref().is_some_and(|path| !path.is_empty()) =>
+                    {
+                        return Present;
+                    }
+                    Some(_) => state = Unverified,
+                    None => {}
+                },
+                Ok(None) => {}
+                Err(()) => state = Unverified,
+            }
+        }
+        state
+    };
+    let mut store = presence(|prefs| &prefs.store);
+    if store == Present {
+        let extensions = profile.join("Extensions");
+        if !plain_directory(&extensions)
+            || !store_id().is_some_and(|id| installed_manifest(&extensions.join(id)) == Ok(true))
+        {
+            store = Unverified;
+        }
+    }
+    BrowserExtensionEvidence {
+        store,
+        unpacked: presence(|prefs| &prefs.unpacked),
+    }
+}
+
+fn read_profile_preferences(
+    path: &Path,
+    budget: &mut usize,
+) -> Result<Option<ProfilePreferences>, ()> {
+    let metadata = match std::fs::symlink_metadata(path) {
+        Ok(metadata) if ordinary_entry(&metadata) && metadata.is_file() => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        _ => return Err(()),
+    };
+    let limit = (*budget).min(4 * 1024 * 1024);
+    if limit == 0 || metadata.len() > limit as u64 {
+        return Err(());
+    }
+    let mut options = File::options();
+    options.read(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        const OPEN_REPARSE_POINT: u32 = 0x00200000;
+        options.custom_flags(OPEN_REPARSE_POINT);
+    }
+    let file = options.open(path).map_err(|_| ())?;
+    let opened = file.metadata().map_err(|_| ())?;
+    if !ordinary_entry(&opened) || !opened.is_file() || opened.len() > limit as u64 {
+        return Err(());
+    }
+    let mut bytes = Vec::with_capacity(opened.len() as usize);
+    let read = file.take(limit as u64 + 1).read_to_end(&mut bytes);
+    *budget = budget.saturating_sub(bytes.len());
+    if read.is_err() || bytes.len() > limit {
+        return Err(());
+    }
+    serde_json::from_slice::<PreferenceObject<ProfilePreferences>>(&bytes)
+        .map(|PreferenceObject(preferences)| Some(preferences))
+        .map_err(|_| ())
 }
 
 fn ordinary_entry(metadata: &std::fs::Metadata) -> bool {
@@ -428,13 +589,20 @@ pub struct BrowserStoreStatus {
     pub browser_previously_connected: bool,
 }
 
-pub fn browser_store_status(browser: StoreBrowser) -> BrowserStoreStatus {
+pub fn browser_store_status(
+    browser: StoreBrowser,
+    evidence: BrowserExtensionEvidence,
+) -> BrowserStoreStatus {
     crate::data_dir().map_or_else(BrowserStoreStatus::default, |dir| {
-        browser_store_status_in(&dir, browser)
+        browser_store_status_in(&dir, browser, evidence)
     })
 }
 
-fn browser_store_status_in(dir: &Path, browser: StoreBrowser) -> BrowserStoreStatus {
+fn browser_store_status_in(
+    dir: &Path,
+    browser: StoreBrowser,
+    evidence: BrowserExtensionEvidence,
+) -> BrowserStoreStatus {
     // The native host replaces this record atomically. Read its timestamp and both values
     // through one open handle so another browser cannot replace only half of the result.
     let handshake = |marker: &str, expected_id: &str| {
@@ -446,12 +614,17 @@ fn browser_store_status_in(dir: &Path, browser: StoreBrowser) -> BrowserStoreSta
     };
     let store_handshake = store_id().and_then(|id| handshake(browser.marker(), id));
     let unpacked_handshake = handshake(browser.unpacked_marker(), AURALIS_UNPACKED_ID);
+    // A recent handshake identifies the caller at that time. A current
+    // uninstall supersedes that cached signal for that extension alone.
     let connected_source = [
-        store_handshake.map(|time| (time, "store")),
-        unpacked_handshake.map(|time| (time, "unpacked")),
+        (evidence.store, store_handshake, "store"),
+        (evidence.unpacked, unpacked_handshake, "unpacked"),
     ]
     .into_iter()
-    .flatten()
+    .filter_map(|(presence, time, source)| {
+        time.filter(|_| presence != BrowserExtensionPresence::Missing)
+            .map(|time| (time, source))
+    })
     .filter(|(time, _)| time.elapsed().is_ok_and(|age| age < HANDSHAKE_LIFETIME))
     .max_by_key(|(time, _)| *time)
     .map(|(_, source)| source);
@@ -530,7 +703,13 @@ mod tests {
         let profile = profile.path();
         let handshake = profile.join(StoreBrowser::Chrome.marker());
         let history = profile.join(SEEN);
-        let status = || browser_store_status_in(profile, StoreBrowser::Chrome);
+        let status = || {
+            browser_store_status_in(
+                profile,
+                StoreBrowser::Chrome,
+                BrowserExtensionEvidence::default(),
+            )
+        };
         assert_eq!(status(), BrowserStoreStatus::default());
         std::fs::write(&history, "Google Chrome\t0.1.10\n").unwrap();
         std::fs::write(
@@ -579,7 +758,14 @@ mod tests {
         )
         .unwrap();
         assert!(!status().connected_recently);
-        assert!(browser_store_status_in(profile, StoreBrowser::Edge).connected_recently);
+        assert!(
+            browser_store_status_in(
+                profile,
+                StoreBrowser::Edge,
+                BrowserExtensionEvidence::default()
+            )
+            .connected_recently
+        );
     }
 
     #[test]
@@ -591,7 +777,13 @@ mod tests {
         let profile = tempfile::tempdir().unwrap();
         let profile = profile.path();
         let handshake = profile.join(StoreBrowser::Edge.unpacked_marker());
-        let status = || browser_store_status_in(profile, StoreBrowser::Edge);
+        let status = || {
+            browser_store_status_in(
+                profile,
+                StoreBrowser::Edge,
+                BrowserExtensionEvidence::default(),
+            )
+        };
         for record in [
             format!("Microsoft Edge\t{LEGACY_STORE_ID}"),
             format!("Microsoft Edge\t{UNPACKED_ID}"),
@@ -612,7 +804,11 @@ mod tests {
             }
         );
         assert_eq!(
-            browser_store_status_in(profile, StoreBrowser::Chrome),
+            browser_store_status_in(
+                profile,
+                StoreBrowser::Chrome,
+                BrowserExtensionEvidence::default()
+            ),
             BrowserStoreStatus::default()
         );
     }
@@ -641,38 +837,156 @@ mod tests {
         );
     }
 
+    fn preferences(profile: &Path, assignments: &[(&str, serde_json::Value)]) {
+        let settings: serde_json::Map<String, serde_json::Value> = assignments
+            .iter()
+            .map(|(id, value)| (id.to_string(), value.clone()))
+            .collect();
+        let data = serde_json::json!({"extensions": {"settings": settings}});
+        std::fs::write(profile.join("Secure Preferences"), data.to_string()).unwrap();
+    }
+
     #[test]
     fn presence_requires_a_known_identity_and_ordinary_profile_files() {
-        use BrowserExtensionPresence::*;
         let root = tempfile::tempdir().unwrap();
         let root = root.path().canonicalize().unwrap();
-        let profile = root.join("Profile 1").join("Extensions");
-        let other = profile.join(LEGACY_STORE_ID).join("0.1.10_0");
-        let unpacked = profile.join(AURALIS_UNPACKED_ID).join("0.1.10_0");
-        let official = profile.join(STORE_ID).join("0.1.10_0");
-        assert_eq!(StoreBrowser::extension_presence_in(&root), Unverified);
-        let default = root.join("Default");
-        std::fs::create_dir(&default).unwrap();
-        assert_eq!(StoreBrowser::extension_presence_in(&root), Unverified);
-        std::fs::write(default.join("Preferences"), []).unwrap();
-        assert_eq!(StoreBrowser::extension_presence_in(&root), Missing);
-        std::fs::create_dir_all(&other).unwrap();
-        std::fs::write(other.join("manifest.json"), b"{}").unwrap();
-        assert_eq!(StoreBrowser::extension_presence_in(&root), Missing);
+        let profile = root.join("Default");
+        let official = profile.join("Extensions").join(STORE_ID).join("0.1.10_0");
+        let discovery = || StoreBrowser::extension_presence_in(&root);
+        assert_eq!(discovery().discovery(), "unverified");
+        std::fs::create_dir(&profile).unwrap();
+        assert_eq!(discovery().discovery(), "unverified");
+        std::fs::write(profile.join("Preferences"), b"{}").unwrap();
+        assert_eq!(discovery().discovery(), "missing");
+        preferences(&profile, &[(LEGACY_STORE_ID, serde_json::json!(1))]);
+        assert_eq!(discovery().discovery(), "missing");
+
         std::fs::create_dir_all(&official).unwrap();
-        assert_eq!(StoreBrowser::extension_presence_in(&root), Unverified);
+        preferences(
+            &profile,
+            &[(
+                STORE_ID,
+                serde_json::json!({"location":1, "path":"version"}),
+            )],
+        );
+        assert_eq!(discovery().discovery(), "unverified");
         #[cfg(unix)]
         {
-            std::os::unix::fs::symlink(other.join("manifest.json"), official.join("manifest.json"))
+            std::os::unix::fs::symlink(profile.join("Preferences"), official.join("manifest.json"))
                 .unwrap();
-            assert_eq!(StoreBrowser::extension_presence_in(&root), Unverified);
+            assert_eq!(discovery().discovery(), "unverified");
             std::fs::remove_file(official.join("manifest.json")).unwrap();
         }
-        std::fs::create_dir_all(&unpacked).unwrap();
-        std::fs::write(unpacked.join("manifest.json"), b"{}").unwrap();
-        assert_eq!(StoreBrowser::extension_presence_in(&root), Unpacked);
         std::fs::write(official.join("manifest.json"), b"{}").unwrap();
-        assert_eq!(StoreBrowser::extension_presence_in(&root), Store);
+        assert_eq!(discovery().source(), Some("store"));
+        assert_eq!(discovery().discovery(), "present");
+
+        // Removing the actual registration is authoritative even while Chrome
+        // has not finished removing the versioned extension directory.
+        preferences(&profile, &[]);
+        assert_eq!(discovery().discovery(), "missing");
+        assert_eq!(discovery().source(), None);
+        preferences(
+            &profile,
+            &[(
+                STORE_ID,
+                serde_json::json!({"state":2, "location":7, "path":"version"}),
+            )],
+        );
+        assert_eq!(discovery().discovery(), "missing");
+    }
+
+    #[test]
+    fn verified_absence_suppresses_only_the_matching_cached_handshake() {
+        let root = tempfile::tempdir().unwrap();
+        let root = root.path().canonicalize().unwrap();
+        let default = root.join("Default");
+        let profile = root.join("Profile 1");
+        std::fs::create_dir(&default).unwrap();
+        std::fs::create_dir(&profile).unwrap();
+        preferences(&default, &[]);
+        preferences(
+            &profile,
+            &[(
+                AURALIS_UNPACKED_ID,
+                serde_json::json!({"location":4, "path":"folder"}),
+            )],
+        );
+        let browser = StoreBrowser::Chrome;
+        std::fs::write(
+            root.join(browser.marker()),
+            format!("Google Chrome\t{STORE_ID}"),
+        )
+        .unwrap();
+        let status =
+            || browser_store_status_in(&root, browser, StoreBrowser::extension_presence_in(&root));
+
+        let presence = StoreBrowser::extension_presence_in(&root);
+        assert_eq!(presence.source(), Some("unpacked"));
+        assert!(!status().connected_recently);
+        assert!(status().store_previously_connected);
+        assert!(status().browser_previously_connected);
+
+        std::fs::write(
+            root.join(browser.unpacked_marker()),
+            format!("Google Chrome\t{AURALIS_UNPACKED_ID}"),
+        )
+        .unwrap();
+        assert_eq!(status().connected_source, Some("unpacked"));
+
+        preferences(&profile, &[]);
+        assert_eq!(
+            StoreBrowser::extension_presence_in(&root).discovery(),
+            "missing"
+        );
+        assert!(!status().connected_recently);
+        assert!(status().extension_previously_connected);
+    }
+
+    #[test]
+    fn unreadable_or_unexpected_preferences_are_not_absence() {
+        let root = tempfile::tempdir().unwrap();
+        let root = root.path().canonicalize().unwrap();
+        let profile = root.join("Default");
+        std::fs::create_dir(&profile).unwrap();
+        std::fs::write(profile.join("Preferences"), b"{}").unwrap();
+        let preferences_file = profile.join("Secure Preferences");
+        for data in [
+            "{not-json",
+            "[]",
+            r#"{"extensions":[]}"#,
+            r#"{"extensions":{"settings":false}}"#,
+        ] {
+            std::fs::write(&preferences_file, data).unwrap();
+            assert_eq!(
+                StoreBrowser::extension_presence_in(&root).discovery(),
+                "unverified"
+            );
+        }
+        preferences(&profile, &[(STORE_ID, serde_json::json!({"state":1}))]);
+        assert_eq!(
+            StoreBrowser::extension_presence_in(&root).discovery(),
+            "unverified"
+        );
+        preferences(&profile, &[]);
+        let mut budget = 3;
+        assert_eq!(
+            profile_extension_evidence(&profile, &mut budget).discovery(),
+            "unverified"
+        );
+        File::create(&preferences_file)
+            .unwrap()
+            .set_len(5 * 1024 * 1024)
+            .unwrap();
+        let presence = StoreBrowser::extension_presence_in(&root);
+        assert_eq!(presence.discovery(), "unverified");
+        let browser = StoreBrowser::Edge;
+        std::fs::write(
+            root.join(browser.marker()),
+            format!("Microsoft Edge\t{STORE_ID}"),
+        )
+        .unwrap();
+        assert!(browser_store_status_in(&root, browser, presence).connected_recently);
     }
 
     #[test]

@@ -259,8 +259,9 @@ QVariantMap Engine::dispatch(const QVariantMap &command) const
     const bool openStore = local == QStringLiteral("openBrowserExtensionStore");
     const bool installExtension = local == QStringLiteral("installBrowserExtensionPolicy");
     const bool removeExtensionPolicy = local == QStringLiteral("removeBrowserExtensionPolicy");
+    const bool resetExtensionSetup = local == QStringLiteral("resetBrowserExtensionSetup");
     const bool repairHost = local == QStringLiteral("registerBrowserHost");
-    if (browserStatus || openStore || installExtension || removeExtensionPolicy || repairHost) {
+    if (browserStatus || openStore || installExtension || removeExtensionPolicy || resetExtensionSetup || repairHost) {
         QVariantMap status{{QStringLiteral("browser"), QString()}, {QStringLiteral("browserId"), QString()},
                            {QStringLiteral("browserSupported"), false}, {QStringLiteral("extensionPresent"), false},
                            {QStringLiteral("connectedRecently"), false}, {QStringLiteral("storePreviouslyConnected"), false},
@@ -285,7 +286,7 @@ QVariantMap Engine::dispatch(const QVariantMap &command) const
             const auto browserId = browserResult.value(QStringLiteral("browserId")).toString();
             const auto expectedBrowser = command.value(QStringLiteral("expectedBrowser")).toString();
             const bool browserSpecified = (openStore || repairHost) && !expectedBrowser.isEmpty();
-            if ((installExtension || removeExtensionPolicy || browserSpecified) && expectedBrowser != browserId)
+            if ((installExtension || removeExtensionPolicy || resetExtensionSetup || browserSpecified) && expectedBrowser != browserId)
                 return failure(tr("The Windows default browser changed. Review browser setup again."));
             if (browserId != QStringLiteral("chrome") && browserId != QStringLiteral("edge")) {
                 if (browserStatus)
@@ -322,25 +323,36 @@ QVariantMap Engine::dispatch(const QVariantMap &command) const
                 return error.isEmpty() ? result(QVariantMap{{QStringLiteral("ok"), true},
                     {QStringLiteral("nativeHostRegistered"), true}}) : failure(error);
             }
-            if (installExtension || removeExtensionPolicy) {
+            if (installExtension || removeExtensionPolicy || resetExtensionSetup) {
                 const auto extensionDetected = [](const QVariantMap &value) {
-                    return value.value(QStringLiteral("extensionPresent")).toBool()
-                        || value.value(QStringLiteral("connectedRecently")).toBool();
+                    return value.value(QStringLiteral("extensionDiscovery")).toString() != QStringLiteral("missing")
+                        && (value.value(QStringLiteral("extensionPresent")).toBool()
+                            || value.value(QStringLiteral("connectedRecently")).toBool());
                 };
+                const QString extensionManager = browserId == QStringLiteral("chrome")
+                    ? QStringLiteral("chrome://extensions/") : QStringLiteral("edge://extensions/");
                 const auto extensionDetectedMessage = tr("The browser has the extension. Open its toolbar menu to verify the Auralis connection.");
-                if (removeExtensionPolicy) {
-                    if (command.value(QStringLiteral("requireUnverifiedExtension")).toBool()) {
-                        if (extensionDetected(browserResult))
-                            return failure(extensionDetectedMessage);
-                        if (browserResult.value(QStringLiteral("extensionDiscovery")).toString() != QStringLiteral("missing"))
-                            return failure(tr("Auralis could not confirm that the extension is missing."));
+                const auto browserStillSelected = [&handler] {
+                    return BrowserSetup::defaultHttpsHandler().executable.compare(handler.executable, Qt::CaseInsensitive) == 0;
+                };
+                if (removeExtensionPolicy || resetExtensionSetup) {
+                    const bool setupRemoved = removeExtensionPolicy || BrowserSetup::policyStatus(browserId).removable;
+                    if (setupRemoved) {
+                        bool permissionDenied = false;
+                        auto policyError = BrowserSetup::removePolicy(browserId, &permissionDenied);
+                        if (permissionDenied)
+                            policyError = BrowserSetup::installChromePolicyWithAdministratorApproval(true);
+                        if (!policyError.isEmpty())
+                            return failure(policyError);
                     }
-                    bool permissionDenied = false;
-                    auto policyError = BrowserSetup::removePolicy(browserId, &permissionDenied);
-                    if (permissionDenied)
-                        policyError = BrowserSetup::installChromePolicyWithAdministratorApproval(true);
-                    if (!policyError.isEmpty())
-                        return failure(policyError);
+                    if (resetExtensionSetup) {
+                        const bool removalNeeded = extensionDetected(browserResult);
+                        const bool browserOpened = removalNeeded && browserStillSelected()
+                            && QProcess::startDetached(handler.executable, {extensionManager});
+                        return result(QVariantMap{{QStringLiteral("ok"), true},
+                            {QStringLiteral("setupRemoved"), setupRemoved}, {QStringLiteral("removalNeeded"), removalNeeded},
+                            {QStringLiteral("browserOpened"), browserOpened}});
+                    }
                     return result(QVariantMap{{QStringLiteral("ok"), true},
                         {QStringLiteral("message"), tr("Auralis removed its automatic extension setup. Reopen your browser to apply the change.")}});
                 }
@@ -352,7 +364,7 @@ QVariantMap Engine::dispatch(const QVariantMap &command) const
                 const auto registrationError = BrowserSetup::registerNativeHost(browserId, false);
                 if (!registrationError.isEmpty())
                     return failure(registrationError);
-                if (BrowserSetup::defaultHttpsHandler().executable.compare(handler.executable, Qt::CaseInsensitive) != 0)
+                if (!browserStillSelected())
                     return failure(tr("The Windows default browser changed. Review browser setup again."));
                 const auto rechecked = browserStatusForHandler();
                 if (rechecked.contains(QStringLiteral("error")))
@@ -365,10 +377,8 @@ QVariantMap Engine::dispatch(const QVariantMap &command) const
                     policyError = BrowserSetup::installChromePolicyWithAdministratorApproval();
                 if (!policyError.isEmpty())
                     return failure(policyError);
-                // A newly installed Chrome may never have opened its normal profile. Open its
-                // Extensions page after saving the setting so Chrome can read and apply it.
-                const bool browserOpened = browserId == QStringLiteral("chrome")
-                    && QProcess::startDetached(handler.executable, {QStringLiteral("chrome://extensions/")});
+                // Launch the selected browser only after saving its automatic install request.
+                const bool browserOpened = browserStillSelected() && QProcess::startDetached(handler.executable, {extensionManager});
                 return result(QVariantMap{{QStringLiteral("ok"), true},
                     {QStringLiteral("browserOpened"), browserOpened}, {QStringLiteral("pending"), true}});
             }
