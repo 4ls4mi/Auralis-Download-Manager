@@ -168,6 +168,8 @@ try {
     $console = Join-Path $data 'qt-smoke-console.log'
     Remove-Item -LiteralPath $marker, $console -Force -ErrorAction SilentlyContinue
     Write-Host 'Testing passive upgrade with the installed executable locked.'
+    $uninstallMarker = Join-Path $data 'keep-after-blocked-uninstall.txt'
+    Set-Content -LiteralPath $uninstallMarker -Value 'Uninstall must preserve this profile.'
     $locked = [IO.File]::Open($exe, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
     try {
         Write-Host 'Testing uninstall with the installed executable in use.'
@@ -175,7 +177,8 @@ try {
         if (!(Test-Path -LiteralPath $exe) -or
             !(Test-Path -LiteralPath (Join-Path $fixture 'auralis_engine.dll')) -or
             !(Test-Path -LiteralPath (Join-Path $fixture 'auralis-browser-host.exe')) -or
-            !(Test-Path -LiteralPath $marker)) {
+            !(Test-Path -LiteralPath $uninstallMarker) -or
+            (Get-Content -LiteralPath $uninstallMarker -Raw).Trim() -ne 'Uninstall must preserve this profile.') {
             throw 'The rejected uninstall changed the installed application or its profile.'
         }
         Write-Host 'Verified uninstall refuses in-use files before removing the application.'
