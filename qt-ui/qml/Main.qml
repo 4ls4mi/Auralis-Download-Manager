@@ -599,6 +599,10 @@ AuralisWindow {
         transientParent: null
         availableUpdate: updateNotice.availableUpdate
         onUpdateCheckRequested: updateNotice.manualCheck(settingsWindow)
+        onSetupRequested: {
+            settingsWindow.hide()
+            startupSetup.present()
+        }
         onUpdateDetailsRequested: updateNotice.showUpdate(settingsWindow)
         onConfigChanged: if (config) enginePrompts.settings = config
     }

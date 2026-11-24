@@ -10,6 +10,7 @@ DetachedDialogWindow {
     id: root
 
     property bool automatic: false
+    property bool manualSetup: false
     required property var languages
     property bool started: false
     property bool deferred: false
@@ -24,7 +25,7 @@ DetachedDialogWindow {
     property string activeHelper: ""
     property bool requestingHelper: false
     readonly property bool canCheck: automatic && engine.ready && Boolean(hostWindow?.visible)
-        && hostWindow.active && hostWindow.visibility !== Window.Minimized
+        && hostWindow.visibility !== Window.Minimized
     readonly property bool blockingAnnouncements: automatic && !deferred && (preferences.languagePending || started)
     readonly property bool checksComplete: (preferences.helpersDone || helpersChecked)
         && (preferences.browserDone || browserSetup.checked)
@@ -33,10 +34,10 @@ DetachedDialogWindow {
         && (tool.path === null || tool.path === "")).map(tool => tool.name)
     readonly property bool installerBusy: helperStatus?.job?.state === "installing"
     readonly property bool batchRunning: requestingHelper || Boolean(activeHelper) || queuedHelpers.length > 0
-    readonly property bool needHelpers: !preferences.helpersDone && missingHelpers.length > 0
-    readonly property bool needBrowser: !preferences.browserDone && browserSetup.offerAtStartup
+    readonly property bool needHelpers: !preferences.helpersDone && (manualSetup || missingHelpers.length > 0)
+    readonly property bool needBrowser: !preferences.browserDone && (manualSetup || browserSetup.offerAtStartup)
     readonly property bool hasFollowingPage: page === "language" ? !checksComplete || needHelpers || needBrowser
-        : page === "helpers" && needBrowser
+        : page === "browser" && needHelpers
     readonly property bool canAdvance: !busy && (page === "language" ? engine.ready && languageSelector.currentIndex >= 0
         : page === "helpers" ? helpersChecked && !batchRunning && missingHelpers.length === 0
         : page === "browser" && !browserSetup.acting && browserSetup.installed)
@@ -49,9 +50,29 @@ DetachedDialogWindow {
     Settings {
         id: preferences
         category: "FirstLaunchSetup"
+        property int wizardVersion: 0
         property bool languagePending: false
         property bool helpersDone: false
         property bool browserDone: false
+    }
+
+    function present() {
+        if (busy || batchRunning) {
+            open()
+            return
+        }
+        manualSetup = true
+        deferred = false
+        started = true
+        preferences.languagePending = true
+        preferences.helpersDone = false
+        preferences.browserDone = false
+        preferences.sync()
+        const selected = languages.findIndex(language => language.value === engine.interfaceLanguage)
+        languageSelector.currentIndex = Math.max(0, selected)
+        showPage("language")
+        checkHelpers()
+        browserSetup.refresh()
     }
 
     function checkAtStartup() {
@@ -96,10 +117,10 @@ DetachedDialogWindow {
     function openNextPage() {
         if (!checksComplete)
             showPage("checking")
-        else if (needHelpers)
-            showPage("helpers")
         else if (needBrowser)
             showPage("browser")
+        else if (needHelpers)
+            showPage("helpers")
         else
             finishWizard()
     }
@@ -226,7 +247,17 @@ DetachedDialogWindow {
 
     onCanCheckChanged: if (canCheck) Qt.callLater(checkAtStartup)
     onChecksCompleteChanged: offerIfNeeded()
-    Component.onCompleted: if (canCheck) Qt.callLater(checkAtStartup)
+    Component.onCompleted: {
+        if (automatic && preferences.wizardVersion < 1) {
+            preferences.languagePending = true
+            preferences.helpersDone = false
+            preferences.browserDone = false
+            preferences.wizardVersion = 1
+            preferences.sync()
+        }
+        if (canCheck)
+            Qt.callLater(checkAtStartup)
+    }
     onDismissRequested: closeSetup()
 
     Timer {

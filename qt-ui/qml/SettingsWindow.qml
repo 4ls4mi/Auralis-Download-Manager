@@ -38,6 +38,7 @@ AuralisWindow {
     property string notice: ""
     property var availableUpdate: null
     signal updateCheckRequested()
+    signal setupRequested()
     signal updateDetailsRequested()
     readonly property string updatePresentation: updatePrefs.presentation
     readonly property bool automaticUpdateChecks: updatePrefs.automaticChecks
@@ -458,6 +459,12 @@ AuralisWindow {
                         (engine.ready ? qsTr("Auralis %1").arg(engine.version) : engine.status)
                     elide: Text.ElideRight
                     color: root.colors.muted
+                }
+                GlassButton {
+                    objectName: "openSetupWizard"
+                    text: qsTranslate("StartupSetup", "Set up Auralis")
+                    enabled: engine.ready
+                    onClicked: root.setupRequested()
                 }
                 GlassButton {
                     objectName: "settingsDone"
