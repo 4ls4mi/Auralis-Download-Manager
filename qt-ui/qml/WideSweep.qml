@@ -190,8 +190,11 @@ Canvas {
         base.addColorStop(.54, railColor)
         base.addColorStop(1, footerColor)
         ctx.fillStyle = base
-        const start = foot ? Math.min(left, mirrored ? width - foot.right : foot.left) : left
-        ctx.fillRect(start, top, right - start, (foot ? foot.bottom : bottom) - top)
+        ctx.fillRect(left, top, right - left, (foot ? foot.top : bottom) - top)
+        if (foot) {
+            const footLeft = mirrored ? width - foot.right : foot.left
+            ctx.fillRect(footLeft, foot.top, foot.right - foot.left, foot.bottom - foot.top)
+        }
 
         const view = bounds(viewport)
         let depth = 0

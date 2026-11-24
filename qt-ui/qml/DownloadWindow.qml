@@ -17,6 +17,9 @@ AuralisWindow {
     signal hideToTrayRequested(var downloadId)
     property string material: MaterialTheme.current
     readonly property int resizeInset: 14
+    readonly property int panelInset: 8
+    readonly property int outerPanelInset: Math.max(panelInset, frameSafeInset)
+    readonly property int bodyBottomInset: Math.max(resizeInset, outerPanelInset)
     readonly property var colors: MaterialTheme.profile(material)
     readonly property string transferLayout: colors.layout || ""
     readonly property bool sideTabs: ["fogSlate", "violetRail", "coralSlate"].includes(transferLayout)
@@ -429,13 +432,19 @@ AuralisWindow {
     }
 
     header: ColumnLayout {
-        spacing: 0
+        spacing: 3
         ToolBar {
             Layout.fillWidth: true
             padding: 0
-            leftPadding: mirrored ? 0 : Math.max(0, root.frameSafeInset - 12)
-            rightPadding: mirrored ? Math.max(0, root.frameSafeInset - 12) : 0
-            background: GlassSurface { material: root.material; role: "title"; backdropAvailable: root.backdropAvailable }
+            leftPadding: root.outerPanelInset + 8
+            rightPadding: root.outerPanelInset + 8
+            topPadding: root.panelInset
+            bottomPadding: 2
+            leftInset: root.outerPanelInset
+            rightInset: root.outerPanelInset
+            topInset: root.panelInset
+            bottomInset: 2
+            background: GlassSurface { material: root.material; role: "title"; roundedPanel: true; backdropAvailable: root.backdropAvailable }
             contentItem: RowLayout {
                 spacing: 7
                 Item {
@@ -444,7 +453,6 @@ AuralisWindow {
                     BrandMark {
                         id: transferBrand
                         anchors.left: parent.left
-                        anchors.leftMargin: 12
                         anchors.verticalCenter: parent.verticalCenter
                     }
                     Label {
@@ -522,18 +530,19 @@ AuralisWindow {
                     onMaximizeRequested: root.toggleMaximized()
                     onCloseRequested: root.close()
                 }
-                Item { Layout.preferredWidth: Math.max(root.resizeInset, root.frameSafeInset) }
             }
         }
         ToolBar {
             objectName: "transferCommands"
-            visible: !root.compactView
+            visible: !root.compactView && (root.finished || (root.recoveryAvailable && root.activeTab !== root.recoveryTab))
             Layout.fillWidth: true
-            leftPadding: root.resizeInset + 2
-            rightPadding: root.resizeInset + 2
-            topPadding: root.compactView ? 3 : 7
-            bottomPadding: root.compactView ? 3 : 7
-            background: GlassSurface { material: root.material; role: "toolbar"; backdropAvailable: root.backdropAvailable }
+            leftPadding: root.panelInset + 8
+            rightPadding: root.panelInset + 8
+            topPadding: 7
+            bottomPadding: 7
+            leftInset: root.panelInset
+            rightInset: root.panelInset
+            background: GlassSurface { material: root.material; role: "toolbar"; roundedPanel: true; backdropAvailable: root.backdropAvailable }
             contentItem: Flow {
                 id: transferCommandFlow
                 spacing: 7
@@ -571,9 +580,11 @@ AuralisWindow {
             visible: !root.railTabs && (!root.compactView || root.activeTab !== 0)
             Layout.fillWidth: true
             padding: root.compactHeight ? 5 : 8
-            leftPadding: root.resizeInset + 2
-            rightPadding: root.resizeInset + 2
-            background: GlassSurface { material: root.material; role: "toolbar"; backdropAvailable: root.backdropAvailable }
+            leftPadding: root.panelInset + 8
+            rightPadding: root.panelInset + 8
+            leftInset: root.panelInset
+            rightInset: root.panelInset
+            background: GlassSurface { material: root.material; role: "toolbar"; roundedPanel: true; backdropAvailable: root.backdropAvailable }
             contentItem: Flow {
                 spacing: root.compactWidth ? 5 : 7
                 Repeater {
@@ -641,9 +652,11 @@ AuralisWindow {
         id: transferRail
         visible: root.railTabs
         anchors.top: parent.top
+        anchors.topMargin: root.panelInset
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: root.resizeInset
+        anchors.bottomMargin: root.bodyBottomInset
         anchors.left: parent.left
+        anchors.leftMargin: root.panelInset
         width: root.transferLayout === "violetRail"
             ? Math.max(122, Math.min(169, Math.round(root.width * .21)))
             : Math.max(115, Math.min(145, Math.round(root.width * .19)))
@@ -652,13 +665,8 @@ AuralisWindow {
         background: GlassSurface {
             material: root.material
             role: "sidebar"
+            roundedPanel: true
             backdropAvailable: root.backdropAvailable
-            Rectangle {
-                anchors.right: parent.right
-                width: 1
-                height: parent.height
-                color: root.detailDivider
-            }
         }
         contentItem: ColumnLayout {
             spacing: 5
@@ -698,13 +706,15 @@ AuralisWindow {
     Pane {
         id: compactActions
         visible: root.useCompactActions
-        anchors.left: view.left
-        anchors.right: view.right
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.leftMargin: root.outerPanelInset
+        anchors.rightMargin: root.outerPanelInset
         anchors.bottom: parent.bottom
         anchors.bottomMargin: root.resizeInset
         implicitHeight: downloadActions.implicitHeight + topPadding + bottomPadding
         padding: root.compactView ? 4 : 6
-        background: GlassSurface { material: root.material; role: "toolbar"; backdropAvailable: root.backdropAvailable }
+        background: GlassSurface { material: root.material; role: "toolbar"; roundedPanel: true; backdropAvailable: root.backdropAvailable }
     }
 
     GridLayout {
@@ -772,9 +782,11 @@ AuralisWindow {
         id: view
         objectName: "downloadDetailsScroll"
         anchors.top: parent.top
+        anchors.topMargin: root.panelInset
         anchors.bottom: root.useCompactActions ? compactActions.top : parent.bottom
-        anchors.bottomMargin: root.useCompactActions ? 0 : root.resizeInset
+        anchors.bottomMargin: root.useCompactActions ? root.panelInset : root.bodyBottomInset
         anchors.left: root.railTabs ? transferRail.right : parent.left
+        anchors.leftMargin: root.railTabs ? 0 : root.panelInset
         anchors.right: parent.right
         anchors.rightMargin: root.resizeInset
         clip: true

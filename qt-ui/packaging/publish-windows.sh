@@ -12,7 +12,9 @@ python3 -m unittest discover -s .github/scripts -p 'test_verify_auralis_release.
 build_run="$GITHUB_RUN_ID"
 build_commit="$GITHUB_SHA"
 desktop="${AURALIS_DESKTOP_RELEASE:-0}"
+intel_only="${AURALIS_MACOS_INTEL_ONLY:-0}"
 [[ "$desktop" == 0 || ( "$desktop" == 1 && -z "${AURALIS_VERIFIED_RUN_ID:-}" ) ]]
+[[ "$intel_only" =~ ^[01]$ && ( "$desktop" == 1 || "$intel_only" == 0 ) ]]
 if [[ -n "${AURALIS_VERIFIED_RUN_ID:-}" ]]; then
     build_run="$AURALIS_VERIFIED_RUN_ID"
     [[ "$build_run" =~ ^[0-9]+$ && "$build_run" != "$GITHUB_RUN_ID" ]]
@@ -75,9 +77,20 @@ files=(
     "$work/extensions/auralis-chromium.zip"
     "$work/extensions/auralis-firefox.zip"
 )
+desktop_artifacts=()
 if [[ "$desktop" == 1 ]]; then
     release_name="Auralis Download Manager $version"
-    for platform in debian13_amd64.deb macos-arm64.dmg macos-x86_64.dmg; do
+    desktop_artifacts=(
+        'auralis-download-manager-linux-debian13-amd64:debian13_amd64.deb'
+        'auralis-macos-x86_64:macos-x86_64.dmg'
+    )
+    if [[ "$intel_only" == 1 ]]; then
+        printf '\nThe macOS download is the Intel (x86_64) package.\n' >> "$notes"
+    else
+        desktop_artifacts+=('auralis-macos-arm64:macos-arm64.dmg')
+    fi
+    for artifact in "${desktop_artifacts[@]}"; do
+        platform="${artifact#*:}"
         file="$work/$platform/Auralis.Download.Manager_${version}_$platform"
         files+=("$file" "$file.sha256")
     done
@@ -119,9 +132,9 @@ if [[ "$desktop" == 1 ]]; then
         ' <<< "$artifacts")"
         fetch_artifact "$id" "$digest" "$name" "$work/$platform.zip"
     }
-    fetch_desktop_artifact auralis-download-manager-linux-debian13-amd64 debian13_amd64.deb
-    fetch_desktop_artifact auralis-macos-arm64 macos-arm64.dmg
-    fetch_desktop_artifact auralis-macos-x86_64 macos-x86_64.dmg
+    for artifact in "${desktop_artifacts[@]}"; do
+        fetch_desktop_artifact "${artifact%%:*}" "${artifact#*:}"
+    done
 fi
 
 python3 - "$work" "${files[@]}" <<'PY'

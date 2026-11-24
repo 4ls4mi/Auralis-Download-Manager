@@ -333,13 +333,22 @@ DetachedDialogWindow {
 
     footer: Item {
         implicitHeight: actions.implicitHeight + 26
-        GlassSurface { anchors.fill: parent; material: root.material; role: "footer" }
+        GlassSurface {
+            anchors.fill: parent
+            anchors.leftMargin: root.frameChromeInset
+            anchors.rightMargin: root.frameChromeInset
+            anchors.topMargin: 2
+            anchors.bottomMargin: 8
+            material: root.material
+            role: "footer"
+            roundedPanel: true
+        }
         RowLayout {
             id: actions
             anchors.fill: parent
             anchors.margins: 14
-            anchors.leftMargin: Math.max(14, root.frameSafeInset)
-            anchors.rightMargin: Math.max(14, root.frameSafeInset)
+            anchors.leftMargin: root.frameChromeInset + 8
+            anchors.rightMargin: root.frameChromeInset + 8
             spacing: 9
             GlassButton { material: root.material; text: qsTr("Cancel"); enabled: !root.busy; onClicked: root.cancel() }
             Item { Layout.fillWidth: true }

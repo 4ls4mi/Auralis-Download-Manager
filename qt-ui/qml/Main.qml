@@ -77,6 +77,7 @@ AuralisWindow {
     }
     readonly property bool compact: width < 920
     readonly property int layoutInset: visibility === Window.Maximized ? 0 : compactView ? 5 : 8
+    readonly property int frameBleed: frameCornerRadius > 0 ? layoutInset : 0
     readonly property bool online: engine.ready
     readonly property string filterTitle: filterType === "category"
         ? ((categories.find(category => category.key === filterKey) || {}).name || filterKey)
@@ -1063,7 +1064,7 @@ AuralisWindow {
             pane: downloadsPane
             viewport: libraryScroll.contentItem
             geometryHost: workspace
-            footer: transferFooter
+            footer: footerSurface
             selectedRow: root.selectedLibraryRow
             selectedColor: root.selectedLibraryRow?.selectedFace || root.colors.accent
             backdropAvailable: mainBackdrop.backdropAvailable
@@ -1188,7 +1189,15 @@ AuralisWindow {
         Item {
             Layout.fillWidth: true
             Layout.preferredHeight: root.compactView ? 36 : 43
-            GlassSurface { anchors.fill: parent; role: "title"; roundedPanel: true }
+            GlassSurface {
+                anchors.fill: parent
+                anchors.leftMargin: -root.frameBleed
+                anchors.rightMargin: -root.frameBleed
+                anchors.topMargin: -root.frameBleed
+                role: "title"
+                roundedPanel: root.frameCornerRadius === 0
+                radius: roundedPanel ? Math.max(12, profile.radius) : 0
+            }
             CaptionMoveArea {
                 objectName: "titleDragArea"
                 hostWindow: root
@@ -2143,14 +2152,26 @@ AuralisWindow {
         }
 
         Item {
-            id: transferFooter
             Layout.fillWidth: true
             Layout.preferredHeight: root.compactView ? 36 : 55
-            GlassSurface { anchors.fill: parent; visible: !root.wideSweepVisible; role: "footer"; roundedPanel: true }
+            Item {
+                id: footerSurface
+                anchors.fill: parent
+                anchors.leftMargin: -root.frameBleed
+                anchors.rightMargin: -root.frameBleed
+                anchors.bottomMargin: -root.frameBleed
+                GlassSurface {
+                    anchors.fill: parent
+                    visible: !root.wideSweepVisible
+                    role: "footer"
+                    roundedPanel: root.frameCornerRadius === 0
+                    radius: roundedPanel ? Math.max(12, profile.radius) : 0
+                }
+            }
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 11
-                anchors.rightMargin: 9
+                anchors.leftMargin: Math.max(11, root.frameSafeInset - root.layoutInset)
+                anchors.rightMargin: Math.max(9, root.frameSafeInset - root.layoutInset)
                 spacing: root.compactView ? 8 : 13
                 Repeater {
                     model: [

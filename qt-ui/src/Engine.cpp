@@ -2,6 +2,7 @@
 #include "BrowserSetup.h"
 #include "FrameResize.h"
 #include "LocalFiles.h"
+#include "WindowOutline.h"
 
 #include <QCoreApplication>
 #include <QDesktopServices>
@@ -747,6 +748,11 @@ bool Engine::applyBackdrop(QWindow *window, bool enabled, bool dark) const
         DwmExtendFrameIntoClientArea(hwnd, &reset);
         return false;
     }
+    if (current != type) {
+        const auto radius = window->property("frameCornerRadius");
+        if (radius.isValid())
+            setWindowCornerRadius(window, radius.toInt());
+    }
     return useAcrylic;
 #else
     Q_UNUSED(window);
@@ -763,6 +769,7 @@ void Engine::setWindowCornerRadius(QWindow *window, int radius) const
     const auto state = window->windowStates();
     if (radius <= 0 || !(window->flags() & Qt::FramelessWindowHint)
         || state.testAnyFlags(Qt::WindowMaximized | Qt::WindowFullScreen)) {
+        WindowOutline::configureAntialiasing(window, {});
         if (!window->mask().isEmpty())
             window->setMask({});
         return;
@@ -774,6 +781,20 @@ void Engine::setWindowCornerRadius(QWindow *window, int radius) const
     const qreal height = window->height();
     const qreal reachX = qMin(qreal(radius), width / 2);
     const qreal reachY = qMin(radius * (113.0 / 114.0), height / 2);
+    bool allowCoverageFringe = WindowOutline::configureAntialiasing(window, QSizeF(reachX, reachY));
+#ifdef Q_OS_WIN
+    if (allowCoverageFringe && window->isVisible()) {
+        // Windows draws native Acrylic separately from Qt's scene. Keep the region tight there.
+        constexpr DWORD SystemBackdropType = 38;
+        constexpr int DesktopAcrylic = 3;
+        int backdrop = 0;
+        const auto hwnd = reinterpret_cast<HWND>(window->winId());
+        if (SUCCEEDED(DwmGetWindowAttribute(hwnd, SystemBackdropType, &backdrop, sizeof backdrop))
+            && backdrop == DesktopAcrylic)
+            allowCoverageFringe = false;
+    }
+#endif
+    const qreal fringe = allowCoverageFringe ? 2 : 0;
     // Cache samples of the approved superellipse and mirror them around the four corners.
     constexpr int segments = 48;
     static const auto quarter = [] {
@@ -790,14 +811,20 @@ void Engine::setWindowCornerRadius(QWindow *window, int radius) const
     QPolygon outline;
     outline.reserve(qsizetype(quarter.size()) * 4);
     for (const auto &p : quarter)
-        outline << QPointF(width - reachX + reachX * p.y(), reachY - reachY * p.x()).toPoint();
+        outline << QPointF(qMin(width, width - reachX + reachX * p.y() + fringe),
+                           qMax(0.0, reachY - reachY * p.x() - fringe)).toPoint();
     for (const auto &p : quarter)
-        outline << QPointF(width - reachX + reachX * p.x(), height - reachY + reachY * p.y()).toPoint();
+        outline << QPointF(qMin(width, width - reachX + reachX * p.x() + fringe),
+                           qMin(height, height - reachY + reachY * p.y() + fringe)).toPoint();
     for (const auto &p : quarter)
-        outline << QPointF(reachX - reachX * p.y(), height - reachY + reachY * p.x()).toPoint();
+        outline << QPointF(qMax(0.0, reachX - reachX * p.y() - fringe),
+                           qMin(height, height - reachY + reachY * p.x() + fringe)).toPoint();
     for (const auto &p : quarter)
-        outline << QPointF(reachX - reachX * p.x(), reachY - reachY * p.y()).toPoint();
-    window->setMask(QRegion(outline));
+        outline << QPointF(qMax(0.0, reachX - reachX * p.x() - fringe),
+                           qMax(0.0, reachY - reachY * p.y() - fringe)).toPoint();
+    const QRegion mask(outline);
+    if (mask != window->mask())
+        window->setMask(mask);
 }
 
 void Engine::installInteractiveResize(QWindow *window, int borderSize, int cornerSize) const

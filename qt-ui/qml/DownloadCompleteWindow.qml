@@ -332,14 +332,23 @@ DetachedDialogWindow {
         }
     ]
     footer: Item {
-        implicitHeight: footerItems.implicitHeight + 20
-        GlassSurface { anchors.fill: parent; material: root.material; role: "footer" }
+        implicitHeight: footerItems.implicitHeight + 26
+        GlassSurface {
+            anchors.fill: parent
+            anchors.leftMargin: root.frameChromeInset
+            anchors.rightMargin: root.frameChromeInset
+            anchors.topMargin: 2
+            anchors.bottomMargin: 8
+            material: root.material
+            role: "footer"
+            roundedPanel: true
+        }
         Flow {
             id: footerItems
             anchors.fill: parent
-            anchors.margins: 10
-            anchors.leftMargin: Math.max(10, root.frameSafeInset)
-            anchors.rightMargin: Math.max(10, root.frameSafeInset)
+            anchors.margins: 13
+            anchors.leftMargin: root.frameChromeInset + 8
+            anchors.rightMargin: root.frameChromeInset + 8
             spacing: 8
             CheckBox {
                 id: suppress

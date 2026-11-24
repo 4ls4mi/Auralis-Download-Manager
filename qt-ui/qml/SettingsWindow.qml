@@ -26,6 +26,7 @@ AuralisWindow {
     palette.highlight: colors.accent
 
     readonly property int resizeInset: 14
+    readonly property bool roundedFrame: frameCornerRadius > 0
     readonly property var colors: MaterialTheme.palette
     readonly property bool wideSweepVisible: wideSweep.visible && wideSweep.available
     readonly property GlassButton selectedNavigationButton: {
@@ -419,11 +420,16 @@ AuralisWindow {
         ToolBar {
             Layout.fillWidth: true
             padding: 0
-            leftInset: 8
-            rightInset: 8
-            topInset: 5
-            bottomInset: 2
-            background: GlassSurface { role: "title"; roundedPanel: true; backdropAvailable: settingsBackdrop.backdropAvailable }
+            leftInset: root.roundedFrame ? 0 : 8
+            rightInset: leftInset
+            topInset: root.roundedFrame ? 0 : 5
+            bottomInset: root.roundedFrame ? 0 : 2
+            background: GlassSurface {
+                role: "title"
+                roundedPanel: !root.roundedFrame
+                radius: roundedPanel ? Math.max(12, profile.radius) : 0
+                backdropAvailable: settingsBackdrop.backdropAvailable
+            }
 
             contentItem: RowLayout {
                 id: settingsTitleRow
@@ -471,11 +477,16 @@ AuralisWindow {
             rightPadding: Math.max(root.resizeInset + 2, root.frameSafeInset)
             topPadding: 4
             bottomPadding: 5
-            leftInset: 8
-            rightInset: 8
-            topInset: 2
-            bottomInset: 1
-            background: GlassSurface { role: "toolbar"; roundedPanel: true; backdropAvailable: settingsBackdrop.backdropAvailable }
+            leftInset: root.roundedFrame ? 0 : 8
+            rightInset: leftInset
+            topInset: root.roundedFrame ? 0 : 2
+            bottomInset: root.roundedFrame ? 0 : 1
+            background: GlassSurface {
+                role: "toolbar"
+                roundedPanel: !root.roundedFrame
+                radius: roundedPanel ? Math.max(12, profile.radius) : 0
+                backdropAvailable: settingsBackdrop.backdropAvailable
+            }
             contentItem: RowLayout {
                 spacing: 8
                 Label {
@@ -507,7 +518,7 @@ AuralisWindow {
         anchors.fill: parent
         anchors.margins: 12
         anchors.rightMargin: root.resizeInset
-        anchors.bottomMargin: root.resizeInset
+        anchors.bottomMargin: Math.max(root.resizeInset, root.frameSafeInset)
         spacing: 12
 
         Frame {

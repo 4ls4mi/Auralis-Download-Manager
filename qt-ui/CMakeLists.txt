@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(AuralisQt VERSION 0.3.86 LANGUAGES CXX)
+project(AuralisQt VERSION 0.3.87 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -23,6 +23,8 @@ qt_add_executable(auralis-download-manager WIN32 MACOSX_BUNDLE
     src/Smoke.h
     src/Typography.cpp
     src/Typography.h
+    src/WindowOutline.cpp
+    src/WindowOutline.h
 )
 
 target_compile_definitions(auralis-download-manager PRIVATE AURALIS_VERSION="${PROJECT_VERSION}")
@@ -85,7 +87,10 @@ endif()
 
 qt_add_shaders(auralis-download-manager "glass_effects"
     PREFIX "/auralis"
-    FILES shaders/bubble.frag
+    FILES
+        shaders/bubble.frag
+        shaders/window-outline.vert
+        shaders/window-outline.frag
 )
 
 qt_add_resources(auralis-download-manager "branding"

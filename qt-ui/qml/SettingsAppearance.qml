@@ -568,7 +568,7 @@ GridLayout {
         Layout.column: 0
         Layout.columnSpan: 2
         Layout.row: 3
-        Switch {
+        GlassSwitch {
             text: qsTr("Reduce animations")
             checked: MaterialTheme.reducedMotion
             onToggled: MaterialTheme.reducedMotion = checked

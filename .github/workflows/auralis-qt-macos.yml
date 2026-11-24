@@ -7,6 +7,9 @@ on:
       coordinated_release:
         type: boolean
         default: false
+      intel_only:
+        type: boolean
+        default: false
   push:
     branches: [wip/auralis-qt-shell]
     paths:
@@ -24,14 +27,12 @@ jobs:
       github.ref == 'refs/heads/wip/auralis-qt-shell' &&
       (github.event_name == 'workflow_dispatch' || inputs.coordinated_release ||
        contains(github.event.head_commit.message, '[build-auralis-macos]'))
-    runs-on: ${{ matrix.runner }}
+    runs-on: ${{ matrix.arch == 'arm64' && 'macos-15' || 'macos-15-intel' }}
     timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - { arch: arm64, runner: macos-15, target: aarch64-apple-darwin }
-          - { arch: x86_64, runner: macos-15-intel, target: x86_64-apple-darwin }
+        arch: ${{ fromJSON(inputs.intel_only && '["x86_64"]' || '["arm64","x86_64"]') }}
     env:
       QT_VERSION: '6.11.3'
     steps:
@@ -43,7 +44,7 @@ jobs:
       - name: Install the Rust target
         shell: bash
         env:
-          RUST_TARGET: ${{ matrix.target }}
+          RUST_TARGET: ${{ matrix.arch == 'arm64' && 'aarch64-apple-darwin' || 'x86_64-apple-darwin' }}
           BUILD_ARCH: ${{ matrix.arch }}
         run: |
           test "$(uname -m)" = "$BUILD_ARCH"

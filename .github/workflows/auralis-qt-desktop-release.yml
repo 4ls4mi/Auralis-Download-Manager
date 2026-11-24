@@ -45,6 +45,7 @@ jobs:
     uses: ./.github/workflows/auralis-qt-macos.yml
     with:
       coordinated_release: true
+      intel_only: ${{ contains(github.event.head_commit.message, '[macos-intel-only]') }}
 
   publish:
     name: Publish verified desktop release
@@ -65,6 +66,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           AURALIS_DESKTOP_RELEASE: '1'
+          AURALIS_MACOS_INTEL_ONLY: ${{ contains(github.event.head_commit.message, '[macos-intel-only]') && '1' || '0' }}
           AURALIS_INSTALLER_ARTIFACT_ID: ${{ needs.windows.outputs.installer-id }}
           AURALIS_INSTALLER_ARTIFACT_DIGEST: ${{ needs.windows.outputs.installer-digest }}
           AURALIS_EXTENSIONS_ARTIFACT_ID: ${{ needs.windows.outputs.extensions-id }}

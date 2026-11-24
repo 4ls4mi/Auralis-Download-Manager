@@ -154,7 +154,7 @@ ColumnLayout {
 
     Component {
         id: boolControl
-        Switch {
+        GlassSwitch {
             checked: Boolean(root.field.value)
             Accessible.name: root.field.label
             onToggled: root.commit(checked, {})
@@ -441,7 +441,7 @@ ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 3
 
-                    Switch {
+                    GlassSwitch {
                         text: soundRow.modelData
                         checked: Boolean(soundRow.entry[0])
                         onToggled: root.changeSound(soundRow.index, checked, soundRow.path)

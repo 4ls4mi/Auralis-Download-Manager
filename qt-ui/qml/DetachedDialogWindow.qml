@@ -16,7 +16,8 @@ AuralisWindow {
     property bool customFrame: false
     property int customFrameWindowType: Qt.Dialog
     property int innerPadding: 16
-    readonly property int captionInset: Math.max(innerPadding, frameSafeInset)
+    readonly property int frameChromeInset: customFrame ? Math.max(8, frameSafeInset) : 0
+    readonly property int captionInset: Math.max(innerPadding, customFrame ? frameChromeInset + 8 : 0)
     property alias bodyContent: body.data
     readonly property int preferredHeight: Math.ceil(Math.max(minimumHeight,
         Math.min(650, body.implicitHeight + header.implicitHeight
@@ -105,8 +106,17 @@ AuralisWindow {
 
     header: Item {
         implicitHeight: Math.max(dialogBrand.implicitHeight, heading.implicitHeight,
-                                 controls.visible ? controls.implicitHeight : 0) + 20
-        GlassSurface { anchors.fill: parent; material: root.material; role: "title" }
+                                 controls.visible ? controls.implicitHeight : 0) + (root.customFrame ? 26 : 20)
+        GlassSurface {
+            anchors.fill: parent
+            anchors.leftMargin: root.frameChromeInset
+            anchors.rightMargin: root.frameChromeInset
+            anchors.topMargin: root.customFrame ? 8 : 0
+            anchors.bottomMargin: root.customFrame ? 2 : 0
+            material: root.material
+            role: "title"
+            roundedPanel: root.customFrame
+        }
         BrandMark {
             id: dialogBrand
             anchors.left: parent.left
