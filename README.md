@@ -8,7 +8,7 @@ Auralis is a free Windows x64 download manager with a glass-inspired interface, 
 
 [![Donate on Patreon](https://img.shields.io/badge/Donate%20on-Patreon-C83740?style=for-the-badge&logo=patreon&logoColor=white)](https://www.patreon.com/c/Alsamii)
 
-Your support helps Alsami build new apps and tools and localize games into Arabic.
+Your support helps me build new apps and tools and localize games.
 
 ## Auralis in action
 
