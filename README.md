@@ -67,6 +67,22 @@ Captured on Windows. Expand a demo to see the controls in motion.
 
 ### Browser video download
 
+#### From a video thumbnail
+
+Hover over a YouTube thumbnail and click the **Auralis** button on the thumbnail to open the quality menu. Select **Fetch qualities** to run the lookup again. [Screenshot](docs/images/auralis/windows-gallery/extension-thumbnail-qualities.png)
+
+![Opening the Auralis menu on a YouTube thumbnail to look up video qualities](docs/images/auralis/windows-gallery/extension-thumbnail-qualities.gif)
+
+#### From the playing video
+
+Click the **Auralis** button at the top right of the video player to open the format menu. Select **Fetch qualities** to run the lookup again. [Screenshot](docs/images/auralis/windows-gallery/extension-player-qualities.png)
+
+![Opening the Auralis menu over a playing YouTube video and looking up its formats](docs/images/auralis/windows-gallery/extension-player-qualities.gif)
+
+The demos show the notice Auralis displays when YouTube format lookup needs a JavaScript runtime.
+
+#### Video confirmation and progress
+
 | Confirm video download | Compact transfer |
 | --- | --- |
 | ![Video download confirmation with destination and available drive space](docs/images/auralis/windows-screenshots/4.png) | ![Video downloading in compact view with the segmented bar, connections, and speed graph](docs/images/auralis/windows-screenshots/5.png) |
