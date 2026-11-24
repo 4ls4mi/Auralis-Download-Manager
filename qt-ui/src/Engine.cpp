@@ -257,20 +257,19 @@ QVariantMap Engine::dispatch(const QVariantMap &command) const
         return setStartupSettings(command);
     const bool browserStatus = local == QStringLiteral("browserExtensionStatus");
     const bool openStore = local == QStringLiteral("openBrowserExtensionStore");
-    const bool installExtension = local == QStringLiteral("installBrowserExtensionPolicy");
-    const bool removeExtensionPolicy = local == QStringLiteral("removeBrowserExtensionPolicy");
-    const bool resetExtensionSetup = local == QStringLiteral("resetBrowserExtensionSetup");
+    const bool offerExtension = local == QStringLiteral("offerBrowserExtension");
+    const bool removeOffer = local == QStringLiteral("removeBrowserExtensionOffer");
+    const bool removeLegacyPolicy = local == QStringLiteral("removeLegacyBrowserExtensionPolicy");
     const bool repairHost = local == QStringLiteral("registerBrowserHost");
-    if (browserStatus || openStore || installExtension || removeExtensionPolicy || resetExtensionSetup || repairHost) {
+    if (browserStatus || openStore || offerExtension || removeOffer || removeLegacyPolicy || repairHost) {
         QVariantMap status{{QStringLiteral("browser"), QString()}, {QStringLiteral("browserId"), QString()},
                            {QStringLiteral("browserSupported"), false}, {QStringLiteral("extensionPresent"), false},
                            {QStringLiteral("connectedRecently"), false}, {QStringLiteral("storePreviouslyConnected"), false},
                            {QStringLiteral("browserPreviouslyConnected"), false}, {QStringLiteral("storeUrl"), QString()},
                            {QStringLiteral("nativeHostRegistered"), false}, {QStringLiteral("nativeHostCanRegister"), false},
-                           {QStringLiteral("nativeHostProblem"), QString()},
-                           {QStringLiteral("silentInstallAvailable"), false}, {QStringLiteral("policyInstalled"), false},
-                           {QStringLiteral("policyRemovable"), false}, {QStringLiteral("policyProblem"), QString()},
-                           {QStringLiteral("policyState"), QStringLiteral("unsupported")}};
+                           {QStringLiteral("nativeHostProblem"), QString()}, {QStringLiteral("externalOfferAvailable"), false},
+                           {QStringLiteral("externalOfferRegistered"), false}, {QStringLiteral("externalOfferRemovable"), false},
+                           {QStringLiteral("externalOfferProblem"), QString()}, {QStringLiteral("legacyPolicyRemovable"), false}};
 #ifdef Q_OS_WIN
         if (!m_smoke) {
             const auto handler = BrowserSetup::defaultHttpsHandler();
@@ -286,7 +285,7 @@ QVariantMap Engine::dispatch(const QVariantMap &command) const
             const auto browserId = browserResult.value(QStringLiteral("browserId")).toString();
             const auto expectedBrowser = command.value(QStringLiteral("expectedBrowser")).toString();
             const bool browserSpecified = (openStore || repairHost) && !expectedBrowser.isEmpty();
-            if ((installExtension || removeExtensionPolicy || resetExtensionSetup || browserSpecified) && expectedBrowser != browserId)
+            if ((offerExtension || removeOffer || removeLegacyPolicy || browserSpecified) && expectedBrowser != browserId)
                 return failure(tr("The Windows default browser changed. Review browser setup again."));
             if (browserId != QStringLiteral("chrome") && browserId != QStringLiteral("edge")) {
                 if (browserStatus)
@@ -303,19 +302,20 @@ QVariantMap Engine::dispatch(const QVariantMap &command) const
             if (browserStatus) {
                 for (auto it = browserResult.constBegin(); it != browserResult.constEnd(); ++it)
                     status.insert(it.key(), it.value());
-                const auto policy = BrowserSetup::policyStatus(browserId);
                 const auto host = BrowserSetup::nativeHostStatus(browserId);
                 const bool canPrepare = host.registered || (host.canRegister && !host.anotherApplication);
                 status.insert(QStringLiteral("storeUrl"), store);
                 status.insert(QStringLiteral("nativeHostRegistered"), host.registered);
                 status.insert(QStringLiteral("nativeHostCanRegister"), host.canRegister);
                 status.insert(QStringLiteral("nativeHostProblem"), host.problem);
-                status.insert(QStringLiteral("silentInstallAvailable"), (policy.available || policy.configured) && canPrepare);
-                status.insert(QStringLiteral("policyInstalled"), policy.configured);
-                status.insert(QStringLiteral("policyRemovable"), policy.removable);
-                status.insert(QStringLiteral("policyProblem"), policy.available && !canPrepare ? host.problem : policy.problem);
-                status.insert(QStringLiteral("policyState"), policy.configured ? QStringLiteral("configured")
-                    : policy.available && canPrepare ? QStringLiteral("available") : QStringLiteral("blocked"));
+                status.insert(QStringLiteral("legacyPolicyRemovable"), BrowserSetup::legacyPolicyRemovable(browserId));
+                if (browserId == QStringLiteral("chrome")) {
+                    const auto offer = BrowserSetup::chromeOfferStatus();
+                    status.insert(QStringLiteral("externalOfferAvailable"), offer.available && canPrepare);
+                    status.insert(QStringLiteral("externalOfferRegistered"), offer.registered);
+                    status.insert(QStringLiteral("externalOfferRemovable"), offer.removable);
+                    status.insert(QStringLiteral("externalOfferProblem"), offer.available && !canPrepare ? host.problem : offer.problem);
+                }
                 return result(status);
             }
             if (repairHost) {
@@ -323,71 +323,61 @@ QVariantMap Engine::dispatch(const QVariantMap &command) const
                 return error.isEmpty() ? result(QVariantMap{{QStringLiteral("ok"), true},
                     {QStringLiteral("nativeHostRegistered"), true}}) : failure(error);
             }
-            if (installExtension || removeExtensionPolicy || resetExtensionSetup) {
+            const auto browserStillSelected = [&handler] {
+                return BrowserSetup::defaultHttpsHandler().executable.compare(handler.executable, Qt::CaseInsensitive) == 0;
+            };
+            if (removeLegacyPolicy) {
+                bool approvalRequired = false;
+                auto error = BrowserSetup::removeLegacyPolicy(browserId, &approvalRequired);
+                if (approvalRequired)
+                    error = BrowserSetup::removeLegacyChromePolicyWithAdministratorApproval();
+                if (!error.isEmpty())
+                    return failure(error);
+                const auto arguments = BrowserSetup::browserPolicyRefreshArguments(browserId, handler.executable);
+                const bool refreshRequested = !arguments.isEmpty() && browserStillSelected()
+                    && QProcess::startDetached(handler.executable, arguments);
+                return result(QVariantMap{{QStringLiteral("ok"), true}, {QStringLiteral("legacyPolicyRemoved"), true},
+                                          {QStringLiteral("refreshRequested"), refreshRequested}});
+            }
+            if ((offerExtension || removeOffer) && browserId != QStringLiteral("chrome"))
+                return failure(tr("Chrome can offer the extension only when it is your Windows default browser."));
+            if (removeOffer) {
+                const auto error = BrowserSetup::removeChromeOffer();
+                if (!error.isEmpty())
+                    return failure(error);
+                return result(QVariantMap{{QStringLiteral("ok"), true}, {QStringLiteral("offerRemoved"), true}});
+            }
+            if (offerExtension) {
                 const auto extensionDetected = [](const QVariantMap &value) {
                     return value.value(QStringLiteral("extensionDiscovery")).toString() != QStringLiteral("missing")
                         && (value.value(QStringLiteral("extensionPresent")).toBool()
                             || value.value(QStringLiteral("connectedRecently")).toBool());
                 };
-                const auto browserStillSelected = [&handler] {
-                    return BrowserSetup::defaultHttpsHandler().executable.compare(handler.executable, Qt::CaseInsensitive) == 0;
-                };
-                if (removeExtensionPolicy || resetExtensionSetup) {
-                    const bool setupRemoved = removeExtensionPolicy || BrowserSetup::policyStatus(browserId).removable;
-                    if (setupRemoved) {
-                        bool permissionDenied = false;
-                        auto policyError = BrowserSetup::removePolicy(browserId, &permissionDenied);
-                        if (permissionDenied)
-                            policyError = BrowserSetup::installChromePolicyWithAdministratorApproval(true);
-                        if (!policyError.isEmpty())
-                            return failure(policyError);
-                    }
-                    const auto refreshArguments = setupRemoved
-                        ? BrowserSetup::browserPolicyRefreshArguments(browserId, handler.executable) : QStringList{};
-                    const bool refreshRequested = !refreshArguments.isEmpty() && browserStillSelected()
-                        && QProcess::startDetached(handler.executable, refreshArguments);
-                    return result(QVariantMap{{QStringLiteral("ok"), true},
-                        {QStringLiteral("setupRemoved"), setupRemoved},
-                        {QStringLiteral("removalNeeded"), resetExtensionSetup && extensionDetected(browserResult)},
-                        {QStringLiteral("refreshRequested"), refreshRequested}});
-                }
                 const auto alreadyInstalled = [] {
                     return result(QVariantMap{{QStringLiteral("ok"), true}, {QStringLiteral("alreadyInstalled"), true}});
                 };
                 if (extensionDetected(browserResult))
                     return alreadyInstalled();
-                const auto policy = BrowserSetup::policyStatus(browserId);
-                if (!policy.available && !policy.configured)
-                    return failure(policy.problem);
+                const auto offer = BrowserSetup::chromeOfferStatus();
+                if (!offer.available)
+                    return failure(offer.problem);
                 const auto registrationError = BrowserSetup::registerNativeHost(browserId, false);
                 if (!registrationError.isEmpty())
                     return failure(registrationError);
-                if (!browserStillSelected())
-                    return failure(tr("The Windows default browser changed. Review browser setup again."));
                 const auto rechecked = browserStatusForHandler();
                 if (rechecked.contains(QStringLiteral("error")))
                     return rechecked;
-                if (extensionDetected(rechecked.value(QStringLiteral("result")).toMap()))
-                    return alreadyInstalled();
-                if (!policy.configured) {
-                    bool approvalRequired = false;
-                    auto policyError = BrowserSetup::installPolicy(browserId, &approvalRequired);
-                    if (approvalRequired && !BrowserSetup::policyStatus(browserId).configured)
-                        policyError = BrowserSetup::installChromePolicyWithAdministratorApproval();
-                    if (!policyError.isEmpty())
-                        return failure(policyError);
-                }
-                const auto savedPolicy = BrowserSetup::policyStatus(browserId);
-                if (!savedPolicy.configured)
-                    return failure(savedPolicy.problem.isEmpty()
-                        ? tr("Auralis could no longer find the saved automatic setup.") : savedPolicy.problem);
                 if (!browserStillSelected())
                     return failure(tr("The Windows default browser changed. Review browser setup again."));
-                const auto launchArguments = BrowserSetup::browserPolicyRefreshArguments(browserId, handler.executable);
-                const bool browserOpened = QProcess::startDetached(handler.executable, launchArguments);
-                return result(QVariantMap{{QStringLiteral("ok"), true},
-                    {QStringLiteral("browserOpened"), browserOpened}, {QStringLiteral("pending"), true},
-                    {QStringLiteral("refreshRequested"), browserOpened && !launchArguments.isEmpty()}});
+                if (extensionDetected(rechecked.value(QStringLiteral("result")).toMap()))
+                    return alreadyInstalled();
+                const auto offerError = BrowserSetup::registerChromeOffer();
+                if (!offerError.isEmpty())
+                    return failure(offerError);
+                const bool browserOpened = browserStillSelected()
+                    && QProcess::startDetached(handler.executable, QStringList{});
+                return result(QVariantMap{{QStringLiteral("ok"), true}, {QStringLiteral("offerRegistered"), true},
+                                          {QStringLiteral("browserOpened"), browserOpened}, {QStringLiteral("pending"), true}});
             }
             const auto registrationError = BrowserSetup::registerNativeHost(browserId, false);
             if (!QProcess::startDetached(handler.executable, {store}))
@@ -441,19 +431,25 @@ void Engine::request(const QVariantMap &command, const QJSValue &callback)
     const bool installingUpdate = shellAction == QStringLiteral("update-install");
     const bool changesDownloads = local.isEmpty() && shellAction.isEmpty()
         && !command.contains(QStringLiteral("query"));
-    const auto deliver = [this, callback, installingUpdate](const QVariantMap &response) {
+    const QString language = changesDownloads
+        && command.value(QStringLiteral("action")).toString() == QStringLiteral("glass-setting")
+        && command.value(QStringLiteral("category")).toString() == QStringLiteral("language")
+        ? command.value(QStringLiteral("queue")).toString() : QString();
+    const auto deliver = [this, callback, installingUpdate, language](const QVariantMap &response) {
         const QVariant value = response.value(QStringLiteral("result"));
+        const QVariantMap data = value.toMap();
         QString error = response.value(QStringLiteral("error")).toString();
         if (error.isEmpty())
-            error = value.toMap().value(QStringLiteral("error")).toString();
+            error = data.value(QStringLiteral("error")).toString();
+        if (error.isEmpty() && !language.isEmpty() && data.value(QStringLiteral("saved")).toBool())
+            applyInterfaceLanguage(language);
         if (callback.isCallable()) {
             callback.call({m_scriptEngine->toScriptValue(value),
                            error.isEmpty() ? QJSValue(QJSValue::NullValue) : QJSValue(error)});
         } else if (!error.isEmpty()) {
             emit operationFailed(error);
         }
-        if (error.isEmpty() && installingUpdate
-            && value.toMap().value(QStringLiteral("ok")).toBool())
+        if (error.isEmpty() && installingUpdate && data.value(QStringLiteral("ok")).toBool())
             requestQuit();
     };
     if (installingUpdate && (m_updateInstallPending || m_quitting)) {

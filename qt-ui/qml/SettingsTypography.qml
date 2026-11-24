@@ -119,29 +119,26 @@ ColumnLayout {
 
             contentItem: ColumnLayout {
                 spacing: 3
-                Label {
+                NumeralLabel {
                     objectName: script.rightToLeft ? "arabicFontPreview" : "englishFontPreview"
                     Layout.fillWidth: true
-                    text: script.sampleTitle
-                    textFormat: Text.PlainText
+                    valueText: script.sampleTitle
                     font: root.previewFont(script.family, 20, Font.DemiBold)
                     color: root.colors.text
                     horizontalAlignment: script.rightToLeft ? Text.AlignRight : Text.AlignLeft
                     wrapMode: Text.WordWrap
                 }
-                Label {
+                NumeralLabel {
                     Layout.fillWidth: true
-                    text: script.sampleDetail
-                    textFormat: Text.PlainText
+                    valueText: script.sampleDetail
                     font: root.previewFont(script.family, 13, Font.Normal)
                     color: root.colors.muted
                     horizontalAlignment: script.rightToLeft ? Text.AlignRight : Text.AlignLeft
                     wrapMode: Text.Wrap
                 }
-                Label {
+                NumeralLabel {
                     Layout.fillWidth: true
-                    text: script.sampleStatus
-                    textFormat: Text.PlainText
+                    valueText: script.sampleStatus
                     font: root.previewFont(script.family, 12, Font.Medium)
                     color: root.colors.positive
                     horizontalAlignment: script.rightToLeft ? Text.AlignRight : Text.AlignLeft
@@ -177,8 +174,8 @@ ColumnLayout {
             Accessible.name: qsTr("Font size")
             onMoved: root.draftSizePercent = Math.round(value)
         }
-        Label {
-            text: qsTr("%1%").arg(root.draftSizePercent)
+        NumeralLabel {
+            valueText: qsTr("%1%").arg(root.draftSizePercent)
             color: root.colors.text
         }
     }

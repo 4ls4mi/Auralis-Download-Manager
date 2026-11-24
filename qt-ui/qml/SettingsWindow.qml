@@ -11,8 +11,8 @@ AuralisWindow {
     id: root
 
     title: qsTr("Settings — Auralis Download Manager")
-    width: 1050
-    height: 760
+    width: windowLayout.initialWidth
+    height: windowLayout.initialHeight
     minimumWidth: 650
     minimumHeight: 440
     visible: false
@@ -51,14 +51,15 @@ AuralisWindow {
         {id: "Downloads", name: qsTr("Downloads"), detail: qsTr("File rules, folders, and archive extraction"), terms: qsTr("file folder category archive duplicates extract"), keys: []},
         {id: "Connection", name: qsTr("Connection"), detail: qsTr("Speed limits, proxy, and DNS"), terms: qsTr("speed throttle proxy dns network adapter login authentication"),
             keys: ["max_connections", "speed_limit_on", "speed_limit_kb", "global_limit_on", "global_limit_kb", "net_adapter"]},
-        {id: "Browser Integration", name: qsTr("Browser integration"), detail: qsTr("Extension setup and browser download capture"), terms: qsTr("chrome edge connector install extension capture video subtitles cookies"),
+        {id: "Browser Integration", name: qsTr("Browser integration"), detail: qsTr("Extension setup and browser download capture"), terms: qsTr("browser chrome edge firefox brave opera chromium vivaldi extension install capture"),
             keys: ["capture_opened", "advanced_integration", "proxy_from_browser"]},
+        {id: "Media Helpers", name: qsTr("Video & gallery helpers"), detail: qsTr("Helper installations, video options, and browser sessions"), terms: qsTr("video gallery ffmpeg yt-dlp gallery-dl quality chapters cookies profile"), keys: []},
         {id: "Torrents", name: qsTr("Torrents"), detail: qsTr("Peer discovery and direct download recovery"), terms: qsTr("peer tracker torrent automatic recovery dht lsd share"),
             keys: ["torrent_keep_sharing", "torrent_dht", "torrent_lsd", "torrent_recovery_mode"]},
         {id: "Scheduler", name: qsTr("Scheduler"), detail: qsTr("Queue size, start times, and completion actions"), terms: qsTr("queue scheduler retry weekday schedule start stop"), keys: []},
         {id: "Accounts", name: qsTr("Accounts"), detail: qsTr("File hosts and supported service accounts"), terms: qsTr("account debrid host sign in token api"), keys: []},
         {id: "Appearance", name: qsTr("Appearance"), detail: qsTr("Materials, translucent backgrounds, and indicators"), terms: qsTr("theme tint glass dark light opacity translucent color material background indicator progress motion"), keys: []},
-        {id: "Advanced", name: qsTr("Advanced"), detail: qsTr("Media helpers and other preferences"), terms: qsTr("media helper ffmpeg yt-dlp gallery-dl tools preferences"), keys: []},
+        {id: "Advanced", name: qsTr("Advanced"), detail: qsTr("Other preferences and compatibility options"), terms: qsTr("preferences sounds notification format compatibility"), keys: []},
         {id: "Updates", name: qsTr("Updates & about"), detail: qsTr("Version, update preferences, and release notes"), terms: qsTr("application about update release changelog version notification"), keys: []}
     ]
     readonly property var recoveryChoices: [
@@ -118,10 +119,12 @@ AuralisWindow {
                 {label: qsTr("Do nothing"), value: "off"}
             ]
         },
+        browsers: {description: qsTr("Capture requires the extension and Advanced browser integration. Chromium, Vivaldi, and Helium use the Google Chrome setting when they identify as Chrome. Opera GX uses the Opera setting.")},
         sounds: {description: qsTr("Choose a WAV file for each download or queue event.")},
-        video_cookies: {kind: "select", description: qsTr("Choose the browser where you signed in. Auralis uses the local browser session for media requests when the extension did not send cookies.")},
-        video_cookies_file: {description: qsTr("A Netscape cookies.txt file takes precedence over the browser session. Treat the file like a password.")},
-        video_cookies_profile: {description: qsTr("Use the browser’s default profile, enter its profile name, or choose its directory. In Chrome or Edge, open chrome://version or edge://version and look for Profile Path. In Firefox, open about:profiles and use the Root Directory.")}
+        video_chapters: {section: "Media Helpers"},
+        video_cookies: {section: "Media Helpers", kind: "select", description: qsTr("Choose the browser where you signed in. Auralis uses the local browser session for media requests when the extension did not send cookies.")},
+        video_cookies_file: {section: "Media Helpers", description: qsTr("A Netscape cookies.txt file takes precedence over the browser session. Treat the file like a password.")},
+        video_cookies_profile: {section: "Media Helpers", description: qsTr("Use the browser’s default profile, enter its profile name, or choose its directory. In Chrome or Edge, open chrome://version or edge://version and look for Profile Path. In Firefox, open about:profiles and use the Root Directory.")}
     })
     readonly property var chosen: sections.find(section => section.id === category) || sections[0]
     readonly property var hiddenEngineFields: ["update_check", "speed_limit_on"]
@@ -129,6 +132,13 @@ AuralisWindow {
     readonly property bool showingNetworkAdapter: visible && visibleFields.some(field => field.key === "net_adapter")
     readonly property var destinationSections: term ? sections.filter(section => matchesText(section.name + " " + section.detail + " " + section.terms) ||
         visibleFields.some(field => field.section === section.id)) : sections
+
+    Settings {
+        id: windowLayout
+        category: "SettingsWindowLayout"
+        property int initialWidth: 1050
+        property int initialHeight: 760
+    }
 
     Settings {
         id: updatePrefs
@@ -245,16 +255,17 @@ AuralisWindow {
         }
         for (const field of advancedFields) {
             if (hiddenEngineFields.includes(field.key)) continue
-            if (!term && field.section !== category) continue
             const details = extraDetails[field.key]
             const entry = Object.assign(localizeBackendField(field), details || {})
+            if (!term && entry.section !== category) continue
             if (field.key === "video_cookies") {
                 const stored = String(entry.value || "").trim().toLowerCase()
                 entry.value = stored
                 entry.options = stored && !browserChoices.some(browser => browser.value === stored)
                     ? browserChoices.concat([{label: stored, value: stored}]) : browserChoices
             }
-            if (matchesText(entry.key + " " + entry.label + " " + field.label + " " + (entry.description || "")))
+            const browserNames = field.key === "browsers" ? (entry.captureBrowsers || []).map(row => row.name).join(" ") : ""
+            if (matchesText(entry.key + " " + entry.label + " " + field.label + " " + (entry.description || "") + " " + browserNames))
                 entries.push(entry)
         }
         return entries
@@ -276,6 +287,7 @@ AuralisWindow {
                     load()
                 } else {
                     problem = error || qsTr("Could not save this setting.")
+                    if (field.key === "browsers") load()
                 }
                 return
             }
@@ -636,8 +648,8 @@ AuralisWindow {
                                                 onPressedChanged: if (!pressed) saveSelection()
                                             }
 
-                                            Label {
-                                                text: qsTr("%1%").arg(Math.round(interfaceSize.valueAt(interfaceSize.position)))
+                                            NumeralLabel {
+                                                valueText: qsTr("%1%").arg(Math.round(interfaceSize.valueAt(interfaceSize.position)))
                                                 color: root.colors.text
                                             }
                                         }
@@ -703,10 +715,18 @@ AuralisWindow {
                             visible: !root.term && root.category === "Accounts"
                         }
 
+                        BrowserSetupOptions {
+                            objectName: "settingsBrowserSetupOptions"
+                            Layout.fillWidth: true
+                            visible: !root.term && root.category === "Browser Integration"
+                            monitoring: Qt.platform.os === "windows" && visible
+                                && root.visible && root.visibility !== Window.Minimized
+                            showManualTools: true
+                        }
+
                         SettingsTools {
                             Layout.fillWidth: true
-                            visible: !root.term && (root.category === "Advanced" || root.category === "Browser Integration")
-                            section: root.category
+                            visible: !root.term && root.category === "Media Helpers"
                         }
 
                         SettingsUpdates {

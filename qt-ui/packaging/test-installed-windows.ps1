@@ -144,7 +144,7 @@ try {
     Test-InstalledIcon
     Test-PublisherMetadata
     $approvalHelper = Join-Path $fixture 'auralis-chrome-approval.exe'
-    Run-Fixture $approvalHelper @('install', 'invalid-account-sid', '0') -Timeout 10000 -ExpectedExitCode 2
+    Run-Fixture $approvalHelper @('remove', 'invalid-account-sid', '0') -Timeout 10000 -ExpectedExitCode 2
     if ($env:AURALIS_QT_RELEASE_FONTS -eq '1') {
         $sourceFonts = Join-Path $env:AURALIS_QT_JOB 'payload/interface-fonts'
         $installedFonts = Join-Path $fixture 'interface-fonts'

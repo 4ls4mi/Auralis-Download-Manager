@@ -10,11 +10,11 @@ struct Handler {
     QString name;
 };
 
-struct PolicyStatus {
+struct OfferStatus {
     bool available = false;
-    bool configured = false;
-    QString problem;
+    bool registered = false;
     bool removable = false;
+    QString problem;
 };
 
 struct NativeHostStatus {
@@ -30,9 +30,10 @@ QStringList browserPolicyRefreshArguments(const QString &browserId, const QStrin
 bool isInstalledApplication();
 NativeHostStatus nativeHostStatus(const QString &browserId);
 QString registerNativeHost(const QString &browserId, bool repair);
-PolicyStatus policyStatus(const QString &browserId);
-QString installPolicy(const QString &browserId, bool *windowsApprovalRequired = nullptr);
-QString removePolicy(const QString &browserId, bool *windowsApprovalRequired = nullptr);
-bool chromeWindowsApprovalAvailable();
-QString installChromePolicyWithAdministratorApproval(bool remove = false);
+OfferStatus chromeOfferStatus();
+QString registerChromeOffer();
+QString removeChromeOffer();
+bool legacyPolicyRemovable(const QString &browserId);
+QString removeLegacyPolicy(const QString &browserId, bool *windowsApprovalRequired = nullptr);
+QString removeLegacyChromePolicyWithAdministratorApproval();
 }

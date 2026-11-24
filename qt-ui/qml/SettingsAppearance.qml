@@ -267,9 +267,9 @@ GridLayout {
             }
 
             Heading { text: qsTr("Window background opacity") }
-            Label {
+            NumeralLabel {
                 Layout.fillWidth: true
-                text: qsTr("100% is solid. Lower values show more of the background.")
+                valueText: qsTr("100% is solid. Lower values show more of the background.")
                 color: root.colors.muted
                 wrapMode: Text.WordWrap
             }
@@ -286,8 +286,8 @@ GridLayout {
                     onMoved: MaterialTheme.translucency = (100 - value) / 100
                     Accessible.name: qsTr("Window background opacity")
                 }
-                Label {
-                    text: qsTr("%1% opaque").arg(Math.round(MaterialTheme.opacityFor(MaterialTheme.current) * 100))
+                NumeralLabel {
+                    valueText: qsTr("%1% opaque").arg(Math.round(MaterialTheme.opacityFor(MaterialTheme.current) * 100))
                     color: root.colors.text
                 }
                 GlassButton {
@@ -319,7 +319,7 @@ GridLayout {
                     onMoved: MaterialTheme.tintStrength = value
                     Accessible.name: qsTr("Tint strength")
                 }
-                Label { text: qsTr("%1%").arg(Math.round(MaterialTheme.tintStrength * 100)); color: root.colors.text }
+                NumeralLabel { valueText: qsTr("%1%").arg(Math.round(MaterialTheme.tintStrength * 100)); color: root.colors.text }
             }
 
             Heading { text: qsTr("Accent override") }

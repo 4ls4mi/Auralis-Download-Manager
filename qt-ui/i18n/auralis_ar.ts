@@ -436,6 +436,30 @@
             <source>Auralis could not read the browser’s native messaging policy.</source>
             <translation>تعذّر على Auralis قراءة سياسة المراسلة الأصلية في المتصفح.</translation>
         </message>
+        <message>
+            <source>Chrome’s existing extension registration prevents Auralis from adding an offer. Open the Chrome Web Store to install the extension.</source>
+            <translation>يمنع تسجيل الإضافة الحالي في Chrome تطبيق Auralis من عرض اقتراح التثبيت. افتح سوق Chrome الإلكتروني لتثبيت الإضافة.</translation>
+        </message>
+        <message>
+            <source>Chrome’s extension offer changed. Only an offer created by Auralis can be removed.</source>
+            <translation>تغيّر اقتراح الإضافة في Chrome. يمكن إزالة الاقتراح الذي أنشأه Auralis فقط.</translation>
+        </message>
+        <message>
+            <source>Windows could not remove the Chrome extension offer (Windows error %1).</source>
+            <translation>تعذّر على Windows إزالة اقتراح تثبيت إضافة Chrome (خطأ Windows رقم %1).</translation>
+        </message>
+        <message>
+            <source>Windows could not save the Chrome extension offer (Windows error %1).</source>
+            <translation>تعذّر على Windows حفظ اقتراح تثبيت إضافة Chrome (خطأ Windows رقم %1).</translation>
+        </message>
+        <message>
+            <source>Windows did not remove the Chrome extension offer.</source>
+            <translation>لم يُزل Windows اقتراح تثبيت إضافة Chrome.</translation>
+        </message>
+        <message>
+            <source>Windows did not retain the Chrome extension offer.</source>
+            <translation>لم يحتفظ Windows باقتراح تثبيت إضافة Chrome.</translation>
+        </message>
     </context>
     <context>
         <name>BrowserSetupOptions</name>
@@ -682,6 +706,62 @@
         <message>
             <source>To remove the extension from %1, first choose “%2” in Auralis Settings under “%3”.</source>
             <translation>لإزالة الإضافة من %1، اختر أولًا «%2» ضمن «%3» في إعدادات Auralis.</translation>
+        </message>
+        <message>
+            <source>Check Chrome’s menu for New extension added, then choose Enable extension. Reopen Chrome if the offer is missing.</source>
+            <translation>ابحث في قائمة Chrome عن «تمت إضافة إضافة جديدة»، ثم اختر «تفعيل الإضافة». أعد فتح Chrome إذا لم يظهر الاقتراح.</translation>
+        </message>
+        <message>
+            <source>Chrome asks for your confirmation before enabling the extension.</source>
+            <translation>يطلب Chrome تأكيدك قبل تفعيل الإضافة.</translation>
+        </message>
+        <message>
+            <source>Chrome’s extension offer was removed. If Auralis is still listed, remove it from Chrome’s Extensions page.</source>
+            <translation>أُزيل اقتراح تثبيت الإضافة في Chrome. إذا ظل Auralis مدرجًا، فأزله من صفحة الإضافات في Chrome.</translation>
+        </message>
+        <message>
+            <source>Clear the previous automatic setup Auralis saved for %1?</source>
+            <translation>هل تريد مسح الإعداد التلقائي السابق الذي حفظه Auralis للمتصفح %1؟</translation>
+        </message>
+        <message>
+            <source>Clear the previous automatic setup in Browser integration.</source>
+            <translation>امسح الإعداد التلقائي السابق من «التكامل مع المتصفح».</translation>
+        </message>
+        <message>
+            <source>Could not complete browser setup.</source>
+            <translation>تعذّر إكمال إعداد المتصفح.</translation>
+        </message>
+        <message>
+            <source>If Chrome shows New extension added, choose Enable extension. Then open Auralis’s toolbar icon to verify the connection.</source>
+            <translation>إذا عرض Chrome «تمت إضافة إضافة جديدة»، فاختر «تفعيل الإضافة». ثم افتح Auralis من شريط الأدوات للتحقق من الاتصال.</translation>
+        </message>
+        <message>
+            <source>Offer in Chrome</source>
+            <translation>طلب عرض الإضافة في Chrome</translation>
+        </message>
+        <message>
+            <source>Open Chrome</source>
+            <translation>فتح Chrome</translation>
+        </message>
+        <message>
+            <source>Open Chrome to check for the extension offer.</source>
+            <translation>افتح Chrome للتحقق من ظهور اقتراح تثبيت الإضافة.</translation>
+        </message>
+        <message>
+            <source>Preparing the extension offer in Chrome…</source>
+            <translation>جارٍ تحضير اقتراح تثبيت الإضافة في Chrome…</translation>
+        </message>
+        <message>
+            <source>Remove the extension offer that Auralis registered in Chrome?</source>
+            <translation>هل تريد إزالة اقتراح تثبيت الإضافة الذي سجّله Auralis في Chrome؟</translation>
+        </message>
+        <message>
+            <source>Reset extension setup clears the previous setting Auralis saved.</source>
+            <translation>يمسح خيار «إعادة ضبط إعداد الإضافة» الإعداد السابق الذي حفظه Auralis.</translation>
+        </message>
+        <message>
+            <source>To remove Auralis, use the Extensions page in %1.</source>
+            <translation>لإزالة Auralis، استخدم صفحة الإضافات في %1.</translation>
         </message>
     </context>
     <context>
@@ -1392,6 +1472,14 @@ Info hash %3</source>
             <source>Full view</source>
             <translation>عرض كامل</translation>
         </message>
+        <message>
+            <source>Switch to the compact layout</source>
+            <translation>التبديل إلى العرض المدمج</translation>
+        </message>
+        <message>
+            <source>Return to the full layout</source>
+            <translation>العودة إلى العرض الكامل</translation>
+        </message>
     </context>
     <context>
         <name>Engine</name>
@@ -1494,6 +1582,10 @@ Info hash %3</source>
         <message>
             <source>Auralis could no longer find the saved automatic setup.</source>
             <translation>تعذّر على Auralis العثور على الإعداد التلقائي المحفوظ.</translation>
+        </message>
+        <message>
+            <source>Chrome can offer the extension only when it is your Windows default browser.</source>
+            <translation>لا يمكن لـ Chrome اقتراح تثبيت الإضافة إلا إذا كان متصفحك الافتراضي في Windows.</translation>
         </message>
     </context>
     <context>
@@ -2262,6 +2354,34 @@ Info hash %3</source>
         <message>
             <source>Refresh download address</source>
             <translation>تحديث عنوان التنزيل</translation>
+        </message>
+        <message>
+            <source>Add new download…</source>
+            <translation>إضافة تنزيل جديد…</translation>
+        </message>
+        <message>
+            <source>Arrange by</source>
+            <translation>ترتيب حسب</translation>
+        </message>
+        <message>
+            <source>Clear all filters</source>
+            <translation>مسح كل عوامل التصفية</translation>
+        </message>
+        <message>
+            <source>Delete all completed…</source>
+            <translation>حذف كل التنزيلات المكتملة…</translation>
+        </message>
+        <message>
+            <source>Select all</source>
+            <translation>تحديد الكل</translation>
+        </message>
+        <message>
+            <source>Switch to the compact layout</source>
+            <translation>التبديل إلى العرض المدمج</translation>
+        </message>
+        <message>
+            <source>Return to the full layout</source>
+            <translation>العودة إلى العرض الكامل</translation>
         </message>
     </context>
     <context>
@@ -4160,6 +4280,34 @@ Info hash %3</source>
             <source>Restarting…</source>
             <translation>جارٍ إعادة التشغيل…</translation>
         </message>
+        <message>
+            <source>browser chrome edge firefox brave opera chromium vivaldi extension install capture</source>
+            <translation>متصفح chrome edge firefox brave opera chromium vivaldi إضافة تثبيت التقاط التنزيلات</translation>
+        </message>
+        <message>
+            <source>Video &amp; gallery helpers</source>
+            <translation>أدوات الفيديو ومعارض الصور المساعدة</translation>
+        </message>
+        <message>
+            <source>Helper installations, video options, and browser sessions</source>
+            <translation>تثبيت الأدوات المساعدة، وخيارات الفيديو، وجلسات المتصفح</translation>
+        </message>
+        <message>
+            <source>video gallery ffmpeg yt-dlp gallery-dl quality chapters cookies profile</source>
+            <translation>فيديو معرض صور ffmpeg yt-dlp gallery-dl جودة فصول ملفات تعريف الارتباط ملف المتصفح</translation>
+        </message>
+        <message>
+            <source>Other preferences and compatibility options</source>
+            <translation>تفضيلات أخرى وخيارات التوافق</translation>
+        </message>
+        <message>
+            <source>preferences sounds notification format compatibility</source>
+            <translation>تفضيلات أصوات إشعار تنسيق توافق</translation>
+        </message>
+        <message>
+            <source>Capture requires the extension and Advanced browser integration. Chromium, Vivaldi, and Helium use the Google Chrome setting when they identify as Chrome. Opera GX uses the Opera setting.</source>
+            <translation>يتطلّب التقاط التنزيلات تثبيت الإضافة وتفعيل «خيارات التكامل المتقدمة مع المتصفح». تستخدم متصفحات Chromium وVivaldi وHelium إعداد Google Chrome عندما تعرّف عن نفسها على أنها Chrome. يستخدم Opera GX إعداد Opera.</translation>
+        </message>
     </context>
     <context>
         <name>StartupSetup</name>
@@ -4234,6 +4382,30 @@ Info hash %3</source>
         <message>
             <source>Continue to Auralis</source>
             <translation>متابعة إلى Auralis</translation>
+        </message>
+        <message>
+            <source>Choose your language</source>
+            <translation>اختر لغتك</translation>
+        </message>
+        <message>
+            <source>You can change the interface language later in Settings.</source>
+            <translation>يمكنك تغيير لغة الواجهة لاحقًا من الإعدادات.</translation>
+        </message>
+        <message>
+            <source>Checking optional components…</source>
+            <translation>جارٍ التحقّق من المكوّنات الاختيارية…</translation>
+        </message>
+        <message>
+            <source>Next</source>
+            <translation>التالي</translation>
+        </message>
+        <message>
+            <source>Skip</source>
+            <translation>تخطّي</translation>
+        </message>
+        <message>
+            <source>Close</source>
+            <translation>إغلاق</translation>
         </message>
     </context>
     <context>
@@ -4398,6 +4570,10 @@ Info hash %3</source>
             <source>Installed version %1</source>
             <translation>الصيغة المثبتة %1</translation>
         </message>
+        <message>
+            <source>Auralis update could not finish</source>
+            <translation>تعذّر إكمال تحديث Auralis</translation>
+        </message>
     </context>
     <context>
         <name>UpdateWindow</name>
@@ -4456,6 +4632,22 @@ Info hash %3</source>
         <message>
             <source>Install Auralis %1</source>
             <translation>تثبيت Auralis %1</translation>
+        </message>
+        <message>
+            <source>Continue in background</source>
+            <translation>المتابعة في الخلفية</translation>
+        </message>
+        <message>
+            <source>Minimize</source>
+            <translation>تصغير</translation>
+        </message>
+        <message>
+            <source>Minimize to system tray</source>
+            <translation>تصغير إلى منطقة الإعلام</translation>
+        </message>
+        <message>
+            <source>Hide to main window</source>
+            <translation>إخفاء والعودة إلى النافذة الرئيسية</translation>
         </message>
     </context>
     <context>

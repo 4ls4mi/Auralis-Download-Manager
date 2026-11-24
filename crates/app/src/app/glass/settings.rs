@@ -2,6 +2,27 @@
 //! Password values are never returned. Blank password edits preserve the saved secret.
 use super::*;
 
+fn extension_capture_browsers() -> impl Iterator<Item = &'static str> {
+    crate::settings::BROWSERS.into_iter().filter(|&name| {
+        !matches!(name, "Internet Explorer" | "Microsoft Edge Legacy" | "Apple Safari")
+    })
+}
+
+fn set_browser_capture(browsers: &mut Vec<(String, bool)>, browser: &str, enabled: bool) -> bool {
+    if !extension_capture_browsers().any(|name| name == browser) {
+        return false;
+    }
+    let mut found = false;
+    for (_, capture) in browsers.iter_mut().filter(|(name, _)| name == browser) {
+        *capture = enabled;
+        found = true;
+    }
+    if !found {
+        browsers.push((browser.to_owned(), enabled));
+    }
+    true
+}
+
 impl App {
     pub(super) fn glass_clipboard_mode(&self) -> &'static str {
         match (self.settings.clipboard_autostart, self.settings.glass_clipboard_auto_download) {
@@ -61,7 +82,15 @@ impl App {
         fields.push(json!({"key":"dns_fallback","label":"Fall back to system DNS","section":"Connection","kind":"boolean","value":self.settings.dns_fallback}));
         fields.push(json!({"key":"ftp_passive","label":"Passive FTP","section":"Connection","kind":"boolean","value":self.settings.ftp_passive}));
         fields.push(json!({"key":"site_logins","label":"Site authentication","section":"Connection","kind":"table","columns":[{"label":"Site / path","kind":"text"},{"label":"Username","kind":"text"},{"label":"Password","kind":"password"}],"value":self.settings.site_logins.iter().map(|(site,user,_)|(site,user,"")).collect::<Vec<_>>()}));
-        fields.push(json!({"key":"browsers","label":"Capture downloads from these browsers","section":"Browser Integration","kind":"table","columns":[{"label":"Browser","kind":"text"},{"label":"Capture","kind":"boolean"}],"value":self.settings.browsers}));
+        fields.push(json!({
+            "key": "browsers", "label": "Capture downloads from these browsers", "section": "Browser Integration",
+            "kind": "table", "columns": [{"label":"Browser","kind":"text"},{"label":"Capture","kind":"boolean"}],
+            "value": self.settings.browsers,
+            "captureBrowsers": extension_capture_browsers().map(|name| json!({
+                "name": name,
+                "enabled": !self.settings.browsers.iter().any(|(browser, enabled)| browser == name && !enabled)
+            })).collect::<Vec<_>>()
+        }));
         fields.push(json!({"key":"auto_types","label":"Automatically captured file extensions","section":"Browser Integration","kind":"text","value":self.settings.auto_types}));
         fields.push(json!({"key":"excluded_sites","label":"Excluded sites","section":"Browser Integration","kind":"text","value":self.settings.excluded_sites}));
         fields.push(json!({"key":"excluded_addresses","label":"Excluded download addresses","section":"Browser Integration","kind":"lines","value":self.settings.excluded_addresses}));
@@ -159,7 +188,16 @@ impl App {
                 "dns_nextdns_id" => next.dns_nextdns_id=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?,
                 "dns_fallback" => next.dns_fallback=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?,
                 "ftp_passive" => next.ftp_passive=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?,
-                "browsers" => next.browsers=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?,
+                "browsers" => {
+                    if let Some(browser) = payload["browser"].as_str() {
+                        let enabled = value.as_bool().ok_or("Choose whether to capture browser downloads")?;
+                        if !set_browser_capture(&mut next.browsers, browser, enabled) {
+                            return Err("Choose a supported browser".into());
+                        }
+                    } else {
+                        next.browsers = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
+                    }
+                },
                 "auto_types" => next.auto_types=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?,
                 "excluded_sites" => next.excluded_sites=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?,
                 "excluded_addresses" => next.excluded_addresses=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?,

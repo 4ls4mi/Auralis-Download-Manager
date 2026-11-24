@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Window
 import "TransferData.js" as TransferData
 
 Frame {
@@ -12,9 +13,13 @@ Frame {
     property string installedVersion
     property string targetVersion
     property double installerBytes: 0
+    property double downloadedBytes: -1
+    property string problem
     property string actionLabel
     property bool announceChanges: false
     readonly property var colors: MaterialTheme.palette
+    readonly property bool hasProgress: downloadedBytes >= 0 && installerBytes > 0
+    readonly property real completion: hasProgress ? Math.min(1, downloadedBytes / installerBytes) : 0
     readonly property string headline: {
         switch (stage) {
         case "checking": return qsTr("Checking for updates…")
@@ -25,13 +30,18 @@ Frame {
         case "installing": return qsTr("Starting the Auralis %1 installer…").arg(targetVersion)
         case "closing": return qsTr("Closing Auralis to install %1…").arg(targetVersion)
         case "latest": return qsTr("Auralis is up to date")
-        case "error": return qsTr("Update check unavailable")
+        case "error": return targetVersion ? qsTr("Auralis update could not finish") : qsTr("Update check unavailable")
         default: return qsTr("Auralis %1 is available").arg(targetVersion)
         }
     }
-    readonly property string summary: installerBytes > 0 && targetVersion
-        ? qsTr("Installed %1 · %2 installer").arg(installedVersion).arg(TransferData.bytes(installerBytes))
-        : qsTr("Installed version %1").arg(installedVersion)
+    readonly property string summary: {
+        if (hasProgress)
+            return qsTranslate("UpdateWindow", "%1% · %2 of %3").arg(Math.floor(completion * 100))
+                .arg(TransferData.bytes(downloadedBytes)).arg(TransferData.bytes(installerBytes))
+        return installerBytes > 0 && targetVersion
+            ? qsTr("Installed %1 · %2 installer").arg(installedVersion).arg(TransferData.bytes(installerBytes))
+            : qsTr("Installed version %1").arg(installedVersion)
+    }
     readonly property string symbol: stage === "latest" ? "complete" : stage === "error" ? "details"
         : stage === "checking" || stage === "rechecking" ? "refresh" : "downloads"
     readonly property color accent: MaterialTheme.vividControlAccent(MaterialTheme.actionColor(stage === "error" ? "pause"
@@ -143,18 +153,40 @@ Frame {
             Layout.fillWidth: true
             spacing: 2
 
-            Label {
+            NumeralLabel {
                 Layout.fillWidth: true
-                text: card.headline
-                textFormat: Text.PlainText
+                valueText: card.headline
                 font.pixelSize: TypographyScale.pixels(15)
                 font.weight: Font.DemiBold
                 color: card.ink
                 wrapMode: Text.WordWrap
             }
+            NumeralLabel {
+                Layout.fillWidth: true
+                valueText: card.summary
+                font.pixelSize: TypographyScale.pixels(12)
+                color: card.ink
+                wrapMode: Text.WordWrap
+            }
+            GlassProgress {
+                objectName: "updateCardDownloadProgress"
+                Layout.fillWidth: true
+                Layout.preferredHeight: 11
+                visible: card.hasProgress
+                value: card.completion
+                animated: visible && card.Window.visibility !== Window.Minimized
+                animationStyle: WindowAppearance.progressAnimation
+                shape: WindowAppearance.progressShape === "material"
+                    ? (["bubble", "prism", "ice"].includes(profile.shape) ? profile.shape : "round") : WindowAppearance.progressShape
+                startColor: MaterialTheme.progressColors[0]
+                endColor: MaterialTheme.progressColors[1]
+                showLabel: false
+                Accessible.ignored: true
+            }
             Label {
                 Layout.fillWidth: true
-                text: card.summary
+                visible: Boolean(card.problem)
+                text: card.problem
                 textFormat: Text.PlainText
                 font.pixelSize: TypographyScale.pixels(12)
                 color: card.ink

@@ -214,12 +214,12 @@ DetachedDialogWindow {
             Layout.fillWidth: true
             text: qsTr("Starting a torrent contacts BitTorrent peers.")
         },
-        Label {
+        NumeralLabel {
             visible: root.confirming
             color: root.colors.muted
             wrapMode: Text.WordWrap
             Layout.fillWidth: true
-            text: root.confirming ? root.requestInfo.info.probing
+            valueText: root.confirming ? root.requestInfo.info.probing
                   ? qsTr("Checking the source…") : qsTr("Size %1").arg(Transfer.bytes(root.requestInfo.info.size)) : ""
         },
         Label {
@@ -275,14 +275,13 @@ DetachedDialogWindow {
                 onClicked: savePicker.open()
             }
         },
-        Label {
+        NumeralLabel {
             objectName: "downloadDestinationSpace"
             visible: root.confirming
             Layout.fillWidth: true
             color: root.colors.muted
             wrapMode: Text.WordWrap
-            textFormat: Text.PlainText
-            text: {
+            valueText: {
                 const space = root.destinationSpace
                 if (root.spaceDestination && space === null)
                     return qsTr("Checking drive space…")
@@ -312,6 +311,7 @@ DetachedDialogWindow {
             SpinBox {
                 id: connectionCount
                 objectName: "downloadConnectionCount"
+                font.family: root.numeralInputFamily()
                 from: 0
                 to: 128
                 editable: true

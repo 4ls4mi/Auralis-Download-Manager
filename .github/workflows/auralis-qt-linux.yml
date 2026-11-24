@@ -2,6 +2,11 @@ name: Auralis Qt Linux build
 
 on:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      coordinated_release:
+        type: boolean
+        default: false
   push:
     branches: [wip/auralis-qt-shell]
     paths:
@@ -17,7 +22,8 @@ jobs:
     if: >-
       github.repository == '4ls4mi/Auralis-Download-Manager' &&
       github.ref == 'refs/heads/wip/auralis-qt-shell' &&
-      (github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[build-auralis-linux]'))
+      (github.event_name == 'workflow_dispatch' || inputs.coordinated_release ||
+       contains(github.event.head_commit.message, '[build-auralis-linux]'))
     runs-on: ubuntu-latest
     container: debian:13-slim
     timeout-minutes: 90
@@ -61,7 +67,7 @@ jobs:
       - name: Upload the verified Debian package and checksum
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: auralis-download-manager-linux-debian13-amd64
+          name: auralis-download-manager-linux-debian13-amd64${{ github.run_attempt > 1 && format('-attempt-{0}', github.run_attempt) || '' }}
           path: |
             target/auralis-qt-linux/dist/*.deb
             target/auralis-qt-linux/dist/*.deb.sha256

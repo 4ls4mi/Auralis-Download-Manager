@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Window
 
 ColumnLayout {
     id: root
@@ -103,6 +104,9 @@ ColumnLayout {
     Component.onCompleted: load()
 
     component ScheduleInput: TextField {
+        property bool numericValue: true
+        font.family: numericValue && text.length ? root.Window.window?.numeralInputFamily?.() || ""
+            : root.Window.window?.font.family || ""
         color: root.colors.text
         placeholderTextColor: root.colors.muted
         selectByMouse: true
@@ -143,6 +147,7 @@ ColumnLayout {
         Label { text: qsTr("Simultaneous downloads"); color: root.colors.text }
         SpinBox {
             id: simultaneous
+            font.family: root.Window.window?.numeralInputFamily?.() || ""
             Layout.fillWidth: true
             from: 1
             to: 128
@@ -205,6 +210,7 @@ ColumnLayout {
         Label { text: qsTr("Open after completion"); color: root.colors.text }
         ScheduleInput {
             id: completionFile
+            numericValue: false
             Layout.fillWidth: true
             placeholderText: qsTr("File path")
             Accessible.name: qsTr("File to open after completion")

@@ -243,10 +243,10 @@ DetachedDialogWindow {
                     color: root.colors.ink
                     wrapMode: Text.Wrap
                 }
-                Label {
+                NumeralLabel {
                     objectName: "completedDownloadSize"
                     Layout.fillWidth: true
-                    text: root.exactBytes === "" ? qsTr("Loading download details…")
+                    valueText: root.exactBytes === "" ? qsTr("Loading download details…")
                         : root.exactBytes === "1" ? qsTr("Downloaded 1 byte")
                         : qsTr("Downloaded %1 (%2 bytes)").arg(Transfer.bytes(root.exactBytes)).arg(root.byteCount)
                     color: root.colors.muted

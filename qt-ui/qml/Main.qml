@@ -92,6 +92,7 @@ AuralisWindow {
     property string filterKey: "all"
     property string searchTerm: ""
     property int sortOrder: 0
+    readonly property var downloadSortLabels: [qsTr("Newest first"), qsTr("Oldest first"), qsTr("Name"), qsTr("Size"), qsTr("Status")]
     property bool showSidebar: true
     property var chosenIds: []
     property string selectionAnchor: ""
@@ -605,12 +606,15 @@ AuralisWindow {
         id: updateNotice
         backend: engine
         anchorWindow: root
-        automaticChecks: settingsWindow.automaticUpdateChecks
+        automaticChecks: settingsWindow.automaticUpdateChecks && !startupSetup.blockingAnnouncements
+        minimizeToTray: root.minimizeToTray
         presentation: settingsWindow.updatePresentation
     }
     StartupSetup {
+        id: startupSetup
         hostWindow: root
         automatic: engine.interactiveSetup === true
+        languages: settingsWindow.common.language.options
     }
     AddDownloadDialog { id: addDialog }
     // Preserve QObject ownership without making the dashboard their native parent.
@@ -626,7 +630,7 @@ AuralisWindow {
     GalleryDownloadDialog {
         id: galleryDialog
         parent: root.contentItem
-        onHelpersRequested: settingsWindow.showCategory("Advanced")
+        onHelpersRequested: settingsWindow.showCategory("Media Helpers")
     }
     BatchDownloadDialog { id: batchDialog; parent: root.contentItem }
     EnginePrompts {
@@ -888,6 +892,54 @@ AuralisWindow {
     }
 
     AppMenu {
+        id: downloadAreaMenu
+        objectName: "downloadAreaContextMenu"
+        parent: root.contentItem
+
+        AppMenuItem { symbol: "add"; action: addUrl; text: qsTr("Add new download…") }
+        AppMenuItem {
+            symbol: "check"
+            text: qsTr("Select all")
+            enabled: rows.count > 0
+            onTriggered: root.selectEveryRow()
+        }
+        AppMenu {
+            id: arrangeDownloads
+            objectName: "arrangeDownloadsMenu"
+            title: qsTr("Arrange by")
+            Instantiator {
+                model: root.downloadSortLabels
+                delegate: AppMenuItem {
+                    required property int index
+                    required property string modelData
+                    text: modelData
+                    checkable: true
+                    checked: root.sortOrder === index
+                    onTriggered: root.sortOrder = index
+                }
+                onObjectAdded: (index, object) => arrangeDownloads.insertItem(index, object)
+                onObjectRemoved: (index, object) => arrangeDownloads.removeItem(object)
+            }
+        }
+        AppMenuItem {
+            symbol: "refresh"
+            text: qsTr("Clear all filters")
+            enabled: root.searchTerm.length > 0 || root.filterType !== "status" || root.filterKey !== "all"
+            onTriggered: {
+                searchField.clear()
+                root.chooseFilter("status", "all")
+            }
+        }
+        MenuRule {}
+        AppMenuItem {
+            symbol: "remove"
+            action: removeCompleted
+            text: qsTr("Delete all completed…")
+            destructive: true
+        }
+    }
+
+    AppMenu {
         id: contextMenu
         objectName: "downloadContextMenu"
         parent: root.contentItem
@@ -1028,9 +1080,9 @@ AuralisWindow {
                 font.pixelSize: TypographyScale.pixels(12)
                 font.weight: libraryButton.checked ? Font.DemiBold : Font.Normal
             }
-            Label {
+            NumeralLabel {
                 visible: libraryButton.count.length > 0
-                text: libraryButton.count
+                valueText: libraryButton.count
                 color: MaterialTheme.controlTextInk(root.sidebarMuted, libraryButton.actualFace)
                 font.pixelSize: TypographyScale.pixels(11)
             }
@@ -1162,20 +1214,38 @@ AuralisWindow {
                         id: compactButton
                         objectName: "mainCompactView"
                         readonly property string viewLabel: root.compactView ? qsTr("Full view") : qsTr("Compact view")
-                        Layout.preferredWidth: 32
+                        readonly property string viewHint: root.compactView ? qsTr("Return to the full layout")
+                            : qsTr("Switch to the compact layout")
                         Layout.preferredHeight: 30
+                        text: viewLabel
+                        font.weight: Font.DemiBold
                         accent: root.colors.accent
                         filled: root.compactView
                         padding: 3
+                        leftPadding: 8
+                        rightPadding: 8
                         Accessible.name: viewLabel
-                        contentItem: DashboardIcon {
-                            symbol: root.compactView ? "fullView" : "compactView"
-                            ink: compactButton.iconInk
-                            surface: compactButton.faceColor
-                            relief: compactButton.enabled
+                        Accessible.description: viewHint
+                        contentItem: RowLayout {
+                            spacing: 5
+                            transform: Translate { y: compactButton.faceOffset }
+                            DashboardIcon {
+                                Layout.preferredWidth: 18
+                                Layout.preferredHeight: 18
+                                symbol: root.compactView ? "fullView" : "compactView"
+                                ink: compactButton.iconInk
+                                surface: compactButton.faceColor
+                                relief: compactButton.enabled
+                            }
+                            Label {
+                                text: compactButton.text
+                                color: compactButton.buttonInk
+                                font: compactButton.font
+                                Accessible.ignored: true
+                            }
                         }
-                        ToolTip.visible: hovered
-                        ToolTip.text: viewLabel
+                        ToolTip.visible: hovered || visualFocus
+                        ToolTip.text: viewHint
                         ToolTip.delay: 420
                         onClicked: root.toggleCompactView()
                     }
@@ -1416,8 +1486,11 @@ AuralisWindow {
             stage: updateNotice.statusStage
             installedVersion: engine.version
             targetVersion: updateNotice.statusRelease?.version || ""
-            installerBytes: Number(updateNotice.statusRelease?.size || 0)
-            actionLabel: updateNotice.updateInProgress ? qsTr("View update status") : qsTr("Review update")
+            installerBytes: updateNotice.statusInstallerBytes
+            downloadedBytes: updateNotice.statusDownloadedBytes
+            problem: updateNotice.statusProblem
+            actionLabel: updateNotice.updateInProgress || updateNotice.statusProblem
+                ? qsTr("View update status") : qsTr("Review update")
             announceChanges: true
             onActionRequested: root.showUpdates()
         }
@@ -1599,10 +1672,10 @@ AuralisWindow {
                                 font.weight: Font.Bold
                                 elide: Text.ElideRight
                             }
-                            Label {
+                            NumeralLabel {
                                 visible: !root.compactView
                                 Layout.fillWidth: true
-                                text: qsTr("%1 of %2 downloads").arg(rows.count).arg(root.downloads.length)
+                                valueText: qsTr("%1 of %2 downloads").arg(rows.count).arg(root.downloads.length)
                                 color: root.colors.muted
                                 font.pixelSize: TypographyScale.pixels(11)
                             }
@@ -1616,7 +1689,7 @@ AuralisWindow {
                             id: sortSelector
                             visible: !root.compactView
                             Layout.preferredWidth: root.compact ? 115 : 132
-                            model: [qsTr("Newest first"), qsTr("Oldest first"), qsTr("Name"), qsTr("Size"), qsTr("Status")]
+                            model: root.downloadSortLabels
                             currentIndex: root.sortOrder
                             onActivated: index => root.sortOrder = index
                             Accessible.name: qsTr("Sort downloads")
@@ -1639,8 +1712,8 @@ AuralisWindow {
                     RowLayout {
                         Layout.fillWidth: true
                         visible: !root.compactView && root.chosenIds.length > 0
-                        Label {
-                            text: qsTr("%1 selected").arg(root.chosenItems.length)
+                        NumeralLabel {
+                            valueText: qsTr("%1 selected").arg(root.chosenItems.length)
                             color: root.colors.ink
                         }
                         GlassButton { action: resumeTransfers; accent: root.colors.positive }
@@ -1668,8 +1741,8 @@ AuralisWindow {
                                 Column {
                                     spacing: 3
                                     Label { text: qsTr("Total speed"); color: root.colors.muted; font.pixelSize: TypographyScale.pixels(11) }
-                                    Label {
-                                        text: TransferData.rate(engine.dashboard.speed || 0)
+                                    NumeralLabel {
+                                        valueText: TransferData.rate(engine.dashboard.speed || 0)
                                         color: root.colors.ink
                                         font.pixelSize: TypographyScale.pixels(19)
                                         font.weight: Font.DemiBold
@@ -1704,8 +1777,8 @@ AuralisWindow {
                                     color: root.colors.summaryInk || root.colors.ink
                                     font.pixelSize: TypographyScale.pixels(11)
                                 }
-                                Label {
-                                    text: String(root.counts.downloading)
+                                NumeralLabel {
+                                    valueText: String(root.counts.downloading)
                                     color: root.colors.summaryInk || root.colors.ink
                                     font.pixelSize: TypographyScale.pixels(21)
                                     font.weight: Font.DemiBold
@@ -1830,7 +1903,18 @@ AuralisWindow {
                         }
                         Accessible.role: Accessible.List
                         Accessible.name: qsTr("Downloads list")
-                        ScrollBar.vertical: LibraryScrollBar {}
+                        ScrollBar.vertical: LibraryScrollBar { id: downloadsScrollBar }
+                        TapHandler {
+                            acceptedButtons: Qt.RightButton
+                            onTapped: point => {
+                                if (downloadsScrollBar.visible && root.listGutter > 0
+                                        && downloadsScrollBar.contains(downloadsScrollBar.mapFromItem(null, point.scenePosition)))
+                                    return
+                                const contentPosition = list.contentItem.mapFromItem(null, point.scenePosition)
+                                if (list.indexAt(contentPosition.x, contentPosition.y) === -1)
+                                    downloadAreaMenu.popup(root.contentItem.mapFromItem(null, point.scenePosition))
+                            }
+                        }
                         delegate: DashboardRow {
                             id: downloadRow
                             required property int index
@@ -1899,10 +1983,12 @@ AuralisWindow {
                                 if (root.currentItem)
                                     root.showDownload(root.currentItem.id)
                                 event.accepted = true
-                            } else if ((event.key === Qt.Key_Menu || (event.key === Qt.Key_F10 &&
-                                        (event.modifiers & Qt.ShiftModifier))) && root.currentItem) {
+                            } else if (event.key === Qt.Key_Menu || (event.key === Qt.Key_F10 &&
+                                        (event.modifiers & Qt.ShiftModifier))) {
                                 const row = list.currentItem
-                                if (row)
+                                if (!root.currentItem)
+                                    downloadAreaMenu.popup(list.mapToItem(root.contentItem, 12, 12))
+                                else if (row)
                                     contextMenu.popup(row.mapToItem(root.contentItem, 12, row.height))
                                 else
                                     contextMenu.popup()
@@ -2034,7 +2120,7 @@ AuralisWindow {
                             anchors.centerIn: parent
                             spacing: 2
                             Label { text: modelData.title; color: root.colors.muted; font.pixelSize: TypographyScale.pixels(11) }
-                            Label { text: modelData.value; color: root.colors.ink; font.weight: Font.DemiBold }
+                            NumeralLabel { valueText: modelData.value; color: root.colors.ink; font.weight: Font.DemiBold }
                         }
                     }
                 }
@@ -2050,18 +2136,17 @@ AuralisWindow {
                     gridColor: root.colors.divider
                     Accessible.name: qsTr("Recent total transfer speed")
                 }
-                Label {
+                NumeralLabel {
                     id: statusMessage
                     visible: !root.compactView || Boolean(root.actionError)
                     Layout.preferredWidth: Math.min(root.compactView ? 134 : 240, Math.ceil(implicitWidth))
-                    text: root.actionError || (root.online ? qsTr("Auralis %1").arg(engine.version) : engine.status || qsTr("Offline"))
-                    textFormat: Text.PlainText
+                    valueText: root.actionError || (root.online ? qsTr("Auralis %1").arg(engine.version) : engine.status || qsTr("Offline"))
                     color: root.actionError ? root.colors.destructive : root.colors.muted
                     elide: Text.ElideRight
                     font.pixelSize: TypographyScale.pixels(11)
                     PlainTextToolTip {
-                        visible: statusHover.hovered && statusMessage.text.length > 20
-                        text: statusMessage.text
+                        visible: statusHover.hovered && statusMessage.valueText.length > 20
+                        text: statusMessage.valueText
                     }
                     HoverHandler { id: statusHover }
                 }

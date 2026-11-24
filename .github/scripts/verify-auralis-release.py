@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify release assets against the exact artifacts from a Windows build."""
+"""Verify release assets against the exact artifacts from a verified build."""
 import argparse
 import hashlib
 import json

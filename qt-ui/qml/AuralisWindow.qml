@@ -39,4 +39,8 @@ ApplicationWindow {
             return font.family
         return fontSettings.fontForText(text).family || font.family
     }
+
+    function numeralInputFamily() {
+        return fontSettings?.numeralInputFamily?.(font.family) || font.family
+    }
 }

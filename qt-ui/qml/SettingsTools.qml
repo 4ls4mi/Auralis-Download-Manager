@@ -3,27 +3,21 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import QtQuick.Window
 
 ColumnLayout {
     id: root
 
-    property string section: "Advanced"
     property var helpers: null
     property bool loadingHelpers: false
     property bool helperRequest: false
     property string helperProblem: ""
-    readonly property bool browserSection: section === "Browser Integration"
-    readonly property bool hasWindowsIntegration: Qt.platform.os === "windows"
-    readonly property bool browserSetupVisible: browserSection && hasWindowsIntegration && visible
-        && Boolean(Window.window?.visible) && Window.window.visibility !== Window.Minimized
     readonly property bool installingHelper: Boolean(helpers && helpers.job && helpers.job.state === "installing")
     readonly property var colors: MaterialTheme.palette
 
     spacing: 14
 
     function loadHelpers() {
-        if (browserSection || loadingHelpers)
+        if (loadingHelpers)
             return
         loadingHelpers = true
         engine.request({query: "glass-helpers"}, function(result, error) {
@@ -54,34 +48,16 @@ ColumnLayout {
 
     Component.onCompleted: if (visible) loadHelpers()
     onVisibleChanged: if (visible) loadHelpers()
-    onSectionChanged: if (visible) loadHelpers()
     Timer {
         interval: 1500
         repeat: true
-        running: root.visible && !root.browserSection
+        running: root.visible
         onTriggered: root.loadHelpers()
-    }
-
-    BrowserSetupOptions {
-        objectName: "settingsBrowserSetupOptions"
-        Layout.fillWidth: true
-        visible: root.browserSection
-        monitoring: root.browserSetupVisible
-        showManualTools: true
     }
 
     ColumnLayout {
         Layout.fillWidth: true
-        visible: !root.browserSection
         spacing: 8
-
-        Label {
-            Layout.fillWidth: true
-            text: qsTr("Video and gallery helpers")
-            color: root.colors.text
-            font.pixelSize: TypographyScale.pixels(17)
-            font.weight: Font.DemiBold
-        }
 
         Repeater {
             model: root.helpers ? root.helpers.tools : []

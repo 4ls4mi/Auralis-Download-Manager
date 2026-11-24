@@ -15,6 +15,7 @@ Window {
     required property var backend
     required property Window anchorWindow
     property bool automaticChecks: true
+    property bool minimizeToTray: false
     property string presentation: "toast"
     property var availableUpdate: null
 
@@ -25,8 +26,13 @@ Window {
     readonly property var colors: MaterialTheme.palette
     readonly property bool working: stage !== ""
     readonly property bool updateInProgress: updateWindow.requestInProgress
-    readonly property string statusStage: updateInProgress ? updateWindow.statusStage : availableUpdate ? "available" : ""
-    readonly property var statusRelease: updateInProgress ? updateWindow.release : availableUpdate
+    readonly property string statusProblem: updateWindow.problem
+    readonly property string statusStage: updateInProgress ? updateWindow.statusStage
+        : statusProblem ? "error" : availableUpdate ? "available" : ""
+    readonly property var statusRelease: updateInProgress || statusProblem ? updateWindow.release : availableUpdate
+    readonly property double statusInstallerBytes: updateWindow.stage === "downloading"
+        ? updateWindow.totalBytes : Number(statusRelease?.size || 0)
+    readonly property double statusDownloadedBytes: updateWindow.stage === "downloading" ? updateWindow.downloadedBytes : -1
     readonly property int bottomGap: 148
 
     property var release: null
@@ -208,7 +214,7 @@ Window {
     }
 
     function showUpdate(owner) {
-        if (updateInProgress) { updateWindow.open(); return; }
+        if (updateInProgress || statusProblem) { updateWindow.present(); return; }
         if (!availableUpdate) { manualCheck(owner); return; }
         visible = false;
         if (!updateWindow.requestInProgress) updateWindow.hostWindow = owner || anchorWindow;
@@ -224,6 +230,14 @@ Window {
         id: updateWindow
         hostWindow: popup.anchorWindow
         backend: popup.backend
+        minimizeToTray: popup.minimizeToTray
+        onShowMainRequested: {
+            const mainWindow = popup.anchorWindow
+            if (!mainWindow.visible || mainWindow.visibility === Window.Minimized)
+                mainWindow.showNormal()
+            mainWindow.raise()
+            mainWindow.requestActivate()
+        }
         onChecked: result => {
             popup.availableUpdate = result.state === "available" ? result : null;
             if (result.state === "available") {

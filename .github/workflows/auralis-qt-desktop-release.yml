@@ -1,0 +1,72 @@
+name: Auralis desktop release
+
+on:
+  push:
+    branches: [wip/auralis-qt-shell]
+    paths:
+      - 'qt-ui/**'
+      - 'crates/**'
+      - 'docs/glass-releases/**'
+      - '.github/workflows/auralis-qt-desktop-release.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: auralis-qt-desktop-release
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    if: >-
+      github.repository == '4ls4mi/Auralis-Download-Manager' &&
+      contains(github.event.head_commit.message, '[release-auralis-desktop]')
+    uses: ./.github/workflows/auralis-qt-windows.yml
+    permissions:
+      actions: read
+      contents: write
+    with:
+      coordinated_release: true
+    secrets:
+      AURALIS_RELEASE_FONT_KEY: ${{ secrets.AURALIS_RELEASE_FONT_KEY }}
+
+  linux:
+    if: >-
+      github.repository == '4ls4mi/Auralis-Download-Manager' &&
+      contains(github.event.head_commit.message, '[release-auralis-desktop]')
+    uses: ./.github/workflows/auralis-qt-linux.yml
+    with:
+      coordinated_release: true
+
+  macos:
+    if: >-
+      github.repository == '4ls4mi/Auralis-Download-Manager' &&
+      contains(github.event.head_commit.message, '[release-auralis-desktop]')
+    uses: ./.github/workflows/auralis-qt-macos.yml
+    with:
+      coordinated_release: true
+
+  publish:
+    name: Publish verified desktop release
+    needs: [windows, linux, macos]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Verify and publish all desktop artifacts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          AURALIS_DESKTOP_RELEASE: '1'
+          AURALIS_INSTALLER_ARTIFACT_ID: ${{ needs.windows.outputs.installer-id }}
+          AURALIS_INSTALLER_ARTIFACT_DIGEST: ${{ needs.windows.outputs.installer-digest }}
+          AURALIS_EXTENSIONS_ARTIFACT_ID: ${{ needs.windows.outputs.extensions-id }}
+          AURALIS_EXTENSIONS_ARTIFACT_DIGEST: ${{ needs.windows.outputs.extensions-digest }}
+        run: bash qt-ui/packaging/publish-windows.sh

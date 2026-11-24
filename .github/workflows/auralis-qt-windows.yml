@@ -1,6 +1,23 @@
 name: Auralis Qt Windows build on your PC
 
 on:
+  workflow_call:
+    inputs:
+      coordinated_release:
+        type: boolean
+        default: false
+    secrets:
+      AURALIS_RELEASE_FONT_KEY:
+        required: true
+    outputs:
+      installer-id:
+        value: ${{ jobs.windows-x64.outputs.installer-id }}
+      installer-digest:
+        value: ${{ jobs.windows-x64.outputs.installer-digest }}
+      extensions-id:
+        value: ${{ jobs.windows-x64.outputs.extensions-id }}
+      extensions-digest:
+        value: ${{ jobs.windows-x64.outputs.extensions-digest }}
   workflow_dispatch:
     inputs:
       publish:
@@ -39,7 +56,8 @@ jobs:
     if: >-
       github.repository == '4ls4mi/Auralis-Download-Manager' &&
       github.ref == 'refs/heads/wip/auralis-qt-shell' &&
-      (github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[build-auralis-qt]'))
+      (inputs.coordinated_release || github.event_name == 'workflow_dispatch' ||
+       contains(github.event.head_commit.message, '[build-auralis-qt]'))
     runs-on: [self-hosted, Windows, X64, auralis]
     timeout-minutes: 180
     defaults:
@@ -145,7 +163,7 @@ jobs:
     name: Publish verified public release
     needs: windows-x64
     if: >-
-      !cancelled() &&
+      !cancelled() && !inputs.coordinated_release &&
       github.repository == '4ls4mi/Auralis-Download-Manager' &&
       github.ref == 'refs/heads/wip/auralis-qt-shell' &&
       ((needs.windows-x64.result == 'success' &&

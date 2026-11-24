@@ -534,10 +534,10 @@ Item {
         }
     }
 
-    Text {
+    NumeralLabel {
         anchors.centerIn: parent
         visible: progress.showLabel
-        text: qsTr("%1%").arg(Math.round(progress.amount * 100))
+        valueText: qsTr("%1%").arg(Math.round(progress.amount * 100))
         color: "#ffffff"
         font.pixelSize: TypographyScale.pixels(12)
         font.weight: Font.DemiBold

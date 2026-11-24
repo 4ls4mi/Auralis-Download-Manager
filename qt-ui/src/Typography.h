@@ -1,10 +1,13 @@
 #pragma once
 
 #include <QFont>
+#include <QHash>
 #include <QObject>
 #include <QStringList>
 #include <QUrl>
 #include <QVariant>
+
+#include <array>
 
 class Typography final : public QObject
 {
@@ -43,6 +46,8 @@ public:
     Q_INVOKABLE bool setInterfaceScalePercent(int percent);
     Q_INVOKABLE QFont fontForText(const QString &text) const;
     Q_INVOKABLE QFont previewFont(const QString &family) const;
+    Q_INVOKABLE QString numeralMarkup(const QString &text, const QString &family) const;
+    Q_INVOKABLE QString numeralInputFamily(const QString &family) const;
     Q_INVOKABLE QString importFont(const QUrl &file);
 
 signals:
@@ -54,10 +59,13 @@ private:
     QFont fontWithFamily(const QString &family) const;
     void applyInterfaceFont() const;
     void refreshFontOptions();
+    uint numeralCoverage(const QString &family) const;
 
     const QFont m_systemFont;
     const QStringList m_latinFallbacks;
     const QStringList m_arabicFallbacks;
+    const std::array<QString, 3> m_numeralFamilies;
+    mutable QHash<QString, uint> m_numeralCoverage;
     QVariantList m_englishFontOptions;
     QVariantList m_arabicFontOptions;
     QString m_preferredEnglishFamily;

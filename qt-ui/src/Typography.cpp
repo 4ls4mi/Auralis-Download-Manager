@@ -7,6 +7,7 @@
 #include <QFileInfo>
 #include <QFontDatabase>
 #include <QLocale>
+#include <QPainterPath>
 #include <QRawFont>
 #include <QSaveFile>
 #include <QSettings>
@@ -62,6 +63,73 @@ constexpr int DefaultPercent = 100;
 constexpr int MaximumFontPercent = 130;
 constexpr int MaximumInterfacePercent = 150;
 constexpr qint64 MaximumFontBytes = 16 * 1024 * 1024;
+constexpr std::array NumeralStarts{0x0030, 0x0660, 0x06f0};
+
+int numeralRange(QChar character)
+{
+    for (size_t index = 0; index < NumeralStarts.size(); ++index) {
+        const int digit = character.unicode() - NumeralStarts[index];
+        if (digit >= 0 && digit < 10)
+            return int(index);
+    }
+    return -1;
+}
+
+QRawFont numeralFace(const QString &family)
+{
+    QFont font(family);
+    font.setPixelSize(24);
+    font.setStyleStrategy(QFont::NoFontMerging);
+    return QRawFont::fromFont(font);
+}
+
+bool supportsNumeralRange(const QRawFont &face, int first)
+{
+    if (!face.isValid())
+        return false;
+    QString digits;
+    for (int index = 0; index < 10; ++index)
+        digits.append(QChar(ushort(first + index)));
+    const auto glyphs = face.glyphIndexesForString(digits);
+    if (glyphs.size() != 10)
+        return false;
+    QList<QPainterPath> outlines;
+    for (const auto glyph : glyphs) {
+        if (glyph == 0)
+            return false;
+        auto outline = face.pathForGlyph(glyph);
+        // Some demo faces map each digit to a different glyph ID that draws
+        // the same placeholder. Coverage alone would count those as usable.
+        if (outline.isEmpty() || outlines.contains(outline))
+            return false;
+        outlines.append(std::move(outline));
+    }
+    return true;
+}
+
+std::array<QString, 3> numeralFallbacks(const QFont &system)
+{
+    auto candidates = system.families() + QFontDatabase::systemFont(QFontDatabase::GeneralFont).families();
+    candidates += {QStringLiteral("Segoe UI"), QStringLiteral("Arial"), QStringLiteral("Tahoma"),
+                   QStringLiteral("Geeza Pro"), QStringLiteral("Noto Sans Arabic"),
+                   QStringLiteral("DejaVu Sans")};
+    candidates += QFontDatabase::families(QFontDatabase::Arabic);
+    candidates += QFontDatabase::families(QFontDatabase::Latin);
+    candidates.removeDuplicates();
+    std::array<QString, 3> fallbacks;
+    for (const auto &candidate : candidates) {
+        if (candidate.isEmpty() || !QFontDatabase::hasFamily(candidate))
+            continue;
+        const auto face = numeralFace(candidate);
+        for (size_t index = 0; index < fallbacks.size(); ++index) {
+            if (fallbacks[index].isEmpty() && supportsNumeralRange(face, NumeralStarts[index]))
+                fallbacks[index] = face.familyName();
+        }
+        if (!fallbacks[0].isEmpty() && !fallbacks[1].isEmpty() && !fallbacks[2].isEmpty())
+            break;
+    }
+    return fallbacks;
+}
 
 int savedPercent(const QVariant &value, int maximum)
 {
@@ -244,6 +312,7 @@ Typography::Typography(int activeInterfaceScalePercent, QObject *parent)
       m_systemFont(QApplication::font()),
       m_latinFallbacks(QFontDatabase::applicationFallbackFontFamilies(QChar::Script_Latin)),
       m_arabicFallbacks(QFontDatabase::applicationFallbackFontFamilies(QChar::Script_Arabic)),
+      m_numeralFamilies(numeralFallbacks(m_systemFont)),
       m_fontSizePercent(DefaultPercent),
       m_interfaceScalePercent(DefaultPercent),
       m_activeInterfaceScalePercent(activeInterfaceScalePercent)
@@ -271,6 +340,7 @@ Typography::Typography(int activeInterfaceScalePercent, QObject *parent)
 
 void Typography::refreshFontOptions()
 {
+    m_numeralCoverage.clear();
     m_englishFontOptions = fontOptions(EnglishFonts, QFontDatabase::Latin);
     m_arabicFontOptions = fontOptions(ArabicFonts, QFontDatabase::Arabic);
 }
@@ -359,6 +429,78 @@ QFont Typography::previewFont(const QString &family) const
 {
     const auto latin = installedFamily(family, m_englishFontOptions);
     return fontWithFamily(latin.isEmpty() ? installedFamily(family, m_arabicFontOptions) : latin);
+}
+
+uint Typography::numeralCoverage(const QString &family) const
+{
+    const auto effective = family.isEmpty() ? m_systemFont.family() : family;
+    const auto existing = m_numeralCoverage.constFind(effective);
+    if (existing != m_numeralCoverage.constEnd())
+        return existing.value();
+    const auto face = numeralFace(effective);
+    uint mask = 0;
+    for (size_t index = 0; index < NumeralStarts.size(); ++index) {
+        if (supportsNumeralRange(face, NumeralStarts[index]))
+            mask |= 1u << index;
+    }
+    m_numeralCoverage.insert(effective, mask);
+    return mask;
+}
+
+QString Typography::numeralMarkup(const QString &text, const QString &family) const
+{
+    QString markup;
+    qsizetype start = 0;
+    QString currentFallback;
+    uint coverage = 0;
+    bool coverageKnown = false;
+    bool substituted = false;
+    const auto append = [&](qsizetype end) {
+        const auto part = text.mid(start, end - start).toHtmlEscaped();
+        if (currentFallback.isEmpty()) {
+            markup += part;
+        } else {
+            markup += QStringLiteral("<font face=\"%1\">%2</font>")
+                .arg(currentFallback.toHtmlEscaped(), part);
+            substituted = true;
+        }
+        start = end;
+    };
+
+    for (qsizetype position = 0; position < text.size(); ++position) {
+        QString fallback;
+        const int range = numeralRange(text[position]);
+        if (range >= 0) {
+            if (!coverageKnown) {
+                coverage = numeralCoverage(family);
+                coverageKnown = true;
+            }
+            if ((coverage & (1u << range)) == 0)
+                fallback = m_numeralFamilies[range];
+        }
+        if (fallback != currentFallback) {
+            append(position);
+            currentFallback = fallback;
+        }
+    }
+    if (!substituted && currentFallback.isEmpty())
+        return {};
+    append(text.size());
+    return QStringLiteral("<div style=\"white-space:pre-wrap;margin:0\">%1</div>").arg(markup);
+}
+
+QString Typography::numeralInputFamily(const QString &family) const
+{
+    const auto zero = QLocale().zeroDigit();
+    const int range = zero.isEmpty() ? 0 : qMax(0, numeralRange(zero.front()));
+    const uint needed = 1u | (1u << range);
+    if ((numeralCoverage(family) & needed) == needed)
+        return family;
+    for (const auto &fallback : m_numeralFamilies) {
+        if (!fallback.isEmpty() && (numeralCoverage(fallback) & needed) == needed)
+            return fallback;
+    }
+    return m_numeralFamilies[range].isEmpty() ? family : m_numeralFamilies[range];
 }
 
 int Typography::fontSizeMinimum() const { return MinimumPercent; }

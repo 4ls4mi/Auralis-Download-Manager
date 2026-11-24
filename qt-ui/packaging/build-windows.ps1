@@ -93,6 +93,17 @@ try {
     Invoke-Checked (Join-Path $env:AURALIS_QT_ROOT 'bin/windeployqt.exe') @('--release','--no-translations',
         '--no-compiler-runtime','--no-system-dxc-compiler','--include-plugins','qsvg,qsvgicon,ffmpegmediaplugin',
         '--qmldir',$source,'--dir',$stage,$exe)
+
+    # Qt's deployment scanner includes optional Controls styles. The app selects Basic
+    # before loading QML, and its explicit style imports also use Basic.
+    foreach ($style in @('FluentWinUI3','Fusion','Imagine','Material','Universal','Windows')) {
+        $styleModule = Join-Path $stage "qml/QtQuick/Controls/$style"
+        if (Test-Path -LiteralPath $styleModule -PathType Container) {
+            Remove-Item -LiteralPath $styleModule -Recurse -Force
+        }
+        Get-ChildItem -LiteralPath $stage -File -Filter "Qt6QuickControls2$style*.dll" | Remove-Item -Force
+    }
+
     # Use the same app-local x64 DXC pair on every installation.
     foreach ($file in @('dxcompiler.dll','dxil.dll')) {
         Copy-Item -LiteralPath (Join-Path $env:AURALIS_QT_DXC $file) -Destination $stage
@@ -120,7 +131,8 @@ try {
         'directx-shader-compiler/LICENSE-MS.txt',
         'Qt6Core.dll','Qt6Quick3D.dll','Qt6Multimedia.dll','platforms/qwindows.dll','qml/QtQuick3D/qmldir',
         'Qt6WebSockets.dll','tls/qschannelbackend.dll',
-        'qml/QtQuick/Controls/qmldir','qml/QtMultimedia/qmldir','multimedia/ffmpegmediaplugin.dll',
+        'qml/QtQuick/Controls/qmldir','qml/QtQuick/Controls/Basic/qmldir','Qt6QuickControls2Basic.dll',
+        'qml/QtMultimedia/qmldir','multimedia/ffmpegmediaplugin.dll',
         'msvcp140.dll','vcruntime140.dll','auralis-extension/manifest.json',$shortcutIcon)) {
         if (!(Test-Path -LiteralPath (Join-Path $stage $file) -PathType Leaf)) { throw "Missing deployed package file: $file" }
     }

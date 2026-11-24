@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Publish only the installer and extensions uploaded by a verified Windows job.
+# Publish verified build artifacts, optionally including the Linux and macOS packages.
 set -euo pipefail
 
 : "${GH_REPO:?Set GH_REPO to the build repository}"
@@ -11,6 +11,8 @@ python3 -m unittest discover -s .github/scripts -p 'test_verify_auralis_release.
 
 build_run="$GITHUB_RUN_ID"
 build_commit="$GITHUB_SHA"
+desktop="${AURALIS_DESKTOP_RELEASE:-0}"
+[[ "$desktop" == 0 || ( "$desktop" == 1 && -z "${AURALIS_VERIFIED_RUN_ID:-}" ) ]]
 if [[ -n "${AURALIS_VERIFIED_RUN_ID:-}" ]]; then
     build_run="$AURALIS_VERIFIED_RUN_ID"
     [[ "$build_run" =~ ^[0-9]+$ && "$build_run" != "$GITHUB_RUN_ID" ]]
@@ -60,6 +62,7 @@ PY
 )"
 tag="v$version"
 asset="Auralis.Download.Manager_${version}_x64-setup.exe"
+release_name="Auralis Download Manager $version — Windows x64"
 
 work="$(mktemp -d)"
 trap 'rm -rf -- "$work"' EXIT
@@ -72,6 +75,13 @@ files=(
     "$work/extensions/auralis-chromium.zip"
     "$work/extensions/auralis-firefox.zip"
 )
+if [[ "$desktop" == 1 ]]; then
+    release_name="Auralis Download Manager $version"
+    for platform in debian13_amd64.deb macos-arm64.dmg macos-x86_64.dmg; do
+        file="$work/$platform/Auralis.Download.Manager_${version}_$platform"
+        files+=("$file" "$file.sha256")
+    done
+fi
 
 fetch_artifact() {
     local id="$1" digest="${2#sha256:}" name="$3" destination="$4"
@@ -98,7 +108,24 @@ fetch_artifact "$AURALIS_INSTALLER_ARTIFACT_ID" "$AURALIS_INSTALLER_ARTIFACT_DIG
 fetch_artifact "$AURALIS_EXTENSIONS_ARTIFACT_ID" "$AURALIS_EXTENSIONS_ARTIFACT_DIGEST" \
     auralis-browser-extensions "$work/extensions.zip"
 
+if [[ "$desktop" == 1 ]]; then
+    artifacts="$(gh api --paginate "repos/$GH_REPO/actions/runs/$build_run/artifacts?per_page=100")"
+    fetch_desktop_artifact() {
+        local name="$1" platform="$2" id digest
+        read -r id digest <<< "$(jq -ser --arg name "$name" '
+            [.[] .artifacts[] | select(.expired == false and
+                (.name | test("^" + $name + "(-attempt-[0-9]+)?$")))] |
+            max_by(.id) | select(. != null) | "\(.id) \(.digest)"
+        ' <<< "$artifacts")"
+        fetch_artifact "$id" "$digest" "$name" "$work/$platform.zip"
+    }
+    fetch_desktop_artifact auralis-download-manager-linux-debian13-amd64 debian13_amd64.deb
+    fetch_desktop_artifact auralis-macos-arm64 macos-arm64.dmg
+    fetch_desktop_artifact auralis-macos-x86_64 macos-x86_64.dmg
+fi
+
 python3 - "$work" "${files[@]}" <<'PY'
+import hashlib
 import shutil
 import sys
 import zipfile
@@ -106,10 +133,11 @@ from pathlib import Path
 
 work = Path(sys.argv[1])
 files = [Path(path) for path in sys.argv[2:]]
-for archive_name, folder, limit in (
-    ("windows.zip", "installer", 256 * 1024 * 1024),
-    ("extensions.zip", "extensions", 16 * 1024 * 1024),
-):
+limits_mib = {"installer": 256, "extensions": 16, "debian13_amd64.deb": 128,
+              "macos-arm64.dmg": 512, "macos-x86_64.dmg": 512}
+for folder in dict.fromkeys(path.parent.name for path in files):
+    archive_name = f"{'windows' if folder == 'installer' else folder}.zip"
+    limit = limits_mib[folder] * 1024 * 1024
     destination = work / folder
     expected = [path.name for path in files if path.parent == destination]
     destination.mkdir()
@@ -117,10 +145,18 @@ for archive_name, folder, limit in (
         if sorted(archive.namelist()) != sorted(expected):
             raise SystemExit(f"Unexpected file names in {archive_name}")
         for name in expected:
-            if not 0 < archive.getinfo(name).file_size <= limit:
+            asset_limit = 512 if name.endswith(".sha256") else limit
+            if not 0 < archive.getinfo(name).file_size <= asset_limit:
                 raise SystemExit(f"Invalid asset size: {name}")
             with archive.open(name) as source, (destination / name).open("xb") as target:
                 shutil.copyfileobj(source, target)
+
+for checksum in (path for path in files if path.suffix == ".sha256"):
+    package = checksum.with_suffix("")
+    with package.open("rb") as source:
+        digest = hashlib.file_digest(source, "sha256").hexdigest()
+    if checksum.read_text() != f"{digest}  {package.name}\n":
+        raise SystemExit(f"Invalid checksum for {package.name}")
 PY
 
 find_release_id() {
@@ -171,7 +207,7 @@ fi
 if [[ -z "$release_id" ]]; then
     gh api --method POST "repos/$GH_REPO/releases" \
         -f tag_name="$tag" -f target_commitish="$build_commit" \
-        -f name="Auralis Download Manager $version — Windows x64" \
+        -f name="$release_name" \
         -F body="@$notes" -F draft=true -F prerelease=false > "$release_json"
     release_id="$(jq -er '.id | select(type == "number")' "$release_json")"
 fi

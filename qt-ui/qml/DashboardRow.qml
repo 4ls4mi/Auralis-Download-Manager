@@ -138,10 +138,10 @@ Item {
                 color: row.chosen ? row.colors.rowSelectionInk || row.colors.ink : row.colors.ink
                 font.weight: Font.DemiBold
             }
-            Label {
+            NumeralLabel {
                 visible: !row.compactView
                 Layout.fillWidth: true
-                text: row.sizeLabel + (row.mixed ? "  ·  " + qsTr("Direct → Torrent") : row.torrent ? "  ·  " + qsTr("Torrent") : "")
+                valueText: row.sizeLabel + (row.mixed ? "  ·  " + qsTr("Direct → Torrent") : row.torrent ? "  ·  " + qsTr("Torrent") : "")
                 elide: Text.ElideRight
                 color: row.colors.muted
                 font.pixelSize: TypographyScale.pixels(11)
@@ -162,11 +162,11 @@ Item {
                     elide: Text.ElideRight
                     font.pixelSize: TypographyScale.pixels(11)
                 }
-                Label {
+                NumeralLabel {
                     visible: row.speedLabel.length > 0
                     Layout.fillWidth: true
                     Layout.minimumWidth: 0
-                    text: "·  " + row.speedLabel
+                    valueText: "·  " + row.speedLabel
                     color: row.colors.ink
                     elide: Text.ElideRight
                     font.pixelSize: TypographyScale.pixels(11)
@@ -204,9 +204,9 @@ Item {
                     startColor: MaterialTheme.progressColors[0]
                     endColor: MaterialTheme.progressColors[1]
                 }
-                Label {
+                NumeralLabel {
                     Layout.preferredWidth: 30
-                    text: Math.floor(row.progress * 100) + "%"
+                    valueText: Math.floor(row.progress * 100) + "%"
                     horizontalAlignment: Text.AlignRight
                     color: row.studioChrome && !row.colors.rowSelectionInk
                         ? row.colors.navigationInk || row.colors.accent : row.colors.ink
@@ -244,10 +244,10 @@ Item {
                         }
                     }
                 }
-                Label {
+                NumeralLabel {
                     Layout.fillWidth: true
                     color: row.colors.muted
-                    text: row.connectionLabel
+                    valueText: row.connectionLabel
                     elide: Text.ElideRight
                     font.pixelSize: TypographyScale.pixels(10)
                 }
@@ -269,10 +269,10 @@ Item {
                 }
             }
         }
-        Label {
+        NumeralLabel {
             Layout.preferredWidth: row.timeWidth
             Layout.minimumWidth: 0
-            text: row.timeLabel
+            valueText: row.timeLabel
             elide: Text.ElideLeft
             color: row.colors.muted
             horizontalAlignment: Text.AlignRight

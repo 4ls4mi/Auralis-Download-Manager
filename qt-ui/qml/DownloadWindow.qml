@@ -83,7 +83,8 @@ AuralisWindow {
     property var details: ({})
     property int activeTab: 0
     property size expandedWindowSize: Qt.size(790, 625)
-    property size compactWindowSize: Qt.size(465, 320)
+    property size compactWindowSize: Qt.size(transferWindowSettings.initialCompactWidth,
+                                             transferWindowSettings.initialCompactHeight)
 
     function connectionHasData(connection) {
         return connection.state === "Receiving" && connection.receiving_data !== false
@@ -107,6 +108,8 @@ AuralisWindow {
         id: transferWindowSettings
         category: "TransferWindowLayout"
         property bool compactView: false
+        property int initialCompactWidth: 465
+        property int initialCompactHeight: 320
     }
 
     Component.onCompleted: {
@@ -470,19 +473,38 @@ AuralisWindow {
                     objectName: "toggleCompactTransferView"
                     material: root.material
                     readonly property string viewLabel: root.compactView ? qsTr("Full view") : qsTr("Compact view")
-                    Layout.preferredWidth: 32
+                    readonly property string viewHint: root.compactView ? qsTr("Return to the full layout")
+                        : qsTr("Switch to the compact layout")
                     Layout.preferredHeight: 30
+                    text: viewLabel
+                    font.weight: Font.DemiBold
                     filled: root.compactView
                     padding: 3
+                    leftPadding: 8
+                    rightPadding: 8
                     Accessible.name: viewLabel
-                    contentItem: DashboardIcon {
-                        symbol: root.compactView ? "fullView" : "compactView"
-                        ink: compactButton.iconInk
-                        surface: compactButton.faceColor
-                        relief: compactButton.enabled
+                    Accessible.description: viewHint
+                    contentItem: RowLayout {
+                        spacing: 5
+                        transform: Translate { y: compactButton.faceOffset }
+                        DashboardIcon {
+                            visible: root.width >= 420
+                            Layout.preferredWidth: 18
+                            Layout.preferredHeight: 18
+                            symbol: root.compactView ? "fullView" : "compactView"
+                            ink: compactButton.iconInk
+                            surface: compactButton.faceColor
+                            relief: compactButton.enabled
+                        }
+                        Label {
+                            text: compactButton.text
+                            color: compactButton.buttonInk
+                            font: compactButton.font
+                            Accessible.ignored: true
+                        }
                     }
-                    ToolTip.visible: hovered
-                    ToolTip.text: viewLabel
+                    ToolTip.visible: hovered || visualFocus
+                    ToolTip.text: viewHint
                     ToolTip.delay: 420
                     onClicked: root.setCompactView(!root.compactView)
                 }
@@ -886,11 +908,10 @@ AuralisWindow {
                                         color: root.colors.muted
                                         wrapMode: Text.Wrap
                                     }
-                                    Label {
+                                    NumeralLabel {
                                         Layout.fillWidth: true
                                         Layout.minimumWidth: 0
-                                        text: measurement.cell.value
-                                        textFormat: Text.PlainText
+                                        valueText: measurement.cell.value
                                         color: root.summaryInk
                                         wrapMode: Text.Wrap
                                     }
@@ -924,24 +945,23 @@ AuralisWindow {
                                 material: root.material
                                 Accessible.name: qsTr("Download progress")
                             }
-                            Label {
+                            NumeralLabel {
                                 id: progressPercent
                                 anchors.left: downloadProgress.right
                                 anchors.leftMargin: 5
                                 anchors.verticalCenter: parent.verticalCenter
-                                text: Math.round(Transfer.fraction(root.item) * 100) + "%"
+                                valueText: Math.round(Transfer.fraction(root.item) * 100) + "%"
                                 color: root.summaryInk
                                 font.bold: true
                             }
                         }
-                        Label {
+                        NumeralLabel {
                             visible: root.mixed && !root.compactView
                             Layout.fillWidth: true
                             color: root.colors.positive
                             wrapMode: Text.WordWrap
-                            text: root.mixed && root.telemetry.original_partial
+                            valueText: root.mixed && root.telemetry.original_partial
                                   ? qsTr("Original direct partial kept at %1").arg(root.telemetry.original_partial) : ""
-                            textFormat: Text.PlainText
                         }
                         Label {
                             visible: !!(root.item && root.item.error)
@@ -1025,12 +1045,12 @@ AuralisWindow {
                                 font.bold: true
                                 wrapMode: Text.WordWrap
                             }
-                            Label {
+                            NumeralLabel {
                                 visible: !!root.torrent && !root.compactView
                                 Layout.fillWidth: true
                                 color: root.colors.muted
                                 wrapMode: Text.WordWrap
-                                text: root.torrent ? qsTr("Upload %1  ·  Sent %2\nInfo hash %3").arg(Transfer.rate(root.torrent.upload_speed)).arg(Transfer.bytes(root.torrent.uploaded)).arg(root.torrent.info_hash || "—") : ""
+                                valueText: root.torrent ? qsTr("Upload %1  ·  Sent %2\nInfo hash %3").arg(Transfer.rate(root.torrent.upload_speed)).arg(Transfer.bytes(root.torrent.uploaded)).arg(root.torrent.info_hash || "—") : ""
                             }
                             Label {
                                 visible: !root.compactView && !root.torrent && !(root.telemetry && root.telemetry.connections && root.telemetry.connections.length)
@@ -1111,7 +1131,7 @@ AuralisWindow {
                                             endColor: root.connectionColors[1]
                                             trackColor: root.colors.background
                                         }
-                                        Label {
+                                        NumeralLabel {
                                             anchors.left: parent.left
                                             anchors.leftMargin: root.compactView ? 2 : 4
                                             anchors.bottom: parent.bottom
@@ -1119,7 +1139,7 @@ AuralisWindow {
                                             color: root.colors.text
                                             style: Text.Outline
                                             styleColor: root.colors.shade
-                                            text: Number(worker.connection.id) + 1
+                                            valueText: Number(worker.connection.id) + 1
                                             font.pixelSize: TypographyScale.pixels(root.compactView ? 9 : 11)
                                         }
                                         HoverHandler { id: workerHover }
@@ -1149,9 +1169,9 @@ AuralisWindow {
                                     font.bold: true
                                     wrapMode: Text.WordWrap
                                 }
-                                Label {
+                                NumeralLabel {
                                     visible: !root.compactView
-                                    text: root.item ? Transfer.rate(root.item.speed) : "—"
+                                    valueText: root.item ? Transfer.rate(root.item.speed) : "—"
                                     color: root.colors.muted
                                 }
                             }
@@ -1309,9 +1329,9 @@ AuralisWindow {
                                     Layout.fillWidth: true
                                     elide: Text.ElideRight
                                 }
-                                Label {
+                                NumeralLabel {
                                     Layout.fillWidth: true
-                                    text: qsTr("%1 matching pieces · %2 unchecked").arg(candidate.modelData.matching_pieces).arg(candidate.modelData.unavailable_pieces)
+                                    valueText: qsTr("%1 matching pieces · %2 unchecked").arg(candidate.modelData.matching_pieces).arg(candidate.modelData.unavailable_pieces)
                                     color: root.colors.muted
                                     wrapMode: Text.Wrap
                                 }
@@ -1340,6 +1360,7 @@ AuralisWindow {
                         RowLayout {
                             TextField {
                                 id: limitField
+                                font.family: text.length ? root.numeralInputFamily() : root.font.family
                                 enabled: limitEnabled.checked
                                 validator: IntValidator { bottom: 1; top: 10000000 }
                                 inputMethodHints: Qt.ImhDigitsOnly

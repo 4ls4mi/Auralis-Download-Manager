@@ -436,6 +436,30 @@
             <source>Auralis could not read the browser’s native messaging policy.</source>
             <translation>Auralis 无法读取浏览器的原生消息传递策略。</translation>
         </message>
+        <message>
+            <source>Chrome’s existing extension registration prevents Auralis from adding an offer. Open the Chrome Web Store to install the extension.</source>
+            <translation>Chrome 中已有扩展程序注册记录，Auralis 无法添加安装提示。请打开 Chrome 网上应用店安装扩展程序。</translation>
+        </message>
+        <message>
+            <source>Chrome’s extension offer changed. Only an offer created by Auralis can be removed.</source>
+            <translation>Chrome 的扩展程序安装提示已更改。只能移除由 Auralis 添加的提示。</translation>
+        </message>
+        <message>
+            <source>Windows could not remove the Chrome extension offer (Windows error %1).</source>
+            <translation>Windows 无法移除 Chrome 的扩展程序安装提示（Windows 错误 %1）。</translation>
+        </message>
+        <message>
+            <source>Windows could not save the Chrome extension offer (Windows error %1).</source>
+            <translation>Windows 无法保存 Chrome 的扩展程序安装提示（Windows 错误 %1）。</translation>
+        </message>
+        <message>
+            <source>Windows did not remove the Chrome extension offer.</source>
+            <translation>Windows 未移除 Chrome 的扩展程序安装提示。</translation>
+        </message>
+        <message>
+            <source>Windows did not retain the Chrome extension offer.</source>
+            <translation>Windows 未保留 Chrome 的扩展程序安装提示。</translation>
+        </message>
     </context>
     <context>
         <name>BrowserSetupOptions</name>
@@ -682,6 +706,62 @@
         <message>
             <source>To remove the extension from %1, first choose “%2” in Auralis Settings under “%3”.</source>
             <translation>要从 %1 移除扩展程序，请先在 Auralis 设置的“%3”中选择“%2”。</translation>
+        </message>
+        <message>
+            <source>Check Chrome’s menu for New extension added, then choose Enable extension. Reopen Chrome if the offer is missing.</source>
+            <translation>在 Chrome 菜单中找到“已添加新扩展程序”，然后选择“启用扩展程序”。如果没有看到提示，请重新打开 Chrome。</translation>
+        </message>
+        <message>
+            <source>Chrome asks for your confirmation before enabling the extension.</source>
+            <translation>Chrome 会在启用扩展程序前请你确认。</translation>
+        </message>
+        <message>
+            <source>Chrome’s extension offer was removed. If Auralis is still listed, remove it from Chrome’s Extensions page.</source>
+            <translation>已移除 Chrome 的扩展程序安装提示。如果仍能找到 Auralis，请在 Chrome 的“扩展程序”页面移除它。</translation>
+        </message>
+        <message>
+            <source>Clear the previous automatic setup Auralis saved for %1?</source>
+            <translation>要清除 Auralis 之前为 %1 保存的自动设置吗？</translation>
+        </message>
+        <message>
+            <source>Clear the previous automatic setup in Browser integration.</source>
+            <translation>请在“浏览器集成”中清除之前的自动设置。</translation>
+        </message>
+        <message>
+            <source>Could not complete browser setup.</source>
+            <translation>无法完成浏览器设置。</translation>
+        </message>
+        <message>
+            <source>If Chrome shows New extension added, choose Enable extension. Then open Auralis’s toolbar icon to verify the connection.</source>
+            <translation>如果 Chrome 显示“已添加新扩展程序”，请选择“启用扩展程序”。然后点击工具栏中的 Auralis 图标验证连接。</translation>
+        </message>
+        <message>
+            <source>Offer in Chrome</source>
+            <translation>让 Chrome 提示安装</translation>
+        </message>
+        <message>
+            <source>Open Chrome</source>
+            <translation>打开 Chrome</translation>
+        </message>
+        <message>
+            <source>Open Chrome to check for the extension offer.</source>
+            <translation>打开 Chrome，查看是否有扩展程序安装提示。</translation>
+        </message>
+        <message>
+            <source>Preparing the extension offer in Chrome…</source>
+            <translation>正在准备 Chrome 的扩展程序安装提示…</translation>
+        </message>
+        <message>
+            <source>Remove the extension offer that Auralis registered in Chrome?</source>
+            <translation>要移除 Auralis 在 Chrome 中注册的扩展程序安装提示吗？</translation>
+        </message>
+        <message>
+            <source>Reset extension setup clears the previous setting Auralis saved.</source>
+            <translation>“重置扩展设置”会清除 Auralis 之前保存的设置。</translation>
+        </message>
+        <message>
+            <source>To remove Auralis, use the Extensions page in %1.</source>
+            <translation>要移除 Auralis，请前往 %1 中的“扩展程序”页面。</translation>
         </message>
     </context>
     <context>
@@ -1392,6 +1472,14 @@ Info hash %3</source>
             <source>Full view</source>
             <translation>完整视图</translation>
         </message>
+        <message>
+            <source>Switch to the compact layout</source>
+            <translation>切换到紧凑视图</translation>
+        </message>
+        <message>
+            <source>Return to the full layout</source>
+            <translation>返回完整视图</translation>
+        </message>
     </context>
     <context>
         <name>Engine</name>
@@ -1494,6 +1582,10 @@ Info hash %3</source>
         <message>
             <source>Auralis could no longer find the saved automatic setup.</source>
             <translation>Auralis 已找不到保存的自动设置。</translation>
+        </message>
+        <message>
+            <source>Chrome can offer the extension only when it is your Windows default browser.</source>
+            <translation>只有将 Chrome 设为 Windows 的默认浏览器，Chrome 才能提示安装扩展程序。</translation>
         </message>
     </context>
     <context>
@@ -2262,6 +2354,34 @@ Info hash %3</source>
         <message>
             <source>Refresh download address</source>
             <translation>刷新下载地址</translation>
+        </message>
+        <message>
+            <source>Add new download…</source>
+            <translation>添加新下载…</translation>
+        </message>
+        <message>
+            <source>Arrange by</source>
+            <translation>排序方式</translation>
+        </message>
+        <message>
+            <source>Clear all filters</source>
+            <translation>清除所有筛选条件</translation>
+        </message>
+        <message>
+            <source>Delete all completed…</source>
+            <translation>删除所有已完成的下载…</translation>
+        </message>
+        <message>
+            <source>Select all</source>
+            <translation>全选</translation>
+        </message>
+        <message>
+            <source>Switch to the compact layout</source>
+            <translation>切换到紧凑视图</translation>
+        </message>
+        <message>
+            <source>Return to the full layout</source>
+            <translation>返回完整视图</translation>
         </message>
     </context>
     <context>
@@ -4160,6 +4280,34 @@ Info hash %3</source>
             <source>Restarting…</source>
             <translation>正在重启…</translation>
         </message>
+        <message>
+            <source>browser chrome edge firefox brave opera chromium vivaldi extension install capture</source>
+            <translation>浏览器 chrome edge firefox brave opera chromium vivaldi 扩展 安装 接管下载</translation>
+        </message>
+        <message>
+            <source>Video &amp; gallery helpers</source>
+            <translation>视频和图片集下载工具</translation>
+        </message>
+        <message>
+            <source>Helper installations, video options, and browser sessions</source>
+            <translation>工具安装、视频选项和浏览器会话</translation>
+        </message>
+        <message>
+            <source>video gallery ffmpeg yt-dlp gallery-dl quality chapters cookies profile</source>
+            <translation>视频 图片集 ffmpeg yt-dlp gallery-dl 画质 章节 Cookie 浏览器配置</translation>
+        </message>
+        <message>
+            <source>Other preferences and compatibility options</source>
+            <translation>其他偏好和兼容性选项</translation>
+        </message>
+        <message>
+            <source>preferences sounds notification format compatibility</source>
+            <translation>偏好 声音 通知 格式 兼容性</translation>
+        </message>
+        <message>
+            <source>Capture requires the extension and Advanced browser integration. Chromium, Vivaldi, and Helium use the Google Chrome setting when they identify as Chrome. Opera GX uses the Opera setting.</source>
+            <translation>接管下载需要安装扩展并启用“高级浏览器集成”。如果 Chromium、Vivaldi 或 Helium 将自身标识为 Chrome，Auralis 会使用 Google Chrome 的设置。Opera GX 使用 Opera 的设置。</translation>
+        </message>
     </context>
     <context>
         <name>StartupSetup</name>
@@ -4234,6 +4382,30 @@ Info hash %3</source>
         <message>
             <source>Continue to Auralis</source>
             <translation>继续使用 Auralis</translation>
+        </message>
+        <message>
+            <source>Choose your language</source>
+            <translation>选择你的语言</translation>
+        </message>
+        <message>
+            <source>You can change the interface language later in Settings.</source>
+            <translation>你可以稍后在设置中更改界面语言。</translation>
+        </message>
+        <message>
+            <source>Checking optional components…</source>
+            <translation>正在检查可选组件…</translation>
+        </message>
+        <message>
+            <source>Next</source>
+            <translation>下一步</translation>
+        </message>
+        <message>
+            <source>Skip</source>
+            <translation>跳过</translation>
+        </message>
+        <message>
+            <source>Close</source>
+            <translation>关闭</translation>
         </message>
     </context>
     <context>
@@ -4398,6 +4570,10 @@ Info hash %3</source>
             <source>Installed version %1</source>
             <translation>安装的版本%1</translation>
         </message>
+        <message>
+            <source>Auralis update could not finish</source>
+            <translation>无法完成 Auralis 更新</translation>
+        </message>
     </context>
     <context>
         <name>UpdateWindow</name>
@@ -4456,6 +4632,22 @@ Info hash %3</source>
         <message>
             <source>Install Auralis %1</source>
             <translation>安装 Auralis %1</translation>
+        </message>
+        <message>
+            <source>Continue in background</source>
+            <translation>在后台继续</translation>
+        </message>
+        <message>
+            <source>Minimize</source>
+            <translation>最小化</translation>
+        </message>
+        <message>
+            <source>Minimize to system tray</source>
+            <translation>最小化到系统托盘</translation>
+        </message>
+        <message>
+            <source>Hide to main window</source>
+            <translation>隐藏并返回主窗口</translation>
         </message>
     </context>
     <context>

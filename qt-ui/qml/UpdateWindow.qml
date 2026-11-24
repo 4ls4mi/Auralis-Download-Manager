@@ -15,6 +15,8 @@ DetachedDialogWindow {
     property string stage: ""
     property string problem: ""
     property bool waitingForAutomaticCheck: false
+    property bool minimizeToTray: false
+    readonly property bool trayAvailable: backend.trayAvailable === true
     readonly property bool checking: stage === "checking" || stage === "rechecking"
     readonly property bool requestInProgress: checking || busy
     readonly property string statusStage: stage === "downloading" ? transfer?.state || "connecting" : stage
@@ -23,24 +25,56 @@ DetachedDialogWindow {
     readonly property real completion: totalBytes > 0 ? downloadedBytes / totalBytes : 0
 
     signal checked(var result)
+    signal showMainRequested()
 
     objectName: "updateWindow"
     title: qsTr("Auralis Update")
     width: 550
     minimumHeight: 245
+    flags: Qt.Window | Qt.WindowTitleHint | Qt.WindowSystemMenuHint | Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint
+    modality: Qt.NonModal
+    transientParent: null
     busy: ["rechecking", "downloading", "installing", "closing"].includes(stage)
     onDismissRequested: hide()
     onVisibleChanged: if (!visible) closeWhenCurrent.stop()
+    onClosing: if (requestInProgress) hide()
+    onVisibilityChanged: {
+        if (update.visibility === Window.Minimized && trayAvailable && minimizeToTray) {
+            Qt.callLater(() => {
+                if (update.visibility === Window.Minimized)
+                    update.hide()
+            })
+        }
+    }
+
+    function present() {
+        if (visibility === Window.Minimized)
+            showNormal()
+        if (!positioned && hostWindow?.visible && hostWindow.visibility !== Window.Minimized) {
+            fitInitialHeight()
+            x = Math.round(hostWindow.x + (hostWindow.width - width) / 2)
+            y = Math.round(hostWindow.y + (hostWindow.height - height) / 2)
+            positioned = true
+        }
+        open()
+    }
+
+    function minimizeWindow() {
+        if (trayAvailable && minimizeToTray)
+            hide()
+        else
+            showMinimized()
+    }
 
     function beginCheck(awaitAutomaticCheck) {
-        if (requestInProgress) { open(); return }
+        if (requestInProgress) { present(); return }
         closeWhenCurrent.stop()
         stage = "checking"
         problem = ""
         release = null
         transfer = null
         waitingForAutomaticCheck = awaitAutomaticCheck
-        open()
+        present()
         if (!awaitAutomaticCheck)
             backend.request({shellAction: "update-check"}, function(result, error) { update.finishCheck(result, error) })
     }
@@ -59,7 +93,7 @@ DetachedDialogWindow {
     }
 
     function showRelease(result) {
-        if (requestInProgress) { open(); return }
+        if (requestInProgress) { present(); return }
         if (!result || result.state !== "available") {
             beginCheck(false)
             return
@@ -69,7 +103,7 @@ DetachedDialogWindow {
         transfer = null
         problem = ""
         stage = "available"
-        open()
+        present()
     }
 
     function downloadAndInstall() {
@@ -168,10 +202,10 @@ DetachedDialogWindow {
             endColor: MaterialTheme.progressColors[1]
             showLabel: false
         },
-        Label {
+        NumeralLabel {
             Layout.fillWidth: true
             visible: update.stage === "downloading" && update.totalBytes > 0
-            text: qsTr("%1% · %2 of %3").arg(Math.floor(update.completion * 100))
+            valueText: qsTr("%1% · %2 of %3").arg(Math.floor(update.completion * 100))
                 .arg(TransferData.bytes(update.downloadedBytes)).arg(TransferData.bytes(update.totalBytes))
             color: update.colors.muted
             Accessible.name: qsTr("Update download progress")
@@ -210,18 +244,20 @@ DetachedDialogWindow {
     footer: Item {
         implicitHeight: actions.implicitHeight + 16
         GlassSurface { anchors.fill: parent; role: "footer" }
-        RowLayout {
+        Flow {
             id: actions
-            anchors.fill: parent
-            anchors.leftMargin: 14
-            anchors.rightMargin: 14
+            width: parent.width - 28
+            anchors.centerIn: parent
+            layoutDirection: Qt.RightToLeft
             spacing: 8
-            Item { Layout.fillWidth: true }
             GlassButton {
-                text: qsTr("Close")
-                accent: update.colors.destructive
-                enabled: !update.busy
-                onClicked: update.hide()
+                objectName: "downloadAuralisUpdate"
+                text: qsTr("Download and install")
+                Accessible.description: qsTr("Install Auralis %1").arg(update.release?.version || "")
+                accent: update.colors.positive
+                visible: update.stage === "available"
+                highlighted: true
+                onClicked: update.downloadAndInstall()
             }
             GlassButton {
                 objectName: "manualUpdateRetry"
@@ -231,14 +267,26 @@ DetachedDialogWindow {
                 onClicked: update.beginCheck(false)
             }
             GlassButton {
-                objectName: "downloadAuralisUpdate"
-                text: qsTr("Download and install")
-                Accessible.description: qsTr("Install Auralis %1").arg(update.release?.version || "")
-                accent: update.colors.positive
-                visible: update.stage === "available" || update.stage === "rechecking"
-                enabled: update.stage === "available"
-                highlighted: true
-                onClicked: update.downloadAndInstall()
+                objectName: "hideUpdateWindow"
+                text: qsTr("Hide to main window")
+                accent: update.colors.accent
+                visible: update.requestInProgress
+                onClicked: {
+                    update.hide()
+                    update.showMainRequested()
+                }
+            }
+            GlassButton {
+                objectName: "minimizeUpdateWindow"
+                text: update.trayAvailable && update.minimizeToTray ? qsTr("Minimize to system tray") : qsTr("Minimize")
+                visible: update.requestInProgress
+                onClicked: update.minimizeWindow()
+            }
+            GlassButton {
+                text: qsTr("Close")
+                accent: update.colors.destructive
+                visible: !update.requestInProgress
+                onClicked: update.hide()
             }
         }
     }

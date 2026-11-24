@@ -436,6 +436,30 @@
             <source>Auralis could not read the browser’s native messaging policy.</source>
             <translation>Auralis no pudo leer la política de mensajería nativa del navegador.</translation>
         </message>
+        <message>
+            <source>Chrome’s existing extension registration prevents Auralis from adding an offer. Open the Chrome Web Store to install the extension.</source>
+            <translation>El registro existente de la extensión en Chrome impide que Auralis sugiera instalarla. Abre Chrome Web Store para instalar la extensión.</translation>
+        </message>
+        <message>
+            <source>Chrome’s extension offer changed. Only an offer created by Auralis can be removed.</source>
+            <translation>La sugerencia de la extensión en Chrome ha cambiado. Solo se puede eliminar una sugerencia creada por Auralis.</translation>
+        </message>
+        <message>
+            <source>Windows could not remove the Chrome extension offer (Windows error %1).</source>
+            <translation>Windows no pudo eliminar la sugerencia de la extensión de Chrome (error de Windows %1).</translation>
+        </message>
+        <message>
+            <source>Windows could not save the Chrome extension offer (Windows error %1).</source>
+            <translation>Windows no pudo guardar la sugerencia de la extensión de Chrome (error de Windows %1).</translation>
+        </message>
+        <message>
+            <source>Windows did not remove the Chrome extension offer.</source>
+            <translation>Windows no eliminó la sugerencia de la extensión de Chrome.</translation>
+        </message>
+        <message>
+            <source>Windows did not retain the Chrome extension offer.</source>
+            <translation>Windows no conservó la sugerencia de la extensión de Chrome.</translation>
+        </message>
     </context>
     <context>
         <name>BrowserSetupOptions</name>
@@ -682,6 +706,62 @@
         <message>
             <source>To remove the extension from %1, first choose “%2” in Auralis Settings under “%3”.</source>
             <translation>Para eliminar la extensión de %1, elige primero «%2» en la sección «%3» de los ajustes de Auralis.</translation>
+        </message>
+        <message>
+            <source>Check Chrome’s menu for New extension added, then choose Enable extension. Reopen Chrome if the offer is missing.</source>
+            <translation>Busca «Se ha añadido una nueva extensión» en el menú de Chrome y elige «Habilitar extensión». Vuelve a abrir Chrome si no aparece el aviso.</translation>
+        </message>
+        <message>
+            <source>Chrome asks for your confirmation before enabling the extension.</source>
+            <translation>Chrome te pide confirmación antes de habilitar la extensión.</translation>
+        </message>
+        <message>
+            <source>Chrome’s extension offer was removed. If Auralis is still listed, remove it from Chrome’s Extensions page.</source>
+            <translation>Se ha eliminado la sugerencia de la extensión en Chrome. Si Auralis sigue en la lista, elimínalo desde la página Extensiones de Chrome.</translation>
+        </message>
+        <message>
+            <source>Clear the previous automatic setup Auralis saved for %1?</source>
+            <translation>¿Quieres borrar la configuración automática anterior que Auralis guardó para %1?</translation>
+        </message>
+        <message>
+            <source>Clear the previous automatic setup in Browser integration.</source>
+            <translation>Borra la configuración automática anterior en «Integración con el navegador».</translation>
+        </message>
+        <message>
+            <source>Could not complete browser setup.</source>
+            <translation>No se pudo completar la configuración del navegador.</translation>
+        </message>
+        <message>
+            <source>If Chrome shows New extension added, choose Enable extension. Then open Auralis’s toolbar icon to verify the connection.</source>
+            <translation>Si Chrome muestra «Se ha añadido una nueva extensión», elige «Habilitar extensión». Después, haz clic en el icono de Auralis de la barra de herramientas para comprobar la conexión.</translation>
+        </message>
+        <message>
+            <source>Offer in Chrome</source>
+            <translation>Sugerir la extensión en Chrome</translation>
+        </message>
+        <message>
+            <source>Open Chrome</source>
+            <translation>Abrir Chrome</translation>
+        </message>
+        <message>
+            <source>Open Chrome to check for the extension offer.</source>
+            <translation>Abre Chrome para comprobar si aparece la sugerencia de la extensión.</translation>
+        </message>
+        <message>
+            <source>Preparing the extension offer in Chrome…</source>
+            <translation>Preparando la sugerencia de la extensión en Chrome…</translation>
+        </message>
+        <message>
+            <source>Remove the extension offer that Auralis registered in Chrome?</source>
+            <translation>¿Eliminar la sugerencia de la extensión que Auralis registró en Chrome?</translation>
+        </message>
+        <message>
+            <source>Reset extension setup clears the previous setting Auralis saved.</source>
+            <translation>«Restablecer la configuración de la extensión» borra el ajuste anterior que guardó Auralis.</translation>
+        </message>
+        <message>
+            <source>To remove Auralis, use the Extensions page in %1.</source>
+            <translation>Para eliminar Auralis, usa la página Extensiones de %1.</translation>
         </message>
     </context>
     <context>
@@ -1392,6 +1472,14 @@ Identificador del torrent %3</translation>
             <source>Full view</source>
             <translation>Vista completa</translation>
         </message>
+        <message>
+            <source>Switch to the compact layout</source>
+            <translation>Cambiar a la vista compacta</translation>
+        </message>
+        <message>
+            <source>Return to the full layout</source>
+            <translation>Volver a la vista completa</translation>
+        </message>
     </context>
     <context>
         <name>Engine</name>
@@ -1494,6 +1582,10 @@ Identificador del torrent %3</translation>
         <message>
             <source>Auralis could no longer find the saved automatic setup.</source>
             <translation>Auralis ya no encuentra la configuración automática guardada.</translation>
+        </message>
+        <message>
+            <source>Chrome can offer the extension only when it is your Windows default browser.</source>
+            <translation>Chrome solo puede sugerirte la extensión si es tu navegador predeterminado en Windows.</translation>
         </message>
     </context>
     <context>
@@ -2262,6 +2354,34 @@ Identificador del torrent %3</translation>
         <message>
             <source>Refresh download address</source>
             <translation>Actualizar dirección de descarga</translation>
+        </message>
+        <message>
+            <source>Add new download…</source>
+            <translation>Añadir nueva descarga…</translation>
+        </message>
+        <message>
+            <source>Arrange by</source>
+            <translation>Ordenar por</translation>
+        </message>
+        <message>
+            <source>Clear all filters</source>
+            <translation>Quitar todos los filtros</translation>
+        </message>
+        <message>
+            <source>Delete all completed…</source>
+            <translation>Eliminar todas las descargas completadas…</translation>
+        </message>
+        <message>
+            <source>Select all</source>
+            <translation>Seleccionar todo</translation>
+        </message>
+        <message>
+            <source>Switch to the compact layout</source>
+            <translation>Cambiar a la vista compacta</translation>
+        </message>
+        <message>
+            <source>Return to the full layout</source>
+            <translation>Volver a la vista completa</translation>
         </message>
     </context>
     <context>
@@ -4160,6 +4280,34 @@ Identificador del torrent %3</translation>
             <source>Restarting…</source>
             <translation>Reiniciando…</translation>
         </message>
+        <message>
+            <source>browser chrome edge firefox brave opera chromium vivaldi extension install capture</source>
+            <translation>navegador chrome edge firefox brave opera chromium vivaldi extensión instalar capturar</translation>
+        </message>
+        <message>
+            <source>Video &amp; gallery helpers</source>
+            <translation>Herramientas para vídeos y galerías</translation>
+        </message>
+        <message>
+            <source>Helper installations, video options, and browser sessions</source>
+            <translation>Instalación de herramientas, opciones de vídeo y sesiones del navegador</translation>
+        </message>
+        <message>
+            <source>video gallery ffmpeg yt-dlp gallery-dl quality chapters cookies profile</source>
+            <translation>vídeo galería ffmpeg yt-dlp gallery-dl calidad capítulos cookies perfil</translation>
+        </message>
+        <message>
+            <source>Other preferences and compatibility options</source>
+            <translation>Otras preferencias y opciones de compatibilidad</translation>
+        </message>
+        <message>
+            <source>preferences sounds notification format compatibility</source>
+            <translation>preferencias sonidos notificación formato compatibilidad</translation>
+        </message>
+        <message>
+            <source>Capture requires the extension and Advanced browser integration. Chromium, Vivaldi, and Helium use the Google Chrome setting when they identify as Chrome. Opera GX uses the Opera setting.</source>
+            <translation>Para capturar descargas se necesitan la extensión y la opción «Integración avanzada con el navegador». Chromium, Vivaldi y Helium usan la configuración de Google Chrome cuando se identifican como Chrome. Opera GX usa la de Opera.</translation>
+        </message>
     </context>
     <context>
         <name>StartupSetup</name>
@@ -4234,6 +4382,30 @@ Identificador del torrent %3</translation>
         <message>
             <source>Continue to Auralis</source>
             <translation>Continuar a Auralis</translation>
+        </message>
+        <message>
+            <source>Choose your language</source>
+            <translation>Elige tu idioma</translation>
+        </message>
+        <message>
+            <source>You can change the interface language later in Settings.</source>
+            <translation>Puedes cambiar el idioma de la interfaz más adelante en Configuración.</translation>
+        </message>
+        <message>
+            <source>Checking optional components…</source>
+            <translation>Comprobando los componentes opcionales…</translation>
+        </message>
+        <message>
+            <source>Next</source>
+            <translation>Siguiente</translation>
+        </message>
+        <message>
+            <source>Skip</source>
+            <translation>Omitir</translation>
+        </message>
+        <message>
+            <source>Close</source>
+            <translation>Cerrar</translation>
         </message>
     </context>
     <context>
@@ -4398,6 +4570,10 @@ Identificador del torrent %3</translation>
             <source>Installed version %1</source>
             <translation>Versión instalada %1</translation>
         </message>
+        <message>
+            <source>Auralis update could not finish</source>
+            <translation>No se pudo completar la actualización de Auralis</translation>
+        </message>
     </context>
     <context>
         <name>UpdateWindow</name>
@@ -4456,6 +4632,22 @@ Identificador del torrent %3</translation>
         <message>
             <source>Install Auralis %1</source>
             <translation>Instalar Auralis %1</translation>
+        </message>
+        <message>
+            <source>Continue in background</source>
+            <translation>Continuar en segundo plano</translation>
+        </message>
+        <message>
+            <source>Minimize</source>
+            <translation>Minimizar</translation>
+        </message>
+        <message>
+            <source>Minimize to system tray</source>
+            <translation>Minimizar a la bandeja del sistema</translation>
+        </message>
+        <message>
+            <source>Hide to main window</source>
+            <translation>Ocultar y volver a la ventana principal</translation>
         </message>
     </context>
     <context>

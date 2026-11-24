@@ -4,14 +4,17 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Window
+import QtCore
 
 DetachedDialogWindow {
     id: root
 
     property bool automatic: false
+    required property var languages
     property bool started: false
-    property bool offered: false
     property bool deferred: false
+    property string page: ""
+    property string languageProblem: ""
     property bool helpersChecked: false
     property bool checkingHelpers: false
     property var helperStatus: null
@@ -22,42 +25,135 @@ DetachedDialogWindow {
     property bool requestingHelper: false
     readonly property bool canCheck: automatic && engine.ready && Boolean(hostWindow?.visible)
         && hostWindow.active && hostWindow.visibility !== Window.Minimized
-    readonly property bool checksComplete: helpersChecked && browserSetup.checked
+    readonly property bool blockingAnnouncements: automatic && !deferred && (preferences.languagePending || started)
+    readonly property bool checksComplete: (preferences.helpersDone || helpersChecked)
+        && (preferences.browserDone || browserSetup.checked)
     readonly property var tools: Array.from(helperStatus?.tools ?? [])
     readonly property var missingHelpers: helperProblem ? [] : tools.filter(tool => tool?.name
         && (tool.path === null || tool.path === "")).map(tool => tool.name)
     readonly property bool installerBusy: helperStatus?.job?.state === "installing"
     readonly property bool batchRunning: requestingHelper || Boolean(activeHelper) || queuedHelpers.length > 0
-    readonly property bool missingPrerequisite: (missingHelpers.length > 0 && !installerBusy)
-        || browserSetup.offerAtStartup
+    readonly property bool needHelpers: !preferences.helpersDone && missingHelpers.length > 0
+    readonly property bool needBrowser: !preferences.browserDone && browserSetup.offerAtStartup
+    readonly property bool hasFollowingPage: page === "language" ? !checksComplete || needHelpers || needBrowser
+        : page === "helpers" && needBrowser
+    readonly property bool canAdvance: !busy && (page === "language" ? engine.ready && languageSelector.currentIndex >= 0
+        : page === "helpers" ? helpersChecked && !batchRunning && missingHelpers.length === 0
+        : page === "browser" && !browserSetup.acting && browserSetup.installed)
 
     title: qsTr("Set up Auralis")
     objectName: "startupSetupWindow"
     width: 560
     minimumHeight: 315
 
+    Settings {
+        id: preferences
+        category: "FirstLaunchSetup"
+        property bool languagePending: false
+        property bool helpersDone: false
+        property bool browserDone: false
+    }
+
     function checkAtStartup() {
-        if (!canCheck)
+        if (!canCheck || deferred)
             return
         if (!started) {
             started = true
-            checkHelpers()
-            browserSetup.refresh()
+            if (preferences.languagePending) {
+                const selected = languages.findIndex(language => language.value === engine.interfaceLanguage)
+                languageSelector.currentIndex = Math.max(0, selected)
+                showPage("language")
+            }
+            if (!preferences.helpersDone)
+                checkHelpers()
+            if (!preferences.browserDone)
+                browserSetup.refresh()
         }
         offerIfNeeded()
     }
 
     function offerIfNeeded() {
-        if (canCheck && checksComplete && missingPrerequisite && !offered && !deferred) {
-            offered = true
-            open()
-        }
+        if (started && !deferred && checksComplete && (page === "checking" || (!page && canCheck)))
+            openNextPage()
     }
 
-    function continueToApp() {
+    function focusStep() {
+        if (page === "language")
+            languageSelector.forceActiveFocus()
+        else if (canAdvance)
+            nextButton.forceActiveFocus()
+        else
+            skipButton.forceActiveFocus()
+    }
+
+    function showPage(next) {
+        page = next
+        if (!visible)
+            open()
+        Qt.callLater(focusStep)
+    }
+
+    function openNextPage() {
+        if (!checksComplete)
+            showPage("checking")
+        else if (needHelpers)
+            showPage("helpers")
+        else if (needBrowser)
+            showPage("browser")
+        else
+            finishWizard()
+    }
+
+    function finishWizard() {
         deferred = true
         browserSetup.cancelConfirmation()
         hide()
+    }
+
+    function completePage() {
+        if (page === "language")
+            preferences.languagePending = false
+        else if (page === "helpers")
+            preferences.helpersDone = true
+        else if (page === "browser")
+            preferences.browserDone = true
+        preferences.sync()
+        openNextPage()
+    }
+
+    function skipPage() {
+        if (!busy && page !== "checking")
+            completePage()
+    }
+
+    function closeSetup() {
+        if (busy)
+            return
+        preferences.languagePending = false
+        preferences.helpersDone = true
+        preferences.browserDone = true
+        preferences.sync()
+        finishWizard()
+    }
+
+    function advance() {
+        if (!canAdvance)
+            return
+        if (page !== "language") {
+            completePage()
+            return
+        }
+        busy = true
+        languageProblem = ""
+        engine.request({action: "glass-setting", category: "language", queue: languageSelector.currentValue},
+            function(result, error) {
+                busy = false
+                if (error || result?.saved !== true) {
+                    languageProblem = qsTranslate("SettingsWindow", "Could not change the interface language.")
+                    return
+                }
+                completePage()
+            })
     }
 
     function checkHelpers() {
@@ -131,92 +227,126 @@ DetachedDialogWindow {
     onCanCheckChanged: if (canCheck) Qt.callLater(checkAtStartup)
     onChecksCompleteChanged: offerIfNeeded()
     Component.onCompleted: if (canCheck) Qt.callLater(checkAtStartup)
-    onDismissRequested: continueToApp()
-    onOpened: continueButton.forceActiveFocus()
+    onDismissRequested: closeSetup()
 
     Timer {
         interval: 1100
         repeat: true
-        running: engine.ready && (root.batchRunning || (root.visible && root.visibility !== Window.Minimized))
+        running: engine.ready && (root.batchRunning
+            || (root.page === "helpers" && root.visible && root.visibility !== Window.Minimized))
         onTriggered: root.checkHelpers()
     }
 
     bodyContent: [
-        Label {
+        ColumnLayout {
             Layout.fillWidth: true
-            text: qsTr("Optional setup for video, image galleries, and browser download capture. You can continue using Auralis at any time.")
-            color: root.colors.muted
-            wrapMode: Text.WordWrap
-            textFormat: Text.PlainText
-        },
-        Label {
-            Layout.fillWidth: true
-            Layout.topMargin: 2
-            text: qsTr("Video and gallery helpers")
-            color: root.colors.ink
-            font.pixelSize: TypographyScale.pixels(17)
-            font.weight: Font.DemiBold
-        },
-        Repeater {
-            model: root.tools
-            delegate: RowLayout {
-                id: row
-                required property var modelData
+            visible: root.page === "language"
+            spacing: 8
+
+            Label {
                 Layout.fillWidth: true
-                spacing: 8
+                text: qsTr("Choose your language")
+                color: root.colors.ink
+                font.pixelSize: TypographyScale.pixels(17)
+                font.weight: Font.DemiBold
+                wrapMode: Text.WordWrap
+            }
 
-                Label {
-                    Layout.fillWidth: true
-                    color: root.colors.ink
-                    text: row.modelData.name === "yt-dlp" ? qsTr("yt-dlp · Video downloads")
-                        : row.modelData.name === "ffmpeg" ? qsTr("FFmpeg · Join and convert media")
-                        : qsTr("gallery-dl · Image galleries")
-                    wrapMode: Text.WordWrap
-                    textFormat: Text.PlainText
-                }
+            GlassComboBox {
+                id: languageSelector
+                objectName: "startupLanguageSelector"
+                Layout.fillWidth: true
+                model: root.languages
+                textRole: "label"
+                valueRole: "value"
+                font.family: root.fontFamilyForText(displayText)
+                enabled: !root.busy
+                Accessible.name: qsTranslate("SettingsWindow", "Interface language")
+            }
 
-                Label {
-                    readonly property string error: root.failures[row.modelData.name] || ""
-                    Layout.maximumWidth: 235
-                    color: error ? root.colors.destructive : row.modelData.path ? root.colors.positive : root.colors.muted
-                    text: error || (root.activeHelper === row.modelData.name ? qsTr("Installing…")
-                        : row.modelData.path ? qsTr("Installed") : qsTr("Missing"))
-                    wrapMode: Text.WordWrap
-                    textFormat: Text.PlainText
-                }
+            Label {
+                Layout.fillWidth: true
+                text: root.languageProblem || qsTr("You can change the interface language later in Settings.")
+                color: root.languageProblem ? root.colors.destructive : root.colors.muted
+                wrapMode: Text.WordWrap
+                textFormat: Text.PlainText
             }
         },
         Label {
             Layout.fillWidth: true
-            visible: Boolean(root.helperProblem) || !root.helpersChecked
-            text: root.helperProblem || qsTr("Checking installed helpers…")
-            color: root.helperProblem ? root.colors.destructive : root.colors.muted
+            visible: root.page === "checking"
+            text: qsTr("Checking optional components…")
+            color: root.colors.muted
             wrapMode: Text.WordWrap
-            textFormat: Text.PlainText
         },
-        BrowserSetupOptions {
-            id: browserSetup
-            objectName: "startupBrowserSetupOptions"
+        ColumnLayout {
             Layout.fillWidth: true
-            Layout.topMargin: 8
-            monitoring: root.visible && root.visibility !== Window.Minimized
-            installDetails: root.missingHelpers.length > 0 && !root.batchRunning && !root.installerBusy
-                ? qsTr("This also starts installing the missing video and gallery helpers.") : ""
-            onInstallAccepted: root.installMissing()
-        },
-        Flow {
-            Layout.fillWidth: true
-            Layout.topMargin: 4
+            visible: root.page === "helpers"
             spacing: 8
-            visible: root.missingHelpers.length > 0
+
+            Label {
+                Layout.fillWidth: true
+                text: qsTr("Video and gallery helpers")
+                color: root.colors.ink
+                font.pixelSize: TypographyScale.pixels(17)
+                font.weight: Font.DemiBold
+                wrapMode: Text.WordWrap
+            }
+
+            Repeater {
+                model: root.tools
+                delegate: RowLayout {
+                    id: row
+                    required property var modelData
+                    Layout.fillWidth: true
+                    spacing: 8
+
+                    Label {
+                        Layout.fillWidth: true
+                        color: root.colors.ink
+                        text: row.modelData.name === "yt-dlp" ? qsTr("yt-dlp · Video downloads")
+                            : row.modelData.name === "ffmpeg" ? qsTr("FFmpeg · Join and convert media")
+                            : qsTr("gallery-dl · Image galleries")
+                        wrapMode: Text.WordWrap
+                        textFormat: Text.PlainText
+                    }
+
+                    Label {
+                        readonly property string error: root.failures[row.modelData.name] || ""
+                        Layout.maximumWidth: 235
+                        color: error ? root.colors.destructive : row.modelData.path ? root.colors.positive : root.colors.muted
+                        text: error || (root.activeHelper === row.modelData.name ? qsTr("Installing…")
+                            : row.modelData.path ? qsTr("Installed") : qsTr("Missing"))
+                        wrapMode: Text.WordWrap
+                        textFormat: Text.PlainText
+                    }
+                }
+            }
+
+            Label {
+                Layout.fillWidth: true
+                visible: Boolean(root.helperProblem) || !root.helpersChecked
+                text: root.helperProblem || qsTr("Checking installed helpers…")
+                color: root.helperProblem ? root.colors.destructive : root.colors.muted
+                wrapMode: Text.WordWrap
+                textFormat: Text.PlainText
+            }
 
             GlassButton {
                 objectName: "installMissingComponents"
                 text: root.batchRunning ? qsTr("Installing helpers…") : qsTr("Install missing helpers")
                 accent: root.colors.positive
+                visible: root.missingHelpers.length > 0
                 enabled: engine.ready && !root.batchRunning && !root.installerBusy
                 onClicked: root.installMissing()
             }
+        },
+        BrowserSetupOptions {
+            id: browserSetup
+            objectName: "startupBrowserSetupOptions"
+            Layout.fillWidth: true
+            visible: root.page === "browser"
+            monitoring: visible && root.visible && root.visibility !== Window.Minimized
         }
     ]
 
@@ -236,11 +366,28 @@ DetachedDialogWindow {
             }
             Item { Layout.fillWidth: true; visible: !root.batchRunning }
             GlassButton {
-                id: continueButton
+                objectName: "closeStartupSetup"
+                text: qsTr("Close")
+                enabled: !root.busy
+                onClicked: root.closeSetup()
+            }
+            GlassButton {
+                id: skipButton
+                objectName: "skipStartupSetup"
+                text: qsTr("Skip")
+                enabled: !root.busy
+                visible: root.page !== "checking"
+                onClicked: root.skipPage()
+            }
+            GlassButton {
+                id: nextButton
                 objectName: "continueStartupSetup"
-                text: qsTr("Continue to Auralis")
+                text: root.hasFollowingPage ? qsTr("Next") : qsTr("Continue to Auralis")
                 accent: root.colors.accent
-                onClicked: root.continueToApp()
+                filled: true
+                enabled: root.canAdvance
+                visible: root.page !== "checking"
+                onClicked: root.advance()
             }
         }
     }

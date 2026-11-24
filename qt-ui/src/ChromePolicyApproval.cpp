@@ -5,14 +5,10 @@
 #include <cstdint>
 #include <cstring>
 #include <cwchar>
-#include <initializer_list>
 #include <string_view>
 
 namespace {
-constexpr wchar_t ChromeKey[] = L"SOFTWARE\\Policies\\Google\\Chrome";
 constexpr wchar_t SettingsName[] = L"ExtensionSettings";
-constexpr wchar_t StoreId[] = L"bobmhloppnfipdjjncalidjenegfgebg";
-constexpr wchar_t NativeHost[] = L"com.misterdownloadmanager.host";
 constexpr wchar_t AuralisPolicy[] =
     LR"({"bobmhloppnfipdjjncalidjenegfgebg":{"installation_mode":"normal_installed","update_url":"https://clients2.google.com/service/update2/crx"}})";
 constexpr std::uint64_t ApprovalLifetimeSeconds = 120;
@@ -128,79 +124,6 @@ LSTATUS openUserChromeKey(std::array<RegistryKey, 4> &keys)
     return ERROR_SUCCESS;
 }
 
-enum class ListMatch { Missing, No, Yes, Unreadable };
-
-ListMatch listContains(HKEY key, REGSAM view, LPCWSTR name, std::wstring_view expected, bool wildcard)
-{
-    RegistryKey list;
-    const auto open = RegOpenKeyExW(key, name, REG_OPTION_OPEN_LINK, KEY_QUERY_VALUE | view, &list.value);
-    if (missing(open))
-        return ListMatch::Missing;
-    if (open != ERROR_SUCCESS)
-        return ListMatch::Unreadable;
-
-    std::array<wchar_t, 64> valueName{};
-    std::array<wchar_t, 8192> value{};
-    for (DWORD index = 0; index < 4096; ++index) {
-        DWORD nameLength = DWORD(valueName.size()), bytes = DWORD(sizeof(value)), type = 0;
-        const auto status = RegEnumValueW(list.value, index, valueName.data(), &nameLength, nullptr, &type,
-                                          reinterpret_cast<BYTE *>(value.data()), &bytes);
-        if (status == ERROR_NO_MORE_ITEMS)
-            return ListMatch::No;
-        if (status != ERROR_SUCCESS || type != REG_SZ || !bytes || bytes > sizeof(value)
-            || bytes % sizeof(wchar_t) || value[bytes / sizeof(wchar_t) - 1] != L'\0')
-            return ListMatch::Unreadable;
-        std::wstring_view item(value.data(), bytes / sizeof(wchar_t) - 1);
-        if (item.find(L'\0') != std::wstring_view::npos)
-            return ListMatch::Unreadable;
-        item = item.substr(0, item.find(L';'));
-        constexpr auto Whitespace = L" \t\r\n";
-        const auto begin = item.find_first_not_of(Whitespace);
-        if (begin == std::wstring_view::npos)
-            continue;
-        item = item.substr(begin, item.find_last_not_of(Whitespace) - begin + 1);
-        if (item == expected || (wildcard && item == L"*"))
-            return ListMatch::Yes;
-    }
-    return ListMatch::Unreadable;
-}
-
-bool blockingValue(HKEY key, LPCWSTR name, bool blockWhenEnabled)
-{
-    DWORD value = 0, bytes = sizeof(value), type = 0;
-    const auto status = RegQueryValueExW(key, name, nullptr, &type, reinterpret_cast<BYTE *>(&value), &bytes);
-    return !missing(status) && (status != ERROR_SUCCESS || type != REG_DWORD || bytes != sizeof(value)
-        || (value != 0) == blockWhenEnabled);
-}
-
-bool conflictingPolicies(HKEY key, REGSAM view)
-{
-    if (readPolicy(key) != CurrentPolicy::Missing || blockingValue(key, L"BlockExternalExtensions", true)
-        || blockingValue(key, L"NativeMessagingUserLevelHosts", false))
-        return true;
-    const auto allowed = listContains(key, view, L"ExtensionAllowedTypes", L"extension", false);
-    if (allowed != ListMatch::Missing && allowed != ListMatch::Yes)
-        return true;
-    for (const auto name : {L"ExtensionInstallForcelist", L"ExtensionInstallBlocklist", L"ExtensionInstallBlacklist"}) {
-        const auto present = listContains(key, view, name, StoreId, true);
-        if (present == ListMatch::Yes || present == ListMatch::Unreadable)
-            return true;
-    }
-    const auto nativeBlocked = listContains(key, view, L"NativeMessagingBlocklist", NativeHost, true);
-    return nativeBlocked == ListMatch::Unreadable || (nativeBlocked == ListMatch::Yes
-        && listContains(key, view, L"NativeMessagingAllowlist", NativeHost, false) != ListMatch::Yes);
-}
-
-bool conflictingMachinePolicies()
-{
-    for (const REGSAM view : {KEY_WOW64_64KEY, KEY_WOW64_32KEY}) {
-        RegistryKey machine;
-        const auto status = RegOpenKeyExW(HKEY_LOCAL_MACHINE, ChromeKey, 0, KEY_QUERY_VALUE | view, &machine.value);
-        if (!missing(status) && (status != ERROR_SUCCESS || conflictingPolicies(machine.value, view)))
-            return true;
-    }
-    return false;
-}
 } // namespace
 
 int wmain(int argc, wchar_t **argv)
@@ -208,9 +131,8 @@ int wmain(int argc, wchar_t **argv)
     if (argc != 4)
         return BadArguments;
     const std::wstring_view action(argv[1]), sid(argv[2]);
-    const bool remove = action == L"remove";
     std::uint64_t deadline = 0;
-    if ((!remove && action != L"install") || sid.size() < 5 || sid.size() > 192
+    if (action != L"remove" || sid.size() < 5 || sid.size() > 192
         || sid.substr(0, 4) != L"S-1-" || !parseDeadline(argv[3], deadline))
         return BadArguments;
     const auto identity = verifyToken(argv[2]);
@@ -226,16 +148,9 @@ int wmain(int argc, wchar_t **argv)
     if (open != ERROR_SUCCESS)
         return WriteFailed;
     const HKEY user = userKeys.back().value;
-    if (!remove && (conflictingMachinePolicies() || conflictingPolicies(user, KEY_WOW64_64KEY)))
+    if (readPolicy(user) != CurrentPolicy::Exact || !approvalCurrent(deadline))
         return Conflict;
-    const auto before = remove ? CurrentPolicy::Exact : CurrentPolicy::Missing;
-    const auto after = remove ? CurrentPolicy::Missing : CurrentPolicy::Exact;
-    if (readPolicy(user) != before || !approvalCurrent(deadline))
-        return Conflict;
-    const auto status = remove ? RegDeleteValueW(user, SettingsName)
-        : RegSetValueExW(user, SettingsName, 0, REG_SZ, reinterpret_cast<const BYTE *>(AuralisPolicy),
-                         DWORD(sizeof(AuralisPolicy)));
-    if (status != ERROR_SUCCESS)
+    if (RegDeleteValueW(user, SettingsName) != ERROR_SUCCESS)
         return WriteFailed;
-    return readPolicy(user) == after ? Applied : VerificationFailed;
+    return readPolicy(user) == CurrentPolicy::Missing ? Applied : VerificationFailed;
 }

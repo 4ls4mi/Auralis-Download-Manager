@@ -5,6 +5,7 @@ import QtMultimedia
 import QtQuick.Controls
 import QtQuick.Dialogs
 import QtQuick.Layouts
+import QtQuick.Window
 
 ColumnLayout {
     id: root
@@ -16,6 +17,7 @@ ColumnLayout {
     property bool expanded: false
     property string cookieBrowser: ""
     readonly property bool browserProfile: field.key === "video_cookies_profile"
+    readonly property bool browserCapture: field.key === "browsers"
     readonly property bool sounds: field.key === "sounds"
     readonly property var soundEvents: [
         qsTr("Download complete"),
@@ -35,7 +37,7 @@ ColumnLayout {
     spacing: 8
 
     function loadDraft() {
-        if (kind === "table") cells = (field.value || []).map(row => Array.from(row))
+        if (kind === "table" && !browserCapture) cells = (field.value || []).map(row => Array.from(row))
         else if (kind === "regional") regional = Object.assign({}, field.value)
     }
 
@@ -105,11 +107,36 @@ ColumnLayout {
         }
 
         Loader {
+            visible: !root.browserCapture
             Layout.preferredWidth: root.kind === "boolean" ? 56 : Math.min(root.width * 0.48, 300)
             Layout.minimumWidth: root.kind === "boolean" ? 48 : 125
-            active: !root.unavailable && !root.browserProfile
+            active: !root.browserCapture && !root.unavailable && !root.browserProfile
             sourceComponent: root.complex ? expandButton : root.kind === "boolean" ? boolControl
                 : root.kind === "select" ? selectControl : root.field.key === "video_cookies_file" ? cookieControl : inputControl
+        }
+    }
+
+    GridLayout {
+        Layout.fillWidth: true
+        visible: root.browserCapture
+        columns: width >= TypographyScale.pixels(420) ? 2 : 1
+        columnSpacing: 12
+        rowSpacing: 2
+
+        Repeater {
+            model: root.browserCapture ? root.field.captureBrowsers || [] : []
+
+            delegate: CheckBox {
+                required property var modelData
+                objectName: "browserCapture:" + modelData.name
+                Layout.fillWidth: true
+                text: modelData.name
+                checked: modelData.enabled
+                palette.windowText: root.colors.text
+                palette.highlight: root.colors.accent
+                Accessible.name: text
+                onToggled: root.commit(checked, {browser: modelData.name})
+            }
         }
     }
 
@@ -158,6 +185,8 @@ ColumnLayout {
                 id: editable
                 Layout.fillWidth: true
                 text: String(root.field.value ?? "")
+                font.family: root.kind === "number" && text.length
+                    ? root.Window.window?.numeralInputFamily?.() || "" : root.Window.window?.font.family || ""
                 Accessible.name: root.field.label
                 echoMode: root.kind === "password" ? TextInput.Password : TextInput.Normal
                 placeholderText: root.kind === "password" && root.field.saved ? qsTr("Saved password") : ""
@@ -310,7 +339,7 @@ ColumnLayout {
 
     Loader {
         Layout.fillWidth: true
-        active: root.expanded && root.complex && !root.unavailable
+        active: root.expanded && root.complex && !root.unavailable && !root.browserCapture
         sourceComponent: root.sounds ? soundControl : root.kind === "table" ? tableControl : root.kind === "lines" ? linesControl : regionalControl
     }
 
@@ -569,6 +598,8 @@ ColumnLayout {
                                 id: rowValue
                                 FieldBox {
                                     text: String(cell.entry ?? "")
+                                    font.family: cell.modelData.kind === "number" && text.length
+                                        ? root.Window.window?.numeralInputFamily?.() || "" : root.Window.window?.font.family || ""
                                     placeholderText: cell.modelData.label
                                     Accessible.name: cell.modelData.label
                                     echoMode: cell.modelData.kind === "password" ? TextInput.Password : TextInput.Normal

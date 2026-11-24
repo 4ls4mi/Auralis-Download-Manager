@@ -576,7 +576,7 @@ int main(int argc, char **argv)
 }
 
 namespace {
-void seedFreshAppearance(const QString &profile)
+void seedFreshProfile(const QString &profile)
 {
     const QDir directory(profile);
     for (const auto &history : {QStringLiteral("auralis-interface-version"), QStringLiteral("downloads.json"),
@@ -594,6 +594,20 @@ void seedFreshAppearance(const QString &profile)
     if (!appearance.open(QIODevice::ReadOnly))
         return;
     settings.setValue(QStringLiteral("WindowAppearance/saved"), QString::fromUtf8(appearance.readAll()));
+    settings.setValue(QStringLiteral("FirstLaunchSetup/languagePending"), true);
+    settings.setValue(QStringLiteral("MainWindow/fullWidth"), 810);
+    settings.setValue(QStringLiteral("MainWindow/fullHeight"), 525);
+    settings.setValue(QStringLiteral("SettingsWindowLayout/initialWidth"), 675);
+    settings.setValue(QStringLiteral("SettingsWindowLayout/initialHeight"), 520);
+    settings.setValue(QStringLiteral("TransferWindowLayout/compactView"), true);
+    settings.setValue(QStringLiteral("TransferWindowLayout/initialCompactWidth"), 510);
+    settings.setValue(QStringLiteral("TransferWindowLayout/initialCompactHeight"), 290);
+    settings.setValue(QStringLiteral("Typography/interfaceScalePercent"), 100);
+    settings.setValue(QStringLiteral("Typography/fontPreferences"), QVariantMap{
+        {QStringLiteral("englishFamily"), QStringLiteral("Talina")},
+        {QStringLiteral("arabicFamily"), QStringLiteral("Kidzhood Arabic")},
+        {QStringLiteral("sizePercent"), 110}
+    });
     settings.sync();
 }
 
@@ -603,19 +617,7 @@ int runDesktop(QApplication &app, int activeInterfaceScale, bool startHidden, bo
     // Keep the lock until the engine and its workers have finished shutting down.
     std::optional<QLockFile> instanceLock;
     // QML bindings must be destroyed before their native context objects.
-    Typography typography(activeInterfaceScale);
-    if (smoke && qEnvironmentVariableIntValue("AURALIS_QT_RELEASE_FONTS") == 1) {
-        for (const auto &options : {typography.englishFontOptions(), typography.arabicFontOptions()}) {
-            for (const auto &entry : options) {
-                const auto option = entry.toMap();
-                if (!option.value(QStringLiteral("available")).toBool()) {
-                    qCritical() << "Could not load packaged interface font:" << option.value(QStringLiteral("label")).toString();
-                    return 1;
-                }
-            }
-        }
-        qInfo("Smoke: all packaged interface fonts are available.");
-    }
+    std::optional<Typography> typographyLifetime;
     std::optional<Engine> engineLifetime;
     QQmlApplicationEngine qml;
     Engine &engine = engineLifetime.emplace(&qml, startHidden, smoke);
@@ -648,7 +650,20 @@ int runDesktop(QApplication &app, int activeInterfaceScale, bool startHidden, bo
     if (!local.listen(serverName))
         return 1;
 
-    seedFreshAppearance(engine.dataDirectory());
+    seedFreshProfile(engine.dataDirectory());
+    Typography &typography = typographyLifetime.emplace(activeInterfaceScale);
+    if (smoke && qEnvironmentVariableIntValue("AURALIS_QT_RELEASE_FONTS") == 1) {
+        for (const auto &options : {typography.englishFontOptions(), typography.arabicFontOptions()}) {
+            for (const auto &entry : options) {
+                const auto option = entry.toMap();
+                if (!option.value(QStringLiteral("available")).toBool()) {
+                    qCritical() << "Could not load packaged interface font:" << option.value(QStringLiteral("label")).toString();
+                    return 1;
+                }
+            }
+        }
+        qInfo("Smoke: all packaged interface fonts are available.");
+    }
     engine.initializeInterfaceLanguage();
     qml.rootContext()->setContextProperty(QStringLiteral("engine"), &engine);
     qml.rootContext()->setContextProperty(QStringLiteral("typography"), &typography);

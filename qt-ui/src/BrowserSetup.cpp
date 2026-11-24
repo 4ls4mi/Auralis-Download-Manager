@@ -136,12 +136,6 @@ LSTATUS writeUserPolicy(const QString &path, const PolicyValue &expected,
     constexpr REGSAM access = KEY_QUERY_VALUE | KEY_SET_VALUE | KEY_WOW64_64KEY;
     HKEY key = nullptr;
     auto status = RegOpenKeyExW(HKEY_CURRENT_USER, keyName, 0, access, &key);
-    if (status == ERROR_FILE_NOT_FOUND || status == ERROR_PATH_NOT_FOUND) {
-        if (expected.exists || removeValue)
-            return ERROR_RETRY;
-        status = RegCreateKeyExW(HKEY_CURRENT_USER, keyName, 0, nullptr, REG_OPTION_NON_VOLATILE,
-                                 access, nullptr, &key, nullptr);
-    }
     if (status != ERROR_SUCCESS)
         return status;
 
@@ -251,53 +245,6 @@ bool blocksNativeHost(QSettings &registry)
         && !listContains(registry, QStringLiteral("NativeMessagingAllowlist"), NativeHost, false);
 }
 
-enum class StoreForceList { Unlisted, Configured, OtherSource };
-
-StoreForceList storeForceList(QSettings &registry, bool chrome)
-{
-    registry.beginGroup(QStringLiteral("ExtensionInstallForcelist"));
-    auto result = StoreForceList::Unlisted;
-    for (const auto &key : registry.childKeys()) {
-        const auto setting = registry.value(key).toString().trimmed();
-        if (setting.section(QLatin1Char(';'), 0, 0).trimmed() != StoreId)
-            continue;
-        // Chrome's documented default for an ID by itself is the Chrome Web Store.
-        if (setting != StoreId + QLatin1Char(';') + StoreUpdate && !(chrome && setting == StoreId)) {
-            result = StoreForceList::OtherSource;
-            break;
-        }
-        result = StoreForceList::Configured;
-    }
-    registry.endGroup();
-    return result;
-}
-
-bool usesOfficialStore(const QJsonObject &entry)
-{
-    const auto mode = entry.value(InstallationMode).toString();
-    return (mode == NormalInstalled || mode == QStringLiteral("force_installed"))
-        && entry.value(UpdateUrl).toString() == StoreUpdate;
-}
-
-bool existingPolicyBlocksSetup(QSettings &registry)
-{
-    const auto external = QStringLiteral("BlockExternalExtensions");
-    const auto native = QStringLiteral("NativeMessagingUserLevelHosts");
-    const auto allowedTypes = QStringLiteral("ExtensionAllowedTypes");
-    return registry.value(external).toBool()
-        || (registry.contains(native) && !registry.value(native).toBool())
-        || (registry.childGroups().contains(allowedTypes, Qt::CaseInsensitive)
-            && !listContains(registry, allowedTypes, QStringLiteral("extension"), false))
-        || listContains(registry, QStringLiteral("ExtensionInstallBlocklist"), StoreId, true)
-        || listContains(registry, QStringLiteral("ExtensionInstallBlacklist"), StoreId, true)
-        || blocksNativeHost(registry);
-}
-
-struct Review {
-    BrowserSetup::PolicyStatus status;
-    PolicyValue policy;
-};
-
 struct OwnedUserPolicy {
     PolicyValue policy;
     bool previouslyExisted;
@@ -315,71 +262,80 @@ std::optional<OwnedUserPolicy> ownedUserPolicy(QSettings &ownership, const QStri
     return OwnedUserPolicy{std::move(policy), prior == QStringLiteral("true")};
 }
 
-Review reviewPolicy(const QString &browserId, const QString &path, QSettings &user)
+const QString ChromeOfferPath = QStringLiteral("Software\\Google\\Chrome\\Extensions\\") + StoreId;
+constexpr wchar_t OfferUpdate[] = L"update_url";
+constexpr wchar_t OfferOwner[] = L"AuralisOfferOwner";
+const QString OfferOwnerValue = QStringLiteral("Auralis Download Manager");
+
+struct RegistryKey {
+    HKEY value = nullptr;
+    ~RegistryKey() { if (value) RegCloseKey(value); }
+};
+
+bool missingRegistryKey(LSTATUS status)
 {
-    const QString governed = QCoreApplication::translate("BrowserSetup",
-        "Existing browser policies control extension installation. Use the browser’s supported setup or your administrator’s policy.");
-    const bool chrome = browserId == QStringLiteral("chrome");
-    bool machineConfigured = false;
-    for (const auto format : {QSettings::Registry64Format, QSettings::Registry32Format}) {
-        const bool wide = format == QSettings::Registry64Format;
-        const auto existing = existingReadablePolicyKey(HKEY_LOCAL_MACHINE, path, wide ? KEY_WOW64_64KEY : KEY_WOW64_32KEY);
-        if (!existing)
-            return {{false, false, governed}, {}};
-        // A QSettings query can create its base key when it is missing.
-        if (!*existing)
-            continue;
-        QSettings machine(QStringLiteral("HKEY_LOCAL_MACHINE") + path, format);
-        const auto forceList = storeForceList(machine, chrome);
-        const auto view = wide ? RRF_SUBKEY_WOW6464KEY : RRF_SUBKEY_WOW6432KEY;
-        const auto configured = readPolicy(HKEY_LOCAL_MACHINE, path, view);
-        if (existingPolicyBlocksSetup(machine) || forceList == StoreForceList::OtherSource
-            || configured.error != ERROR_SUCCESS || machine.status() != QSettings::NoError)
-            return {{false, false, governed}, {}};
-        if (configured.exists) {
-            if (!usesOfficialStore(configured.settings.value(StoreId).toObject()))
-                return {{false, false, governed}, {}};
-            machineConfigured = true;
-        }
-        machineConfigured |= forceList == StoreForceList::Configured;
+    return status == ERROR_FILE_NOT_FOUND || status == ERROR_PATH_NOT_FOUND;
+}
+
+enum class OfferValue { Missing, Exact, Other };
+enum class OfferState { Missing, Empty, Preparing, Registered, Owned, Conflict };
+
+OfferValue readOfferValue(HKEY key, LPCWSTR name, const QString &expected)
+{
+    std::array<wchar_t, 256> value{};
+    DWORD bytes = sizeof(value), type = 0;
+    const auto status = RegQueryValueExW(key, name, nullptr, &type,
+        reinterpret_cast<BYTE *>(value.data()), &bytes);
+    if (missingRegistryKey(status))
+        return OfferValue::Missing;
+    if (status == ERROR_SUCCESS && type == REG_SZ && bytes == (expected.size() + 1) * sizeof(wchar_t)
+        && value[expected.size()] == L'\0'
+        && QString::fromWCharArray(value.data(), expected.size()) == expected)
+        return OfferValue::Exact;
+    return OfferValue::Other;
+}
+
+OfferState inspectOfferKey(HKEY key)
+{
+    DWORD subkeys = 0, values = 0;
+    if (RegQueryInfoKeyW(key, nullptr, nullptr, nullptr, &subkeys, nullptr, nullptr,
+                         &values, nullptr, nullptr, nullptr, nullptr) != ERROR_SUCCESS
+        || !missingRegistryKey(RegQueryValueExW(key, L"SymbolicLinkValue", nullptr, nullptr, nullptr, nullptr)))
+        return OfferState::Conflict;
+
+    const auto update = readOfferValue(key, OfferUpdate, StoreUpdate);
+    const bool owner = readOfferValue(key, OfferOwner, OfferOwnerValue) == OfferValue::Exact;
+    if (update == OfferValue::Exact)
+        return owner && subkeys == 0 && values == 2 ? OfferState::Owned : OfferState::Registered;
+    if (update == OfferValue::Missing && subkeys == 0) {
+        if (values == 0)
+            return OfferState::Empty;
+        if (owner && values == 1)
+            return OfferState::Preparing;
     }
-    const auto existingUserKey = existingReadablePolicyKey(HKEY_CURRENT_USER, path, KEY_WOW64_64KEY);
-    if (!existingUserKey)
-        return {{false, false, governed}, {}};
-    const auto userForceList = *existingUserKey ? storeForceList(user, chrome) : StoreForceList::Unlisted;
-    if ((*existingUserKey && existingPolicyBlocksSetup(user)) || userForceList == StoreForceList::OtherSource
-        || user.status() != QSettings::NoError)
-        return {{false, false, governed}, {}};
-    if (machineConfigured)
-        return {{false, true, {}}, {}};
+    return OfferState::Conflict;
+}
 
-    const auto configured = readPolicy(HKEY_CURRENT_USER, path, RRF_SUBKEY_WOW6464KEY);
-    if (configured.error != ERROR_SUCCESS)
-        return {{false, false, governed}, {}};
-    const auto &settings = configured.settings;
+OfferState inspectOffer(HKEY hive, REGSAM view = 0)
+{
+    RegistryKey key;
+    const auto status = RegOpenKeyExW(hive, reinterpret_cast<LPCWSTR>(ChromeOfferPath.utf16()),
+        REG_OPTION_OPEN_LINK, KEY_QUERY_VALUE | view, &key.value);
+    if (status == ERROR_SUCCESS)
+        return inspectOfferKey(key.value);
+    return missingRegistryKey(status) ? OfferState::Missing : OfferState::Conflict;
+}
 
-    const auto existing = settings.value(StoreId);
-    const auto entry = existing.toObject();
-    if (usesOfficialStore(entry))
-        return {{false, true, {}}, configured};
+LSTATUS setOfferValue(HKEY key, LPCWSTR name, const QString &value)
+{
+    return RegSetValueExW(key, name, 0, REG_SZ, reinterpret_cast<const BYTE *>(value.utf16()),
+                           DWORD((value.size() + 1) * sizeof(wchar_t)));
+}
 
-    // Adding a specific extension can change how a browser inherits wildcard permissions.
-    // Leave any existing wildcard restrictions and store-level policy in full control.
-    const auto global = settings.value(QStringLiteral("*"));
-    const auto defaults = global.toObject();
-    if ((!global.isUndefined() && !global.isObject())
-        || (!defaults.isEmpty() && !(defaults.size() == 1
-                && defaults.value(InstallationMode).toString() == QStringLiteral("allowed"))))
-        return {{false, false, governed}, {}};
-    for (auto it = settings.constBegin(); it != settings.constEnd(); ++it) {
-        if (it.key().startsWith(QStringLiteral("update_url:"), Qt::CaseInsensitive))
-            return {{false, false, governed}, {}};
-    }
-    if (!existing.isUndefined())
-        return {{false, false, governed}, {}};
-    if (userForceList == StoreForceList::Configured)
-        return {{false, true, {}}, configured};
-    return {{true, false, {}}, configured};
+QString existingOfferProblem()
+{
+    return QCoreApplication::translate("BrowserSetup",
+        "Chrome’s existing extension registration prevents Auralis from adding an offer. Open the Chrome Web Store to install the extension.");
 }
 
 #ifdef AURALIS_CHROME_APPROVAL_ENABLED
@@ -420,17 +376,12 @@ QString chromeApprovalAccountSid()
     return sid;
 }
 
-enum class ChromeApprovalAvailability { Ready, PolicyKeyUnavailable, IneligibleApplicationOrAccount };
-
-ChromeApprovalAvailability chromeApprovalAvailability()
+bool chromeApprovalAvailable()
 {
     const auto chromePath = policyPath(QStringLiteral("chrome"));
     // The elevated helper opens an existing policy key without following registry links.
-    if (!existingReadablePolicyKey(HKEY_CURRENT_USER, chromePath, KEY_WOW64_64KEY).value_or(false))
-        return ChromeApprovalAvailability::PolicyKeyUnavailable;
-    if (!BrowserSetup::isInstalledApplication() || chromeApprovalAccountSid().isEmpty())
-        return ChromeApprovalAvailability::IneligibleApplicationOrAccount;
-    return ChromeApprovalAvailability::Ready;
+    return existingReadablePolicyKey(HKEY_CURRENT_USER, chromePath, KEY_WOW64_64KEY).value_or(false)
+        && BrowserSetup::isInstalledApplication() && !chromeApprovalAccountSid().isEmpty();
 }
 
 QString chromeApprovalOwnershipKey()
@@ -676,113 +627,85 @@ QString BrowserSetup::registerNativeHost(const QString &browserId, bool repair)
     return {};
 }
 
-BrowserSetup::PolicyStatus BrowserSetup::policyStatus(const QString &browserId)
+BrowserSetup::OfferStatus BrowserSetup::chromeOfferStatus()
+{
+    const auto user = inspectOffer(HKEY_CURRENT_USER);
+    const auto machine = inspectOffer(HKEY_LOCAL_MACHINE, KEY_WOW64_32KEY);
+    // Chrome selects the machine key first when both keys exist for the same ID.
+    const auto effective = machine == OfferState::Missing ? user : machine;
+    const bool registered = effective == OfferState::Registered || effective == OfferState::Owned;
+    const bool available = registered || (machine == OfferState::Missing
+        && (user == OfferState::Missing || user == OfferState::Empty || user == OfferState::Preparing));
+    return {available, registered, user == OfferState::Owned || user == OfferState::Preparing,
+            available ? QString() : existingOfferProblem()};
+}
+
+QString BrowserSetup::registerChromeOffer()
+{
+    const auto offer = chromeOfferStatus();
+    if (offer.registered || !offer.available)
+        return offer.problem;
+
+    RegistryKey key;
+    const auto path = reinterpret_cast<LPCWSTR>(ChromeOfferPath.utf16());
+    constexpr REGSAM access = KEY_QUERY_VALUE | KEY_SET_VALUE;
+    auto result = RegOpenKeyExW(HKEY_CURRENT_USER, path, REG_OPTION_OPEN_LINK, access, &key.value);
+    if (missingRegistryKey(result))
+        result = RegCreateKeyExW(HKEY_CURRENT_USER, path, 0, nullptr, REG_OPTION_NON_VOLATILE,
+                                 access, nullptr, &key.value, nullptr);
+    if (result == ERROR_SUCCESS) {
+        const auto state = inspectOfferKey(key.value);
+        if (state == OfferState::Owned || state == OfferState::Registered)
+            return {};
+        if (state != OfferState::Empty && state != OfferState::Preparing)
+            return existingOfferProblem();
+
+        // Mark ownership before enabling the offer so a failed write can be retried or removed.
+        if (state == OfferState::Empty)
+            result = setOfferValue(key.value, OfferOwner, OfferOwnerValue);
+        if (result == ERROR_SUCCESS)
+            result = setOfferValue(key.value, OfferUpdate, StoreUpdate);
+    }
+    if (result != ERROR_SUCCESS)
+        return QCoreApplication::translate("BrowserSetup", "Windows could not save the Chrome extension offer (Windows error %1).").arg(result);
+    if (inspectOfferKey(key.value) != OfferState::Owned)
+        return QCoreApplication::translate("BrowserSetup", "Windows did not retain the Chrome extension offer.");
+    return {};
+}
+
+QString BrowserSetup::removeChromeOffer()
+{
+    RegistryKey key;
+    auto result = RegOpenKeyExW(HKEY_CURRENT_USER, reinterpret_cast<LPCWSTR>(ChromeOfferPath.utf16()),
+        REG_OPTION_OPEN_LINK, KEY_QUERY_VALUE | KEY_SET_VALUE, &key.value);
+    if (result == ERROR_SUCCESS) {
+        const auto state = inspectOfferKey(key.value);
+        if (state != OfferState::Owned && state != OfferState::Preparing)
+            return QCoreApplication::translate("BrowserSetup", "Chrome’s extension offer changed. Only an offer created by Auralis can be removed.");
+        if (state == OfferState::Owned)
+            result = RegDeleteValueW(key.value, OfferUpdate);
+        // Delete only the two recognized values, never the key or anything else in it.
+        if (result == ERROR_SUCCESS && inspectOfferKey(key.value) == OfferState::Preparing)
+            result = RegDeleteValueW(key.value, OfferOwner);
+    }
+    if (result != ERROR_SUCCESS)
+        return QCoreApplication::translate("BrowserSetup", "Windows could not remove the Chrome extension offer (Windows error %1).").arg(result);
+    if (readOfferValue(key.value, OfferOwner, OfferOwnerValue) == OfferValue::Exact)
+        return QCoreApplication::translate("BrowserSetup", "Windows did not remove the Chrome extension offer.");
+    return {};
+}
+
+bool BrowserSetup::legacyPolicyRemovable(const QString &browserId)
 {
     const auto path = policyPath(browserId);
     if (path.isEmpty())
-        return {};
-    QSettings user(QStringLiteral("HKEY_CURRENT_USER") + path, QSettings::Registry64Format);
-    auto status = reviewPolicy(browserId, path, user).status;
+        return false;
     QSettings ownership;
     ownership.setFallbacksEnabled(false);
-    status.removable = ownedUserPolicy(ownership, browserId, path).has_value();
-    return status;
+    return ownedUserPolicy(ownership, browserId, path).has_value();
 }
 
-QString BrowserSetup::installPolicy(const QString &browserId, bool *windowsApprovalRequired)
-{
-    if (windowsApprovalRequired)
-        *windowsApprovalRequired = false;
-    const auto path = policyPath(browserId);
-    if (path.isEmpty())
-        return QCoreApplication::translate("BrowserSetup", "Managed setup is unavailable for this browser.");
-    QSettings user(QStringLiteral("HKEY_CURRENT_USER") + path, QSettings::Registry64Format);
-    auto review = reviewPolicy(browserId, path, user);
-    if (review.status.configured || !review.status.available)
-        return review.status.problem;
-    QSettings ownership;
-    ownership.setFallbacksEnabled(false);
-    const auto undoError = QCoreApplication::translate("BrowserSetup",
-        "Auralis could not save its undo information. Use Install manually.");
-    if (!ownership.isWritable())
-        return undoError;
-
-    auto settings = review.policy.settings;
-    settings.insert(StoreId, auralisPolicy());
-    const auto json = QString::fromUtf8(QJsonDocument(settings).toJson(QJsonDocument::Compact));
-    const auto error = writeUserPolicy(path, review.policy, json, false);
-    if (error == ERROR_RETRY)
-        return QCoreApplication::translate("BrowserSetup", "The browser policy changed while saving. Check browser setup and try again.");
-    if (error == ERROR_ACCESS_DENIED) {
-#ifdef AURALIS_CHROME_APPROVAL_ENABLED
-        if (browserId == QStringLiteral("chrome")) {
-            if (review.policy.exists)
-                return QCoreApplication::translate("BrowserSetup",
-                    "Windows denied changes to an existing Chrome policy. Use Install manually, or ask your administrator to update Chrome’s policy.");
-            switch (chromeApprovalAvailability()) {
-            case ChromeApprovalAvailability::PolicyKeyUnavailable:
-                return QCoreApplication::translate("BrowserSetup",
-                    "Auralis could not open Chrome’s Windows policy key for approval. Use Install manually, or ask your administrator to configure Chrome.");
-            case ChromeApprovalAvailability::IneligibleApplicationOrAccount:
-                return QCoreApplication::translate("BrowserSetup",
-                    "Windows approval requires an installed copy of Auralis and an administrator account that can approve for itself. Use Install manually, or ask your administrator to configure Chrome.");
-            case ChromeApprovalAvailability::Ready:
-                if (windowsApprovalRequired)
-                    *windowsApprovalRequired = true;
-                break;
-            }
-        }
-#endif
-        return QCoreApplication::translate("BrowserSetup",
-            "Windows denied permission to save automatic setup for this account. Use Install manually, or ask your administrator to configure the extension.");
-    }
-    if (error != ERROR_SUCCESS)
-        return QCoreApplication::translate("BrowserSetup",
-            "Could not save browser setup for this Windows account (Windows error %1).").arg(error);
-    const auto saved = readPolicy(HKEY_CURRENT_USER, path, RRF_SUBKEY_WOW6464KEY);
-    if (saved.error != ERROR_SUCCESS || saved.settings.value(StoreId).toObject() != auralisPolicy())
-        return QCoreApplication::translate("BrowserSetup", "Windows did not retain the Auralis browser policy for this user.");
-
-    const auto key = ownershipKey(browserId);
-    const auto previousMarker = ownership.value(key);
-    ownership.setValue(key, review.policy.exists);
-#ifdef AURALIS_CHROME_APPROVAL_ENABLED
-    const auto approvalKey = browserId == QStringLiteral("chrome") ? chromeApprovalOwnershipKey() : QString();
-    QVariant previousApprovalMarker;
-    if (!approvalKey.isEmpty()) {
-        previousApprovalMarker = ownership.value(approvalKey);
-        ownership.remove(approvalKey);
-    }
-#endif
-    ownership.sync();
-    if (ownership.status() == QSettings::NoError)
-        return {};
-
-    const auto rollbackError = QCoreApplication::translate("BrowserSetup",
-        "Auralis could not save its undo information or confirm that the browser policy was restored. Check browser setup before trying again.");
-    // Restore the original value only when the complete policy is still our write.
-    if (saved.raw != json || writeUserPolicy(path, saved, review.policy.raw, !review.policy.exists) != ERROR_SUCCESS)
-        return rollbackError;
-    const auto restored = readPolicy(HKEY_CURRENT_USER, path, RRF_SUBKEY_WOW6464KEY);
-    if (restored.error != ERROR_SUCCESS || restored.exists != review.policy.exists || restored.raw != review.policy.raw)
-        return rollbackError;
-
-    const auto restoreMarker = [&ownership](const QString &name, const QVariant &value) {
-        if (value.isValid())
-            ownership.setValue(name, value);
-        else
-            ownership.remove(name);
-    };
-    restoreMarker(key, previousMarker);
-#ifdef AURALIS_CHROME_APPROVAL_ENABLED
-    if (!approvalKey.isEmpty())
-        restoreMarker(approvalKey, previousApprovalMarker);
-#endif
-    ownership.sync();
-    return undoError;
-}
-
-QString BrowserSetup::removePolicy(const QString &browserId, bool *windowsApprovalRequired)
+QString BrowserSetup::removeLegacyPolicy(const QString &browserId, bool *windowsApprovalRequired)
 {
     if (windowsApprovalRequired)
         *windowsApprovalRequired = false;
@@ -803,7 +726,7 @@ QString BrowserSetup::removePolicy(const QString &browserId, bool *windowsApprov
 #ifdef AURALIS_CHROME_APPROVAL_ENABLED
     if (windowsApprovalRequired && error == ERROR_ACCESS_DENIED && browserId == QStringLiteral("chrome")
         && canApproveOwnedRemoval(*owned))
-        *windowsApprovalRequired = chromeWindowsApprovalAvailable();
+        *windowsApprovalRequired = chromeApprovalAvailable();
 #endif
     if (error != ERROR_SUCCESS)
         return QCoreApplication::translate("BrowserSetup",
@@ -819,16 +742,7 @@ QString BrowserSetup::removePolicy(const QString &browserId, bool *windowsApprov
     return {};
 }
 
-bool BrowserSetup::chromeWindowsApprovalAvailable()
-{
-#ifdef AURALIS_CHROME_APPROVAL_ENABLED
-    return chromeApprovalAvailability() == ChromeApprovalAvailability::Ready;
-#else
-    return false;
-#endif
-}
-
-QString BrowserSetup::installChromePolicyWithAdministratorApproval(bool remove)
+QString BrowserSetup::removeLegacyChromePolicyWithAdministratorApproval()
 {
     const auto unavailable = QCoreApplication::translate("BrowserSetup",
         "Windows approval requires an installed Auralis application and an administrator account with its own approval token.");
@@ -843,16 +757,9 @@ QString BrowserSetup::installChromePolicyWithAdministratorApproval(bool remove)
         return QCoreApplication::translate("BrowserSetup", "The Chrome policy changed before approval. Check browser setup again.");
     QSettings ownership;
     ownership.setFallbacksEnabled(false);
-    if (remove) {
-        const auto owned = ownedUserPolicy(ownership, browser, path);
-        if (!owned || !canApproveOwnedRemoval(*owned))
-            return QCoreApplication::translate("BrowserSetup", "The Chrome policy changed before approval. Check browser setup again.");
-    } else {
-        QSettings user(QStringLiteral("HKEY_CURRENT_USER") + path, QSettings::Registry64Format);
-        const auto review = reviewPolicy(browser, path, user);
-        if (!review.status.available || review.policy.exists)
-            return QCoreApplication::translate("BrowserSetup", "The Chrome policy changed before approval. Check browser setup again.");
-    }
+    const auto owned = ownedUserPolicy(ownership, browser, path);
+    if (!owned || !canApproveOwnedRemoval(*owned))
+        return QCoreApplication::translate("BrowserSetup", "The Chrome policy changed before approval. Check browser setup again.");
     if (!ownership.isWritable())
         return QCoreApplication::translate("BrowserSetup", "Auralis could not save the undo information for Windows approval.");
 
@@ -870,8 +777,7 @@ QString BrowserSetup::installChromePolicyWithAdministratorApproval(bool remove)
         return invalidHelper;
 
     const auto expires = QDateTime::currentSecsSinceEpoch() + 90;
-    const auto parameters = QStringLiteral("%1 %2 %3")
-        .arg(remove ? QStringLiteral("remove") : QStringLiteral("install"), sid).arg(expires);
+    const auto parameters = QStringLiteral("remove %1 %2").arg(sid).arg(expires);
     SHELLEXECUTEINFOW execute{};
     execute.cbSize = sizeof(execute);
     execute.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
@@ -905,17 +811,12 @@ QString BrowserSetup::installChromePolicyWithAdministratorApproval(bool remove)
     switch (exitCode) {
     case 0: {
         const auto saved = readPolicy(HKEY_CURRENT_USER, path, RRF_SUBKEY_WOW6464KEY);
-        if (saved.error != ERROR_SUCCESS || (remove ? saved.exists : saved.raw != approvedChromePolicyValue()))
+        if (saved.error != ERROR_SUCCESS || saved.exists)
             break;
         const auto key = ownershipKey(browser);
         const auto approvedKey = chromeApprovalOwnershipKey();
-        if (remove) {
-            ownership.remove(key);
-            ownership.remove(approvedKey);
-        } else {
-            ownership.setValue(key, false);
-            ownership.setValue(approvedKey, true);
-        }
+        ownership.remove(key);
+        ownership.remove(approvedKey);
         ownership.sync();
         if (ownership.status() != QSettings::NoError)
             return QCoreApplication::translate("BrowserSetup", "Chrome setup changed, but Auralis could not save its undo information.");
@@ -938,7 +839,6 @@ QString BrowserSetup::installChromePolicyWithAdministratorApproval(bool remove)
     }
     return QCoreApplication::translate("BrowserSetup", "Windows did not retain the Auralis browser policy change.");
 #else
-    Q_UNUSED(remove);
     return unavailable;
 #endif
 }

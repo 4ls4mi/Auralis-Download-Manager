@@ -2,6 +2,11 @@ name: Auralis Qt macOS build
 
 on:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      coordinated_release:
+        type: boolean
+        default: false
   push:
     branches: [wip/auralis-qt-shell]
     paths:
@@ -17,7 +22,8 @@ jobs:
     if: >-
       github.repository == '4ls4mi/Auralis-Download-Manager' &&
       github.ref == 'refs/heads/wip/auralis-qt-shell' &&
-      (github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[build-auralis-macos]'))
+      (github.event_name == 'workflow_dispatch' || inputs.coordinated_release ||
+       contains(github.event.head_commit.message, '[build-auralis-macos]'))
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     strategy:
@@ -68,7 +74,7 @@ jobs:
       - name: Upload the verified macOS package
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: auralis-macos-${{ matrix.arch }}
+          name: auralis-macos-${{ matrix.arch }}${{ github.run_attempt > 1 && format('-attempt-{0}', github.run_attempt) || '' }}
           path: |
             target/dist/Auralis.Download.Manager_*_macos-${{ matrix.arch }}.dmg
             target/dist/Auralis.Download.Manager_*_macos-${{ matrix.arch }}.dmg.sha256

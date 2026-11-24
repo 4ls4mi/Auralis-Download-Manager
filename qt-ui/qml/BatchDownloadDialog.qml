@@ -2,11 +2,13 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Window
 import "TransferData.js" as Transfer
 
 Dialog {
     id: root
     readonly property var colors: MaterialTheme.palette
+    readonly property string numericFamily: parent?.Window.window?.numeralInputFamily?.() || font.family
     property bool busy: false
     property string failure: ""
     property var preview: null
@@ -87,9 +89,32 @@ Dialog {
                     root.preview = null
                 }
             }
-            TextField { id: first; text: "1"; Layout.preferredWidth: 72; Accessible.name: qsTr("From"); onTextChanged: root.preview = null }
-            TextField { id: last; text: "10"; Layout.preferredWidth: 72; Accessible.name: qsTr("To"); onTextChanged: root.preview = null }
-            SpinBox { id: digits; from: 1; to: 10; value: 1; enabled: ranges.currentIndex === 0; Accessible.name: qsTr("Number width"); onValueModified: root.preview = null }
+            TextField {
+                id: first
+                text: "1"
+                font.family: ranges.currentIndex === 0 ? root.numericFamily : root.font.family
+                Layout.preferredWidth: 72
+                Accessible.name: qsTr("From")
+                onTextChanged: root.preview = null
+            }
+            TextField {
+                id: last
+                text: "10"
+                font.family: ranges.currentIndex === 0 ? root.numericFamily : root.font.family
+                Layout.preferredWidth: 72
+                Accessible.name: qsTr("To")
+                onTextChanged: root.preview = null
+            }
+            SpinBox {
+                id: digits
+                from: 1
+                to: 10
+                value: 1
+                font.family: root.numericFamily
+                enabled: ranges.currentIndex === 0
+                Accessible.name: qsTr("Number width")
+                onValueModified: root.preview = null
+            }
         }
         RowLayout {
             Layout.fillWidth: true
