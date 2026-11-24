@@ -6,7 +6,7 @@ Auralis is a free, open-source download manager with customizable glass material
 
 [**Download for Windows x64**](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest#assets) · [Debian 13 and macOS installers](https://github.com/4ls4mi/Auralis-Download-Manager/releases/latest#assets) · [Release notes](https://github.com/4ls4mi/Auralis-Download-Manager/releases)
 
-![Auralis on Windows with the Unfinished filter selected in Violet Rail Wide Sweep](docs/images/auralis/windows-gallery/download-library.png)
+![Auralis on Windows with the Unfinished filter selected in Violet Rail Wide Sweep](docs/images/auralis/windows-screenshots/3.png)
 
 ## What Auralis adds
 
@@ -41,7 +41,7 @@ Captured on Windows. Expand a demo to see the controls in motion.
 
 | Surface materials | Progress styling |
 | --- | --- |
-| ![Appearance settings with Violet Rail Wide Sweep selected](docs/images/auralis/windows-gallery/appearance-materials.png) | ![Progress layout, colors, shape, animation, and lighting settings](docs/images/auralis/windows-gallery/appearance-progress.png) |
+| ![Appearance settings with Violet Rail Wide Sweep selected](docs/images/auralis/windows-screenshots/1.png) | ![Progress layout, colors, shape, animation, and lighting settings](docs/images/auralis/windows-screenshots/2.png) |
 
 <details>
 <summary>Watch filters, compact view, and appearance changes</summary>
@@ -69,12 +69,29 @@ Captured on Windows. Expand a demo to see the controls in motion.
 
 | Confirm video download | Compact transfer |
 | --- | --- |
-| ![Video download confirmation with destination and available drive space](docs/images/auralis/windows-gallery/video-confirmation.png) | ![Video downloading in compact view with the segmented bar, connections, and speed graph](docs/images/auralis/windows-gallery/video-compact-transfer.png) |
+| ![Video download confirmation with destination and available drive space](docs/images/auralis/windows-screenshots/4.png) | ![Video downloading in compact view with the segmented bar, connections, and speed graph](docs/images/auralis/windows-screenshots/5.png) |
+
+![Full video transfer view with download details, live connections, and the speed graph](docs/images/auralis/windows-screenshots/6.png)
 
 <details>
 <summary>Watch the compact video transfer</summary>
 
 ![A video downloading with live pill segments, connection blocks, and transfer speed](docs/images/auralis/windows-gallery/video-download.gif)
+
+</details>
+
+<details>
+<summary>More stills from the Windows recordings</summary>
+
+![The Unfinished filter in the Windows download library](docs/images/auralis/windows-gallery/download-library.png)
+
+| Materials menu | Progress indicators |
+| --- | --- |
+| ![Violet Rail Wide Sweep in the materials menu](docs/images/auralis/windows-gallery/appearance-materials.png) | ![Progress bar and connection settings](docs/images/auralis/windows-gallery/appearance-progress.png) |
+
+| Download confirmation | Live compact video transfer |
+| --- | --- |
+| ![Video destination and free space](docs/images/auralis/windows-gallery/video-confirmation.png) | ![Connection activity during a video download](docs/images/auralis/windows-gallery/video-compact-transfer.png) |
 
 </details>
 
