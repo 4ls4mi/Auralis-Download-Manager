@@ -2140,6 +2140,32 @@ AuralisWindow {
                     gridColor: root.colors.divider
                     Accessible.name: qsTr("Recent total transfer speed")
                 }
+                GlassComboBox {
+                    id: footerLanguage
+                    objectName: "mainLanguageSelector"
+                    property bool saving: false
+                    Layout.preferredWidth: root.compactView ? 96 : 110
+                    Layout.alignment: Qt.AlignVCenter
+                    model: settingsWindow.common.language.options
+                    textRole: "label"
+                    valueRole: "value"
+                    currentIndex: Math.max(0, model.findIndex(language => language.value === engine.interfaceLanguage))
+                    font.family: root.fontFamilyForText(displayText)
+                    font.pixelSize: TypographyScale.pixels(11)
+                    enabled: engine.ready && !saving
+                    Accessible.name: qsTranslate("SettingsWindow", "Interface language")
+                    onActivated: {
+                        saving = true
+                        engine.request({action: "glass-setting", category: "language", queue: currentValue},
+                            function(reply, error) {
+                                footerLanguage.saving = false
+                                if (error || reply?.saved !== true)
+                                    root.actionError = qsTranslate("SettingsWindow", "Could not change the interface language.")
+                                footerLanguage.currentIndex = Qt.binding(() => Math.max(0,
+                                    footerLanguage.model.findIndex(language => language.value === engine.interfaceLanguage)))
+                            })
+                    }
+                }
                 NumeralLabel {
                     id: statusMessage
                     visible: !root.compactView || Boolean(root.actionError)
