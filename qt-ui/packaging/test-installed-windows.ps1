@@ -170,6 +170,15 @@ try {
     Write-Host 'Testing passive upgrade with the installed executable locked.'
     $locked = [IO.File]::Open($exe, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
     try {
+        Write-Host 'Testing uninstall with the installed executable in use.'
+        Run-Fixture (Join-Path $fixture 'uninstall.exe') @('/S', '/NOREG', "_?=$fixture") 20000 5
+        if (!(Test-Path -LiteralPath $exe) -or
+            !(Test-Path -LiteralPath (Join-Path $fixture 'auralis_engine.dll')) -or
+            !(Test-Path -LiteralPath (Join-Path $fixture 'auralis-browser-host.exe')) -or
+            !(Test-Path -LiteralPath $marker)) {
+            throw 'The rejected uninstall changed the installed application or its profile.'
+        }
+        Write-Host 'Verified uninstall refuses in-use files before removing the application.'
         Run-Fixture $env:AURALIS_QT_INSTALLER $upgradeArgs 20000 5
         $relaunch = Get-Process -Name 'auralis-download-manager' -ErrorAction SilentlyContinue |
             Where-Object { $_.Path -ieq $exe }

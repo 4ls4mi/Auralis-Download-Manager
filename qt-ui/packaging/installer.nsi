@@ -40,6 +40,10 @@ Var LaunchArguments
 Var DeleteAppData
 Var DeleteSharedProfile
 Var AppDataCheckbox
+Var UninstallAppHandle
+Var UninstallHostHandle
+Var UninstallEngineHandle
+Var UninstallFailed
 
 !define MUI_PAGE_CUSTOMFUNCTION_PRE SkipInPassiveMode
 !insertmacro MUI_PAGE_DIRECTORY
@@ -195,6 +199,10 @@ FunctionEnd
 
 Function un.onInit
     SetShellVarContext current
+    StrCpy $UninstallAppHandle 0
+    StrCpy $UninstallHostHandle 0
+    StrCpy $UninstallEngineHandle 0
+    StrCpy $UninstallFailed 0
     StrCpy $DeleteAppData ${BST_UNCHECKED}
     StrCpy $DeleteSharedProfile ${BST_UNCHECKED}
     ${GetParameters} $0
@@ -202,6 +210,46 @@ Function un.onInit
     ${IfNot} ${Errors}
         StrCpy $NoRegistration 1
     ${EndIf}
+FunctionEnd
+
+Function un.CloseApplicationHandles
+    ${If} $UninstallAppHandle != 0
+        System::Call 'kernel32::CloseHandle(p $UninstallAppHandle)'
+        StrCpy $UninstallAppHandle 0
+    ${EndIf}
+    ${If} $UninstallHostHandle != 0
+        System::Call 'kernel32::CloseHandle(p $UninstallHostHandle)'
+        StrCpy $UninstallHostHandle 0
+    ${EndIf}
+    ${If} $UninstallEngineHandle != 0
+        System::Call 'kernel32::CloseHandle(p $UninstallEngineHandle)'
+        StrCpy $UninstallEngineHandle 0
+    ${EndIf}
+FunctionEnd
+
+# Deny new readers while allowing this process to delete the files it has locked.
+Function un.LockApplicationFile
+    Exch $0
+    Push $1
+    StrCpy $1 0
+    ${If} ${FileExists} "$0"
+        System::Call 'kernel32::CreateFileW(w r0, i 0x40010000, i 4, p 0, i 3, i 0x80, p 0) p.r1'
+        ${If} $1 == -1
+            Call un.CloseApplicationHandles
+            SetErrorLevel 5
+            IfSilent uninstall_in_use
+            MessageBox MB_ICONSTOP|MB_OK "Close Auralis, including its tray icon and browser connections, before uninstalling. No files have been removed."
+uninstall_in_use:
+            Quit
+        ${EndIf}
+    ${EndIf}
+    StrCpy $0 $1
+    Pop $1
+    Exch $0
+FunctionEnd
+
+Function un.onGUIEnd
+    Call un.CloseApplicationHandles
 FunctionEnd
 
 Function un.Confirm
@@ -405,8 +453,25 @@ Function un.RemoveSharedProfile
 FunctionEnd
 
 Section "Uninstall"
+    Push "$INSTDIR\${APP_EXE}"
+    Call un.LockApplicationFile
+    Pop $UninstallAppHandle
+    Push "$INSTDIR\auralis-browser-host.exe"
+    Call un.LockApplicationFile
+    Pop $UninstallHostHandle
+    Push "$INSTDIR\auralis_engine.dll"
+    Call un.LockApplicationFile
+    Pop $UninstallEngineHandle
     # Only the files installed by this package are removed.
     !include "${UNINSTALL_FILES}"
+    Call un.CloseApplicationHandles
+    ${If} $UninstallFailed == 1
+        SetErrorLevel 5
+        IfSilent uninstall_incomplete
+        MessageBox MB_ICONSTOP|MB_OK "Some Auralis files could not be removed. Close programs using the installation and run uninstall again. Settings were kept."
+uninstall_incomplete:
+        Quit
+    ${EndIf}
     ${If} $DeleteAppData == ${BST_CHECKED}
     ${AndIfNot} ${FileExists} "$INSTDIR\${APP_EXE}"
         Call un.CanDeleteAppData

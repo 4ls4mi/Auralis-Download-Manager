@@ -143,7 +143,13 @@ try {
     $lines = foreach ($file in $installed) {
         $relative = [IO.Path]::GetRelativePath($stage, $file.FullName)
         if ($relative -match '[\r\n"$]') { throw "Cannot encode installer filename: $relative" }
-        '    Delete "$INSTDIR\' + $relative + '"'
+        '    ${If} ${FileExists} "$INSTDIR\' + $relative + '"'
+        '        ClearErrors'
+        '        Delete "$INSTDIR\' + $relative + '"'
+        '        ${If} ${Errors}'
+        '            StrCpy $UninstallFailed 1'
+        '        ${EndIf}'
+        '    ${EndIf}'
     }
     $lines += @(Get-ChildItem -LiteralPath $stage -Recurse -Directory | Sort-Object { $_.FullName.Length } -Descending |
         ForEach-Object { '    RMDir "$INSTDIR\' + [IO.Path]::GetRelativePath($stage, $_.FullName) + '"' })
