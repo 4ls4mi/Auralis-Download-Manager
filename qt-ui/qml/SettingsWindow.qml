@@ -137,8 +137,8 @@ AuralisWindow {
     Settings {
         id: windowLayout
         category: "SettingsWindowLayout"
-        property int initialWidth: 1050
-        property int initialHeight: 760
+        property int initialWidth: 675
+        property int initialHeight: 520
     }
 
     Settings {

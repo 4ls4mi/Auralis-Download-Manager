@@ -517,8 +517,8 @@ AuralisWindow {
         id: windowPreferences
         category: "MainWindow"
         property bool compactView: false
-        property int fullWidth: 1120
-        property int fullHeight: 735
+        property int fullWidth: 810
+        property int fullHeight: 525
     }
 
     function toggleCompactView() {

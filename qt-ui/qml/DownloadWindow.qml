@@ -108,8 +108,8 @@ AuralisWindow {
         id: transferWindowSettings
         category: "TransferWindowLayout"
         property bool compactView: false
-        property int initialCompactWidth: 465
-        property int initialCompactHeight: 320
+        property int initialCompactWidth: 510
+        property int initialCompactHeight: 290
     }
 
     Component.onCompleted: {

@@ -489,6 +489,22 @@ void addBundledTools()
         qputenv("PATH", QDir::toNativeSeparators(dir).toUtf8() + QDir::listSeparator().toLatin1() + qgetenv("PATH"));
 }
 
+void applyReferenceWindowSizes()
+{
+    QSettings settings;
+    if (settings.value(QStringLiteral("WindowLayout/referenceSizesVersion")).toInt() >= 1
+        || settings.status() != QSettings::NoError)
+        return;
+    settings.setValue(QStringLiteral("MainWindow/fullWidth"), 810);
+    settings.setValue(QStringLiteral("MainWindow/fullHeight"), 525);
+    settings.setValue(QStringLiteral("SettingsWindowLayout/initialWidth"), 675);
+    settings.setValue(QStringLiteral("SettingsWindowLayout/initialHeight"), 520);
+    settings.setValue(QStringLiteral("TransferWindowLayout/initialCompactWidth"), 510);
+    settings.setValue(QStringLiteral("TransferWindowLayout/initialCompactHeight"), 290);
+    settings.setValue(QStringLiteral("WindowLayout/referenceSizesVersion"), 1);
+    settings.sync();
+}
+
 int runDesktop(QApplication &app, int activeInterfaceScale, bool startHidden, bool exitRequest, bool smoke,
                QString &restartError);
 }
@@ -651,6 +667,7 @@ int runDesktop(QApplication &app, int activeInterfaceScale, bool startHidden, bo
         return 1;
 
     seedFreshProfile(engine.dataDirectory());
+    applyReferenceWindowSizes();
     Typography &typography = typographyLifetime.emplace(activeInterfaceScale);
     if (smoke && qEnvironmentVariableIntValue("AURALIS_QT_RELEASE_FONTS") == 1) {
         for (const auto &options : {typography.englishFontOptions(), typography.arabicFontOptions()}) {
