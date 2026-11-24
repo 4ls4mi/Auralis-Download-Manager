@@ -433,6 +433,8 @@ AuralisWindow {
         ToolBar {
             Layout.fillWidth: true
             padding: 0
+            leftPadding: mirrored ? 0 : Math.max(0, root.frameSafeInset - 12)
+            rightPadding: mirrored ? Math.max(0, root.frameSafeInset - 12) : 0
             background: GlassSurface { material: root.material; role: "title"; backdropAvailable: root.backdropAvailable }
             contentItem: RowLayout {
                 spacing: 7
@@ -520,7 +522,7 @@ AuralisWindow {
                     onMaximizeRequested: root.toggleMaximized()
                     onCloseRequested: root.close()
                 }
-                Item { Layout.preferredWidth: root.resizeInset }
+                Item { Layout.preferredWidth: Math.max(root.resizeInset, root.frameSafeInset) }
             }
         }
         ToolBar {
@@ -932,6 +934,7 @@ AuralisWindow {
                                 width: Math.max(0, progressLine.width - progressPercent.width - progressPercent.anchors.leftMargin)
                                 height: root.compactView ? 18 : 26
                                 value: Transfer.fraction(root.item)
+                                transferState: String(root.item?.status || "")
                                 animated: root.animateTransfer
                                 animationStyle: WindowAppearance.progressAnimation
                                 externalPhase: !root.displayFlow ? -1

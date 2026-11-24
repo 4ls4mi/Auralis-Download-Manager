@@ -23,6 +23,7 @@ Item {
     required property real indicatorWidth
     required property real timeWidth
     property bool cursorFocused: false
+    property string transferState: ""
     property bool transferring: false
     property bool animationsAllowed: true
     property bool compactView: false
@@ -197,6 +198,7 @@ Item {
                     Layout.fillWidth: true
                     Layout.preferredHeight: row.compactView ? 14 : 22
                     value: row.progress
+                    transferState: row.transferState
                     animated: row.transferring && row.animationsAllowed
                     animationStyle: WindowAppearance.progressAnimation
                     shape: WindowAppearance.progressShape === "material"

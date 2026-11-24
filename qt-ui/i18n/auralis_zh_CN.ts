@@ -2574,6 +2574,10 @@ Info hash %3</source>
             <source>Window Glass</source>
             <translation>窗口玻璃</translation>
         </message>
+        <message>
+            <source>Violet Rail Wide Sweep</source>
+            <translation>紫色栏 · 宽弧</translation>
+        </message>
     </context>
     <context>
         <name>QObject</name>
@@ -3006,6 +3010,10 @@ Info hash %3</source>
         <message>
             <source>Could not save the file.</source>
             <translation>无法保存文件。</translation>
+        </message>
+        <message>
+            <source>Progress layout</source>
+            <translation>进度条布局</translation>
         </message>
     </context>
     <context>
@@ -4838,6 +4846,22 @@ Info hash %3</source>
         <message>
             <source>Edge-Lit Glass</source>
             <translation>Edge-Lit Glass (英语).</translation>
+        </message>
+        <message>
+            <source>Status track</source>
+            <translation>状态轨道</translation>
+        </message>
+        <message>
+            <source>Pill segments</source>
+            <translation>圆角分段</translation>
+        </message>
+        <message>
+            <source>Thin line</source>
+            <translation>细线</translation>
+        </message>
+        <message>
+            <source>Striped fill</source>
+            <translation>条纹填充</translation>
         </message>
     </context>
     <context>

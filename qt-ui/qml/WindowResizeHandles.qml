@@ -13,6 +13,9 @@ Item {
     property bool coalesceGeometry: false
     property bool showGrip: false
     property color gripColor: "white"
+    readonly property int shapedCornerOffset: hostWindow["frameResizeInset"] ?? 0
+    readonly property int handleCornerSize: Math.min(cornerSize + shapedCornerOffset,
+        Math.floor(Math.min(width, height) / 2))
     readonly property bool resizing: activeHandle !== null
     property Item activeHandle: null
     property rect pendingGeometry
@@ -74,6 +77,8 @@ Item {
         visible: root.showGrip
         anchors.right: parent.right
         anchors.bottom: parent.bottom
+        anchors.rightMargin: root.shapedCornerOffset
+        anchors.bottomMargin: root.shapedCornerOffset
         width: root.cornerSize
         height: root.cornerSize
         Accessible.ignored: true
@@ -167,10 +172,10 @@ Item {
         delegate: ResizeArea {
             required property var modelData
             edges: modelData.edges
-            width: modelData.horizontal ? root.width - 2 * root.cornerSize : root.borderSize
-            height: modelData.horizontal ? root.borderSize : root.height - 2 * root.cornerSize
-            x: modelData.horizontal ? root.cornerSize : modelData.trailing ? root.width - width : 0
-            y: modelData.horizontal ? modelData.trailing ? root.height - height : 0 : root.cornerSize
+            width: modelData.horizontal ? root.width - 2 * root.handleCornerSize : root.borderSize
+            height: modelData.horizontal ? root.borderSize : root.height - 2 * root.handleCornerSize
+            x: modelData.horizontal ? root.handleCornerSize : modelData.trailing ? root.width - width : 0
+            y: modelData.horizontal ? modelData.trailing ? root.height - height : 0 : root.handleCornerSize
             cursorShape: modelData.horizontal ? Qt.SizeVerCursor : Qt.SizeHorCursor
         }
     }
@@ -183,8 +188,8 @@ Item {
         delegate: ResizeArea {
             required property var modelData
             edges: modelData.edges
-            width: root.cornerSize
-            height: root.cornerSize
+            width: root.handleCornerSize
+            height: root.handleCornerSize
             x: modelData.right ? root.width - width : 0
             y: modelData.bottom ? root.height - height : 0
             cursorShape: modelData.cursor
@@ -196,8 +201,8 @@ Item {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         edges: Qt.BottomEdge | Qt.RightEdge
-        width: root.cornerSize
-        height: root.cornerSize
+        width: root.handleCornerSize
+        height: root.handleCornerSize
         cursorShape: Qt.SizeFDiagCursor
     }
 }

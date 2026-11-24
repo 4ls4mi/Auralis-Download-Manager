@@ -24,7 +24,8 @@ DetachedDialogWindow {
     signal downloadAdded(var id, bool later)
 
     width: 595
-    flags: Qt.Window | Qt.WindowTitleHint | Qt.WindowSystemMenuHint | Qt.WindowMinMaxButtonsHint | Qt.WindowCloseButtonHint
+    customFrame: true
+    customFrameWindowType: Qt.Window
     transientParent: null
     modality: Qt.NonModal
     title: confirming ? (requestInfo.info.video ? qsTr("Confirm video download") : qsTr("Download File Info"))
@@ -113,7 +114,7 @@ DetachedDialogWindow {
             const index = categoryOptions.findIndex(item => item.key === reply.info.category)
             category.currentIndex = Math.max(0, index)
         }
-        if (!visible)
+        if (!visible || visibility === Window.Minimized)
             open()
     }
 
@@ -337,6 +338,8 @@ DetachedDialogWindow {
             id: actions
             anchors.fill: parent
             anchors.margins: 14
+            anchors.leftMargin: Math.max(14, root.frameSafeInset)
+            anchors.rightMargin: Math.max(14, root.frameSafeInset)
             spacing: 9
             GlassButton { material: root.material; text: qsTr("Cancel"); enabled: !root.busy; onClicked: root.cancel() }
             Item { Layout.fillWidth: true }

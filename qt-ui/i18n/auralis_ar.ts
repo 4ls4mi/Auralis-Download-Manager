@@ -2574,6 +2574,10 @@ Info hash %3</source>
             <source>Window Glass</source>
             <translation>زجاج النوافذ</translation>
         </message>
+        <message>
+            <source>Violet Rail Wide Sweep</source>
+            <translation>مسار بنفسجي بانحناء عريض</translation>
+        </message>
     </context>
     <context>
         <name>QObject</name>
@@ -3006,6 +3010,10 @@ Info hash %3</source>
         <message>
             <source>Could not save the file.</source>
             <translation>لا يمكن إنقاذ الملف.</translation>
+        </message>
+        <message>
+            <source>Progress layout</source>
+            <translation>تخطيط شريط التقدم</translation>
         </message>
     </context>
     <context>
@@ -4838,6 +4846,22 @@ Info hash %3</source>
         <message>
             <source>Edge-Lit Glass</source>
             <translation>زجاج مضاء الحواف</translation>
+        </message>
+        <message>
+            <source>Status track</source>
+            <translation>مسار حسب الحالة</translation>
+        </message>
+        <message>
+            <source>Pill segments</source>
+            <translation>مقاطع مستديرة</translation>
+        </message>
+        <message>
+            <source>Thin line</source>
+            <translation>خط رفيع</translation>
+        </message>
+        <message>
+            <source>Striped fill</source>
+            <translation>تعبئة مخططة</translation>
         </message>
     </context>
     <context>

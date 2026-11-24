@@ -2,6 +2,7 @@
 
 #include <QMouseEvent>
 #include <QPointer>
+#include <QVariant>
 #include <QWindow>
 
 #ifdef Q_OS_WIN
@@ -167,8 +168,10 @@ private:
         if (x < 0 || right <= 0 || y < 0 || bottom <= 0)
             return {};
 
-        const bool atCorner = qMin(x, right) <= m_cornerSize && qMin(y, bottom) <= m_cornerSize;
-        const int margin = atCorner ? m_cornerSize : m_borderSize;
+        const auto offset = qMax(0, m_window->property("frameResizeInset").toInt());
+        const qreal cornerSize = qMin(qreal(m_cornerSize + offset), qreal(qMin(size.width(), size.height())) / 2);
+        const bool atCorner = qMin(x, right) <= cornerSize && qMin(y, bottom) <= cornerSize;
+        const qreal margin = atCorner ? cornerSize : m_borderSize;
         Qt::Edges edges;
         if (m_window->minimumWidth() < m_window->maximumWidth()) {
             if (x < margin)

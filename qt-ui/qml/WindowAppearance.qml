@@ -9,6 +9,7 @@ QtObject {
     property bool loaded: false
     property var preferences: defaults()
     readonly property string progressShape: preferences.progressShape
+    readonly property string progressLayout: preferences.progressLayout
     readonly property string progressAnimation: preferences.progressAnimation
     readonly property string progressLighting: preferences.progressLighting
     readonly property string connectionShape: preferences.connectionShape
@@ -17,6 +18,13 @@ QtObject {
     readonly property string graphShape: preferences.graphShape
     readonly property string graphAnimation: preferences.graphAnimation
     readonly property string graphLighting: preferences.graphLighting
+    readonly property var progressLayoutChoices: [
+        {label: qsTr("Classic"), value: "classic"},
+        {label: qsTr("Status track"), value: "status-track"},
+        {label: qsTr("Pill segments"), value: "pill-segments"},
+        {label: qsTr("Thin line"), value: "thin-line"},
+        {label: qsTr("Striped fill"), value: "striped-fill"}
+    ]
     readonly property var animationChoices: [
         {label: qsTr("Classic"), value: "classic"},
         {label: qsTr("Normal (no motion)"), value: "none"},
@@ -74,7 +82,7 @@ QtObject {
     function defaults() {
         return {
             mainMode: "desktop", detailsMode: "desktop", mainMedia: "", detailsMedia: "",
-            mainColor: "", detailsColor: "", progressShape: "bubble",
+            mainColor: "", detailsColor: "", progressShape: "bubble", progressLayout: "classic",
             progressAnimation: "classic", progressLighting: "polished", connectionShape: "material",
             connectionAnimation: "classic", connectionLighting: "polished",
             graphShape: "area", graphAnimation: "classic", graphLighting: "polished"
@@ -141,6 +149,10 @@ QtObject {
 
     function indicatorAnimation(value, fallback) {
         return animationChoices.some(choice => choice.value === value) ? value : fallback
+    }
+
+    function indicatorLayout(value, fallback) {
+        return progressLayoutChoices.some(choice => choice.value === value) ? value : fallback
     }
 
     function indicatorLighting(value, fallback) {
@@ -241,6 +253,7 @@ QtObject {
             mainColor: optionalColor(saved.mainColor ?? data["mh-glass-solid-main"], original.mainColor),
             detailsColor: optionalColor(saved.detailsColor ?? data["mh-glass-solid-details"], original.detailsColor),
             progressShape: indicatorShape(saved.progressShape || data["mh-glass-progress-shape"], original.progressShape),
+            progressLayout: indicatorLayout(saved.progressLayout, original.progressLayout),
             progressAnimation: indicatorAnimation(saved.progressAnimation, original.progressAnimation),
             progressLighting: indicatorLighting(saved.progressLighting, original.progressLighting),
             connectionShape: indicatorShape(saved.connectionShape || data["mh-glass-connection-shape"], original.connectionShape),
@@ -278,6 +291,7 @@ QtObject {
             },
             qt: {
                 material: material, tint: colorText(MaterialTheme.tintColor), progressShape: progressShape,
+                progressLayout: progressLayout,
                 progressAnimation: progressAnimation, progressLighting: progressLighting,
                 connectionShape: connectionShape, connectionAnimation: connectionAnimation, connectionLighting: connectionLighting,
                 graphAnimation: graphAnimation, graphLighting: graphLighting,
@@ -322,6 +336,7 @@ QtObject {
             paletteFor(options.graphIndicator, MaterialTheme.graphPalette))
         preferences = Object.assign({}, preferences, {
             progressShape: indicatorShape(value.qt?.progressShape || options.progressShape, progressShape),
+            progressLayout: indicatorLayout(value.qt?.progressLayout, progressLayout),
             progressAnimation: indicatorAnimation(value.qt?.progressAnimation, progressAnimation),
             progressLighting: indicatorLighting(value.qt?.progressLighting, progressLighting),
             connectionShape: indicatorShape(value.qt?.connectionShape || options.connectionShape, connectionShape),

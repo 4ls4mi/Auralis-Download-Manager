@@ -7,6 +7,7 @@ QtObject {
 
     readonly property string defaultMaterial: "carbon"
     property string current: defaultMaterial
+    readonly property bool wideSweepEnabled: current === "violet-rail-wide-sweep"
     property real translucency: -1
     property color tintColor: "#7298bc"
     property real tintStrength: 0
@@ -76,6 +77,26 @@ QtObject {
     readonly property var connectionColors: colorsFor(connectionPalette, effectiveConnectionPalette, "connections")
     readonly property var graphColors: colorsFor(graphPalette, effectiveGraphPalette, "graph")
 
+    readonly property var violetRailPreset: preset({
+        name: qsTr("Violet Rail"), finish: "matte", shape: "round", opaque: true, cleanStudio: true,
+        layout: "violetRail", background: "#242634", edge: "#674f92", shade: "#1c1d2a", upper: "#e7dcff",
+        accent: "#a379ff", secondary: "#8558ff", ink: "#f6f3ff", muted: "#c3bfd6",
+        divider: "#4c485e", positive: "#4ce6a2", caution: "#ffba52", destructive: "#ff577f",
+        buttonFace: "#352751", buttonChroma: .13, surfaceLine: "#403e53", railFill: "#542da1",
+        sidebarInk: "#f3efff", sidebarMuted: "#c4b6e4",
+        navigationFill: "#54309a", navigationInk: "#fff7ff", rowSelectionFill: "#38334e",
+        rowSelectionInk: "#fbf7ff", summaryFill: "#422f68", summaryInk: "#f7efff",
+        menuSurface: "#28253a", menuHighlight: "#7744db", menuRail: "#bc94ff",
+        translucency: 0, gloss: .15, radius: 8, bevel: 1.4, panelRadius: 8,
+        indicatorDefaults: {
+            progress: {palette: "violet", colors: ["#9069f8", "#ba98ff"]},
+            connections: {palette: "aurora", colors: ["#8c79fb", "#7ce8d0"]},
+            graph: {palette: "violet", colors: ["#9468ec", "#c7a7ff"]}
+        },
+        roleFaces: {title: "#272538", toolbar: "#272838", sidebar: "#2a2939", content: "#262837",
+                    footer: "#242633", field: "#212331", card: "#222534", connections: "#222534"}
+    })
+
     readonly property var builtins: ({
         "fog-slate": preset({
             name: qsTr("Fog Slate"), finish: "matte", shape: "round", opaque: true, cleanStudio: true,
@@ -95,24 +116,9 @@ QtObject {
             roleFaces: {title: "#242936", toolbar: "#2a303e", sidebar: "#dbe0e7", content: "#2b303e",
                         footer: "#252b38", field: "#222834", card: "#252c39", connections: "#252c39"}
         }),
-        "violet-rail": preset({
-            name: qsTr("Violet Rail"), finish: "matte", shape: "round", opaque: true, cleanStudio: true,
-            layout: "violetRail", background: "#242634", edge: "#674f92", shade: "#1c1d2a", upper: "#e7dcff",
-            accent: "#a379ff", secondary: "#8558ff", ink: "#f6f3ff", muted: "#c3bfd6",
-            divider: "#4c485e", positive: "#4ce6a2", caution: "#ffba52", destructive: "#ff577f",
-            buttonFace: "#352751", buttonChroma: .13, surfaceLine: "#403e53", railFill: "#542da1",
-            sidebarInk: "#f3efff", sidebarMuted: "#c4b6e4",
-            navigationFill: "#54309a", navigationInk: "#fff7ff", rowSelectionFill: "#38334e",
-            rowSelectionInk: "#fbf7ff", summaryFill: "#422f68", summaryInk: "#f7efff",
-            menuSurface: "#28253a", menuHighlight: "#7744db", menuRail: "#bc94ff",
-            translucency: 0, gloss: .15, radius: 8, bevel: 1.4, panelRadius: 8,
-            indicatorDefaults: {
-                progress: {palette: "violet", colors: ["#9069f8", "#ba98ff"]},
-                connections: {palette: "aurora", colors: ["#8c79fb", "#7ce8d0"]},
-                graph: {palette: "violet", colors: ["#9468ec", "#c7a7ff"]}
-            },
-            roleFaces: {title: "#272538", toolbar: "#272838", sidebar: "#2a2939", content: "#262837",
-                        footer: "#242633", field: "#212331", card: "#222534", connections: "#222534"}
+        "violet-rail": violetRailPreset,
+        "violet-rail-wide-sweep": Object.assign({}, violetRailPreset, {
+            name: qsTr("Violet Rail Wide Sweep")
         }),
         "coral-slate": preset({
             name: qsTr("Coral Slate"), finish: "matte", shape: "round", opaque: true, cleanStudio: true,

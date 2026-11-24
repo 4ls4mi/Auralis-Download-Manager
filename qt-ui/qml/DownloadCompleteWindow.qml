@@ -11,6 +11,7 @@ DetachedDialogWindow {
     objectName: "downloadCompleteWindow"
     title: qsTr("Download complete")
     width: 660
+    customFrame: true
     modality: Qt.NonModal
 
     property var backend: engine
@@ -337,6 +338,8 @@ DetachedDialogWindow {
             id: footerItems
             anchors.fill: parent
             anchors.margins: 10
+            anchors.leftMargin: Math.max(10, root.frameSafeInset)
+            anchors.rightMargin: Math.max(10, root.frameSafeInset)
             spacing: 8
             CheckBox {
                 id: suppress

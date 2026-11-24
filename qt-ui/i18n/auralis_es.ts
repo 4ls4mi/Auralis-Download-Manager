@@ -2574,6 +2574,10 @@ Identificador del torrent %3</translation>
             <source>Window Glass</source>
             <translation>Ventana de vidrio</translation>
         </message>
+        <message>
+            <source>Violet Rail Wide Sweep</source>
+            <translation>Carril violeta con curva amplia</translation>
+        </message>
     </context>
     <context>
         <name>QObject</name>
@@ -3006,6 +3010,10 @@ Identificador del torrent %3</translation>
         <message>
             <source>Could not save the file.</source>
             <translation>No pude guardar el archivo.</translation>
+        </message>
+        <message>
+            <source>Progress layout</source>
+            <translation>Diseño de la barra de progreso</translation>
         </message>
     </context>
     <context>
@@ -4838,6 +4846,22 @@ Identificador del torrent %3</translation>
         <message>
             <source>Edge-Lit Glass</source>
             <translation>Vidrio con borde iluminado</translation>
+        </message>
+        <message>
+            <source>Status track</source>
+            <translation>Pista según el estado</translation>
+        </message>
+        <message>
+            <source>Pill segments</source>
+            <translation>Segmentos redondeados</translation>
+        </message>
+        <message>
+            <source>Thin line</source>
+            <translation>Línea fina</translation>
+        </message>
+        <message>
+            <source>Striped fill</source>
+            <translation>Relleno a rayas</translation>
         </message>
     </context>
     <context>

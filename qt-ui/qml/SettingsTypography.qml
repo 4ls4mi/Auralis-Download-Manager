@@ -162,7 +162,7 @@ ColumnLayout {
             color: root.colors.text
             font.weight: Font.DemiBold
         }
-        Slider {
+        GlassSlider {
             objectName: "fontSizeChoice"
             Layout.fillWidth: true
             from: root.fontSettings.fontSizeMinimum ?? 85

@@ -13,7 +13,10 @@ AuralisWindow {
     readonly property var colors: MaterialTheme.profile(material)
     property bool busy: false
     property bool positioned: false
+    property bool customFrame: false
+    property int customFrameWindowType: Qt.Dialog
     property int innerPadding: 16
+    readonly property int captionInset: Math.max(innerPadding, frameSafeInset)
     property alias bodyContent: body.data
     readonly property int preferredHeight: Math.ceil(Math.max(minimumHeight,
         Math.min(650, body.implicitHeight + header.implicitHeight
@@ -30,7 +33,10 @@ AuralisWindow {
     minimumHeight: 155
     height: minimumHeight
     color: "transparent"
-    flags: Qt.Dialog | Qt.WindowTitleHint | Qt.WindowSystemMenuHint | Qt.WindowCloseButtonHint
+    frameShapingEnabled: customFrame
+    flags: customFrame
+        ? customFrameWindowType | Qt.FramelessWindowHint | Qt.WindowSystemMenuHint | Qt.WindowMinMaxButtonsHint | Qt.WindowCloseButtonHint
+        : Qt.Dialog | Qt.WindowTitleHint | Qt.WindowSystemMenuHint | Qt.WindowCloseButtonHint
     transientParent: hostWindow && hostWindow.visible && hostWindow.visibility !== Window.Minimized ? hostWindow : null
     modality: Qt.WindowModal
     palette.window: colors.background
@@ -53,6 +59,8 @@ AuralisWindow {
     }
 
     function open() {
+        if (customFrame && visibility === Window.Minimized)
+            showNormal()
         if (!visible)
             fitInitialHeight()
         if (!visible && !positioned) {
@@ -65,6 +73,13 @@ AuralisWindow {
         show()
         raise()
         requestActivate()
+    }
+
+    function toggleMaximized() {
+        if (visibility === Window.Maximized)
+            showNormal()
+        else
+            showMaximized()
     }
 
     onPreferredHeightChanged: if (visible) Qt.callLater(fitInitialHeight)
@@ -89,20 +104,21 @@ AuralisWindow {
     }
 
     header: Item {
-        implicitHeight: Math.max(dialogBrand.implicitHeight, heading.implicitHeight) + 20
+        implicitHeight: Math.max(dialogBrand.implicitHeight, heading.implicitHeight,
+                                 controls.visible ? controls.implicitHeight : 0) + 20
         GlassSurface { anchors.fill: parent; material: root.material; role: "title" }
         BrandMark {
             id: dialogBrand
             anchors.left: parent.left
-            anchors.leftMargin: root.innerPadding
+            anchors.leftMargin: root.captionInset
             anchors.verticalCenter: parent.verticalCenter
         }
         Label {
             id: heading
             anchors.left: dialogBrand.right
             anchors.leftMargin: 8
-            anchors.right: parent.right
-            anchors.rightMargin: root.innerPadding
+            anchors.right: controls.visible ? controls.left : parent.right
+            anchors.rightMargin: controls.visible ? 8 : root.innerPadding
             anchors.top: parent.top
             anchors.bottom: parent.bottom
             text: root.title
@@ -112,6 +128,29 @@ AuralisWindow {
             font.pixelSize: TypographyScale.pixels(18)
             elide: Text.ElideRight
             verticalAlignment: Text.AlignVCenter
+        }
+        CaptionMoveArea {
+            objectName: "detachedCaptionMoveArea"
+            anchors.left: parent.left
+            anchors.right: controls.left
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            visible: root.customFrame
+            hostWindow: root
+            allowManualMove: true
+            onDoubleClickRequested: root.toggleMaximized()
+        }
+        CaptionControls {
+            id: controls
+            anchors.right: parent.right
+            anchors.rightMargin: root.captionInset
+            anchors.verticalCenter: parent.verticalCenter
+            visible: root.customFrame
+            material: root.material
+            maximized: root.visibility === Window.Maximized
+            onMinimizeRequested: root.showMinimized()
+            onMaximizeRequested: root.toggleMaximized()
+            onCloseRequested: root.close()
         }
     }
 
@@ -143,7 +182,12 @@ AuralisWindow {
         }
     }
 
-    WindowResizeHandles { hostWindow: root }
+    WindowResizeHandles {
+        hostWindow: root
+        coalesceGeometry: root.customFrame
+        showGrip: root.customFrame
+        gripColor: root.colors.muted
+    }
 
     Shortcut {
         sequence: "Escape"

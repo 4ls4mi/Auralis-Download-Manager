@@ -195,6 +195,7 @@ DetachedDialogWindow {
             visible: update.stage === "downloading"
             value: update.completion
             animated: visible && update.visibility !== Window.Minimized
+            layoutStyle: "classic"
             animationStyle: WindowAppearance.progressAnimation
             shape: WindowAppearance.progressShape === "material"
                 ? (["bubble", "prism", "ice"].includes(profile.shape) ? profile.shape : "round") : WindowAppearance.progressShape

@@ -28,6 +28,16 @@ AuralisWindow {
     readonly property bool materialDashboard: fogSlate || violetRail || coralSlate
     readonly property bool compactView: windowPreferences.compactView
     readonly property bool sideMenus: materialDashboard && showSidebar && !compactView
+    readonly property bool wideSweepVisible: wideSweep.visible && wideSweep.available
+    readonly property color wideSweepRailFace: MaterialTheme.mix(colors.background, wideSweep.railColor,
+        wideSweep.surfaceOpacity, 1)
+    readonly property Item selectedLibraryRow: {
+        for (const row of libraryRows.children) {
+            if (row.checked === true)
+                return row
+        }
+        return null
+    }
     readonly property bool groupedQueue: !compactView && violetRail && filterType === "status" && filterKey === "all"
     readonly property color sidebarInk: colors.sidebarInk || colors.ink
     readonly property color sidebarMuted: colors.sidebarMuted || colors.muted
@@ -1039,7 +1049,26 @@ AuralisWindow {
         })
     }
 
-    background: WindowBackdrop { hostWindow: root; target: "main" }
+    background: WindowBackdrop {
+        id: mainBackdrop
+        hostWindow: root
+        target: "main"
+
+        WideSweep {
+            id: wideSweep
+            anchors.fill: parent
+            visible: MaterialTheme.wideSweepEnabled && root.visible && root.visibility !== Window.Minimized
+                && !root.compactView && librarySidebar.visible
+            sidebar: librarySidebar
+            pane: downloadsPane
+            viewport: libraryScroll.contentItem
+            geometryHost: workspace
+            footer: transferFooter
+            selectedRow: root.selectedLibraryRow
+            selectedColor: root.selectedLibraryRow?.selectedFace || root.colors.accent
+            backdropAvailable: mainBackdrop.backdropAvailable
+        }
+    }
 
     component LibraryButton: Button {
         id: libraryButton
@@ -1054,14 +1083,21 @@ AuralisWindow {
         readonly property real idleStrength: MaterialTheme.controlIdleStrength(root.colors, finish)
         readonly property color idleFace: MaterialTheme.mix(baseFace, pigment, idleStrength, 1)
         readonly property bool emphasized: checked || down || hovered || visualFocus
+        readonly property color selectedFace: MaterialTheme.mix(baseFace, pigment, finish.selected, 1)
         readonly property color face: MaterialTheme.mix(baseFace,
             pigment, down ? finish.press : hovered || visualFocus ? finish.hover : finish.selected, 1)
-        readonly property color actualFace: emphasized ? face : idleFace
+        readonly property real flatTint: down ? .22 : checked ? 0 : hovered || visualFocus ? .16 : idleStrength
+        readonly property color sweepFace: checked
+            ? MaterialTheme.mix(root.wideSweepRailFace, selectedFace, wideSweep.surfaceOpacity, 1)
+            : root.wideSweepRailFace
+        readonly property color actualFace: root.wideSweepVisible
+            ? MaterialTheme.mix(sweepFace, pigment, flatTint, 1)
+            : emphasized ? face : idleFace
         readonly property color foreground: MaterialTheme.controlTextInk(root.sidebarInk, actualFace)
 
         hoverEnabled: true
-        leftPadding: 9
-        rightPadding: 7
+        leftPadding: root.wideSweepVisible && mirrored ? 24 : 9
+        rightPadding: root.wideSweepVisible && !mirrored ? 24 : 7
         topPadding: 3
         bottomPadding: 3
         Accessible.selected: checked
@@ -1093,16 +1129,18 @@ AuralisWindow {
         }
         background: Rectangle {
             id: libraryFace
-            radius: root.materialDashboard ? 8 : 6
-            color: libraryButton.emphasized ? libraryButton.face
+            radius: root.wideSweepVisible ? 0 : root.materialDashboard ? 8 : 6
+            color: root.wideSweepVisible ? Qt.alpha(libraryButton.pigment, libraryButton.flatTint)
+                : libraryButton.emphasized ? libraryButton.face
                 : Qt.alpha(libraryButton.pigment, libraryButton.idleStrength)
-            border.width: libraryButton.visualFocus ? 2 : 1
+            border.width: libraryButton.visualFocus ? 2 : root.wideSweepVisible ? 0 : 1
             border.color: libraryButton.visualFocus ? libraryButton.foreground
                 : Qt.alpha(libraryButton.pigment, .45 + libraryButton.finish.depth * .35)
 
             ButtonLighting {
                 anchors.fill: parent
                 radius: libraryFace.radius
+                visible: !root.wideSweepVisible
                 enabled: libraryButton.enabled
                 accent: libraryButton.pigment
                 emphasized: libraryButton.emphasized
@@ -1155,14 +1193,15 @@ AuralisWindow {
                 objectName: "titleDragArea"
                 hostWindow: root
                 anchors.fill: parent
-                anchors.rightMargin: titleActions.width + 6
+                anchors.rightMargin: titleActions.width + titleRow.anchors.rightMargin
                 z: 1
                 onDoubleClickRequested: root.toggleMaximized()
             }
             RowLayout {
+                id: titleRow
                 anchors.fill: parent
-                anchors.leftMargin: 10
-                anchors.rightMargin: 6
+                anchors.leftMargin: Math.max(10, root.frameSafeInset - root.layoutInset)
+                anchors.rightMargin: Math.max(6, root.frameSafeInset - root.layoutInset)
                 spacing: 8
                 BrandMark {
                     Layout.preferredWidth: root.compactView ? 24 : 29
@@ -1532,6 +1571,7 @@ AuralisWindow {
         }
 
         RowLayout {
+            id: workspace
             Layout.fillHeight: true
             Layout.minimumHeight: root.compactView ? 95 : 155
             Layout.fillWidth: true
@@ -1550,11 +1590,12 @@ AuralisWindow {
             }
 
             Frame {
+                id: librarySidebar
                 visible: root.showSidebar && !root.compactView
                 Layout.preferredWidth: root.compact ? 151 : 184
                 Layout.fillHeight: true
                 padding: 6
-                background: GlassSurface { role: "sidebar"; roundedPanel: true }
+                background: GlassSurface { visible: !root.wideSweepVisible; role: "sidebar"; roundedPanel: true }
                 ScrollView {
                     id: libraryScroll
                     anchors.fill: parent
@@ -1564,6 +1605,7 @@ AuralisWindow {
                     ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
                     ScrollBar.vertical: LibraryScrollBar {}
                     Column {
+                        id: libraryRows
                         width: libraryScroll.availableWidth
                         spacing: 3
                         Repeater {
@@ -1647,11 +1689,12 @@ AuralisWindow {
             }
 
             Frame {
+                id: downloadsPane
                 Layout.fillHeight: true
                 Layout.fillWidth: true
                 Layout.minimumWidth: 0
                 padding: root.compactView ? 5 : 9
-                background: GlassSurface { role: "content"; roundedPanel: true }
+                background: GlassSurface { visible: !root.wideSweepVisible; role: "content"; roundedPanel: true }
                 ColumnLayout {
                     anchors.fill: parent
                     spacing: root.compactView ? 3 : root.materialDashboard ? 8 : 5
@@ -1937,6 +1980,7 @@ AuralisWindow {
                             compactView: root.compactView
                             fileName: file
                             sizeLabel: TransferData.bytes(bytes) + (length >= 0 ? " / " + TransferData.bytes(length) : "")
+                            transferState: status
                             statusLabel: root.statusText(status)
                             statusInk: root.statusColor(status)
                             transferring: status === "Downloading"
@@ -2099,9 +2143,10 @@ AuralisWindow {
         }
 
         Item {
+            id: transferFooter
             Layout.fillWidth: true
             Layout.preferredHeight: root.compactView ? 36 : 55
-            GlassSurface { anchors.fill: parent; role: "footer"; roundedPanel: true }
+            GlassSurface { anchors.fill: parent; visible: !root.wideSweepVisible; role: "footer"; roundedPanel: true }
             RowLayout {
                 anchors.fill: parent
                 anchors.leftMargin: 11

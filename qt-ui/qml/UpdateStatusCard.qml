@@ -175,6 +175,7 @@ Frame {
                 visible: card.hasProgress
                 value: card.completion
                 animated: visible && card.Window.visibility !== Window.Minimized
+                layoutStyle: "classic"
                 animationStyle: WindowAppearance.progressAnimation
                 shape: WindowAppearance.progressShape === "material"
                     ? (["bubble", "prism", "ice"].includes(profile.shape) ? profile.shape : "round") : WindowAppearance.progressShape

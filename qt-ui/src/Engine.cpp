@@ -12,7 +12,7 @@
 #include <QJSEngine>
 #include <QJsonDocument>
 #include <QLocale>
-#include <QPainterPath>
+#include <QPolygon>
 #include <QProcess>
 #include <QQmlEngine>
 #include <QRegion>
@@ -21,6 +21,10 @@
 #include <QTranslator>
 #include <QWindow>
 #include <QtConcurrentRun>
+
+#include <array>
+#include <cmath>
+#include <numbers>
 
 #ifdef Q_OS_WIN
 #include <QJsonObject>
@@ -756,7 +760,9 @@ void Engine::setWindowCornerRadius(QWindow *window, int radius) const
 {
     if (!window)
         return;
-    if (radius <= 0 || !(window->flags() & Qt::FramelessWindowHint)) {
+    const auto state = window->windowStates();
+    if (radius <= 0 || !(window->flags() & Qt::FramelessWindowHint)
+        || state.testAnyFlags(Qt::WindowMaximized | Qt::WindowFullScreen)) {
         if (!window->mask().isEmpty())
             window->setMask({});
         return;
@@ -764,9 +770,34 @@ void Engine::setWindowCornerRadius(QWindow *window, int radius) const
     if (window->size().isEmpty())
         return;
 
-    QPainterPath outline;
-    outline.addRoundedRect(QRectF(QPointF(), QSizeF(window->size())), radius, radius);
-    window->setMask(QRegion(outline.toFillPolygon().toPolygon()));
+    const qreal width = window->width();
+    const qreal height = window->height();
+    const qreal reachX = qMin(qreal(radius), width / 2);
+    const qreal reachY = qMin(radius * (113.0 / 114.0), height / 2);
+    // Cache samples of the approved superellipse and mirror them around the four corners.
+    constexpr int segments = 48;
+    static const auto quarter = [] {
+        std::array<QPointF, segments + 1> points;
+        points.front() = QPointF(1, 0);
+        points.back() = QPointF(0, 1);
+        for (int i = 1; i < segments; ++i) {
+            const qreal angle = (std::numbers::pi_v<qreal> / 2) * i / segments;
+            points[i] = QPointF(std::pow(std::cos(angle), 2.0 / 3.05),
+                                std::pow(std::sin(angle), 2.0 / 3.05));
+        }
+        return points;
+    }();
+    QPolygon outline;
+    outline.reserve(qsizetype(quarter.size()) * 4);
+    for (const auto &p : quarter)
+        outline << QPointF(width - reachX + reachX * p.y(), reachY - reachY * p.x()).toPoint();
+    for (const auto &p : quarter)
+        outline << QPointF(width - reachX + reachX * p.x(), height - reachY + reachY * p.y()).toPoint();
+    for (const auto &p : quarter)
+        outline << QPointF(reachX - reachX * p.y(), height - reachY + reachY * p.x()).toPoint();
+    for (const auto &p : quarter)
+        outline << QPointF(reachX - reachX * p.x(), reachY - reachY * p.y()).toPoint();
+    window->setMask(QRegion(outline));
 }
 
 void Engine::installInteractiveResize(QWindow *window, int borderSize, int cornerSize) const

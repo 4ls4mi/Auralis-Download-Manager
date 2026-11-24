@@ -11,7 +11,18 @@ ApplicationWindow {
     LayoutMirroring.childrenInherit: true
 
     readonly property var fontSettings: typeof typography === "undefined" ? null : typography
-    readonly property int frameCornerRadius: visibility === Window.Windowed ? 12 : 0
+    property bool frameShapingEnabled: true
+    readonly property int frameCornerRadius: frameShapingEnabled && visibility === Window.Windowed
+        ? Math.round(114 * Math.max(0, Math.min(1, width / 1080, height / 660))) : 0
+    readonly property int frameResizeInset: Math.ceil(frameCornerRadius * (1 - Math.pow(0.5, 1 / 3.05)))
+    readonly property int frameSafeInset: {
+        if (!frameCornerRadius)
+            return 0
+        // Reserve room at both sides of a caption that starts at least 8 logical pixels from the edge.
+        const rise = frameCornerRadius * 113 / 114
+        const vertical = Math.max(0, 1 - 8 / rise)
+        return 1 + Math.ceil(frameCornerRadius * (1 - Math.pow(1 - Math.pow(vertical, 3.05), 1 / 3.05)))
+    }
 
     function refreshFrameShape() {
         if (visible && typeof engine !== "undefined")

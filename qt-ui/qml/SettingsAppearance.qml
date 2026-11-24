@@ -276,7 +276,7 @@ GridLayout {
 
             RowLayout {
                 Layout.fillWidth: true
-                Slider {
+                    GlassSlider {
                     objectName: "translucencySlider"
                     Layout.fillWidth: true
                     from: 0
@@ -310,7 +310,7 @@ GridLayout {
                         colorPicker.open()
                     }
                 }
-                Slider {
+                    GlassSlider {
                     Layout.fillWidth: true
                     from: 0
                     to: 1
@@ -424,6 +424,12 @@ GridLayout {
             GridLayout {
                 Layout.fillWidth: true
                 columns: !root.sideTabs || width >= 320 ? 2 : 1
+                IndicatorChoice {
+                    label: qsTr("Progress layout")
+                    model: WindowAppearance.progressLayoutChoices
+                    selection: WindowAppearance.progressLayout
+                    onChosen: value => WindowAppearance.set("progressLayout", value)
+                }
                 IndicatorChoice {
                     label: qsTr("Progress shape")
                     model: root.shapeChoices

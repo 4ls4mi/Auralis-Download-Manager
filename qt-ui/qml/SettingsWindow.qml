@@ -27,6 +27,17 @@ AuralisWindow {
 
     readonly property int resizeInset: 14
     readonly property var colors: MaterialTheme.palette
+    readonly property bool wideSweepVisible: wideSweep.visible && wideSweep.available
+    readonly property GlassButton selectedNavigationButton: {
+        if (!term) {
+            for (const row of navigationContent.children) {
+                const button = row as GlassButton
+                if (button && button.highlighted)
+                    return button
+            }
+        }
+        return null
+    }
     property string category: "General"
     property var config: null
     property var advancedFields: []
@@ -333,6 +344,19 @@ AuralisWindow {
         id: settingsBackdrop
         hostWindow: root
         target: "details"
+
+        WideSweep {
+            id: wideSweep
+            anchors.fill: parent
+            visible: MaterialTheme.wideSweepEnabled && root.visible && root.visibility !== Window.Minimized
+            sidebar: navigationSidebar
+            pane: settingsPane
+            viewport: navigation
+            geometryHost: settingsLayout
+            backdropAvailable: settingsBackdrop.backdropAvailable
+            selectedRow: root.selectedNavigationButton
+            selectedColor: root.selectedNavigationButton?.engagedFace || root.colors.accent
+        }
     }
 
     component PaneCopy: Label {
@@ -402,6 +426,7 @@ AuralisWindow {
             background: GlassSurface { role: "title"; roundedPanel: true; backdropAvailable: settingsBackdrop.backdropAvailable }
 
             contentItem: RowLayout {
+                id: settingsTitleRow
                 spacing: 7
                 Item {
                     Layout.fillWidth: true
@@ -409,7 +434,7 @@ AuralisWindow {
                     BrandMark {
                         id: settingsBrand
                         anchors.left: parent.left
-                        anchors.leftMargin: 15
+                        anchors.leftMargin: Math.max(15, root.frameSafeInset)
                         anchors.verticalCenter: parent.verticalCenter
                     }
                     Label {
@@ -436,14 +461,14 @@ AuralisWindow {
                     onMaximizeRequested: root.toggleMaximize()
                     onCloseRequested: root.close()
                 }
-                Item { Layout.preferredWidth: root.resizeInset }
+                Item { Layout.preferredWidth: Math.max(root.resizeInset, root.frameSafeInset - settingsTitleRow.spacing) }
             }
         }
         ToolBar {
             objectName: "settingsCommands"
             Layout.fillWidth: true
-            leftPadding: root.resizeInset + 2
-            rightPadding: root.resizeInset + 2
+            leftPadding: Math.max(root.resizeInset + 2, root.frameSafeInset)
+            rightPadding: Math.max(root.resizeInset + 2, root.frameSafeInset)
             topPadding: 4
             bottomPadding: 5
             leftInset: 8
@@ -478,6 +503,7 @@ AuralisWindow {
     }
 
     RowLayout {
+        id: settingsLayout
         anchors.fill: parent
         anchors.margins: 12
         anchors.rightMargin: root.resizeInset
@@ -485,10 +511,16 @@ AuralisWindow {
         spacing: 12
 
         Frame {
+            id: navigationSidebar
             Layout.fillHeight: true
             Layout.preferredWidth: 188
             padding: 9
-            background: GlassSurface { role: "sidebar"; roundedPanel: true; backdropAvailable: settingsBackdrop.backdropAvailable }
+            background: GlassSurface {
+                visible: !root.wideSweepVisible
+                role: "sidebar"
+                roundedPanel: true
+                backdropAvailable: settingsBackdrop.backdropAvailable
+            }
 
             SettingsViewport {
                 id: navigation
@@ -505,14 +537,39 @@ AuralisWindow {
                     Repeater {
                         model: root.destinationSections
                         delegate: GlassButton {
+                            id: navigationButton
                             required property var modelData
                             required property int index
+                            readonly property bool flatSelection: root.wideSweepVisible && highlighted
+                            readonly property color navigationInk: flatSelection
+                                ? MaterialTheme.controlTextInk(root.colors.sidebarInk || root.colors.text, engagedFace)
+                                : buttonInk
+
                             Layout.fillWidth: true
                             text: modelData.name
                             accent: MaterialTheme.navigationColor(index, root.colors.light)
                             highlighted: root.category === modelData.id && !root.term
+                            palette.buttonText: navigationInk
+                            palette.brightText: navigationInk
+                            palette.highlightedText: navigationInk
                             onClicked: root.showCategory(modelData.id)
                             Accessible.description: modelData.detail
+
+                            Binding {
+                                target: navigationButton.background
+                                property: "visible"
+                                value: !navigationButton.flatSelection
+                            }
+
+                            Rectangle {
+                                anchors.fill: parent
+                                anchors.margins: 1
+                                visible: navigationButton.flatSelection && navigationButton.visualFocus
+                                radius: Math.min(10, root.colors.radius)
+                                color: "transparent"
+                                border.color: navigationButton.navigationInk
+                                border.width: 2
+                            }
                         }
                     }
                 }
@@ -520,10 +577,16 @@ AuralisWindow {
         }
 
         Frame {
+            id: settingsPane
             Layout.fillWidth: true
             Layout.fillHeight: true
             padding: 13
-            background: GlassSurface { role: "content"; roundedPanel: true; backdropAvailable: settingsBackdrop.backdropAvailable }
+            background: GlassSurface {
+                visible: !root.wideSweepVisible
+                role: "content"
+                roundedPanel: true
+                backdropAvailable: settingsBackdrop.backdropAvailable
+            }
 
             ColumnLayout {
                 anchors.fill: parent
@@ -624,7 +687,7 @@ AuralisWindow {
                                         RowLayout {
                                             Layout.fillWidth: true
 
-                                            Slider {
+                                            GlassSlider {
                                                 id: interfaceSize
                                                 objectName: "settingsInterfaceSize"
                                                 property bool saveFailed: false
