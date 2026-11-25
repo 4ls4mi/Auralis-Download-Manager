@@ -56,8 +56,11 @@ Canvas {
     property real lastPhase: 0
     property real jellyPhase: 0
 
-    implicitWidth: 32
-    implicitHeight: 38
+    property real baseWidth: 32
+    property real baseHeight: 38
+    readonly property real blockScale: (WindowAppearance.connectionBlockSize ?? 100) / 100
+    implicitWidth: Math.round(baseWidth * blockScale)
+    implicitHeight: Math.round(baseHeight * blockScale)
     Accessible.ignored: true
 
     onAvailableChanged: requestPaint()
@@ -104,14 +107,18 @@ Canvas {
         if (shape === "square" || shape === "plain") {
             ctx.rect(left, top, right - left, bottom - top)
         } else if (["prism", "ice", "chamfer"].includes(shape)) {
-            ctx.moveTo(left + corner, top)
-            ctx.lineTo(right - corner, top)
-            ctx.lineTo(right, top + corner)
-            ctx.lineTo(right, bottom - corner)
-            ctx.lineTo(right - corner, bottom)
-            ctx.lineTo(left + corner, bottom)
-            ctx.lineTo(left, bottom - corner)
-            ctx.lineTo(left, top + corner)
+            const upperLeft = shape === "ice" ? corner * .45 : corner
+            const upperRight = shape === "prism" ? corner * 1.3 : corner
+            const lowerRight = shape === "chamfer" ? corner : corner * .58
+            const lowerLeft = shape === "ice" ? corner : corner * .62
+            ctx.moveTo(left + upperLeft, top)
+            ctx.lineTo(right - upperRight, top)
+            ctx.lineTo(right, top + upperRight)
+            ctx.lineTo(right, bottom - lowerRight)
+            ctx.lineTo(right - lowerRight, bottom)
+            ctx.lineTo(left + lowerLeft, bottom)
+            ctx.lineTo(left, bottom - lowerLeft)
+            ctx.lineTo(left, top + upperLeft)
         } else if (shape === "bubble") {
             const middle = w * .5
             ctx.moveTo(middle, top)

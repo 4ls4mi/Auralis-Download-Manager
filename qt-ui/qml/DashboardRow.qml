@@ -28,6 +28,9 @@ Item {
     property bool animationsAllowed: true
     property bool compactView: false
     property real waterPhase: 0
+    readonly property real blockScale: (WindowAppearance.connectionBlockSize ?? 100) / 100
+    readonly property int baseRowHeight: compactView ? (recoveryLabel.length ? 52 : 40)
+        : recoveryLabel.length ? 78 : colors.layout === "violetRail" ? 59 : 64
     readonly property bool studioChrome: colors.cleanStudio === true
     readonly property string fileSymbol: mixed ? "mixed" : torrent ? "peers"
         : studioChrome && (telemetry.is_video || /\.(mp4|mkv|mov|webm|avi|m4v)$/i.test(fileName)) ? "video" : "file"
@@ -50,8 +53,8 @@ Item {
     signal opened()
     signal optionsRequested()
 
-    implicitHeight: compactView ? (recoveryLabel.length ? 52 : 40)
-        : recoveryLabel.length ? 78 : colors.layout === "violetRail" ? 59 : 64
+    implicitHeight: Math.max(baseRowHeight, Math.ceil(
+        (compactView ? 13 : 19) * blockScale + TypographyScale.pixels(12) + 8))
     Accessible.role: Accessible.ListItem
     Accessible.name: [fileName, sizeLabel, statusLabel, speedLabel, connectionLabel].filter(Boolean).join(", ")
     Accessible.selected: chosen
@@ -196,7 +199,7 @@ Item {
                 spacing: 4
                 GlassProgress {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: row.compactView ? 14 : 22
+                    baseHeight: row.compactView ? 14 : 22
                     value: row.progress
                     transferState: row.transferState
                     animated: row.transferring && row.animationsAllowed
@@ -225,7 +228,7 @@ Item {
                 RowLayout {
                     visible: !row.colors.mdm && row.workers.length > 0
                     Layout.fillWidth: true
-                    Layout.preferredHeight: row.compactView ? 13 : 19
+                    Layout.preferredHeight: Math.round((row.compactView ? 13 : 19) * row.blockScale)
                     spacing: 1
                     Repeater {
                         model: row.workers.length
@@ -233,8 +236,9 @@ Item {
                             required property int index
                             readonly property var worker: row.workers[index] || ({})
                             Layout.fillWidth: true
-                            Layout.preferredWidth: row.compactView ? 10 : 16
-                            Layout.preferredHeight: row.compactView ? 12 : 18
+                            baseWidth: row.compactView ? 10 : 16
+                            baseHeight: row.compactView ? 12 : 18
+                            Layout.maximumWidth: row.blockScale < 1 ? implicitWidth : Infinity
                             value: TransferData.assigned(worker.id, row.telemetry.segments)
                             receiving: row.transferring && worker.state === "Receiving"
                             phase: row.waterPhase
@@ -249,7 +253,7 @@ Item {
                 MdmSegmentMap {
                     visible: Boolean(row.colors.mdm) && !row.torrent && totalBytes > 0
                     Layout.fillWidth: true
-                    Layout.preferredHeight: row.compactView ? 10 : 15
+                    baseHeight: row.compactView ? 10 : 15
                     segments: row.telemetry.segments || []
                     totalBytes: Number(row.telemetry.total || 0)
                 }

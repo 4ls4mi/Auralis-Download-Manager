@@ -13,9 +13,9 @@ function style(name) {
     }
 }
 
-function trackHeight(available, layout) {
+function trackHeight(available, layout, scale = 1) {
     switch (layout) {
-    case "thin-line": return Math.min(5, available)
+    case "thin-line": return Math.min(5 * scale, available)
     case "pill-segments": return available * .77
     case "status-track": return available * .94
     default: return available
@@ -44,10 +44,10 @@ function spans(width, height, layout, fraction) {
     return result
 }
 
-function path(spans, height, layout) {
+function path(spans, height, layout, shape = "round") {
     const radius = layout === "pill-segments" || layout === "thin-line"
         ? height / 2 : Math.min(6, height * .28)
-    return spans.map(span => Geometry.frame(span.x, 0, span.width, height, radius, "round")).join(" ")
+    return spans.map(span => Geometry.frame(span.x, 0, span.width, height, radius, shape === "plain" ? "square" : shape)).join(" ")
 }
 
 function highlights(spans, height, lower) {

@@ -39,6 +39,7 @@ AuralisWindow {
     }
     readonly property string progressShape: selectedShape(WindowAppearance.progressShape)
     readonly property string connectionShape: selectedShape(WindowAppearance.connectionShape)
+    readonly property real connectionBlockScale: (WindowAppearance.connectionBlockSize ?? 100) / 100
     readonly property var item: Transfer.find(engine.dashboard.downloads, downloadId)
     readonly property var telemetry: Transfer.find(engine.visuals.downloads, downloadId)
     readonly property bool transferPaused: !!item && item.status === "Stopped"
@@ -467,7 +468,7 @@ AuralisWindow {
                         elide: Text.ElideMiddle
                         font.family: root.fontFamilyForText(text)
                         font.weight: Font.DemiBold
-                        color: root.colors.ink
+                        color: root.colors.titleInk || root.colors.ink
                     }
                     CaptionMoveArea {
                         id: downloadCaption
@@ -944,7 +945,8 @@ AuralisWindow {
                                 anchors.left: parent.left
                                 anchors.verticalCenter: parent.verticalCenter
                                 width: Math.max(0, progressLine.width - progressPercent.width - progressPercent.anchors.leftMargin)
-                                height: root.compactView ? 18 : 26
+                                baseHeight: root.compactView ? 18 : 26
+                                height: implicitHeight
                                 value: Transfer.fraction(root.item)
                                 transferState: String(root.item?.status || "")
                                 animated: root.animateTransfer
@@ -1087,7 +1089,8 @@ AuralisWindow {
                                 Layout.minimumWidth: 0
                                 Layout.topMargin: root.displayConnectionFlow ? Math.round(19 * root.pipeScale) : 0
                                 columns: Math.max(1, Math.min(8,
-                                    Math.floor((width + columnSpacing) / ((root.compactView ? 16 : root.compactWidth ? 32 : 35) + columnSpacing))))
+                                    Math.floor((width + columnSpacing) /
+                                        ((root.compactView ? 16 : root.compactWidth ? 32 : 35) * root.connectionBlockScale + columnSpacing))))
                                 rowSpacing: root.displayConnectionFlow ? Math.round(26 * root.pipeScale) : 5
                                 columnSpacing: root.compactView ? 3 : 4
                                 Repeater {
@@ -1119,8 +1122,10 @@ AuralisWindow {
                                         readonly property real liquidX: chunkWater.landingX
                                         Layout.fillWidth: true
                                         Layout.minimumWidth: 0
-                                        Layout.preferredWidth: root.compactView ? 20 : 34
-                                        Layout.preferredHeight: root.compactView ? 23 : root.compactWidth || root.compactHeight ? 34 : 39
+                                        Layout.preferredWidth: Math.round((root.compactView ? 20 : 34) * root.connectionBlockScale)
+                                        Layout.maximumWidth: root.connectionBlockScale < 1 ? Layout.preferredWidth : Infinity
+                                        Layout.preferredHeight: Math.round((root.compactView ? 23
+                                            : root.compactWidth || root.compactHeight ? 34 : 39) * root.connectionBlockScale)
                                         function retainReceivedFill() {
                                             if (retainedId !== sample.key) {
                                                 retainedId = sample.key

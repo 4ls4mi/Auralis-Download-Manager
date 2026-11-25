@@ -1068,6 +1068,7 @@ AuralisWindow {
 
         WideSweep {
             id: wideSweep
+            objectName: "mainWideSweep"
             anchors.fill: parent
             visible: MaterialTheme.wideSweepEnabled && root.visible && root.visibility !== Window.Minimized
                 && !root.compactView && librarySidebar.visible
@@ -1087,17 +1088,20 @@ AuralisWindow {
         property string symbol: ""
         property string count: ""
         property color accent: root.colors.accent
-        readonly property color navigationAccent: MaterialTheme.vividControlAccent(MaterialTheme.safeAccent(
+        readonly property string assignedColor: MaterialTheme.buttonColorOverride(MaterialTheme.current, accent)
+        readonly property color navigationAccent: assignedColor || MaterialTheme.vividControlAccent(MaterialTheme.safeAccent(
             MaterialTheme.forcedAccent || accent, root.fogSlate || root.colors.light), root.colors.light)
         readonly property var finish: MaterialTheme.buttonFinishes[root.colors.finish]
-        readonly property color pigment: MaterialTheme.controlPigment(navigationAccent, root.colors.secondary, finish.tint)
+        readonly property color pigment: assignedColor || MaterialTheme.controlPigment(navigationAccent, root.colors.secondary, finish.tint)
         readonly property color baseFace: root.colors.navigationFill || root.colors.background
         readonly property real idleStrength: MaterialTheme.controlIdleStrength(root.colors, finish)
         readonly property color idleFace: MaterialTheme.mix(baseFace, pigment, idleStrength, 1)
         readonly property bool emphasized: checked || down || hovered || visualFocus
-        readonly property color selectedFace: MaterialTheme.mix(baseFace, pigment, finish.selected, 1)
-        readonly property color face: MaterialTheme.mix(baseFace,
-            pigment, down ? finish.press : hovered || visualFocus ? finish.hover : finish.selected, 1)
+        // The selected button and its Wide Sweep ribbon share this exact face color.
+        readonly property color selectedFace: assignedColor || MaterialTheme.mix(baseFace, pigment, finish.selected, 1)
+        readonly property color face: assignedColor
+            ? MaterialTheme.controlHighlight(selectedFace, down, !checked && (hovered || visualFocus))
+            : MaterialTheme.mix(baseFace, pigment, down ? finish.press : hovered || visualFocus ? finish.hover : finish.selected, 1)
         readonly property real flatTint: down ? .22 : checked ? 0 : hovered || visualFocus ? .16 : idleStrength
         readonly property color sweepFace: checked
             ? MaterialTheme.mix(root.wideSweepRailFace, selectedFace, wideSweep.surfaceOpacity, 1)
@@ -1188,7 +1192,8 @@ AuralisWindow {
         Layout.preferredHeight: root.sideMenus ? (root.violetRail ? 37 : 25) : -1
         railIcon: root.sideMenus && root.violetRail ? symbol : ""
         accent: MaterialTheme.actionColor(symbol, root.fogSlate || root.colors.light)
-        idleInk: root.sideMenus && root.violetRail ? "#ffffff"
+        idleInk: root.colors.menuOverride ? MaterialTheme.menuColors.ink
+            : root.sideMenus && root.violetRail ? "#ffffff"
             : root.sideMenus ? root.sidebarInk : MaterialTheme.menuColors.ink
     }
 
@@ -1233,7 +1238,7 @@ AuralisWindow {
                     Label {
                         Layout.fillWidth: true
                         text: qsTr("Auralis")
-                        color: root.colors.ink
+                        color: root.colors.titleInk || root.colors.ink
                         font.pixelSize: TypographyScale.pixels(17)
                         font.weight: Font.Bold
                         elide: Text.ElideRight
@@ -1242,7 +1247,7 @@ AuralisWindow {
                         visible: !root.compactView
                         Layout.fillWidth: true
                         text: qsTr("Download Manager")
-                        color: root.colors.muted
+                        color: root.colors.titleMuted || root.colors.muted
                         font.pixelSize: TypographyScale.pixels(11)
                         elide: Text.ElideRight
                     }
@@ -1256,7 +1261,7 @@ AuralisWindow {
                 Label {
                     visible: !root.compactView
                     text: root.online ? qsTr("Connected") : qsTr("Offline")
-                    color: root.colors.muted
+                    color: root.colors.titleMuted || root.colors.muted
                     font.pixelSize: TypographyScale.pixels(12)
                 }
                 RowLayout {
@@ -1642,7 +1647,7 @@ AuralisWindow {
                 Rectangle {
                     anchors.fill: parent
                     radius: 12
-                    color: root.colors.railFill || root.colors.accent
+                    color: root.colors.menuOverride || root.colors.railFill || root.colors.accent
                 }
             }
 
@@ -1737,6 +1742,12 @@ AuralisWindow {
                     anchors.right: parent.right
                     anchors.bottom: parent.bottom
                     height: 139
+                    Rectangle {
+                        anchors.fill: parent
+                        visible: Boolean(root.colors.menuOverride)
+                        color: MaterialTheme.menuColors.surface
+                        radius: 8
+                    }
                     Rectangle {
                         width: parent.width
                         height: 1
@@ -1917,8 +1928,8 @@ AuralisWindow {
                                         required property int index
                                         readonly property var assignedFraction: TransferData.assigned(modelData.id, root.currentVisual.segments)
                                         width: parent.width
-                                        height: 5
-                                        radius: 2.5
+                                        height: Math.min(6, Math.round(5 * WindowAppearance.connectionBlockSize / 100))
+                                        radius: height / 2
                                         color: root.colors.divider
                                         Accessible.name: qsTr("Connection %1").arg(index + 1)
                                         Rectangle {
@@ -2244,8 +2255,8 @@ AuralisWindow {
                             id: footerMetric
                             anchors.centerIn: parent
                             spacing: 2
-                            Label { text: modelData.title; color: root.colors.muted; font.pixelSize: TypographyScale.pixels(11) }
-                            NumeralLabel { valueText: modelData.value; color: root.colors.ink; font.weight: Font.DemiBold }
+                            Label { text: modelData.title; color: root.colors.footerMuted || root.colors.muted; font.pixelSize: TypographyScale.pixels(11) }
+                            NumeralLabel { valueText: modelData.value; color: root.colors.footerInk || root.colors.ink; font.weight: Font.DemiBold }
                         }
                     }
                 }
@@ -2292,7 +2303,7 @@ AuralisWindow {
                     visible: !root.compactView || Boolean(root.actionError)
                     Layout.preferredWidth: Math.min(root.compactView ? 134 : 240, Math.ceil(implicitWidth))
                     valueText: root.actionError || (root.online ? qsTr("Auralis %1").arg(engine.version) : engine.status || qsTr("Offline"))
-                    color: root.actionError ? root.colors.destructive : root.colors.muted
+                    color: root.actionError ? root.colors.destructive : root.colors.footerMuted || root.colors.muted
                     elide: Text.ElideRight
                     font.pixelSize: TypographyScale.pixels(11)
                     PlainTextToolTip {

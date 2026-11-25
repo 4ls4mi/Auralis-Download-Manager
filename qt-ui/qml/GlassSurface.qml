@@ -35,6 +35,8 @@ Item {
     readonly property string outline: shell ? "square" : roundedPanel || profile.softChrome ? "round" : profile.shape
     readonly property color flatFace: (role === "summary" ? profile.summaryFill : profile.roleFaces?.[role])
         || profile.background
+    readonly property bool customLayer: role === "sidebar" ? Boolean(profile.sidebarOverride)
+        : Boolean(profile.contentOverride) && ["content", "card", "field", "summary", "connections"].includes(role)
     readonly property bool plainMaterialAlpha: backdropAvailable && profile.opaque && MaterialTheme.translucency > 0
     readonly property real foregroundBacking: role === "field" ? .94 : role === "sidebar" ? .88 : .78
     readonly property real flatFaceOpacity: backdropAvailable && MaterialTheme.translucency >= 0
@@ -58,6 +60,8 @@ Item {
                 return solidColor;
             return tintBacking ? MaterialTheme.tint(solidColor, backingAlpha) : MaterialTheme.rgba(solidColor, backingAlpha);
         }
+        if (customLayer)
+            return MaterialTheme.rgba(flatFace, flatFaceOpacity);
         return MaterialTheme.tint(profile.background, backingAlpha);
     }
     readonly property color rim: MaterialTheme.rgba(profile.edge, .33 + .32 * reflectivity)

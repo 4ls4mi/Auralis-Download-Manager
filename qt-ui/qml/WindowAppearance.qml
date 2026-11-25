@@ -12,14 +12,19 @@ QtObject {
     readonly property string cornerPlacement: preferences.cornerPlacement
     readonly property string progressShape: preferences.progressShape
     readonly property string progressLayout: preferences.progressLayout
+    readonly property int progressThickness: preferences.progressThickness
     readonly property string progressAnimation: preferences.progressAnimation
     readonly property string progressLighting: preferences.progressLighting
     readonly property string connectionShape: preferences.connectionShape
+    readonly property int connectionBlockSize: preferences.connectionBlockSize
     readonly property string connectionAnimation: preferences.connectionAnimation
     readonly property string connectionLighting: preferences.connectionLighting
     readonly property string graphShape: preferences.graphShape
     readonly property string graphAnimation: preferences.graphAnimation
     readonly property string graphLighting: preferences.graphLighting
+    readonly property var materialColorRoles: ["sidebar", "content", "menu", "text"]
+    readonly property var buttonColorRoles: ["accent", "secondary", "positive", "caution", "destructive"]
+    readonly property var buttonPaletteIds: ["material", "cool", "warm", "custom"]
     readonly property var progressLayoutChoices: [
         {label: qsTr("Classic"), value: "classic"},
         {label: qsTr("Status track"), value: "status-track"},
@@ -73,12 +78,18 @@ QtObject {
         function onGraphPaletteChanged() { root.store() }
     }
 
-    onPreferencesChanged: store()
+    onPreferencesChanged: {
+        if (loaded) {
+            publishMaterialCustomizations()
+            store()
+        }
+    }
     Component.onCompleted: {
         if (persistence.saved) {
             try { applyBackup(JSON.parse(persistence.saved), true) }
             catch (error) { console.warn("Could not restore appearance preferences", String(error)) }
         }
+        publishMaterialCustomizations()
         loaded = true
     }
 
@@ -86,7 +97,8 @@ QtObject {
         return {
             cornerRadius: 12, cornerPlacement: "top",
             mainMode: "desktop", detailsMode: "desktop", mainMedia: "", detailsMedia: "",
-            mainColor: "", detailsColor: "", progressShape: "bubble", progressLayout: "classic",
+            mainColor: "", detailsColor: "", progressShape: "material", progressLayout: "classic",
+            materialCustomizations: {}, progressThickness: 100, connectionBlockSize: 100,
             progressAnimation: "classic", progressLighting: "polished", connectionShape: "material",
             connectionAnimation: "classic", connectionLighting: "polished",
             graphShape: "area", graphAnimation: "classic", graphLighting: "polished"
@@ -94,7 +106,113 @@ QtObject {
     }
 
     function set(key, value) {
-        preferences = Object.assign({}, preferences, {[key]: value})
+        if (key === "progressThickness" || key === "connectionBlockSize")
+            value = indicatorSize(value, preferences[key])
+        if (preferences[key] !== value)
+            preferences = Object.assign({}, preferences, {[key]: value})
+    }
+
+    function indicatorSize(value, fallback) {
+        return Number.isInteger(value) && value >= 60 && value <= 160 ? value : fallback
+    }
+
+    function publishMaterialCustomizations() {
+        if (MaterialTheme.materialCustomizations !== preferences.materialCustomizations)
+            MaterialTheme.materialCustomizations = preferences.materialCustomizations
+    }
+
+    function materialCustomization(material) {
+        const all = preferences.materialCustomizations
+        return Object.prototype.hasOwnProperty.call(all, material) ? all[material] : {}
+    }
+
+    function materialColor(material, role) {
+        return materialColorRoles.includes(role) ? materialCustomization(material)[role] || "" : ""
+    }
+
+    function buttonPalette(material) {
+        return materialCustomization(material).buttonPalette || "material"
+    }
+
+    function buttonPaletteColor(material, role) {
+        return buttonColorRoles.includes(role) ? materialCustomization(material).buttonColors?.[role] || "" : ""
+    }
+
+    function setMaterialColor(material, role, color) {
+        if (!materialColorRoles.includes(role))
+            return
+        setMaterialCustomization(material, Object.assign({}, materialCustomization(material), {[role]: color}))
+    }
+
+    function resetMaterialColors(material) {
+        const colors = Object.assign({}, materialCustomization(material))
+        materialColorRoles.forEach(role => delete colors[role])
+        setMaterialCustomization(material, colors)
+    }
+
+    function setButtonPalette(material, palette) {
+        setMaterialCustomization(material, Object.assign({}, materialCustomization(material), {buttonPalette: palette}))
+    }
+
+    function setButtonPaletteColor(material, role, color) {
+        if (!buttonColorRoles.includes(role))
+            return
+        const colors = materialCustomization(material)
+        const buttons = Object.assign({}, colors.buttonColors, {[role]: color})
+        setMaterialCustomization(material, Object.assign({}, colors, {buttonColors: buttons}))
+    }
+
+    function resetButtonPalette(material) {
+        const colors = Object.assign({}, materialCustomization(material))
+        delete colors.buttonPalette
+        delete colors.buttonColors
+        setMaterialCustomization(material, colors)
+    }
+
+    function setMaterialCustomization(material, options) {
+        if (!MaterialTheme.hasMaterial(material))
+            return
+        const all = Object.assign({}, preferences.materialCustomizations)
+        const sanitized = validMaterialCustomization(options)
+        if (Object.keys(sanitized).length)
+            all[material] = sanitized
+        else
+            delete all[material]
+        set("materialCustomizations", all)
+    }
+
+    function validMaterialCustomization(value) {
+        const colors = {}
+        if (!value || typeof value !== "object")
+            return colors
+        materialColorRoles.forEach(function(role) {
+            if (colorValid(value[role]))
+                colors[role] = value[role].toLowerCase()
+        })
+        if (buttonPaletteIds.includes(value.buttonPalette) && value.buttonPalette !== "material")
+            colors.buttonPalette = value.buttonPalette
+        if (value.buttonColors && typeof value.buttonColors === "object") {
+            const buttons = {}
+            buttonColorRoles.forEach(function(role) {
+                if (colorValid(value.buttonColors[role]))
+                    buttons[role] = value.buttonColors[role].toLowerCase()
+            })
+            if (Object.keys(buttons).length)
+                colors.buttonColors = buttons
+        }
+        return colors
+    }
+
+    function validMaterialCustomizations(value, fallback) {
+        if (!value || typeof value !== "object" || Array.isArray(value))
+            return fallback
+        const all = {}
+        Object.keys(value).slice(0, 96).filter(material => MaterialTheme.hasMaterial(material)).forEach(function(material) {
+            const options = validMaterialCustomization(value[material])
+            if (Object.keys(options).length)
+                all[material] = options
+        })
+        return all
     }
 
     function background(target) {
@@ -266,6 +384,9 @@ QtObject {
             detailsColor: optionalColor(saved.detailsColor ?? data["mh-glass-solid-details"], original.detailsColor),
             progressShape: indicatorShape(saved.progressShape || data["mh-glass-progress-shape"], original.progressShape),
             progressLayout: indicatorLayout(saved.progressLayout, original.progressLayout),
+            progressThickness: indicatorSize(saved.progressThickness, original.progressThickness),
+            connectionBlockSize: indicatorSize(saved.connectionBlockSize, original.connectionBlockSize),
+            materialCustomizations: validMaterialCustomizations(saved.materialCustomizations, original.materialCustomizations),
             progressAnimation: indicatorAnimation(saved.progressAnimation, original.progressAnimation),
             progressLighting: indicatorLighting(saved.progressLighting, original.progressLighting),
             connectionShape: indicatorShape(saved.connectionShape || data["mh-glass-connection-shape"], original.connectionShape),
@@ -304,7 +425,8 @@ QtObject {
             qt: {
                 material: material, tint: colorText(MaterialTheme.tintColor), progressShape: progressShape,
                 mdmMode: MaterialTheme.mdmMode,
-                progressLayout: progressLayout,
+                progressLayout: progressLayout, progressThickness: progressThickness,
+                connectionBlockSize: connectionBlockSize, materialCustomization: materialCustomization(material),
                 progressAnimation: progressAnimation, progressLighting: progressLighting,
                 connectionShape: connectionShape, connectionAnimation: connectionAnimation, connectionLighting: connectionLighting,
                 graphAnimation: graphAnimation, graphLighting: graphLighting,
@@ -351,6 +473,8 @@ QtObject {
         preferences = Object.assign({}, preferences, {
             progressShape: indicatorShape(value.qt?.progressShape || options.progressShape, progressShape),
             progressLayout: indicatorLayout(value.qt?.progressLayout, progressLayout),
+            progressThickness: indicatorSize(value.qt?.progressThickness, progressThickness),
+            connectionBlockSize: indicatorSize(value.qt?.connectionBlockSize, connectionBlockSize),
             progressAnimation: indicatorAnimation(value.qt?.progressAnimation, progressAnimation),
             progressLighting: indicatorLighting(value.qt?.progressLighting, progressLighting),
             connectionShape: indicatorShape(value.qt?.connectionShape || options.connectionShape, connectionShape),
@@ -360,6 +484,8 @@ QtObject {
             graphAnimation: indicatorAnimation(value.qt?.graphAnimation, graphAnimation),
             graphLighting: indicatorLighting(value.qt?.graphLighting, graphLighting)
         })
+        if (value.qt && Object.prototype.hasOwnProperty.call(value.qt, "materialCustomization"))
+            setMaterialCustomization(material, value.qt.materialCustomization)
         return true
     }
 }

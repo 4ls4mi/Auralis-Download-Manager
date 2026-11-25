@@ -173,6 +173,11 @@ void main()
         // Prism-like caps have a straight chamfer. The square vessel keeps its full height.
         halfHeight *= 1.0 - endRatio * 0.74;
         slope = 0.20 * endRatio * (x < 0.5 ? -1.0 : 1.0);
+    } else if (contourPosition > 3.5) {
+        // Ice leaves more of the left cap intact and has an asymmetric bevel.
+        halfHeight *= 1.0 - endRatio * (x < 0.5 ? 0.38 : 0.63);
+        offset += 0.12 * endRatio * (x < 0.5 ? -1.0 : 1.0);
+        slope = 0.17 * endRatio * (x < 0.5 ? -1.0 : 1.0);
     }
     float rimDistance = (abs(offset) - halfHeight) * height;
     float coverage = 1.0 - smoothstep(-0.65, 0.65, rimDistance);

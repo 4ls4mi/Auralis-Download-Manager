@@ -15,18 +15,24 @@ Basic.MenuItem {
     readonly property var profile: MaterialTheme.palette
     readonly property var finish: MaterialTheme.buttonFinishes[profile.finish]
     readonly property bool selected: enabled && (highlighted || hovered || activeFocus || down)
-    readonly property color actionAccent: MaterialTheme.vividControlAccent(MaterialTheme.forcedAccent
-        || (destructive ? colors.danger : symbol.length ? commandColor : colors.highlight), profile.light)
-    readonly property color pigment: MaterialTheme.controlPigment(actionAccent, profile.secondary, finish.tint)
+    readonly property color baseAccent: destructive ? profile.destructive : symbol.length ? commandColor : colors.highlight
+    readonly property string customTint: MaterialTheme.buttonColorOverride(MaterialTheme.current, baseAccent,
+        destructive ? "destructive" : "")
+    readonly property bool customized: Boolean(customTint || profile.menuOverride || profile.textOverride || profile.contentOverride)
+    readonly property color actionAccent: customTint || MaterialTheme.vividControlAccent(MaterialTheme.forcedAccent
+        || baseAccent, profile.light)
+    readonly property color pigment: customTint || MaterialTheme.controlPigment(actionAccent, profile.secondary, finish.tint)
     readonly property real idleStrength: MaterialTheme.controlIdleStrength(profile, finish) * .42
     readonly property color idleFace: MaterialTheme.mix(colors.surface, pigment, idleStrength * .78, 1)
     readonly property color face: MaterialTheme.controlHighlight(pigment, down, hovered)
-    readonly property color activeInk: MaterialTheme.contrastInk(face)
+    readonly property color activeInk: customized
+        ? MaterialTheme.controlTextInk(profile.textOverride || colors.ink, face) : MaterialTheme.contrastInk(face)
     readonly property real glyphSpace: symbol.length ? 27 : 0
     readonly property string shortcutText: subMenu ? "" : menuShortcut.nativeText
     readonly property real shortcutSpace: shortcutText.length ? shortcutBadge.width + 9 : 0
-    readonly property color foreground: !enabled ? colors.muted : selected ? activeInk
-        : MaterialTheme.controlTextInk(destructive ? colors.danger : colors.ink, idleFace)
+    readonly property color foreground: selected ? activeInk : !enabled && !customized ? colors.muted
+        : MaterialTheme.controlTextInk(!enabled ? colors.muted
+            : profile.textOverride || (destructive ? colors.danger : colors.ink), idleFace)
 
     hoverEnabled: true
     leftPadding: 12 + (mirrored ? shortcutSpace : glyphSpace)
@@ -120,7 +126,9 @@ Basic.MenuItem {
                 anchors.centerIn: parent
                 text: item.shortcutText
                 font.pixelSize: TypographyScale.pixels(11)
-                color: item.foreground
+                color: item.customized ? MaterialTheme.controlTextInk(item.foreground,
+                    MaterialTheme.mix(item.selected ? item.face : item.idleFace, item.foreground,
+                        item.selected ? .17 : .08, 1)) : item.foreground
                 Accessible.ignored: true
             }
         }

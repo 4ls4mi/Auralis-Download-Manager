@@ -3,6 +3,7 @@
 #include "FrameResize.h"
 #include "LocalFiles.h"
 #include "WindowOutline.h"
+#include "WindowShadow.h"
 
 #include <QCoreApplication>
 #include <QDesktopServices>
@@ -13,7 +14,7 @@
 #include <QJSEngine>
 #include <QJsonDocument>
 #include <QLocale>
-#include <QPolygon>
+#include <QPolygonF>
 #include <QProcess>
 #include <QQmlEngine>
 #include <QRegion>
@@ -23,9 +24,6 @@
 #include <QWindow>
 #include <QtConcurrentRun>
 
-#include <array>
-#include <cmath>
-#include <numbers>
 
 #ifdef Q_OS_WIN
 #include <QJsonObject>
@@ -807,6 +805,9 @@ void Engine::setWindowCornerRadius(QWindow *window, int radius) const
         WindowOutline::configureAntialiasing(window, {});
         if (!window->mask().isEmpty())
             window->setMask({});
+#ifdef Q_OS_WIN
+        WindowShadow::update(window, QSizeF(0, 0), 0);
+#endif
         return;
     }
     if (window->size().isEmpty())
@@ -814,50 +815,18 @@ void Engine::setWindowCornerRadius(QWindow *window, int radius) const
 
     const qreal width = window->width();
     const qreal height = window->height();
-    const qreal reachX = qMin(qreal(radius), width / 2);
-    const qreal reachY = qMin(radius * (113.0 / 114.0), height / 2);
-    [[maybe_unused]] const bool antialiasing =
-        WindowOutline::configureAntialiasing(window, QSizeF(reachX, reachY), corners);
-#ifdef Q_OS_WIN
-    // Clip the native HWND to the same outline as the scene. Extra pixels in the region
-    // can expose the compositor's background when it ignores the scene's transparent fringe.
-    constexpr qreal fringe = 0;
-#else
+    const QSizeF reach(qMin(qreal(radius), width / 2), qMin(radius * (113.0 / 114.0), height / 2));
+    const bool antialiasing = WindowOutline::configureAntialiasing(window, reach, corners);
+    // Keep the native input mask, but leave room for the GPU to draw its fractional edge
+    // inside it. Shaped Windows still have no native acrylic or non-client frame.
     const qreal fringe = antialiasing ? 2 : 0;
-#endif
-    // Cache samples of the approved superellipse and mirror them around the four corners.
-    constexpr int segments = 48;
-    static const auto quarter = [] {
-        std::array<QPointF, segments + 1> points;
-        points.front() = QPointF(1, 0);
-        points.back() = QPointF(0, 1);
-        for (int i = 1; i < segments; ++i) {
-            const qreal angle = (std::numbers::pi_v<qreal> / 2) * i / segments;
-            points[i] = QPointF(std::pow(std::cos(angle), 2.0 / 3.05),
-                                std::pow(std::sin(angle), 2.0 / 3.05));
-        }
-        return points;
-    }();
-    QPolygon outline;
-    outline.reserve(qsizetype(quarter.size()) * 4);
-    for (const int corner : {1, 3, 2, 0}) {
-        const bool right = corner % 2;
-        const bool bottom = corner >= 2;
-        const qreal edgeX = right ? width : 0;
-        const qreal edgeY = bottom ? height : 0;
-        if (!(corners & (1 << corner))) {
-            outline << QPointF(edgeX, edgeY).toPoint();
-            continue;
-        }
-        for (const auto &point : quarter) {
-            const qreal x = qMax(0.0, reachX * (1 - (right == bottom ? point.x() : point.y())) - fringe);
-            const qreal y = qMax(0.0, reachY * (1 - (right == bottom ? point.y() : point.x())) - fringe);
-            outline << QPointF(right ? edgeX - x : x, bottom ? edgeY - y : y).toPoint();
-        }
-    }
-    const QRegion mask(outline);
+    const QRegion mask(WindowOutline::framePolygon(QRectF(0, 0, width, height),
+                                                   reach, corners, fringe).toPolygon());
     if (mask != window->mask())
         window->setMask(mask);
+#ifdef Q_OS_WIN
+    WindowShadow::update(window, reach, corners);
+#endif
 }
 
 void Engine::installInteractiveResize(QWindow *window, int borderSize, int cornerSize) const

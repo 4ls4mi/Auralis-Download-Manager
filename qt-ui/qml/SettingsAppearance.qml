@@ -49,6 +49,17 @@ GridLayout {
         outputFile.open()
     }
 
+    function editMaterialColor(button, role, value) {
+        materialColorPicker.materialId = MaterialTheme.current
+        materialColorPicker.role = role
+        materialColorPicker.buttonColor = button
+        materialColorPicker.selectedColor = value
+        materialColorPicker.hue = Math.max(0, materialColorPicker.selectedColor.hsvHue)
+        materialColorPicker.saturation = materialColorPicker.selectedColor.hsvSaturation
+        materialColorPicker.brightness = materialColorPicker.selectedColor.hsvValue
+        materialColorPicker.open()
+    }
+
     function importFile(file) {
         const action = fileAction
         busy = true
@@ -60,7 +71,11 @@ GridLayout {
             }
             if (action === "material") {
                 const id = MaterialTheme.installMaterial(response)
-                if (id) MaterialTheme.current = id
+                if (id) {
+                    if (Object.prototype.hasOwnProperty.call(response, "qtCustomization"))
+                        WindowAppearance.setMaterialCustomization(id, response.qtCustomization)
+                    MaterialTheme.current = id
+                }
                 report(id ? qsTr("Material imported.") : qsTr("Choose a valid Auralis material file."), !id)
             } else {
                 const installed = WindowAppearance.importTheme(response)
@@ -129,6 +144,134 @@ GridLayout {
             selection: field.selection
             Accessible.name: field.label
             onActivated: field.chosen(currentValue)
+        }
+    }
+
+    component PercentSlider: RowLayout {
+        id: field
+
+        required property string label
+        required property int percentage
+        signal changedByUser(int percentage)
+
+        Layout.fillWidth: true
+
+        Label {
+            text: field.label
+            color: root.colors.text
+            wrapMode: Text.WordWrap
+            Layout.maximumWidth: TypographyScale.pixels(160)
+        }
+
+        GlassSlider {
+            id: slider
+            Layout.fillWidth: true
+            from: 60
+            to: 160
+            stepSize: 1
+            value: field.percentage
+            Accessible.name: field.label
+            onMoved: field.changedByUser(Math.round(value))
+        }
+
+        NumeralLabel {
+            valueText: qsTr("%1%").arg(Math.round(slider.value))
+            color: root.colors.muted
+        }
+    }
+
+    component MaterialColorField: ColumnLayout {
+        id: field
+
+        required property var option
+        property bool buttonColor: false
+        readonly property string chosenColor: buttonColor
+            ? WindowAppearance.buttonPaletteColor(MaterialTheme.current, option.role)
+            : WindowAppearance.materialColor(MaterialTheme.current, option.role)
+        readonly property color fallbackColor: {
+            switch (option.role) {
+            case "sidebar": return root.colors.roleFaces?.sidebar || root.colors.background
+            case "content": return root.colors.roleFaces?.content || root.colors.background
+            case "menu": return MaterialTheme.menuColors.surface
+            default: return root.colors[option.role]
+            }
+        }
+        readonly property color effectiveColor: buttonColor
+            ? MaterialTheme.buttonTint(MaterialTheme.current, fallbackColor, option.role)
+            : chosenColor || fallbackColor
+
+        Layout.fillWidth: true
+        Layout.minimumWidth: 1
+        Layout.preferredWidth: 230
+        spacing: 4
+
+        function choose(value) {
+            if (buttonColor)
+                WindowAppearance.setButtonPaletteColor(MaterialTheme.current, option.role, value)
+            else
+                WindowAppearance.setMaterialColor(MaterialTheme.current, option.role, value)
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 6
+
+            Rectangle {
+                Layout.preferredWidth: 18
+                Layout.preferredHeight: 18
+                radius: 4
+                color: field.effectiveColor
+                border.color: MaterialTheme.controlIconInk(root.colors.divider, color)
+            }
+            Label {
+                Layout.fillWidth: true
+                text: field.option.label
+                color: root.colors.text
+                wrapMode: Text.WordWrap
+            }
+        }
+
+        Flow {
+            Layout.fillWidth: true
+            spacing: 4
+
+            Repeater {
+                model: field.option.suggestions
+                delegate: Button {
+                    id: swatch
+                    required property string modelData
+                    padding: 0
+                    implicitWidth: 28
+                    implicitHeight: 28
+                    hoverEnabled: true
+                    Accessible.name: qsTr("Use %1 for %2").arg(modelData).arg(field.option.label)
+                    ToolTip.visible: hovered
+                    ToolTip.text: modelData
+                    onClicked: field.choose(modelData)
+
+                    background: Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: 2
+                        color: swatch.modelData
+                        radius: 5
+                        border.width: swatch.visualFocus || swatch.modelData === field.chosenColor ? 2 : 1
+                        border.color: MaterialTheme.controlIconInk(root.colors.divider, color)
+                    }
+                }
+            }
+
+            GlassButton {
+                text: qsTr("Pick…")
+                Accessible.name: qsTr("Pick a custom color for %1").arg(field.option.label)
+                onClicked: root.editMaterialColor(field.buttonColor, field.option.role, field.effectiveColor)
+            }
+
+            GlassButton {
+                text: qsTr("Default")
+                enabled: Boolean(field.chosenColor)
+                Accessible.name: qsTr("Reset %1 to the material default").arg(field.option.label)
+                onClicked: field.choose("")
+            }
         }
     }
 
@@ -280,6 +423,88 @@ GridLayout {
                 ]
                 Accessible.name: qsTr("Theme mode")
                 onActivated: MaterialTheme.mdmMode = currentValue
+            }
+
+            Heading { text: qsTr("Layer and text colors") }
+            Label {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                text: qsTr("These colors apply only to the selected preset. Auralis adjusts text for contrast where needed.")
+                color: root.colors.muted
+            }
+            GridLayout {
+                Layout.fillWidth: true
+                columns: width >= 480 ? 2 : 1
+                columnSpacing: 10
+                rowSpacing: 10
+
+                Repeater {
+                    model: [
+                        {role: "sidebar", label: qsTr("Sidebar"),
+                            suggestions: ["#322762", "#19465a", "#643b4e"]},
+                        {role: "content", label: qsTr("Content"),
+                            suggestions: ["#202634", "#293947", "#f1edf8"]},
+                        {role: "menu", label: qsTr("Menus"),
+                            suggestions: ["#342944", "#194050", "#f5ecf0"]},
+                        {role: "text", label: qsTr("Interface text"),
+                            suggestions: ["#f5f5f8", "#cbdbf1", "#172033"]}
+                    ]
+                    delegate: MaterialColorField {
+                        required property var modelData
+                        option: modelData
+                    }
+                }
+            }
+            GlassButton {
+                text: qsTr("Reset layer and text colors")
+                enabled: WindowAppearance.materialColorRoles.some(role => Boolean(WindowAppearance.materialColor(MaterialTheme.current, role)))
+                onClicked: WindowAppearance.resetMaterialColors(MaterialTheme.current)
+            }
+
+            Heading { text: qsTr("Button colors") }
+            IndicatorChoice {
+                label: qsTr("Button palette")
+                model: [
+                    {label: qsTr("Material default"), value: "material"},
+                    {label: qsTr("Cool"), value: "cool"},
+                    {label: qsTr("Warm"), value: "warm"},
+                    {label: qsTr("Custom"), value: "custom"}
+                ]
+                selection: WindowAppearance.buttonPalette(MaterialTheme.current)
+                onChosen: value => WindowAppearance.setButtonPalette(MaterialTheme.current, value)
+            }
+            GridLayout {
+                visible: WindowAppearance.buttonPalette(MaterialTheme.current) === "custom"
+                Layout.fillWidth: true
+                columns: width >= 480 ? 2 : 1
+                columnSpacing: 10
+                rowSpacing: 10
+
+                Repeater {
+                    model: [
+                        {role: "accent", label: qsTr("Primary buttons"),
+                            suggestions: ["#7654cf", "#286ab7", "#c14978"]},
+                        {role: "secondary", label: qsTr("Secondary buttons"),
+                            suggestions: ["#586e8f", "#368392", "#925da0"]},
+                        {role: "positive", label: qsTr("Confirm buttons"),
+                            suggestions: ["#28795b", "#298582", "#46763d"]},
+                        {role: "caution", label: qsTr("Caution buttons"),
+                            suggestions: ["#986d23", "#b26c4a", "#ae8725"]},
+                        {role: "destructive", label: qsTr("Destructive buttons"),
+                            suggestions: ["#a84858", "#ad4474", "#b55139"]}
+                    ]
+                    delegate: MaterialColorField {
+                        required property var modelData
+                        option: modelData
+                        buttonColor: true
+                    }
+                }
+            }
+            GlassButton {
+                text: qsTr("Reset button colors")
+                enabled: WindowAppearance.buttonPalette(MaterialTheme.current) !== "material"
+                    || WindowAppearance.buttonColorRoles.some(role => Boolean(WindowAppearance.buttonPaletteColor(MaterialTheme.current, role)))
+                onClicked: WindowAppearance.resetButtonPalette(MaterialTheme.current)
             }
 
             Heading { visible: !MaterialTheme.mdmAppearance; text: qsTr("Window background opacity") }
@@ -492,10 +717,10 @@ GridLayout {
             }
             Heading { text: qsTr("Progress") }
             GridLayout {
-                visible: !MaterialTheme.mdmAppearance
                 Layout.fillWidth: true
-                columns: !root.sideTabs || width >= 320 ? 2 : 1
+                columns: !MaterialTheme.mdmAppearance && (!root.sideTabs || width >= 320) ? 2 : 1
                 IndicatorChoice {
+                    visible: !MaterialTheme.mdmAppearance
                     label: qsTr("Progress layout")
                     model: WindowAppearance.progressLayoutChoices
                     selection: WindowAppearance.progressLayout
@@ -508,27 +733,35 @@ GridLayout {
                     onChosen: value => WindowAppearance.set("progressShape", value)
                 }
                 IndicatorColorChoice {
+                    visible: !MaterialTheme.mdmAppearance
                     label: qsTr("Progress colors")
                     indicatorRole: "progress"
                     selection: MaterialTheme.progressPalette
                     onChosen: value => MaterialTheme.progressPalette = value
                 }
                 IndicatorChoice {
+                    visible: !MaterialTheme.mdmAppearance
                     label: qsTr("Progress animation")
                     model: WindowAppearance.animationChoices
                     selection: WindowAppearance.progressAnimation
                     onChosen: value => WindowAppearance.set("progressAnimation", value)
                 }
                 IndicatorChoice {
+                    visible: !MaterialTheme.mdmAppearance
                     label: qsTr("Progress lighting")
                     model: WindowAppearance.lightingChoices
                     selection: WindowAppearance.progressLighting
                     onChosen: value => WindowAppearance.set("progressLighting", value)
                 }
             }
+            PercentSlider {
+                label: qsTr("Progress bar thickness")
+                percentage: WindowAppearance.progressThickness
+                onChangedByUser: value => WindowAppearance.set("progressThickness", value)
+            }
             GlassProgress {
                 Layout.preferredWidth: parent.width * .53
-                Layout.preferredHeight: 38
+                baseHeight: 38
                 value: .64
                 shape: WindowAppearance.progressShape === "material" ?
                     (["bubble", "prism", "ice"].includes(profile.shape) ? profile.shape : "round") : WindowAppearance.progressShape
@@ -568,6 +801,11 @@ GridLayout {
                     onChosen: value => WindowAppearance.set("connectionLighting", value)
                 }
             }
+            PercentSlider {
+                label: qsTr("Connection block size")
+                percentage: WindowAppearance.connectionBlockSize
+                onChangedByUser: value => WindowAppearance.set("connectionBlockSize", value)
+            }
             MdmSegmentMap {
                 visible: MaterialTheme.mdmAppearance
                 Layout.fillWidth: true
@@ -583,6 +821,7 @@ GridLayout {
                     delegate: ConnectionWater {
                         required property real modelData
                         Layout.fillWidth: true
+                        Layout.maximumWidth: implicitWidth
                         value: modelData
                         receiving: visible && root.previewActive
                         phase: root.previewPhase
@@ -677,7 +916,7 @@ GridLayout {
         id: resetDialog
         hostWindow: root.Window.window
         title: qsTr("Reset appearance?")
-        message: qsTr("Restore the default material, tint, indicator styles, and backgrounds. Imported materials remain available.")
+        message: qsTr("Restore the default material, colors, indicator styles and sizes, and backgrounds. Imported materials remain available.")
         confirmText: qsTr("Reset appearance")
         onConfirmed: {
             const imported = MaterialTheme.userMaterials
@@ -693,6 +932,128 @@ GridLayout {
             if (targetKey === "forcedAccent") MaterialTheme.forcedAccent = WindowAppearance.colorText(selectedColor)
             else if (targetKey) WindowAppearance.set(targetKey, WindowAppearance.colorText(selectedColor))
             else MaterialTheme.tintColor = selectedColor
+        }
+    }
+
+    Dialog {
+        id: materialColorPicker
+
+        property string materialId
+        property string role
+        property bool buttonColor: false
+        property real hue: 0
+        property real saturation: 0
+        property real brightness: 1
+        property color selectedColor: "black"
+
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        width: Math.max(0, Math.min(400, (parent ? parent.width : 432) - 32))
+        title: qsTr("Choose a color")
+        modal: true
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        palette.window: root.colors.background
+        palette.windowText: root.colors.text
+        palette.text: root.colors.text
+        palette.highlight: root.colors.accent
+
+        onAccepted: {
+            const value = WindowAppearance.colorText(selectedColor)
+            if (buttonColor)
+                WindowAppearance.setButtonPaletteColor(materialId, role, value)
+            else
+                WindowAppearance.setMaterialColor(materialId, role, value)
+        }
+
+        function updatePreview() {
+            selectedColor = Qt.hsva(hue === 1 ? 0 : hue, saturation, brightness, 1)
+        }
+
+        function setColorFromHex(value) {
+            const color = MaterialTheme.rgba(value, 1)
+            hue = Math.max(0, color.hsvHue)
+            saturation = color.hsvSaturation
+            brightness = color.hsvValue
+            selectedColor = color
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 10
+
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 48
+                radius: 8
+                color: materialColorPicker.selectedColor
+                border.color: MaterialTheme.controlIconInk(root.colors.divider, color)
+
+                Label {
+                    anchors.centerIn: parent
+                    text: WindowAppearance.colorText(materialColorPicker.selectedColor).toUpperCase()
+                    color: MaterialTheme.controlTextInk(root.colors.text, materialColorPicker.selectedColor)
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Label { text: qsTr("Hex color"); color: root.colors.text }
+                TextField {
+                    Layout.fillWidth: true
+                    text: WindowAppearance.colorText(materialColorPicker.selectedColor).toUpperCase()
+                    placeholderText: "#RRGGBB"
+                    Accessible.name: qsTr("Hex color")
+                    selectByMouse: true
+                    maximumLength: 7
+                    validator: RegularExpressionValidator { regularExpression: /#[0-9a-fA-F]{6}/ }
+                    onTextEdited: {
+                        if (acceptableInput)
+                            materialColorPicker.setColorFromHex(text)
+                    }
+                }
+            }
+            Label { text: qsTr("Hue"); color: root.colors.text }
+            GlassSlider {
+                Layout.fillWidth: true
+                from: 0
+                to: 1
+                stepSize: 1 / 360
+                value: materialColorPicker.hue
+                Accessible.name: qsTr("Hue")
+                onMoved: {
+                    materialColorPicker.hue = value
+                    if (materialColorPicker.saturation < .01)
+                        materialColorPicker.saturation = .7
+                    if (materialColorPicker.brightness < .01)
+                        materialColorPicker.brightness = .75
+                    materialColorPicker.updatePreview()
+                }
+            }
+            Label { text: qsTr("Saturation"); color: root.colors.text }
+            GlassSlider {
+                Layout.fillWidth: true
+                from: 0
+                to: 1
+                stepSize: .01
+                value: materialColorPicker.saturation
+                Accessible.name: qsTr("Saturation")
+                onMoved: {
+                    materialColorPicker.saturation = value
+                    materialColorPicker.updatePreview()
+                }
+            }
+            Label { text: qsTr("Brightness"); color: root.colors.text }
+            GlassSlider {
+                Layout.fillWidth: true
+                from: 0
+                to: 1
+                stepSize: .01
+                value: materialColorPicker.brightness
+                Accessible.name: qsTr("Brightness")
+                onMoved: {
+                    materialColorPicker.brightness = value
+                    materialColorPicker.updatePreview()
+                }
+            }
         }
     }
 
@@ -718,7 +1079,10 @@ GridLayout {
         defaultSuffix: "json"
         nameFilters: [qsTr("Auralis JSON files (*.json)")]
         onAccepted: {
-            const data = root.fileAction === "material" ? MaterialTheme.exportMaterial(MaterialTheme.current) : WindowAppearance.exportTheme()
+            const material = MaterialTheme.current
+            const data = root.fileAction === "material"
+                ? Object.assign({}, MaterialTheme.exportMaterial(material), {qtCustomization: WindowAppearance.materialCustomization(material)})
+                : WindowAppearance.exportTheme()
             if (!data) { root.report(qsTr("Could not export the current appearance."), true); return }
             root.busy = true
             engine.request({local: "writeShareFile", file: selectedFile, data: data}, function(result, error) {

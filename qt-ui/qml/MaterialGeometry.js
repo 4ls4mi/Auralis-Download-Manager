@@ -94,7 +94,9 @@ function barEdge(x, width, height, shape) {
     const cap = Math.min(height * .47, width * .28);
     const end = Math.min(x, width - x);
     const aspect = (end - cap) / Math.max(.01, cap);
-    if (shape === "prism" || shape === "ice" || shape === "chamfer")
+    if (shape === "ice")
+        return end < cap ? height * (x < width / 2 ? .15 : .32) * (1 - end / cap) : 0;
+    if (shape === "prism" || shape === "chamfer")
         return end < cap ? height * .36 * (1 - end / cap) : 0;
     if (shape === "square" || shape === "plain")
         return 0;

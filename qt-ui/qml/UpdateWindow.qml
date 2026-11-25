@@ -191,7 +191,7 @@ DetachedDialogWindow {
         },
         GlassProgress {
             Layout.fillWidth: true
-            Layout.preferredHeight: 24
+            baseHeight: 24
             visible: update.stage === "downloading"
             value: update.completion
             animated: visible && update.visibility !== Window.Minimized

@@ -132,7 +132,7 @@ AuralisWindow {
             anchors.top: parent.top
             anchors.bottom: parent.bottom
             text: root.title
-            color: root.colors.ink
+            color: root.colors.titleInk || root.colors.ink
             font.family: root.fontFamilyForText(text)
             font.bold: true
             font.pixelSize: TypographyScale.pixels(18)

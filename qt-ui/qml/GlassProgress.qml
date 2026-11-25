@@ -18,7 +18,11 @@ Item {
     property string transferState: ""
     property real externalPhase: -1
     property bool showLabel: false
-    property string shape: ["bubble", "prism", "ice"].includes(profile.shape) ? profile.shape : "round"
+    property real baseHeight: 22
+    readonly property string shapeChoice: WindowAppearance.progressShape || "material"
+    property string shape: shapeChoice === "material"
+        ? (["bubble", "prism", "ice"].includes(profile.shape) ? profile.shape : "round") : shapeChoice
+    readonly property real thicknessScale: (WindowAppearance.progressThickness ?? 100) / 100
     property color startColor: profile.accent
     property color endColor: profile.secondary
     property color trackColor: profile.background
@@ -35,7 +39,8 @@ Item {
     readonly property var firstTone: MaterialTheme.neonTone(startColor)
     readonly property var lastTone: MaterialTheme.neonTone(endColor)
     readonly property real glowMargin: Math.round(Math.max(3, Math.min(5, height * .14)) * finish.haloWidth)
-    readonly property int contour: shape === "bubble" ? 1 : ["prism", "ice", "chamfer"].includes(shape) ? 2
+    readonly property int contour: shape === "bubble" ? 1 : shape === "ice" ? 4
+        : ["prism", "chamfer"].includes(shape) ? 2
         : ["square", "plain"].includes(shape) ? 3 : 0
     readonly property bool renderWithShader: !profile.mdm && classicLayout && width >= 12 && height >= 7
         && GraphicsInfo.api !== GraphicsInfo.Software && GraphicsInfo.api !== GraphicsInfo.Unknown
@@ -49,7 +54,7 @@ Item {
     property real localPhase: 0
 
     implicitWidth: 204
-    implicitHeight: 22
+    implicitHeight: Math.round(baseHeight * thicknessScale)
     Accessible.role: Accessible.ProgressBar
     Accessible.name: qsTr("Download progress")
     Accessible.description: qsTr("%1 percent").arg(Math.round(amount * 100))
@@ -84,6 +89,8 @@ Item {
         sourceComponent: MdmProgressBar {
             appearance: progress.profile
             amount: progress.amount
+            shape: progress.shapeChoice === "material" ? "material" : progress.shape
+            thicknessScale: progress.thicknessScale
         }
     }
 
@@ -113,7 +120,7 @@ Item {
         anchors.leftMargin: 1.5
         anchors.rightMargin: progress.labelAtEnd ? amountLabel.width + 8 : 1.5
         anchors.verticalCenter: parent.verticalCenter
-        height: LayoutGeometry.trackHeight(Math.max(0, progress.height - 3), progress.layoutKind)
+        height: LayoutGeometry.trackHeight(Math.max(0, progress.height - 3), progress.layoutKind, progress.thicknessScale)
         active: !progress.profile.mdm && !progress.renderWithShader
 
         sourceComponent: Item {
@@ -125,11 +132,11 @@ Item {
                 : LayoutGeometry.spans(width, height, progress.layoutKind, progress.shownAmount)
             readonly property string trackPath: progress.classicLayout
                 ? Geometry.barContour(width, height, progress.shape, 1, 0)
-                : LayoutGeometry.path(trackSpans, height, progress.layoutKind)
+                : LayoutGeometry.path(trackSpans, height, progress.layoutKind, progress.shape)
             readonly property string fillPath: progress.classicLayout
                 ? Geometry.barContour(width, height, progress.shape, progress.shownAmount,
                     progress.liquidMoving ? progress.wavePhase * (progress.motionKind === 1 ? 2 : 1) : 0)
-                : LayoutGeometry.path(fillSpans, height, progress.layoutKind)
+                : LayoutGeometry.path(fillSpans, height, progress.layoutKind, progress.shape)
             readonly property real front: {
                 if (progress.classicLayout)
                     return width * progress.shownAmount

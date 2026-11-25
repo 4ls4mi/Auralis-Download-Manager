@@ -349,6 +349,7 @@ AuralisWindow {
 
         WideSweep {
             id: wideSweep
+            objectName: "settingsWideSweep"
             anchors.fill: parent
             visible: MaterialTheme.wideSweepEnabled && root.visible && root.visibility !== Window.Minimized
             sidebar: navigationSidebar
@@ -357,7 +358,7 @@ AuralisWindow {
             geometryHost: settingsLayout
             backdropAvailable: settingsBackdrop.backdropAvailable
             selectedRow: root.selectedNavigationButton
-            selectedColor: root.selectedNavigationButton?.engagedFace || root.colors.accent
+            selectedColor: root.selectedNavigationButton?.ribbonFace || root.colors.accent
         }
     }
 
@@ -458,7 +459,7 @@ AuralisWindow {
                         text: root.title
                         elide: Text.ElideRight
                         font.weight: Font.DemiBold
-                        color: root.colors.text
+                        color: root.colors.titleInk || root.colors.text
                     }
                     CaptionMoveArea {
                         objectName: "settingsTitleDragArea"
@@ -568,8 +569,9 @@ AuralisWindow {
                             required property var modelData
                             required property int index
                             readonly property bool flatSelection: root.wideSweepVisible && highlighted
+                            readonly property color ribbonFace: customTint || engagedFace
                             readonly property color navigationInk: flatSelection
-                                ? MaterialTheme.controlTextInk(root.colors.sidebarInk || root.colors.text, engagedFace)
+                                ? MaterialTheme.controlTextInk(root.colors.sidebarInk || root.colors.text, ribbonFace)
                                 : buttonInk
 
                             Layout.fillWidth: true

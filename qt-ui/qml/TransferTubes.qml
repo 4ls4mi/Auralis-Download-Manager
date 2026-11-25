@@ -81,8 +81,10 @@ Canvas {
 
     Connections {
         target: tubes.progressItem
+        function onXChanged() { tubes.requestPaint() }
         function onYChanged() { tubes.requestPaint() }
         function onWidthChanged() { tubes.requestPaint() }
+        function onHeightChanged() { tubes.requestPaint() }
     }
 
     Connections {
@@ -108,6 +110,11 @@ Canvas {
     Connections {
         target: MaterialTheme
         function onReducedMotionChanged() { tubes.requestPaint() }
+    }
+
+    Connections {
+        target: WindowAppearance
+        function onConnectionBlockSizeChanged() { tubes.requestPaint() }
     }
 
     function trace(ctx, points, newPath = true) {

@@ -1,22 +1,82 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Shapes
+import "MaterialGeometry.js" as Geometry
 
 Item {
     id: bar
 
     required property var appearance
     required property real amount
+    property string shape: "material"
+    property real thicknessScale: 1
     readonly property var colors: appearance.mdm
     readonly property string style: appearance.mdmProgress
     readonly property bool isLine: style === "line"
+    readonly property real trackHeight: isLine ? Math.min(4 * thicknessScale, height) : Math.max(0, height - 4)
 
-    Rectangle {
-        id: track
+    // Keep each MDM preset's original line/bar/block artwork unless the user
+    // explicitly picks a different contour.
+    Loader {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
-        height: bar.isLine ? Math.min(4, bar.height) : Math.max(0, bar.height - 4)
+        height: bar.trackHeight
+        active: bar.shape !== "material"
+        sourceComponent: Shape {
+            id: styled
+            preferredRendererType: Shape.CurveRenderer
+            readonly property real cap: height / 2
+            readonly property real inset: bar.isLine ? 0 : 1
+            readonly property string outline: Geometry.frame(0, 0, width, height, cap,
+                bar.shape === "plain" ? "square" : bar.shape)
+            readonly property string filled: fillPath()
+            property LinearGradient gloss: LinearGradient {
+                x2: 0
+                y2: styled.height
+                GradientStop { position: 0; color: MaterialTheme.mix(bar.colors.progressFill, bar.colors.gloss, .50, 1) }
+                GradientStop { position: .5; color: bar.colors.progressFill }
+                GradientStop { position: 1; color: MaterialTheme.mix(bar.colors.progressFill, bar.colors.segmentBorder, .15, 1) }
+            }
+
+            function fillPath() {
+                const full = Math.max(0, width - inset * 2)
+                const fillWidth = full * bar.amount
+                const paintHeight = Math.max(0, height - inset * 2)
+                const shape = bar.shape === "plain" ? "square" : bar.shape
+                if (fillWidth <= 0 || paintHeight <= 0)
+                    return ""
+                if (bar.style !== "blocks")
+                    return Geometry.frame(inset, inset, fillWidth, paintHeight, cap, shape)
+                const paths = []
+                for (let x = 0; x < fillWidth; x += 11)
+                    paths.push(Geometry.frame(inset + x, inset, Math.min(9, fillWidth - x), paintHeight, cap, shape))
+                return paths.join(" ")
+            }
+
+            ShapePath {
+                strokeWidth: bar.isLine ? -1 : 1
+                strokeColor: bar.colors.segmentBorder
+                fillColor: bar.colors.progressTrack
+                PathSvg { path: styled.outline }
+            }
+            ShapePath {
+                strokeWidth: -1
+                fillColor: bar.colors.progressFill
+                fillGradient: bar.style === "gloss" || bar.style === "blocks" ? styled.gloss : null
+                PathSvg { path: styled.filled }
+            }
+        }
+    }
+
+    Rectangle {
+        id: track
+        visible: bar.shape === "material"
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
+        height: bar.trackHeight
         color: bar.colors.progressTrack
         radius: bar.isLine ? height / 2 : 0
         border.width: bar.isLine ? 0 : 1

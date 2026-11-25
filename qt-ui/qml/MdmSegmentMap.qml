@@ -8,7 +8,8 @@ Canvas {
     property var colors: MaterialTheme.palette.mdm
     property bool paintingPaused: false
 
-    implicitHeight: 15
+    property real baseHeight: 15
+    implicitHeight: Math.round(baseHeight * (WindowAppearance.connectionBlockSize ?? 100) / 100)
     renderTarget: Canvas.Image
     Accessible.role: Accessible.Graphic
     Accessible.name: qsTr("Downloaded byte ranges")

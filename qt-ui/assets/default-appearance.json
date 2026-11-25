@@ -12,7 +12,7 @@
   "mh-glass-material": "mdm-classic",
   "mh-glass-progress-material": "liquid-glass",
   "mh-glass-progress-shape": "rounded",
-  "mh-glass-qt-appearance": "{\"mainMode\":\"desktop\",\"detailsMode\":\"desktop\",\"mainMedia\":\"\",\"detailsMedia\":\"\",\"mainColor\":\"\",\"detailsColor\":\"\",\"progressShape\":\"round\",\"progressLayout\":\"pill-segments\",\"progressAnimation\":\"water\",\"progressLighting\":\"cross\",\"connectionShape\":\"material\",\"connectionAnimation\":\"water\",\"connectionLighting\":\"frost\",\"graphShape\":\"area\",\"graphAnimation\":\"water\",\"graphLighting\":\"caustics\",\"tint\":\"#7298bc\",\"colorTheme\":null,\"forcedAccent\":\"\",\"reducedMotion\":false,\"progressPalette\":\"grape-taffy\",\"connectionPalette\":\"emerald\",\"graphPalette\":\"aurora\",\"cornerRadius\":12,\"cornerPlacement\":\"top\",\"mdmMode\":\"system\"}",
+  "mh-glass-qt-appearance": "{\"mainMode\":\"desktop\",\"detailsMode\":\"desktop\",\"mainMedia\":\"\",\"detailsMedia\":\"\",\"mainColor\":\"\",\"detailsColor\":\"\",\"progressShape\":\"material\",\"progressLayout\":\"pill-segments\",\"progressAnimation\":\"water\",\"progressLighting\":\"cross\",\"connectionShape\":\"material\",\"connectionAnimation\":\"water\",\"connectionLighting\":\"frost\",\"graphShape\":\"area\",\"graphAnimation\":\"water\",\"graphLighting\":\"caustics\",\"tint\":\"#7298bc\",\"colorTheme\":null,\"forcedAccent\":\"\",\"reducedMotion\":false,\"progressPalette\":\"grape-taffy\",\"connectionPalette\":\"emerald\",\"graphPalette\":\"aurora\",\"cornerRadius\":12,\"cornerPlacement\":\"top\",\"mdmMode\":\"system\"}",
   "mh-glass-solid-details": "",
   "mh-glass-solid-main": "",
   "mh-glass-tint-strength": "16",

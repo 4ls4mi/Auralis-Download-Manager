@@ -171,7 +171,7 @@ Frame {
             GlassProgress {
                 objectName: "updateCardDownloadProgress"
                 Layout.fillWidth: true
-                Layout.preferredHeight: 11
+                baseHeight: 11
                 visible: card.hasProgress
                 value: card.completion
                 animated: visible && card.Window.visibility !== Window.Minimized

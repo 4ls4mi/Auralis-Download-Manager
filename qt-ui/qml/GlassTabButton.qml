@@ -11,15 +11,16 @@ TabButton {
     readonly property var profile: MaterialTheme.profile(material)
     readonly property var finish: MaterialTheme.buttonFinishes[profile.finish]
     readonly property bool emphasized: enabled && (checked || hovered || visualFocus || down)
-    readonly property color vividAccent: MaterialTheme.vividControlAccent(
+    readonly property string customTint: MaterialTheme.buttonColorOverride(material, accent)
+    readonly property color vividAccent: customTint || MaterialTheme.vividControlAccent(
         MaterialTheme.safeAccent(MaterialTheme.forcedAccent || accent, profile.light), profile.light)
-    readonly property color pigment: MaterialTheme.controlPigment(vividAccent, profile.secondary, finish.tint)
+    readonly property color pigment: customTint || MaterialTheme.controlPigment(vividAccent, profile.secondary, finish.tint)
     readonly property color face: MaterialTheme.mix(profile.buttonFace || profile.background, pigment,
         emphasized ? (down ? finish.press : hovered ? finish.hover : finish.selected)
             : MaterialTheme.controlIdleStrength(profile, finish), 1)
 
     hoverEnabled: true
-    palette.buttonText: MaterialTheme.controlTextInk(profile.ink, face)
+    palette.buttonText: MaterialTheme.controlTextInk(profile.textOverride || profile.ink, face)
 
     background: Rectangle {
         id: plate

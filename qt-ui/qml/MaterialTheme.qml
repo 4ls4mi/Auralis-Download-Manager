@@ -75,6 +75,7 @@ QtObject {
     property bool backdropAvailable: false
     property bool reducedMotion: false
     property var userMaterials: ({})
+    property var materialCustomizations: ({})
     property var colorTheme: null
     property string forcedAccent: ""
     property string progressPalette: "material"
@@ -348,7 +349,7 @@ QtObject {
     function profile(id) {
         const mdm = mdmProfile(id);
         if (mdm)
-            return mdm;
+            return applyMaterialColors(mdm, id);
         let result = Object.prototype.hasOwnProperty.call(builtins, id) ? builtins[id] : builtins.carbon;
         const stored = Object.prototype.hasOwnProperty.call(userMaterials, id) ? userMaterials[id] : null;
         if (stored) {
@@ -370,7 +371,7 @@ QtObject {
             });
         }
         if (!colorTheme)
-            return withAccent(result);
+            return applyMaterialColors(withAccent(result), id);
 
         const light = colorTheme.light === true;
         const contrast = preset({ light: light, shape: result.shape });
@@ -379,7 +380,7 @@ QtObject {
             ? Qt.rgba(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255, 1) : light ? "#e8f1fa" : "#172135";
         const ground = rgba(surface, 1);
         const tone = rgba(colorTheme.accent, 1);
-        return withAccent(Object.assign({}, result, {
+        return applyMaterialColors(withAccent(Object.assign({}, result, {
             light: light, text: contrast.text, ink: contrast.ink, muted: contrast.muted,
             divider: contrast.divider, positive: contrast.positive, caution: contrast.caution,
             destructive: contrast.destructive, accent: colorTheme.accent, secondary: colorTheme.secondary,
@@ -389,7 +390,68 @@ QtObject {
             rowSelectionFill: undefined, rowSelectionInk: undefined, summaryFill: undefined, summaryInk: undefined,
             background: Qt.rgba(ground.r * .78 + tone.r * .22, ground.g * .78 + tone.g * .22,
                                 ground.b * .78 + tone.b * .22, 1)
-        }));
+        })), id);
+    }
+
+    function applyMaterialColors(base, id) {
+        const custom = materialCustomizations[id];
+        if (!custom || !(custom.sidebar || custom.content || custom.menu || custom.text))
+            return base;
+
+        const layers = Object.assign({}, base.roleFaces);
+        const adjusted = {roleFaces: layers, textOverride: custom.text || ""};
+        const text = custom.text || base.ink;
+        const muted = custom.text || base.muted;
+        if (custom.sidebar) {
+            layers.sidebar = custom.sidebar;
+            adjusted.railFill = custom.sidebar;
+            adjusted.sidebarOverride = custom.sidebar;
+        }
+        if (custom.content) {
+            const ink = controlTextInk(text, custom.content);
+            const edge = relativeLuminance(ink) < relativeLuminance(custom.content) ? "#ffffff" : "#000000";
+            layers.content = custom.content;
+            layers.card = mix(custom.content, edge, .05, 1);
+            layers.field = mix(custom.content, edge, .09, 1);
+            layers.summary = layers.card;
+            layers.connections = layers.card;
+            adjusted.summaryFill = layers.summary;
+            adjusted.contentOverride = custom.content;
+        }
+        if (custom.menu) {
+            adjusted.menuSurface = custom.menu;
+            adjusted.menuOverride = custom.menu;
+        }
+
+        if (custom.sidebar || custom.text) {
+            const sidebar = custom.sidebar || (id === "violet-rail-wide-sweep" && base.railFill)
+                || layers.sidebar || base.background;
+            adjusted.sidebarInk = controlTextInk(custom.text || base.sidebarInk || base.ink, sidebar);
+            adjusted.sidebarMuted = controlTextInk(custom.text || base.sidebarMuted || base.muted, sidebar);
+        }
+        if (custom.content || custom.text) {
+            const center = layers.content || base.background;
+            adjusted.ink = controlTextInk(text, center);
+            adjusted.text = adjusted.ink;
+            adjusted.muted = controlTextInk(muted, center);
+            adjusted.rowSelectionInk = controlTextInk(custom.text || base.rowSelectionInk || base.ink,
+                base.rowSelectionFill || center);
+            adjusted.summaryInk = controlTextInk(custom.text || base.summaryInk || base.ink,
+                adjusted.summaryFill || base.summaryFill || layers.summary || center);
+            adjusted.titleInk = controlTextInk(text, layers.title || base.background);
+            adjusted.titleMuted = controlTextInk(muted, layers.title || base.background);
+            adjusted.footerInk = controlTextInk(text, layers.footer || base.background);
+            adjusted.footerMuted = controlTextInk(muted, layers.footer || base.background);
+        }
+        if (base.mdm) {
+            adjusted.mdm = Object.assign({}, base.mdm, {
+                tree: layers.sidebar, list: layers.content, field: layers.field,
+                menu: adjusted.menuSurface || base.mdm.menu,
+                text: adjusted.text || base.mdm.text, muted: adjusted.muted || base.mdm.muted,
+                selectionText: adjusted.rowSelectionInk || base.mdm.selectionText
+            });
+        }
+        return Object.assign({}, base, adjusted);
     }
 
     function resolvedPalette(selection, fallback, role) {
@@ -519,36 +581,76 @@ QtObject {
         const customHighlight = !forcedAccent && profile.menuHighlight;
         const highlight = customHighlight || (profile.light ? mix(vivid, "#ffffff", .42, 1) : vivid);
         const lightInk = relativeLuminance(highlight) < .179;
+        const surface = profile.menuSurface || mix(profile.background, profile.light ? "#ffffff" : "#080b15",
+            profile.light ? .47 : .27, 1);
+        const customized = Boolean(profile.menuOverride || profile.textOverride || profile.contentOverride);
+        const preferred = profile.textOverride || profile.ink;
         return {
             studio: profile.cleanStudio === true,
             showShortcuts: profile.cleanStudio === true && profile.light,
-            surface: profile.menuSurface || mix(profile.background, profile.light ? "#ffffff" : "#080b15", profile.light ? .47 : .27, 1),
-            ink: profile.ink,
-            muted: profile.muted,
-            icon: profile.cleanStudio ? profile.ink : safeAccent(profile.accent, profile.light),
-            danger: profile.destructive,
+            surface: surface,
+            ink: customized ? controlTextInk(preferred, surface) : profile.ink,
+            muted: customized ? controlTextInk(profile.textOverride || profile.muted, surface) : profile.muted,
+            icon: customized ? controlIconInk(profile.accent, surface)
+                : profile.cleanStudio ? profile.ink : safeAccent(profile.accent, profile.light),
+            danger: customized ? controlTextInk(profile.destructive, surface) : profile.destructive,
             border: rgba(profile.surfaceLine || profile.divider, profile.cleanStudio ? .91 : .42),
             highlight: highlight,
-            highlightInk: lightInk ? "#ffffff" : "#050810",
+            highlightInk: customized ? controlTextInk(preferred, highlight) : lightInk ? "#ffffff" : "#050810",
             pressed: mix(highlight, lightInk ? "#000000" : "#ffffff", .15, 1),
             rail: customHighlight && profile.menuRail ? profile.menuRail : lightInk ? "#a9f5ff" : "#101e35"
         };
     }
 
+    readonly property var buttonPresets: ({
+        cool: {accent: "#5475dc", secondary: "#9273d9", positive: "#1da58b", caution: "#d9a34f", destructive: "#d8537c"},
+        warm: {accent: "#dd8257", secondary: "#be6e9e", positive: "#478b61", caution: "#d1a048", destructive: "#c64f61"}
+    })
+
+    readonly property var actionHues: ({
+        add: ["#55f38e", "#077d48"], torrent: ["#adf766", "#537b0a"],
+        start: ["#42d9ff", "#00779d"], pause: ["#ffc44e", "#976007"],
+        stop: ["#ff8e75", "#b14435"], remove: ["#ff7498", "#c03259"],
+        check: ["#f68bc8", "#a93478"], settings: ["#c09aff", "#6d35bc"],
+        clock: ["#67e8e9", "#007d82"], queueStart: ["#8d9dff", "#4a4cc2"],
+        queueStop: ["#e9a4ff", "#893bb2"], downloads: ["#ff8d9c", "#aa3050"],
+        activity: ["#58e0bd", "#077967"], complete: ["#9ce57e", "#437623"],
+        tray: ["#88efb6", "#097c5c"], minimize: ["#69dbff", "#0877a5"],
+        maximize: ["#bd9fff", "#6941a6"], file: ["#ffbd73", "#976020"],
+        details: ["#a5afff", "#5149ab"], keys: ["#e2a2f7", "#8d3aa8"]
+    })
+    readonly property var actionButtonRoles: ({
+        add: "positive", torrent: "positive", start: "positive", activity: "positive", complete: "positive",
+        pause: "caution", file: "caution", stop: "destructive", remove: "destructive",
+        check: "secondary", clock: "secondary", keys: "secondary", queueStop: "secondary", maximize: "secondary"
+    })
+
+    function buttonRole(fallback, material) {
+        const base = profile(material);
+        for (const role of ["accent", "positive", "caution", "destructive", "secondary"]) {
+            if (Qt.colorEqual(fallback, base[role]))
+                return role;
+        }
+        for (const symbol of Object.keys(actionButtonRoles)) {
+            if (actionHues[symbol].some(color => Qt.colorEqual(fallback, color)))
+                return actionButtonRoles[symbol];
+        }
+        return "accent";
+    }
+
+    function buttonColorOverride(material, fallback, role = "") {
+        const custom = materialCustomizations[material];
+        const mode = custom?.buttonPalette;
+        const colors = mode === "custom" ? custom.buttonColors : buttonPresets[mode];
+        return colors?.[role || buttonRole(fallback, material)] || "";
+    }
+
+    function buttonTint(material, fallback, role = "") {
+        return buttonColorOverride(material, fallback, role) || forcedAccent || fallback;
+    }
+
     function actionColor(symbol, light) {
-        const hues = {
-            add: ["#55f38e", "#077d48"], torrent: ["#adf766", "#537b0a"],
-            start: ["#42d9ff", "#00779d"], pause: ["#ffc44e", "#976007"],
-            stop: ["#ff8e75", "#b14435"], remove: ["#ff7498", "#c03259"],
-            check: ["#f68bc8", "#a93478"], settings: ["#c09aff", "#6d35bc"],
-            clock: ["#67e8e9", "#007d82"], queueStart: ["#8d9dff", "#4a4cc2"],
-            queueStop: ["#e9a4ff", "#893bb2"], downloads: ["#ff8d9c", "#aa3050"],
-            activity: ["#58e0bd", "#077967"], complete: ["#9ce57e", "#437623"],
-            tray: ["#88efb6", "#097c5c"], minimize: ["#69dbff", "#0877a5"],
-            maximize: ["#bd9fff", "#6941a6"], file: ["#ffbd73", "#976020"],
-            details: ["#a5afff", "#5149ab"], keys: ["#e2a2f7", "#8d3aa8"]
-        };
-        const colors = hues[symbol];
+        const colors = actionHues[symbol];
         return colors ? colors[light ? 1 : 0] : palette.accent;
     }
 

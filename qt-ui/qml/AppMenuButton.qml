@@ -15,13 +15,18 @@ Basic.Button {
     readonly property var profile: MaterialTheme.palette
     readonly property var finish: MaterialTheme.buttonFinishes[profile.finish]
     readonly property bool emphasized: enabled && (hovered || visualFocus || down || menuOpen)
-    readonly property color actionAccent: MaterialTheme.vividControlAccent(MaterialTheme.forcedAccent || accent,
+    readonly property string customTint: MaterialTheme.buttonColorOverride(MaterialTheme.current, accent)
+    readonly property bool customized: Boolean(customTint || profile.menuOverride || profile.textOverride || profile.contentOverride)
+    readonly property color actionAccent: customTint || MaterialTheme.vividControlAccent(MaterialTheme.forcedAccent || accent,
         profile.light)
-    readonly property color pigment: MaterialTheme.controlPigment(actionAccent, profile.secondary, finish.tint)
+    readonly property color pigment: customTint || MaterialTheme.controlPigment(actionAccent, profile.secondary, finish.tint)
     readonly property real idleStrength: MaterialTheme.controlIdleStrength(profile, finish)
     readonly property color idleFace: MaterialTheme.mix(colors.surface, pigment, idleStrength * .79, 1)
     readonly property color face: MaterialTheme.controlHighlight(pigment, down, hovered || visualFocus)
-    readonly property color activeInk: MaterialTheme.contrastInk(face)
+    readonly property color activeInk: customized
+        ? MaterialTheme.controlTextInk(profile.textOverride || colors.ink, face) : MaterialTheme.contrastInk(face)
+    readonly property color restingInk: customized
+        ? MaterialTheme.controlTextInk(profile.textOverride || idleInk, idleFace) : idleInk
 
     hoverEnabled: true
     leftPadding: 11
@@ -30,7 +35,7 @@ Basic.Button {
     bottomPadding: 5
     font.pixelSize: TypographyScale.pixels(14)
     font.weight: Font.Medium
-    palette.buttonText: railIcon.length ? "transparent" : emphasized ? activeInk : idleInk
+    palette.buttonText: railIcon.length ? "transparent" : emphasized ? activeInk : restingInk
     palette.highlightedText: activeInk
     Accessible.name: text.replace("&", "")
     ToolTip.visible: railIcon.length > 0 && hovered && !menuOpen
@@ -45,8 +50,8 @@ Basic.Button {
         symbol: button.railIcon
         relief: button.enabled
         surface: button.emphasized ? button.face : button.idleFace
-        ink: !button.enabled ? button.colors.muted
-            : MaterialTheme.controlIconInk(button.actionAccent, surface)
+        ink: !button.enabled && !button.customized ? button.colors.muted
+            : MaterialTheme.controlIconInk(button.enabled ? button.actionAccent : button.colors.muted, surface)
     }
 
     background: Item {

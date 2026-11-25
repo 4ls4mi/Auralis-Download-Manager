@@ -15,24 +15,39 @@ Basic.Button {
     readonly property var materialPalette: MaterialTheme.profile(material)
     readonly property var mdmColors: materialPalette.mdm
     readonly property var finish: MaterialTheme.buttonFinishes[materialPalette.finish]
-    readonly property color activeAccent: MaterialTheme.safeAccent(MaterialTheme.forcedAccent || accent, materialPalette.light)
-    readonly property color vividAccent: MaterialTheme.vividControlAccent(activeAccent, materialPalette.light)
+    readonly property string customTint: MaterialTheme.buttonColorOverride(material, accent, danger ? "destructive" : "")
+    readonly property color activeAccent: customTint || MaterialTheme.safeAccent(MaterialTheme.forcedAccent || accent, materialPalette.light)
+    readonly property color vividAccent: customTint || MaterialTheme.vividControlAccent(activeAccent, materialPalette.light)
     readonly property color neutralFace: materialPalette.buttonFace || materialPalette.background
-    readonly property color facePigment: MaterialTheme.controlPigment(vividAccent, materialPalette.secondary, finish.tint)
+    readonly property color facePigment: customTint || MaterialTheme.controlPigment(vividAccent, materialPalette.secondary, finish.tint)
     readonly property real backingOpacity: finish.opacity + (1 - finish.opacity) * MaterialTheme.opacityFor(material)
     readonly property color restingFace: MaterialTheme.mix(neutralFace, facePigment,
         MaterialTheme.controlIdleStrength(materialPalette, finish), backingOpacity)
     readonly property bool selectedFace: filled || checked || highlighted
     readonly property real accentStrength: down ? finish.press : hovered ? finish.hover
         : visualFocus ? (finish.hover + finish.selected) / 2 : finish.selected
-    readonly property color engagedFace: MaterialTheme.mix(neutralFace, facePigment, accentStrength,
-        Math.max(.93, backingOpacity))
+    readonly property color engagedFace: customTint && selectedFace && !down && !hovered ? customTint
+        : MaterialTheme.mix(neutralFace, facePigment, accentStrength, Math.max(.93, backingOpacity))
     readonly property bool accentFill: enabled && (selectedFace || hovered || down || visualFocus)
-    readonly property color faceColor: accentFill ? engagedFace : restingFace
-    readonly property color buttonInk: mdmColors
+    readonly property bool adjustedText: Boolean(customTint || materialPalette.textOverride || materialPalette.contentOverride)
+    readonly property color nativeFace: mdmColors
+        ? !enabled ? mdmColors.buttonDisabled : selectedFace ? mdmColors.buttonAccent
+            : down ? mdmColors.buttonPressed : hovered ? mdmColors.buttonHot : mdmColors.button
+        : neutralFace
+    readonly property color mdmButtonFace: mdmColors && customTint && enabled
+        ? selectedFace ? customTint : MaterialTheme.mix(nativeFace, customTint, down ? .42 : hovered ? .64 : .36, 1)
+        : nativeFace
+    readonly property color faceColor: mdmColors && adjustedText ? mdmButtonFace : accentFill ? engagedFace : restingFace
+    readonly property color contrastFace: !enabled && !mdmColors && adjustedText
+        ? MaterialTheme.mix(materialPalette.roleFaces?.content || materialPalette.background, faceColor, faceColor.a * .54, 1)
+        : faceColor
+    readonly property color buttonInk: mdmColors && !adjustedText
         ? !enabled ? mdmColors.textDisabled : selectedFace ? mdmColors.buttonAccentText : mdmColors.buttonText
-        : MaterialTheme.controlTextInk(materialPalette.text, faceColor)
-    readonly property color iconInk: mdmColors ? buttonInk : !enabled ? MaterialTheme.mix(materialPalette.muted, neutralFace, .36, 1)
+        : MaterialTheme.controlTextInk(materialPalette.textOverride || (enabled || !adjustedText
+            ? materialPalette.text : materialPalette.muted), contrastFace)
+    readonly property color iconInk: mdmColors ? buttonInk : !enabled
+        ? adjustedText ? MaterialTheme.controlIconInk(materialPalette.muted, contrastFace)
+            : MaterialTheme.mix(materialPalette.muted, neutralFace, .36, 1)
         : MaterialTheme.controlIconInk(vividAccent, faceColor)
     property real faceOffset: enabled && !mdmColors ? down ? 1.55 : hovered ? -.45 : 0 : 0
 
@@ -88,26 +103,23 @@ Basic.Button {
             sourceComponent: Rectangle {
                 id: classicButton
                 anchors.fill: parent
-                radius: control.materialPalette.buttonRadius
+                radius: control.materialPalette.buttonRadius ?? 0
                 gradient: control.materialPalette.mdmGlossyButtons ? classicGloss : null
                 Gradient {
                     id: classicGloss
                     GradientStop {
                         position: 0
-                        color: MaterialTheme.mix(classicButton.color, control.mdmColors.gloss, .46, 1)
+                        color: MaterialTheme.mix(classicButton.color, control.mdmColors?.gloss || classicButton.color, .46, 1)
                     }
                     GradientStop { position: .55; color: classicButton.color }
                     GradientStop {
                         position: 1
-                        color: MaterialTheme.mix(classicButton.color, control.mdmColors.buttonBorder, .22, 1)
+                        color: MaterialTheme.mix(classicButton.color, control.mdmColors?.buttonBorder || classicButton.color, .22, 1)
                     }
                 }
-                color: !control.enabled ? control.mdmColors.buttonDisabled
-                    : control.selectedFace ? control.mdmColors.buttonAccent
-                    : control.down ? control.mdmColors.buttonPressed
-                    : control.hovered ? control.mdmColors.buttonHot : control.mdmColors.button
+                color: control.mdmButtonFace
                 border.width: 1
-                border.color: !control.enabled ? control.mdmColors.buttonDisabledBorder
+                border.color: !control.mdmColors ? "transparent" : !control.enabled ? control.mdmColors.buttonDisabledBorder
                     : control.visualFocus ? control.mdmColors.focusRing : control.mdmColors.buttonBorder
             }
         }
