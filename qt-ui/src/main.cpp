@@ -253,8 +253,20 @@ public:
         updateProgressIcon(downloadSnapshot());
     }
 
-    void exercise(std::function<void(bool)> finish)
+    void exercise(std::function<void(bool)> finish, int attemptsLeft = 3)
     {
+        // A relaunched progress window can take focus from the tray popup while
+        // the resumed download is still propagating to the QML snapshot.
+        // Retry the complete menu checks after those events have settled.
+        finish = [this, complete = std::move(finish), attemptsLeft](bool passed) mutable {
+            if (passed || attemptsLeft <= 1) {
+                complete(passed);
+                return;
+            }
+            QTimer::singleShot(250, this, [this, complete = std::move(complete), attemptsLeft]() mutable {
+                exercise(std::move(complete), attemptsLeft - 1);
+            });
+        };
         const QVariantList downloads = m_engine.dashboard().value(QStringLiteral("downloads")).toList();
         for (const auto &value : downloads) {
             const auto item = value.toMap();
