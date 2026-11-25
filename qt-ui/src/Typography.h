@@ -44,6 +44,7 @@ public:
 
     Q_INVOKABLE bool applyFontPreferences(const QString &englishFamily, const QString &arabicFamily, int sizePercent);
     Q_INVOKABLE bool setInterfaceScalePercent(int percent);
+    Q_INVOKABLE bool previewInterfaceScalePercent(int percent);
     Q_INVOKABLE QFont fontForText(const QString &text) const;
     Q_INVOKABLE QFont previewFont(const QString &family) const;
     Q_INVOKABLE QString numeralMarkup(const QString &text, const QString &family) const;
@@ -59,6 +60,7 @@ private:
     QFont fontWithFamily(const QString &family) const;
     void applyInterfaceFont() const;
     void refreshFontOptions();
+    void loadImportedFonts();
     uint numeralCoverage(const QString &family) const;
 
     const QFont m_systemFont;
@@ -68,11 +70,14 @@ private:
     mutable QHash<QString, uint> m_numeralCoverage;
     QVariantList m_englishFontOptions;
     QVariantList m_arabicFontOptions;
+    QStringList m_importedFamilies;
     QString m_preferredEnglishFamily;
     QString m_preferredArabicFamily;
     QString m_englishFamily;
     QString m_arabicFamily;
     int m_fontSizePercent;
+    int m_defaultWeight;
     int m_interfaceScalePercent;
+    int m_savedInterfaceScalePercent;
     const int m_activeInterfaceScalePercent;
 };

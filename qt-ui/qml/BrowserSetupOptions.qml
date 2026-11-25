@@ -170,6 +170,13 @@ ColumnLayout {
     }
 
     Label {
+        Layout.fillWidth: true
+        wrapMode: Text.WordWrap
+        color: root.colors.muted
+        text: qsTr("With the Auralis extension installed, download capture supports Chrome, Edge, Brave, Chromium, Vivaldi, Opera and Opera GX, Helium, Thorium, Firefox, Zen, LibreWolf, Floorp, and Waterfox. Safari is supported on macOS. Install the extension separately in each browser.")
+    }
+
+    Label {
         objectName: "browserSetupStatus"
         Layout.fillWidth: true
         wrapMode: Text.WordWrap

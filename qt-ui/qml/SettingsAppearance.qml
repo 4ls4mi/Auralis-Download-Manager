@@ -959,7 +959,7 @@ GridLayout {
         Layout.fillWidth: true
         Layout.column: 0
         Layout.columnSpan: 2
-        Layout.row: 3
+        Layout.row: root.activeTab === 1 && !root.sideTabs ? 4 : 3
         GlassSwitch {
             text: qsTr("Reduce animations")
             checked: MaterialTheme.reducedMotion
@@ -977,7 +977,7 @@ GridLayout {
         Layout.fillWidth: true
         Layout.column: 0
         Layout.columnSpan: 2
-        Layout.row: 4
+        Layout.row: root.activeTab === 1 && !root.sideTabs ? 5 : 4
         text: root.status
         color: root.failed ? root.colors.destructive : root.colors.positive
         wrapMode: Text.WordWrap

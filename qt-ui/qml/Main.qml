@@ -1386,15 +1386,15 @@ AuralisWindow {
                 }
                 RowLayout {
                     id: titleActions
-                    spacing: 8
+                    spacing: root.classicLayout ? 3 : 8
 
                     GlassButton {
                         id: donationButton
                         objectName: "mainDonatePatreon"
                         action: settingsWindow.donationAction
-                        Layout.preferredWidth: 35
-                        Layout.preferredHeight: 30
-                        padding: 3
+                        Layout.preferredWidth: root.classicLayout ? 25 : 35
+                        Layout.preferredHeight: root.classicLayout ? 21 : 30
+                        padding: root.classicLayout ? 1 : 3
                         accent: root.colors.secondary
                         Accessible.name: text
                         Accessible.role: Accessible.Link
@@ -1415,22 +1415,22 @@ AuralisWindow {
                         readonly property string viewLabel: root.compactView ? qsTr("Full view") : qsTr("Compact view")
                         readonly property string viewHint: root.compactView ? qsTr("Return to the full layout")
                             : qsTr("Switch to the compact layout")
-                        Layout.preferredHeight: 30
+                        Layout.preferredHeight: root.classicLayout ? 22 : 30
                         text: viewLabel
                         font.weight: Font.DemiBold
                         accent: root.colors.accent
                         filled: root.compactView
-                        padding: 3
-                        leftPadding: 8
-                        rightPadding: 8
+                        padding: root.classicLayout ? 1 : 3
+                        leftPadding: root.classicLayout ? 3 : 8
+                        rightPadding: root.classicLayout ? 4 : 8
                         Accessible.name: viewLabel
                         Accessible.description: viewHint
                         contentItem: RowLayout {
-                            spacing: 5
+                            spacing: root.classicLayout ? 2 : 5
                             transform: Translate { y: compactButton.faceOffset }
                             DashboardIcon {
-                                Layout.preferredWidth: 18
-                                Layout.preferredHeight: 18
+                                Layout.preferredWidth: root.classicLayout ? 14 : 18
+                                Layout.preferredHeight: root.classicLayout ? 14 : 18
                                 symbol: root.compactView ? "fullView" : "compactView"
                                 ink: compactButton.iconInk
                                 surface: compactButton.faceColor

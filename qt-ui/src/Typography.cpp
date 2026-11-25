@@ -2,6 +2,7 @@
 
 #include <QApplication>
 #include <QCoreApplication>
+#include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -13,6 +14,7 @@
 #include <QSettings>
 #include <QStandardPaths>
 
+#include <algorithm>
 #include <cmath>
 
 namespace {
@@ -31,6 +33,14 @@ struct FontSource
 // The archive names and family names in the supplied files are recorded in
 // assets/fonts/SOURCES.md. Keep preferred typographic names before style aliases.
 const QList<FontSource> EnglishFonts{
+    {QStringLiteral("Arial"), {}, {}},
+    {QStringLiteral("Segoe UI"), {}, {}},
+    {QStringLiteral("Aptos"), {}, {}},
+    {QStringLiteral("Calibri"), {}, {}},
+    {QStringLiteral("Tahoma"), {}, {}},
+    {QStringLiteral("Verdana"), {}, {}},
+    {QStringLiteral("Georgia"), {}, {}},
+    {QStringLiteral("Trebuchet MS"), {}, {}},
     {QStringLiteral("Talina"), QStringLiteral("talina-demo"), {QStringLiteral("Talina DEMO")}},
     {QStringLiteral("Milkyway"), QStringLiteral("milkyway"), {}},
     {QStringLiteral("Mochi Boom"), QStringLiteral("mochi-boom-demo"),
@@ -41,6 +51,12 @@ const QList<FontSource> EnglishFonts{
          QStringLiteral("Qurova DEMO Med"), QStringLiteral("Qurova DEMO SemBd")}},
 };
 const QList<FontSource> ArabicFonts{
+    {QStringLiteral("Arial"), {}, {}},
+    {QStringLiteral("Segoe UI"), {}, {}},
+    {QStringLiteral("Tahoma"), {}, {}},
+    {QStringLiteral("Aptos"), {}, {}},
+    {QStringLiteral("Noto Naskh Arabic"), {}, {}},
+    {QStringLiteral("Times New Roman"), {}, {}},
     {QStringLiteral("Kidzhood Arabic"), QStringLiteral("kidzhood-arabic-demo"),
         {QStringLiteral("Kidzhood Arabic DEMO"), QStringLiteral("Kidzhood Arabic DEMO Light")}},
     {QStringLiteral("Tinta Arabic"), QStringLiteral("tinta-arabic"),
@@ -254,6 +270,8 @@ void loadFonts(const QStringList &directories, const QList<FontSource> &catalog,
                QFontDatabase::WritingSystem script)
 {
     for (const auto &font : catalog) {
+        if (font.fileStem.isEmpty())
+            continue;
         for (const auto &directory : directories) {
             const auto path = privateFontPath(directory, font);
             if (QFileInfo(path).isSymLink())
@@ -291,20 +309,7 @@ void applyScriptFallback(QChar::Script script, const QStringList &inherited,
 
 int Typography::applyStartupInterfaceScale()
 {
-    const int percent = savedPercent(QSettings().value(InterfaceScaleKey), MaximumInterfacePercent);
-    if (percent == DefaultPercent)
-        return percent;
-
-    bool valid = false;
-    const double externalScale = qgetenv("QT_SCALE_FACTOR").toDouble(&valid);
-    const double baseScale = valid && std::isfinite(externalScale) && externalScale > 0
-        ? externalScale : 1.0;
-    const double scale = baseScale * (percent / 100.0);
-    if (!std::isfinite(scale) || scale <= 0
-        || !qputenv("QT_SCALE_FACTOR", QByteArray::number(scale, 'g', 12))) {
-        return DefaultPercent;
-    }
-    return percent;
+    return savedPercent(QSettings().value(InterfaceScaleKey), MaximumInterfacePercent);
 }
 
 Typography::Typography(int activeInterfaceScalePercent, QObject *parent)
@@ -314,7 +319,9 @@ Typography::Typography(int activeInterfaceScalePercent, QObject *parent)
       m_arabicFallbacks(QFontDatabase::applicationFallbackFontFamilies(QChar::Script_Arabic)),
       m_numeralFamilies(numeralFallbacks(m_systemFont)),
       m_fontSizePercent(DefaultPercent),
+      m_defaultWeight(QFont::Normal),
       m_interfaceScalePercent(DefaultPercent),
+      m_savedInterfaceScalePercent(DefaultPercent),
       m_activeInterfaceScalePercent(activeInterfaceScalePercent)
 {
     const auto bundled = QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("interface-fonts"));
@@ -324,6 +331,7 @@ Typography::Typography(int activeInterfaceScalePercent, QObject *parent)
     });
     loadFonts(fontDirectories, EnglishFonts, QFontDatabase::Latin);
     loadFonts(fontDirectories, ArabicFonts, QFontDatabase::Arabic);
+    loadImportedFonts();
     refreshFontOptions();
     const QSettings settings;
     const auto fonts = settings.value(FontPreferencesKey).toMap();
@@ -334,7 +342,11 @@ Typography::Typography(int activeInterfaceScalePercent, QObject *parent)
     m_arabicFamily = installedFamily(m_preferredArabicFamily, m_arabicFontOptions);
     m_fontSizePercent = savedPercent(fonts.value(QStringLiteral("sizePercent"), settings.value(FontSizeKey)),
                                      MaximumFontPercent);
+    const int savedWeight = fonts.value(QStringLiteral("weight"), QFont::Normal).toInt();
+    m_defaultWeight = savedWeight >= QFont::Thin && savedWeight <= QFont::Black
+        ? savedWeight : QFont::Normal;
     m_interfaceScalePercent = savedPercent(settings.value(InterfaceScaleKey), MaximumInterfacePercent);
+    m_savedInterfaceScalePercent = m_interfaceScalePercent;
     applyInterfaceFont();
 }
 
@@ -343,6 +355,51 @@ void Typography::refreshFontOptions()
     m_numeralCoverage.clear();
     m_englishFontOptions = fontOptions(EnglishFonts, QFontDatabase::Latin);
     m_arabicFontOptions = fontOptions(ArabicFonts, QFontDatabase::Arabic);
+    const auto appendImported = [this](QVariantList &options) {
+        for (const auto &family : m_importedFamilies) {
+            const auto key = familyKey(family);
+            const bool listed = std::any_of(options.cbegin(), options.cend(), [&key](const QVariant &entry) {
+                const auto option = entry.toMap();
+                return option.value(QStringLiteral("available")).toBool()
+                    && familyKey(option.value(QStringLiteral("value")).toString()) == key;
+            });
+            if (!listed)
+                options.append(QVariantMap{{QStringLiteral("label"), family},
+                                           {QStringLiteral("available"), true},
+                                           {QStringLiteral("value"), family}});
+        }
+    };
+    appendImported(m_englishFontOptions);
+    appendImported(m_arabicFontOptions);
+}
+
+void Typography::loadImportedFonts()
+{
+    const auto folder = privateFontFolder();
+    if (folder.isEmpty() || QFileInfo(folder).isSymLink())
+        return;
+    const QDir directory(folder);
+    const auto files = directory.entryInfoList({QStringLiteral("*.font")},
+                                                QDir::Files | QDir::NoSymLinks, QDir::Name);
+    for (const auto &entry : files) {
+        const auto bytes = readFontFile(entry.absoluteFilePath());
+        if (bytes.isEmpty())
+            continue;
+        const int id = QFontDatabase::addApplicationFontFromData(bytes);
+        if (id < 0)
+            continue;
+        const auto families = QFontDatabase::applicationFontFamilies(id);
+        const auto family = families.isEmpty() ? QString() : families.constFirst();
+        if (family.isEmpty()) {
+            QFontDatabase::removeApplicationFont(id);
+            continue;
+        }
+        const auto key = familyKey(family);
+        if (std::none_of(m_importedFamilies.cbegin(), m_importedFamilies.cend(), [&key](const QString &known) {
+                return familyKey(known) == key;
+            }))
+            m_importedFamilies.append(family);
+    }
 }
 
 QString Typography::importFont(const QUrl &file)
@@ -358,36 +415,37 @@ QString Typography::importFont(const QUrl &file)
     if (id < 0)
         return tr("Could not load the selected font file.");
 
-    const QRawFont face(bytes, 16);
-    const auto saveFont = [&]() -> QString {
-        for (const auto script : {QFontDatabase::Latin, QFontDatabase::Arabic}) {
-            const bool arabic = script == QFontDatabase::Arabic;
-            const auto &catalog = arabic ? ArabicFonts : EnglishFonts;
-            const auto &existing = arabic ? m_arabicFontOptions : m_englishFontOptions;
-            for (const auto &font : catalog) {
-                if (verifiedFontFamily(id, font, face, script).isEmpty())
-                    continue;
-                if (!installedFamily(font.name, existing).isEmpty())
-                    return tr("This font is already available in Auralis.");
-                const auto folder = privateFontFolder();
-                if (folder.isEmpty() || QFileInfo(folder).isSymLink() || !QDir().mkpath(folder))
-                    return tr("Could not save the font for Auralis.");
-                const auto destination = privateFontPath(folder, font);
-                if (QFileInfo(destination).isSymLink())
-                    return tr("Could not save the font for Auralis.");
-                QSaveFile copy(destination);
-                if (!copy.open(QIODevice::WriteOnly) || copy.write(bytes) != bytes.size() || !copy.commit())
-                    return tr("Could not save the font for Auralis.");
-                return {};
-            }
-        }
-        return tr("The file does not match a listed interface font or does not support its language.");
-    };
-    const auto problem = saveFont();
-    if (!problem.isEmpty()) {
+    const auto families = QFontDatabase::applicationFontFamilies(id);
+    const auto family = families.isEmpty() ? QString() : families.constFirst();
+    if (family.isEmpty()) {
         QFontDatabase::removeApplicationFont(id);
-        return problem;
+        return tr("Could not find a usable font family in this file.");
     }
+    const auto key = familyKey(family);
+    if (std::any_of(m_importedFamilies.cbegin(), m_importedFamilies.cend(), [&key](const QString &known) {
+            return familyKey(known) == key;
+        })) {
+        QFontDatabase::removeApplicationFont(id);
+        return tr("This font is already available in Auralis.");
+    }
+    const auto folder = privateFontFolder();
+    if (folder.isEmpty() || QFileInfo(folder).isSymLink() || !QDir().mkpath(folder)) {
+        QFontDatabase::removeApplicationFont(id);
+        return tr("Could not save the font for Auralis.");
+    }
+    const auto filename = QString::fromLatin1(QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex())
+        + QStringLiteral(".font");
+    const auto destination = QDir(folder).filePath(filename);
+    if (QFileInfo(destination).isSymLink()) {
+        QFontDatabase::removeApplicationFont(id);
+        return tr("Could not save the font for Auralis.");
+    }
+    QSaveFile copy(destination);
+    if (!copy.open(QIODevice::WriteOnly) || copy.write(bytes) != bytes.size() || !copy.commit()) {
+        QFontDatabase::removeApplicationFont(id);
+        return tr("Could not save the font for Auralis.");
+    }
+    m_importedFamilies.append(family);
     refreshFontOptions();
     emit fontOptionsChanged();
     return {};
@@ -413,6 +471,7 @@ QFont Typography::fontForText(const QString &text) const
 QFont Typography::fontWithFamily(const QString &family) const
 {
     QFont font = m_systemFont;
+    font.setWeight(static_cast<QFont::Weight>(m_defaultWeight));
     if (!family.isEmpty())
         font.setFamilies(withPreferredFamily(font.families(), family));
     if (m_fontSizePercent != DefaultPercent) {
@@ -524,7 +583,8 @@ bool Typography::applyFontPreferences(const QString &englishFamily, const QStrin
     const auto preferredArabic = arabic.isEmpty() && m_arabicFamily.isEmpty() ? m_preferredArabicFamily : arabic;
     const QVariantMap fonts{{QStringLiteral("englishFamily"), preferredEnglish},
                             {QStringLiteral("arabicFamily"), preferredArabic},
-                            {QStringLiteral("sizePercent"), sizePercent}};
+                            {QStringLiteral("sizePercent"), sizePercent},
+                            {QStringLiteral("weight"), m_defaultWeight}};
     if (!savePreference(FontPreferencesKey, fonts))
         return false;
 
@@ -540,8 +600,26 @@ bool Typography::applyFontPreferences(const QString &englishFamily, const QStrin
 
 bool Typography::setInterfaceScalePercent(int percent)
 {
-    if (percent < MinimumPercent || percent > MaximumInterfacePercent
-        || !savePreference(InterfaceScaleKey, percent))
+    if (percent < MinimumPercent || percent > MaximumInterfacePercent)
+        return false;
+    if (!savePreference(InterfaceScaleKey, percent)) {
+        if (m_interfaceScalePercent != m_savedInterfaceScalePercent) {
+            m_interfaceScalePercent = m_savedInterfaceScalePercent;
+            emit interfaceScaleChanged();
+        }
+        return false;
+    }
+    m_savedInterfaceScalePercent = percent;
+    if (m_interfaceScalePercent != percent) {
+        m_interfaceScalePercent = percent;
+        emit interfaceScaleChanged();
+    }
+    return true;
+}
+
+bool Typography::previewInterfaceScalePercent(int percent)
+{
+    if (percent < MinimumPercent || percent > MaximumInterfacePercent)
         return false;
     if (m_interfaceScalePercent != percent) {
         m_interfaceScalePercent = percent;

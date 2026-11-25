@@ -40,6 +40,13 @@ Var LaunchArguments
 Var DeleteAppData
 Var DeleteSharedProfile
 Var AppDataCheckbox
+Var ShortcutOptionsChosen
+Var StartMenuShortcutCheckbox
+Var DesktopShortcutCheckbox
+Var TaskbarPinCheckbox
+Var CreateStartMenuShortcut
+Var CreateDesktopShortcut
+Var OpenForTaskbarPin
 Var UninstallAppHandle
 Var UninstallHostHandle
 Var UninstallEngineHandle
@@ -48,6 +55,7 @@ Var UninstallFailed
 !define MUI_PAGE_CUSTOMFUNCTION_PRE SkipInPassiveMode
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
+Page custom ShortcutOptionsPageCreate ShortcutOptionsPageLeave
 !define MUI_PAGE_CUSTOMFUNCTION_PRE SkipInPassiveMode
 !define MUI_FINISHPAGE_RUN "$INSTDIR\${APP_EXE}"
 !insertmacro MUI_PAGE_FINISH
@@ -109,6 +117,43 @@ Function SkipInPassiveMode
     ${EndIf}
 FunctionEnd
 
+Function ShortcutOptionsPageCreate
+    ${If} $Passive == 1
+    ${OrIf} $Upgrade == 1
+    ${OrIf} $NoRegistration == 1
+        Abort
+    ${EndIf}
+    nsDialogs::Create 1018
+    Pop $0
+    ${If} $0 == error
+        Abort
+    ${EndIf}
+    ${NSD_CreateLabel} 0 0 100% 18u "Choose which shortcuts to create when setup finishes."
+    Pop $0
+    ${NSD_CreateCheckbox} 0 25u 100% 13u "Create a Start menu shortcut"
+    Pop $StartMenuShortcutCheckbox
+    ${NSD_SetState} $StartMenuShortcutCheckbox ${BST_CHECKED}
+    ${NSD_CreateCheckbox} 0 44u 100% 13u "Create a desktop shortcut"
+    Pop $DesktopShortcutCheckbox
+    ${NSD_SetState} $DesktopShortcutCheckbox ${BST_CHECKED}
+    ${NSD_CreateCheckbox} 0 63u 100% 13u "Open Auralis so I can pin it to the taskbar"
+    Pop $TaskbarPinCheckbox
+    ${NSD_SetState} $TaskbarPinCheckbox ${BST_UNCHECKED}
+    ${NSD_CreateLabel} 12u 81u 93% 35u "Windows requires you to pin apps yourself. After Auralis opens, right-click its taskbar icon and choose Pin to taskbar."
+    Pop $0
+    nsDialogs::Show
+FunctionEnd
+
+Function ShortcutOptionsPageLeave
+    StrCpy $ShortcutOptionsChosen 1
+    ${NSD_GetState} $StartMenuShortcutCheckbox $0
+    StrCpy $CreateStartMenuShortcut $0
+    ${NSD_GetState} $DesktopShortcutCheckbox $0
+    StrCpy $CreateDesktopShortcut $0
+    ${NSD_GetState} $TaskbarPinCheckbox $0
+    StrCpy $OpenForTaskbarPin $0
+FunctionEnd
+
 # Refuse an in-use install before copying files. Leave a running instance and its data alone.
 Function AssertReplaceable
     Exch $0
@@ -166,14 +211,6 @@ Section "Install Auralis"
         WriteRegStr HKCU "${UNINSTALL_KEY}" "URLInfoAbout" "https://github.com/4ls4mi/Auralis-Download-Manager"
         WriteRegDWORD HKCU "${UNINSTALL_KEY}" "NoModify" 1
         WriteRegDWORD HKCU "${UNINSTALL_KEY}" "NoRepair" 1
-        # Refresh this installer-owned Start menu shortcut without modifying taskbar pins.
-        StrCpy $0 0x0002 # SHCNE_CREATE
-        ${If} ${FileExists} "$SMPROGRAMS\${PRODUCT}.lnk"
-            StrCpy $0 0x2000 # SHCNE_UPDATEITEM
-        ${EndIf}
-        CreateShortCut "$SMPROGRAMS\${PRODUCT}.lnk" "$INSTDIR\${APP_EXE}" "" "$INSTDIR\${SHORTCUT_ICON}" 0
-        # SHCNF_PATHW | SHCNF_FLUSHNOWAIT
-        System::Call 'shell32::SHChangeNotify(i r0, i 0x2005, w "$SMPROGRAMS\${PRODUCT}.lnk", p 0)'
     ${EndIf}
     Goto installed
 
@@ -191,6 +228,26 @@ Function .onInstSuccess
     ${If} $NoRegistration != 1
         # Refresh the existing executable icon without changing taskbar grouping.
         ExecWait '"$INSTDIR\${APP_EXE}" --refresh-taskbar-icon' $0
+        ${If} $ShortcutOptionsChosen == 1
+            ${If} $CreateStartMenuShortcut == ${BST_CHECKED}
+                CreateShortCut "$SMPROGRAMS\${PRODUCT}.lnk" "$INSTDIR\${APP_EXE}" "" "$INSTDIR\${SHORTCUT_ICON}" 0
+            ${Else}
+                Delete "$SMPROGRAMS\${PRODUCT}.lnk"
+            ${EndIf}
+            ${If} $CreateDesktopShortcut == ${BST_CHECKED}
+                CreateShortCut "$DESKTOP\${PRODUCT}.lnk" "$INSTDIR\${APP_EXE}" "" "$INSTDIR\${SHORTCUT_ICON}" 0
+            ${Else}
+                Delete "$DESKTOP\${PRODUCT}.lnk"
+            ${EndIf}
+        ${Else}
+            # Silent installs and upgrades keep the existing Start menu entry.
+            CreateShortCut "$SMPROGRAMS\${PRODUCT}.lnk" "$INSTDIR\${APP_EXE}" "" "$INSTDIR\${SHORTCUT_ICON}" 0
+        ${EndIf}
+        # SHCNE_UPDATEITEM | SHCNF_PATHW | SHCNF_FLUSHNOWAIT.
+        System::Call 'shell32::SHChangeNotify(i 0x2000, i 0x2005, w "$SMPROGRAMS\${PRODUCT}.lnk", p 0)'
+        ${If} $OpenForTaskbarPin == ${BST_CHECKED}
+            Exec '"$INSTDIR\${APP_EXE}"'
+        ${EndIf}
     ${EndIf}
     ${If} $Relaunch == 1
         Exec '"$INSTDIR\${APP_EXE}" $LaunchArguments'

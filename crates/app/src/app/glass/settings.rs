@@ -124,6 +124,8 @@ impl App {
         fields.push(json!({"key":"video_cookies_profile","label":"Video-helper browser profile","section":"Advanced","kind":"text","value":self.settings.video_cookies_profile}));
         fields.push(json!({"key":"cnl_on","label":"Enable Click’n’Load","section":"Advanced","kind":"boolean","value":self.settings.cnl_on}));
         fields.push(json!({"key":"cnl_sites","label":"Remembered Click’n’Load sites","section":"Advanced","kind":"table","columns":[{"label":"Site","kind":"text"},{"label":"Allowed","kind":"boolean"}],"value":self.settings.cnl_sites}));
+        fields.push(json!({"key":"remote_on","label":"Allow control from paired computers and phones","section":"Remote","kind":"boolean","value":self.settings.remote_on}));
+        fields.push(json!({"key":"remote_port","label":"Remote control port","section":"Remote","kind":"number","minimum":1024,"maximum":65535,"value":self.settings.remote_port}));
         fields.push(json!({"key":"proxy_pass","label":"Proxy password","section":"Connection","kind":"password","value":"","saved":!self.settings.proxy_pass.is_empty()}));
         if let Some(field)=fields.iter_mut().find(|f|f["key"]=="category_dirs") {
             field["columns"][0]["options"]=json!(Category::all().into_iter().map(|c|json!({"label":c.shown(),"value":c.key()})).collect::<Vec<_>>());
@@ -235,6 +237,8 @@ impl App {
                 "video_cookies_profile" => next.video_cookies_profile=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?,
                 "cnl_on" => next.cnl_on=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?,
                 "cnl_sites" => next.cnl_sites=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?,
+                "remote_on" => next.remote_on=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?,
+                "remote_port" => next.remote_port=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?,
                 "proxy_pass"=>{
                     let value=value.as_str().ok_or("Enter a password")?;
                     if !value.is_empty()||payload["clear"].as_bool()==Some(true){next.proxy_pass=value.to_owned();}
@@ -253,6 +257,7 @@ impl App {
             }
             if key=="proxy_mode"&&next.proxy_mode>3||key=="dns_mode"&&next.dns_mode>3||key=="duplicate_action"&&next.duplicate_action>3||key=="extract_subfolder"&&next.extract_subfolder>2 {return Err("Choose a valid option".into());}
             if key=="proxy_port"&&!next.proxy_port.is_empty()&&next.proxy_port.trim().parse::<u16>().ok().filter(|p|*p>0).is_none(){return Err("Proxy port must be 1–65535".into());}
+            if key=="remote_port"&&!(1024..=65535).contains(&next.remote_port){return Err("Remote control port must be 1024–65535".into());}
             if key=="conn_exceptions"&&next.conn_exceptions.iter().any(|(_,n)|!(1..=128).contains(n)){return Err("Connection counts must be 1–128".into());}
             if key=="regional"&&next.regional.week_start>6 {return Err("Choose a valid first day of the week".into());}
             if key=="category_dirs"&&next.category_dirs.iter().any(|(key,_)|!Category::all().iter().any(|c|c.key()==key.as_str())) {return Err("Choose a known category".into());}

@@ -36,14 +36,16 @@ AuralisWindow {
     readonly property color classicPageInk: MaterialTheme.controlTextInk(colors.textOverride || colors.text, classicPageFace)
     readonly property color captionInk: (classicLayout && !active ? colors.titleMuted : colors.titleInk) || colors.text
     readonly property var classicFrontTabs: ["General", "Browser Integration", "Downloads",
-        "Connection", "Appearance", "Updates"]
+        "Connection", "Appearance", "Updates", "Remote"]
     readonly property var classicBackTabs: ["Advanced", "Media Helpers", "Accounts", "Torrents", "Display", "Scheduler"]
+    readonly property int classicTabsColumns: Math.max(classicFrontTabs.length, classicBackTabs.length)
     readonly property var classicTabs: classicFrontTabs.concat(classicBackTabs).map(id => sections.find(section => section.id === id))
     readonly property var classicPageIcons: ({
         "General": "page-general", "Browser Integration": "page-general", "Downloads": "page-downloads",
         "Connection": "page-connection", "Appearance": "page-regional", "Updates": "page-remote",
         "Advanced": "page-proxy", "Media Helpers": "page-logins", "Accounts": "page-logins",
-        "Torrents": "page-file-types", "Display": "page-regional", "Scheduler": "page-archives"
+        "Torrents": "page-file-types", "Display": "page-regional", "Scheduler": "page-archives",
+        "Remote": "page-remote"
     })
     readonly property bool wideSweepVisible: wideSweep.visible && wideSweep.available
     readonly property GlassButton selectedNavigationButton: {
@@ -65,6 +67,9 @@ AuralisWindow {
     property bool reading: false
     property string problem: ""
     property string notice: ""
+    property var remotePair: null
+    property bool remotePairing: false
+    property string remoteProblem: ""
     property var availableUpdate: null
     property alias donationAction: donatePatreon
     signal updateCheckRequested()
@@ -88,6 +93,7 @@ AuralisWindow {
         {id: "Torrents", name: qsTr("Torrents"), detail: qsTr("Peer discovery and direct download recovery"), terms: qsTr("peer tracker torrent automatic recovery dht lsd share"),
             keys: ["torrent_keep_sharing", "torrent_dht", "torrent_lsd", "torrent_recovery_mode"]},
         {id: "Scheduler", name: qsTr("Scheduler"), detail: qsTr("Queue size, start times, and completion actions"), terms: qsTr("queue scheduler retry weekday schedule start stop"), keys: []},
+        {id: "Remote", name: qsTr("Remote control"), detail: qsTr("Pair a phone or another computer on your local network"), terms: qsTr("remote phone mobile computer pair device network control"), keys: []},
         {id: "Accounts", name: qsTr("Accounts"), detail: qsTr("File hosts and supported service accounts"), terms: qsTr("account debrid host sign in token api"), keys: []},
         {id: "Appearance", name: qsTr("Appearance"), detail: qsTr("Materials, translucent backgrounds, and indicators"), terms: qsTr("theme tint glass dark light opacity translucent color material background indicator progress motion"), keys: []},
         {id: "Advanced", name: qsTr("Advanced"), detail: qsTr("Other preferences and compatibility options"), terms: qsTr("preferences sounds notification format compatibility"), keys: []},
@@ -150,7 +156,7 @@ AuralisWindow {
                 {label: qsTr("Do nothing"), value: "off"}
             ]
         },
-        browsers: {description: qsTr("Capture requires the extension and Advanced browser integration. Chromium, Vivaldi, and Helium use the Google Chrome setting when they identify as Chrome. Opera GX uses the Opera setting.")},
+        browsers: {description: qsTr("Capture requires the extension and Advanced browser integration. Auralis supports Chrome, Edge, Brave, Chromium, Vivaldi, Opera, Helium, Thorium, Firefox and its supported forks, plus Safari on macOS. Install and enable the extension in each browser you use.")},
         sounds: {description: qsTr("Choose a WAV file for each download or queue event.")},
         video_chapters: {section: "Media Helpers"},
         video_cookies: {section: "Media Helpers", kind: "select", description: qsTr("Choose the browser where you signed in. Auralis uses the local browser session for media requests when the extension did not send cookies.")},
@@ -159,6 +165,7 @@ AuralisWindow {
     })
     readonly property var chosen: sections.find(section => section.id === category) || sections[0]
     readonly property var hiddenEngineFields: ["update_check", "speed_limit_on"]
+    readonly property bool remoteControlEnabled: Boolean(advancedFields.find(field => field.key === "remote_on")?.value)
     readonly property var visibleFields: matchingFields()
     readonly property bool showingNetworkAdapter: visible && visibleFields.some(field => field.key === "net_adapter")
     readonly property var destinationSections: term ? sections.filter(section => matchesText(section.name + " " + section.detail + " " + section.terms) ||
@@ -325,6 +332,22 @@ AuralisWindow {
             if (field.key !== "language")
                 notice = qsTr("Settings saved")
             load()
+        })
+    }
+
+    function pairRemoteDevice() {
+        if (!remoteControlEnabled || remotePairing)
+            return
+        remotePairing = true
+        remoteProblem = ""
+        engine.request({pair: true}, function(reply, error) {
+            remotePairing = false
+            if (error || reply?.error) {
+                remoteProblem = error || reply.error
+                remotePair = null
+                return
+            }
+            remotePair = reply
         })
     }
 
@@ -640,7 +663,7 @@ AuralisWindow {
             Layout.fillWidth: true
             Layout.leftMargin: 2
             Layout.rightMargin: 2
-            columns: 6
+            columns: root.classicTabsColumns
             rowSpacing: 1
             columnSpacing: 1
             uniformCellWidths: true
@@ -660,7 +683,7 @@ AuralisWindow {
                     readonly property color ink: MaterialTheme.controlTextInk(root.colors.textOverride || root.colors.text, face)
 
                     Layout.row: firstRow ? 0 : 1
-                    Layout.column: index % root.classicFrontTabs.length
+                    Layout.column: index % root.classicTabsColumns
                     Layout.fillWidth: true
                     Layout.minimumWidth: 0
                     Layout.preferredHeight: Math.max(19, implicitContentHeight + 4)
@@ -950,30 +973,26 @@ AuralisWindow {
                                                 id: interfaceSize
                                                 objectName: "settingsInterfaceSize"
                                                 property bool saveFailed: false
-                                                property string restartProblem: ""
-                                                readonly property bool restartRequired: root.fontSettings?.interfaceScalePercent
-                                                    !== root.fontSettings?.activeInterfaceScalePercent
-
                                                 Layout.fillWidth: true
                                                 from: root.fontSettings?.interfaceScaleMinimum ?? 85
                                                 to: root.fontSettings?.interfaceScaleMaximum ?? 150
                                                 stepSize: 1
                                                 snapMode: Slider.SnapAlways
-                                                live: false
+                                                live: true
                                                 value: root.fontSettings?.interfaceScalePercent ?? 100
                                                 palette.highlight: root.colors.accent
                                                 Accessible.name: qsTr("Interface size")
 
                                                 function saveSelection() {
                                                     const percent = Math.round(value)
-                                                    if (percent === root.fontSettings.interfaceScalePercent)
-                                                        return
-                                                    restartProblem = ""
                                                     saveFailed = !root.fontSettings.setInterfaceScalePercent(percent)
                                                     if (saveFailed)
                                                         value = Qt.binding(() => root.fontSettings.interfaceScalePercent)
                                                 }
-                                                onMoved: if (!pressed) saveSelection()
+                                                onMoved: {
+                                                    root.fontSettings.previewInterfaceScalePercent(Math.round(value))
+                                                    if (!pressed) saveSelection()
+                                                }
                                                 onPressedChanged: if (!pressed) saveSelection()
                                             }
 
@@ -983,40 +1002,7 @@ AuralisWindow {
                                             }
                                         }
 
-                                        PaneCopy {
-                                            text: interfaceSize.restartRequired
-                                                ? qsTr("Saved %2% for the next launch. The current size is %1%. Quit Auralis and reopen it to apply.")
-                                                    .arg(root.fontSettings?.activeInterfaceScalePercent)
-                                                    .arg(root.fontSettings?.interfaceScalePercent)
-                                                : qsTr("Resizes controls, text, and spacing throughout Auralis after you quit and reopen the app.")
-                                        }
-
-                                        GlassButton {
-                                            objectName: "restartForInterfaceScale"
-                                            visible: interfaceSize.restartRequired
-                                            enabled: !engine.quitting
-                                            text: engine.quitting ? qsTr("Restarting…") : qsTr("Restart Auralis")
-                                            accent: root.colors.accent
-                                            filled: true
-                                            onClicked: {
-                                                interfaceSize.restartProblem = ""
-                                                engine.requestRestart()
-                                            }
-                                        }
-
-                                        Connections {
-                                            target: engine
-                                            function onRestartFailed(message) {
-                                                interfaceSize.restartProblem = qsTranslate("BackendErrors", message)
-                                            }
-                                        }
-
-                                        PaneCopy {
-                                            visible: interfaceSize.restartRequired && interfaceSize.restartProblem !== ""
-                                            text: interfaceSize.restartProblem
-                                            textFormat: Text.PlainText
-                                            color: root.colors.destructive
-                                        }
+                                        PaneCopy { text: qsTr("Resizes controls, text, and spacing throughout Auralis as you move the slider.") }
 
                                         PaneCopy {
                                             visible: interfaceSize.saveFailed
@@ -1056,6 +1042,76 @@ AuralisWindow {
                         SettingsTools {
                             Layout.fillWidth: true
                             visible: !root.term && root.category === "Media Helpers"
+                        }
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            visible: !root.term && root.category === "Remote"
+                            spacing: 10
+
+                            PaneCopy {
+                                text: qsTr("Turn on remote control, then create a one-time pairing code. On your phone or another computer on the same local network, open one of the addresses and enter that code. Connections use HTTPS.")
+                            }
+
+                            GlassButton {
+                                objectName: "pairRemoteDevice"
+                                text: root.remotePairing ? qsTr("Creating pairing code…") : qsTr("Pair a device")
+                                accent: root.colors.accent
+                                filled: true
+                                enabled: root.remoteControlEnabled && !root.remotePairing && engine.ready
+                                onClicked: root.pairRemoteDevice()
+                            }
+
+                            Card {
+                                visible: Boolean(root.remotePair)
+                                ColumnLayout {
+                                    width: parent.width
+                                    spacing: 8
+                                    Label {
+                                        text: qsTr("Enter this code on the device")
+                                        color: root.colors.text
+                                        font.weight: Font.DemiBold
+                                    }
+                                    Label {
+                                        objectName: "remotePairingCode"
+                                        text: root.remotePair?.code || ""
+                                        color: root.colors.accent
+                                        font.pixelSize: TypographyScale.pixels(26)
+                                        font.weight: Font.Bold
+                                        font.family: "monospace"
+                                        selectByMouse: true
+                                    }
+                                    Label {
+                                        Layout.fillWidth: true
+                                        text: qsTr("Pairing code expires after %1 minutes and can be used once.").arg(root.remotePair?.minutes || 10)
+                                        color: root.colors.muted
+                                        wrapMode: Text.WordWrap
+                                    }
+                                    Repeater {
+                                        model: root.remotePair?.urls || []
+                                        delegate: Label {
+                                            required property string modelData
+                                            Layout.fillWidth: true
+                                            text: modelData
+                                            color: root.colors.text
+                                            wrapMode: Text.WrapAnywhere
+                                            selectByMouse: true
+                                        }
+                                    }
+                                }
+                            }
+
+                            PaneCopy {
+                                visible: !root.remoteControlEnabled
+                                text: qsTr("Remote control is off. Enable it above to let devices join after you give them a pairing code.")
+                            }
+
+                            PaneCopy {
+                                visible: Boolean(root.remoteProblem)
+                                text: root.remoteProblem
+                                textFormat: Text.PlainText
+                                color: root.colors.destructive
+                            }
                         }
 
                         SettingsUpdates {

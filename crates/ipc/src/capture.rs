@@ -411,6 +411,14 @@ pub fn browser_named(user_agent: &str, brands: &[String]) -> &'static str {
         "Waterfox"
     } else if brand("Brave") {
         "Brave Browser"
+    } else if brand("Vivaldi") {
+        "Vivaldi"
+    } else if brand("Helium") {
+        "Helium"
+    } else if brand("Thorium") {
+        "Thorium"
+    } else if brand("Chromium") {
+        "Chromium"
     } else if brand("Opera") || brand("Opera GX") {
         "Opera"
     } else if brand("Microsoft Edge") {
@@ -424,6 +432,14 @@ pub fn browser_named(user_agent: &str, brands: &[String]) -> &'static str {
 pub fn browser_of(user_agent: &str) -> &'static str {
     if user_agent.contains("Edg/") {
         "Microsoft Edge"
+    } else if user_agent.contains("Vivaldi/") {
+        "Vivaldi"
+    } else if user_agent.contains("Thorium/") {
+        "Thorium"
+    } else if user_agent.contains("Helium/") {
+        "Helium"
+    } else if user_agent.contains("Chromium/") {
+        "Chromium"
     } else if user_agent.contains("OPR/") || user_agent.contains("Opera") {
         "Opera"
     } else if user_agent.contains("Firefox/") {

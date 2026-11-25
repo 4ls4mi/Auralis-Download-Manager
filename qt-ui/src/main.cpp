@@ -629,9 +629,10 @@ void seedFreshProfile(const QString &profile)
     settings.setValue(QStringLiteral("TransferWindowLayout/initialCompactHeight"), 290);
     settings.setValue(QStringLiteral("Typography/interfaceScalePercent"), 100);
     settings.setValue(QStringLiteral("Typography/fontPreferences"), QVariantMap{
-        {QStringLiteral("englishFamily"), QStringLiteral("Talina")},
-        {QStringLiteral("arabicFamily"), QStringLiteral("Kidzhood Arabic")},
-        {QStringLiteral("sizePercent"), 110}
+        {QStringLiteral("englishFamily"), QStringLiteral("Arial")},
+        {QStringLiteral("arabicFamily"), QStringLiteral("Arial")},
+        {QStringLiteral("sizePercent"), 100},
+        {QStringLiteral("weight"), 700}
     });
     settings.sync();
 }

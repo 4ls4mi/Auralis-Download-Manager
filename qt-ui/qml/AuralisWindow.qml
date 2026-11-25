@@ -11,6 +11,12 @@ ApplicationWindow {
     LayoutMirroring.childrenInherit: true
 
     readonly property var fontSettings: typeof typography === "undefined" ? null : typography
+    readonly property real interfaceScale: (fontSettings?.interfaceScalePercent ?? 100) / 100
+    readonly property var interfaceColors: MaterialTheme.palette
+    palette.windowText: interfaceColors.text
+    palette.text: interfaceColors.text
+    palette.buttonText: interfaceColors.text
+    palette.highlight: interfaceColors.accent
     property bool frameShapingEnabled: true
     readonly property int frameCornerMask: {
         if (!frameShapingEnabled || visibility !== Window.Windowed)
@@ -48,6 +54,27 @@ ApplicationWindow {
     Binding on font {
         when: window.fontSettings !== null
         value: window.fontSettings?.interfaceFont
+    }
+
+    Binding {
+        target: window.contentItem
+        property: "scale"
+        value: window.interfaceScale
+    }
+    Binding {
+        target: window.contentItem
+        property: "transformOrigin"
+        value: Item.TopLeft
+    }
+    Binding {
+        target: window.contentItem
+        property: "width"
+        value: window.width / window.interfaceScale
+    }
+    Binding {
+        target: window.contentItem
+        property: "height"
+        value: window.height / window.interfaceScale
     }
 
     function fontFamilyForText(text) {

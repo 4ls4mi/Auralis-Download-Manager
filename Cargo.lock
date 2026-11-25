@@ -634,7 +634,7 @@ dependencies = [
 
 [[package]]
 name = "auralis-qt-engine"
-version = "0.3.92"
+version = "0.3.93"
 dependencies = [
  "hex",
  "mdm-app",

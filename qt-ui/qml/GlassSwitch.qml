@@ -11,10 +11,9 @@ Basic.Switch {
     readonly property color fieldColor: profile.roleFaces?.field || profile.background
     readonly property color idleTrack: MaterialTheme.mix(MaterialTheme.mix(fieldColor, profile.divider, .62, 1),
         palette.highlight, .13, 1)
-    readonly property color selectedTrack: MaterialTheme.controlIconInk(palette.highlight, idleTrack)
+    readonly property color selectedTrack: MaterialTheme.safeAccent(palette.highlight, profile.light)
     readonly property color trackColor: checked ? selectedTrack : idleTrack
-    readonly property color thumbColor: MaterialTheme.controlIconInk(
-        MaterialTheme.mix(profile.ink, palette.highlight, .24, 1), trackColor)
+    readonly property color thumbColor: MaterialTheme.controlTextInk(profile.text, trackColor)
 
     hoverEnabled: true
     palette.highlight: profile.accent
@@ -47,7 +46,9 @@ Basic.Switch {
             anchors.topMargin: 3
             anchors.bottomMargin: 3
             radius: height / 2
-            border.color: MaterialTheme.mix(control.trackColor, control.profile.ink, .28, 1)
+            border.width: control.checked ? 1.5 : 1
+            border.color: control.checked ? control.palette.highlight
+                : MaterialTheme.mix(control.trackColor, control.profile.ink, .42, 1)
             gradient: Gradient {
                 GradientStop { position: 0; color: MaterialTheme.mix(control.trackColor, control.profile.upper, control.hovered ? .20 : .12, 1) }
                 GradientStop { position: .45; color: control.trackColor }
@@ -82,6 +83,17 @@ Basic.Switch {
                 enabled: !control.down && !MaterialTheme.reducedMotion
                 NumberAnimation { duration: 130; easing.type: Easing.OutCubic }
             }
+        }
+
+        Text {
+            anchors.fill: thumb
+            visible: control.checked
+            text: "✓"
+            color: MaterialTheme.controlTextInk(control.profile.ink, control.thumbColor)
+            font.pixelSize: 10
+            font.weight: Font.Bold
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
         }
     }
 }

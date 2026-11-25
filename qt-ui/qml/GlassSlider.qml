@@ -11,10 +11,10 @@ Basic.Slider {
     readonly property real thumbExtent: 28
     readonly property real grooveThickness: 7
     readonly property color fieldColor: profile.roleFaces?.field || profile.background
-    readonly property color grooveColor: MaterialTheme.mix(fieldColor, profile.divider, .72, 1)
+    readonly property color grooveColor: MaterialTheme.mix(fieldColor, profile.divider, .46, 1)
     readonly property color grooveEdge: MaterialTheme.controlIconInk(
         MaterialTheme.mix(profile.divider, palette.highlight, .24, 1), fieldColor)
-    readonly property color fillColor: MaterialTheme.controlIconInk(palette.highlight, grooveColor)
+    readonly property color fillColor: MaterialTheme.safeAccent(palette.highlight, profile.light)
     readonly property color thumbColor: MaterialTheme.controlTextInk(profile.buttonFace || profile.background, fillColor)
 
     hoverEnabled: true

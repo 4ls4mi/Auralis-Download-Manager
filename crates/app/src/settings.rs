@@ -384,19 +384,23 @@ pub struct Settings {
 
 /// Options → File types defaults (IDM 6.42), shared with the browser host (mdm_ipc::capture).
 pub use mdm_ipc::capture::{DEFAULT_AUTO_TYPES, DEFAULT_EXCLUDED_SITES};
-/// The browsers IDM 6.42 lists, plus Firefox's forks MDM tells apart (#41; capture::browser_named),
-/// all captured on.
-pub const BROWSERS: [&str; 12] = [
+/// Browsers identified by the extension's UA/brand data, plus Firefox forks it can distinguish;
+/// all captured on unless the user turns one off.
+pub const BROWSERS: [&str; 16] = [
     "Apple Safari",          // not translated: a product name
     "Brave Browser",         // not translated: a product name
+    "Chromium",              // not translated: a product name
     "Floorp",                // not translated: a product name
     "Google Chrome",         // not translated: a product name
+    "Helium",                // not translated: a product name
     "Internet Explorer",     // not translated: a product name
     "LibreWolf",             // not translated: a product name
     "Microsoft Edge",        // not translated: a product name
     "Microsoft Edge Legacy", // not translated: a product name
     "Mozilla Firefox",       // not translated: a product name
     "Opera",                 // not translated: a product name
+    "Thorium",               // not translated: a product name
+    "Vivaldi",               // not translated: a product name
     "Waterfox",              // not translated: a product name
     "Zen Browser",           // not translated: a product name
 ];
