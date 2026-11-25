@@ -151,7 +151,8 @@ Basic.Button {
                         color: MaterialTheme.mix(buttonBackground.edge, buttonBackground.shade, .51, 1)
                     }
                 }
-                PathSvg { path: buttonBackground.edgePath + " " + buttonBackground.facePath }
+                // Qt 6.8 can read past trailing whitespace when an inset path is still empty.
+                PathSvg { path: (buttonBackground.edgePath + " " + buttonBackground.facePath).trim() }
             }
 
             ShapePath {
