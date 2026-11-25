@@ -11,6 +11,7 @@ DetachedDialogWindow {
     property bool torrentMode: false
     property var requestInfo: null
     readonly property bool confirming: requestInfo !== null
+    readonly property bool waitingForMetadata: confirming && !destinationEdited && requestInfo.info.probing
     property string errorMessage: ""
     property bool destinationEdited: false
     property bool descriptionEdited: false
@@ -363,7 +364,7 @@ DetachedDialogWindow {
                 material: root.material
                 text: qsTr("Download later")
                 visible: root.confirming
-                enabled: !root.busy
+                enabled: !root.busy && !root.waitingForMetadata
                 onClicked: root.submit(true)
             }
             GlassButton {
@@ -371,7 +372,7 @@ DetachedDialogWindow {
                 accent: root.colors.positive
                 objectName: "confirmStartDownload"
                 text: root.busy ? qsTr("Working…") : root.confirming || root.torrentMode ? qsTr("Start download") : qsTr("Continue")
-                enabled: !root.busy
+                enabled: !root.busy && !root.waitingForMetadata
                 onClicked: root.submit(false)
             }
         }

@@ -52,6 +52,11 @@ pub struct Command {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub origin: Option<String>,
     pub cookies: Option<String>,
+    /// From the browser: do not apply saved site logins to this verified anonymous release
+    /// asset handoff.
+    #[serde(skip_serializing_if = "is_false")]
+    #[schemars(skip)]
+    pub browser_anonymous: bool,
     /// Use this video's supplied browser cookies instead of global helper cookie settings.
     #[serde(skip_serializing_if = "is_false")]
     #[schemars(skip)]

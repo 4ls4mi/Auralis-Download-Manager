@@ -7,6 +7,9 @@ import QtQuick.Window
 ApplicationWindow {
     id: window
 
+    default property alias windowContent: scaledContent.data
+    property alias scaledContentItem: scaledContent
+
     LayoutMirroring.enabled: Qt.application.layoutDirection === Qt.RightToLeft
     LayoutMirroring.childrenInherit: true
 
@@ -39,16 +42,27 @@ ApplicationWindow {
             engine.setWindowCornerRadius?.(window, frameCornerRadius)
     }
 
-    Component.onCompleted: Qt.callLater(refreshFrameShape)
-    onFrameCornerMaskChanged: Qt.callLater(refreshFrameShape)
-    onFrameCornerRadiusChanged: Qt.callLater(refreshFrameShape)
+    function scheduleFrameShapeRefresh() {
+        frameShapeRefresh.restart()
+    }
+
+    Component.onCompleted: scheduleFrameShapeRefresh()
+    onFrameCornerMaskChanged: scheduleFrameShapeRefresh()
+    onFrameCornerRadiusChanged: scheduleFrameShapeRefresh()
+
+    Timer {
+        id: frameShapeRefresh
+        interval: 16
+        repeat: false
+        onTriggered: window.refreshFrameShape()
+    }
 
     Connections {
         target: window
-        function onWidthChanged() { Qt.callLater(window.refreshFrameShape) }
-        function onHeightChanged() { Qt.callLater(window.refreshFrameShape) }
-        function onVisibleChanged() { Qt.callLater(window.refreshFrameShape) }
-        function onScreenChanged() { Qt.callLater(window.refreshFrameShape) }
+        function onWidthChanged() { window.scheduleFrameShapeRefresh() }
+        function onHeightChanged() { window.scheduleFrameShapeRefresh() }
+        function onVisibleChanged() { window.scheduleFrameShapeRefresh() }
+        function onScreenChanged() { window.scheduleFrameShapeRefresh() }
     }
 
     Binding on font {
@@ -56,25 +70,15 @@ ApplicationWindow {
         value: window.fontSettings?.interfaceFont
     }
 
-    Binding {
-        target: window.contentItem
-        property: "scale"
-        value: window.interfaceScale
-    }
-    Binding {
-        target: window.contentItem
-        property: "transformOrigin"
-        value: Item.TopLeft
-    }
-    Binding {
-        target: window.contentItem
-        property: "width"
-        value: window.width / window.interfaceScale
-    }
-    Binding {
-        target: window.contentItem
-        property: "height"
-        value: window.height / window.interfaceScale
+    Item {
+        id: scaledContent
+        parent: window.contentItem
+        x: 0
+        y: 0
+        width: parent ? parent.width / window.interfaceScale : 0
+        height: parent ? parent.height / window.interfaceScale : 0
+        scale: window.interfaceScale
+        transformOrigin: Item.TopLeft
     }
 
     function fontFamilyForText(text) {

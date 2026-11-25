@@ -70,6 +70,8 @@ AuralisWindow {
     property var remotePair: null
     property bool remotePairing: false
     property string remoteProblem: ""
+    property int preferredVisibility: Window.Windowed
+    property int pendingInterfaceScalePercent: 100
     property var availableUpdate: null
     property alias donationAction: donatePatreon
     signal updateCheckRequested()
@@ -351,14 +353,25 @@ AuralisWindow {
         })
     }
 
+    function present() {
+        if (!visible || visibility === Window.Minimized) {
+            if (preferredVisibility === Window.Maximized)
+                showMaximized()
+            else if (preferredVisibility === Window.FullScreen)
+                showFullScreen()
+            else
+                show()
+        }
+        raise()
+        requestActivate()
+    }
+
     function showCategory(section) {
         if (!sections.some(item => item.id === section)) return
         search.clear()
         category = section
         scrollViewport.contentY = 0
-        show()
-        raise()
-        requestActivate()
+        present()
     }
 
     function toggleMaximize() {
@@ -367,9 +380,20 @@ AuralisWindow {
     }
 
     onVisibleChanged: if (visible) load()
+    onVisibilityChanged: {
+        if (visibility === Window.Windowed || visibility === Window.Maximized || visibility === Window.FullScreen)
+            preferredVisibility = visibility
+    }
     onShowingNetworkAdapterChanged: if (showingNetworkAdapter) Qt.callLater(loadNetworkAdapters)
     onCategoryChanged: if (category === "Scheduler" && engine.ready && !scheduler.queues.length) scheduler.load()
     onTermChanged: if (scrollViewport) scrollViewport.contentY = 0
+
+    Timer {
+        id: interfaceScalePreview
+        interval: 16
+        repeat: false
+        onTriggered: root.fontSettings.previewInterfaceScalePercent(root.pendingInterfaceScalePercent)
+    }
 
     Connections {
         target: engine
@@ -984,13 +1008,18 @@ AuralisWindow {
                                                 Accessible.name: qsTr("Interface size")
 
                                                 function saveSelection() {
+                                                    interfaceScalePreview.stop()
                                                     const percent = Math.round(value)
+                                                    root.pendingInterfaceScalePercent = percent
+                                                    root.fontSettings.previewInterfaceScalePercent(percent)
                                                     saveFailed = !root.fontSettings.setInterfaceScalePercent(percent)
                                                     if (saveFailed)
                                                         value = Qt.binding(() => root.fontSettings.interfaceScalePercent)
                                                 }
                                                 onMoved: {
-                                                    root.fontSettings.previewInterfaceScalePercent(Math.round(value))
+                                                    root.pendingInterfaceScalePercent = Math.round(value)
+                                                    if (pressed && !interfaceScalePreview.running)
+                                                        interfaceScalePreview.start()
                                                     if (!pressed) saveSelection()
                                                 }
                                                 onPressedChanged: if (!pressed) saveSelection()

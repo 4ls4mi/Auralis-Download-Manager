@@ -463,8 +463,6 @@ AuralisWindow {
     }
 
     function showScheduler() {
-        if (settingsWindow.visibility === Window.Minimized)
-            settingsWindow.showNormal()
         settingsWindow.showCategory("Scheduler")
     }
 
@@ -483,12 +481,7 @@ AuralisWindow {
     }
 
     function showSettings() {
-        if (settingsWindow.visibility === Window.Minimized)
-            settingsWindow.showNormal()
-        else
-            settingsWindow.show()
-        settingsWindow.raise()
-        settingsWindow.requestActivate()
+        settingsWindow.present()
     }
 
     function showBrowserSettings() {
@@ -690,13 +683,13 @@ AuralisWindow {
     }
     GalleryDownloadDialog {
         id: galleryDialog
-        parent: root.contentItem
+        parent: root.scaledContentItem
         onHelpersRequested: settingsWindow.showCategory("Media Helpers")
     }
-    BatchDownloadDialog { id: batchDialog; parent: root.contentItem }
+    BatchDownloadDialog { id: batchDialog; parent: root.scaledContentItem }
     EnginePrompts {
         id: enginePrompts
-        popupParent: root.contentItem
+        popupParent: root.scaledContentItem
         onShowProgressRequested: downloadId => {
             if (!root.hiddenProgressIds.includes(String(downloadId)))
                 root.showDownload(downloadId)
@@ -959,7 +952,7 @@ AuralisWindow {
     AppMenu {
         id: downloadAreaMenu
         objectName: "downloadAreaContextMenu"
-        parent: root.contentItem
+        parent: root.scaledContentItem
 
         AppMenuItem { symbol: "add"; action: addUrl; text: qsTr("Add new download…") }
         AppMenuItem {
@@ -1007,7 +1000,7 @@ AuralisWindow {
     AppMenu {
         id: contextMenu
         objectName: "downloadContextMenu"
-        parent: root.contentItem
+        parent: root.scaledContentItem
         AppMenuItem { symbol: "details"; action: detailsAction }
         AppMenuItem {
             objectName: "refreshDownloadAddressMenuItem"
@@ -2392,7 +2385,7 @@ AuralisWindow {
                                     return
                                 const contentPosition = list.contentItem.mapFromItem(null, point.scenePosition)
                                 if (list.indexAt(contentPosition.x, contentPosition.y) === -1)
-                                    downloadAreaMenu.popup(root.contentItem.mapFromItem(null, point.scenePosition))
+                                    downloadAreaMenu.popup(root.scaledContentItem.mapFromItem(null, point.scenePosition))
                             }
                         }
                         delegate: DashboardRow {
@@ -2488,9 +2481,9 @@ AuralisWindow {
                                         (event.modifiers & Qt.ShiftModifier))) {
                                 const row = list.currentItem
                                 if (!root.currentItem)
-                                    downloadAreaMenu.popup(list.mapToItem(root.contentItem, 12, 12))
+                                    downloadAreaMenu.popup(list.mapToItem(root.scaledContentItem, 12, 12))
                                 else if (row)
-                                    contextMenu.popup(row.mapToItem(root.contentItem, 12, row.height))
+                                    contextMenu.popup(row.mapToItem(root.scaledContentItem, 12, row.height))
                                 else
                                     contextMenu.popup()
                                 event.accepted = true

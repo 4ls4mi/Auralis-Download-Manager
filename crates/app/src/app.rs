@@ -3270,7 +3270,11 @@ impl App {
         context: &ipc::Command,
         direct: bool,
     ) -> RequestParts {
-        let site_login = self.settings.site_login(url);
+        let site_login = if context.browser_anonymous {
+            None
+        } else {
+            self.settings.site_login(url)
+        };
         let url_login = mdm_engine::ftp::is_ftp(url)
             .then(|| url_login(url))
             .flatten();

@@ -1871,6 +1871,26 @@ async function siteAccess(url) {
   }
 }
 
+// A public GitHub release URL redirects to a signed asset URL. Replaying GitHub's cookies on
+// the separate asset host is unsafe, and keeping that download in the browser because cookies
+// exist for GitHub would prevent ordinary public release assets from being captured. Restrict
+// this anonymous handoff to the exact public release route and GitHub's release asset host.
+function githubReleaseAsset(first, final) {
+  try {
+    const source = new URL(first);
+    const target = new URL(final);
+    const parts = source.pathname.split("/").filter(Boolean);
+    return source.protocol === "https:" && source.hostname === "github.com"
+      && !source.username && !source.password && !source.port
+      && parts.length === 6 && parts[2] === "releases" && parts[3] === "download"
+      && Boolean(parts[0] && parts[1] && parts[4] && parts[5])
+      && target.protocol === "https:" && target.hostname === "release-assets.githubusercontent.com"
+      && !target.username && !target.password && !target.port;
+  } catch {
+    return false;
+  }
+}
+
 // ---- the browser's proxy (#42) -------------------------------------------------------------
 
 // A VPN or proxy extension is a proxy for the browser only: the app downloads through the same
@@ -2140,6 +2160,7 @@ async function handOff(d) {
     referrer: d.referrer || "",
     ...(d.page && /^https?:\/\//i.test(d.page) && d.page.length <= URL_MAX ? { pageUrl: d.page } : {}),
     cookies: d.cookies || "",
+    ...(d.anonymous ? { anonymous: true } : {}),
     filename: d.filename || "",
     // The browser's name is only its address's guess (#948, `addressNamed`): the host checks
     // Options' file types by it, and MDM names the file from the server's own answer.
@@ -2204,7 +2225,7 @@ async function candidate(item, url, clicked = false) {
   // Smaller than Options' minimum (when the browser knows the size already).
   const size = item.totalBytes > 0 ? item.totalBytes : item.fileSize;
   if (r.minKb > 0 && size > 0 && size < r.minKb * 1024) return left("small");
-  if (!(await siteAccess(first))) return left("site-access");
+  if (!(await siteAccess(first)) && !githubReleaseAsset(first, url)) return left("site-access");
   return { name, post };
 }
 
@@ -2217,8 +2238,9 @@ function leftAlone(c, item, url) {
 // its address's (`addressNamed`).
 async function offer(item, url, { name, post }, nameGuessed = false) {
   const first = firstUrl(item);
-  const cookies = downloadCookie(item, first, url);
-  if (cookies === null || (cookies === undefined && !(await canHandOffAnonymously(first, url, item)))) {
+  const publicRelease = githubReleaseAsset(first, url);
+  const cookies = publicRelease ? "" : downloadCookie(item, first, url);
+  if (!publicRelease && (cookies === null || (cookies === undefined && !(await canHandOffAnonymously(first, url, item))))) {
     // Keep URL-derived names out of the notice: a file route can contain a session token.
     const basename = (item.filename || "").split(/[\\/]/).pop() || "";
     const fromAddress = nameGuessed || basename === addressName(first) || basename === addressName(url);
@@ -2236,6 +2258,7 @@ async function offer(item, url, { name, post }, nameGuessed = false) {
     size: item.totalBytes > 0 ? item.totalBytes : item.fileSize,
     mime: item.mime,
     cookies,
+    anonymous: publicRelease,
     post,
     incognito: item.incognito,
     storeId: item.cookieStoreId,

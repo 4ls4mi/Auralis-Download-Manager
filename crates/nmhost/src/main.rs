@@ -85,6 +85,8 @@ struct Message {
     /// The web page the download was started from, whole (#607; `mdm_ipc::Command::page_url`).
     page_url: Option<String>,
     cookies: Option<String>,
+    /// A narrowly scoped public GitHub release handoff that must not reuse any saved login.
+    anonymous: bool,
     /// The same cookies with their domains and flags (`mdm_ipc::Command::cookie_jar`); an older
     /// extension sends none.
     cookie_jar: Vec<mdm_ipc::BrowserCookie>,
@@ -964,6 +966,7 @@ fn to_command(m: Message) -> mdm_ipc::Command {
             (p.starts_with("http://") || p.starts_with("https://")) && p.len() <= PAGE_MAX
         }),
         cookies: some(m.cookies),
+        browser_anonymous: m.anonymous,
         cookie_jar: m.cookie_jar,
         user_agent: m.user_agent,
         size: m.size.filter(|s| *s > 0),
