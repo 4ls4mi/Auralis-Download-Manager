@@ -13,8 +13,10 @@ build_run="$GITHUB_RUN_ID"
 build_commit="$GITHUB_SHA"
 desktop="${AURALIS_DESKTOP_RELEASE:-0}"
 intel_only="${AURALIS_MACOS_INTEL_ONLY:-0}"
+skip_macos="${AURALIS_SKIP_MACOS:-0}"
 [[ "$desktop" == 0 || ( "$desktop" == 1 && -z "${AURALIS_VERIFIED_RUN_ID:-}" ) ]]
 [[ "$intel_only" =~ ^[01]$ && ( "$desktop" == 1 || "$intel_only" == 0 ) ]]
+[[ "$skip_macos" =~ ^[01]$ && ( "$desktop" == 1 || "$skip_macos" == 0 ) ]]
 if [[ -n "${AURALIS_VERIFIED_RUN_ID:-}" ]]; then
     build_run="$AURALIS_VERIFIED_RUN_ID"
     [[ "$build_run" =~ ^[0-9]+$ && "$build_run" != "$GITHUB_RUN_ID" ]]
@@ -80,14 +82,14 @@ files=(
 desktop_artifacts=()
 if [[ "$desktop" == 1 ]]; then
     release_name="Auralis Download Manager $version"
-    desktop_artifacts=(
-        'auralis-download-manager-linux-debian13-amd64:debian13_amd64.deb'
-        'auralis-macos-x86_64:macos-x86_64.dmg'
-    )
-    if [[ "$intel_only" == 1 ]]; then
-        printf '\nThe macOS download is the Intel (x86_64) package.\n' >> "$notes"
-    else
-        desktop_artifacts+=('auralis-macos-arm64:macos-arm64.dmg')
+    desktop_artifacts=('auralis-download-manager-linux-debian13-amd64:debian13_amd64.deb')
+    if [[ "$skip_macos" == 0 ]]; then
+        desktop_artifacts+=('auralis-macos-x86_64:macos-x86_64.dmg')
+        if [[ "$intel_only" == 1 ]]; then
+            printf '\nThe macOS download is the Intel (x86_64) package.\n' >> "$notes"
+        else
+            desktop_artifacts+=('auralis-macos-arm64:macos-arm64.dmg')
+        fi
     fi
     for artifact in "${desktop_artifacts[@]}"; do
         platform="${artifact#*:}"
