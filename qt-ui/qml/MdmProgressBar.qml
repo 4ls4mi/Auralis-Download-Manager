@@ -11,6 +11,7 @@ Item {
     required property real amount
     property string shape: "material"
     property real thicknessScale: 1
+    property var trackPaint: null
     readonly property var colors: appearance.mdm
     readonly property string style: appearance.mdmProgress
     readonly property bool isLine: style === "line"
@@ -40,6 +41,13 @@ Item {
                 GradientStop { position: 1; color: MaterialTheme.mix(bar.colors.progressFill, bar.colors.segmentBorder, .15, 1) }
             }
 
+            property LinearGradient trackTint: LinearGradient {
+                x2: styled.width
+                y2: 0
+                GradientStop { position: 0; color: bar.trackPaint?.start ?? "transparent" }
+                GradientStop { position: 1; color: bar.trackPaint?.end ?? "transparent" }
+            }
+
             function fillPath() {
                 const full = Math.max(0, width - inset * 2)
                 const fillWidth = full * bar.amount
@@ -57,9 +65,21 @@ Item {
 
             ShapePath {
                 strokeWidth: bar.isLine ? -1 : 1
-                strokeColor: bar.colors.segmentBorder
+                strokeColor: bar.trackPaint?.edge ?? bar.colors.segmentBorder
                 fillColor: bar.colors.progressTrack
+                fillGradient: bar.trackPaint ? styled.trackTint : null
                 PathSvg { path: styled.outline }
+            }
+            ShapePath {
+                strokeWidth: -1
+                fillGradient: LinearGradient {
+                    x2: 0
+                    y2: styled.height
+                    GradientStop { position: 0; color: bar.trackPaint?.upper ?? "transparent" }
+                    GradientStop { position: .50; color: "transparent" }
+                    GradientStop { position: 1; color: bar.trackPaint?.lower ?? "transparent" }
+                }
+                PathSvg { path: bar.trackPaint ? styled.outline : "" }
             }
             ShapePath {
                 strokeWidth: -1
@@ -80,7 +100,26 @@ Item {
         color: bar.colors.progressTrack
         radius: bar.isLine ? height / 2 : 0
         border.width: bar.isLine ? 0 : 1
-        border.color: bar.colors.segmentBorder
+        border.color: bar.trackPaint?.edge ?? bar.colors.segmentBorder
+        gradient: bar.trackPaint ? track.tint : null
+
+        property Gradient tint: Gradient {
+            orientation: Gradient.Horizontal
+            GradientStop { position: 0; color: bar.trackPaint?.start ?? "transparent" }
+            GradientStop { position: 1; color: bar.trackPaint?.end ?? "transparent" }
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: track.border.width
+            visible: Boolean(bar.trackPaint)
+            radius: track.radius
+            gradient: Gradient {
+                GradientStop { position: 0; color: bar.trackPaint?.upper ?? "transparent" }
+                GradientStop { position: .50; color: "transparent" }
+                GradientStop { position: 1; color: bar.trackPaint?.lower ?? "transparent" }
+            }
+        }
 
         Item {
             id: fill

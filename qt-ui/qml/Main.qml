@@ -1569,6 +1569,7 @@ AuralisWindow {
                         onClicked: viewMenu.open()
                         AppMenu {
                             id: viewMenu
+                            objectName: "mainViewMenu"
                             x: root.sideMenus ? viewMenuButton.width : 0
                             y: root.sideMenus ? 0 : viewMenuButton.height
                             AppMenuItem { symbol: "refresh"; action: refreshAction }
@@ -1578,6 +1579,14 @@ AuralisWindow {
                             MenuRule {}
                             AppMenuItem { symbol: "settings"; text: qsTr("Appearance"); onTriggered: settingsWindow.showCategory("Appearance") }
                             AppMenuItem { symbol: "settings"; text: qsTr("Display & fonts"); onTriggered: settingsWindow.showCategory("Display") }
+                            AppMenuItem {
+                                objectName: "appearanceHintMenuItem"
+                                text: qsTr("Customization hint")
+                                checkable: true
+                                checked: !windowPreferences.classicAppearanceHintDismissed
+                                Accessible.description: qsTr("Show the customization hint when a classic material is selected")
+                                onTriggered: windowPreferences.classicAppearanceHintDismissed = !checked
+                            }
                         }
                     }
                     CommandMenuButton {

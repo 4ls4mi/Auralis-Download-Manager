@@ -12,6 +12,11 @@ layout(std140, binding = 0) uniform ProgressUniforms {
     vec4 liquidEnd;
     vec4 glassTint;
     vec4 lighting;
+    vec4 trackStart;
+    vec4 trackEnd;
+    vec4 trackUpper;
+    vec4 trackLower;
+    vec4 trackEdge;
     float amount;
     float phase;
     float flow;
@@ -26,6 +31,12 @@ vec4 layer(vec4 below, vec3 light, float alpha)
 {
     alpha = clamp(alpha, 0.0, 1.0);
     return vec4(light * alpha, alpha) + below * (1.0 - alpha);
+}
+
+// Qt supplies ShaderEffect colors with premultiplied alpha.
+vec4 over(vec4 below, vec4 paint)
+{
+    return paint + below * (1.0 - paint.a);
 }
 
 float band(float distance)
@@ -314,6 +325,13 @@ void main()
     }
     float meniscus = exp(-abs(frontDistance) / max(1.2, height * 0.13));
     liquid = layer(liquid, reflection, meniscus * 0.71 * depth);
+
+    if (state.trackStart.a > 0.0 && filled < 1.0) {
+        glass = over(glass, mix(state.trackStart, state.trackEnd, x));
+        glass = over(glass, state.trackUpper * max(-curvedY, 0.0));
+        glass = over(glass, state.trackLower * max(curvedY, 0.0));
+        glass = over(glass, state.trackEdge * rim);
+    }
 
     // Keep spray inside both the glass silhouette and the unfilled region.
     float remainder = (1.0 - fillEdge) * width;

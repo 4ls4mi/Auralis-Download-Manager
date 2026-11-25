@@ -50,9 +50,17 @@ GridLayout {
     }
 
     function editMaterialColor(button, role, value) {
-        materialColorPicker.materialId = MaterialTheme.current
-        materialColorPicker.role = role
-        materialColorPicker.buttonColor = button
+        const material = MaterialTheme.current
+        editColor(value, color => {
+            if (button)
+                WindowAppearance.setButtonPaletteColor(material, role, color)
+            else
+                WindowAppearance.setMaterialColor(material, role, color)
+        })
+    }
+
+    function editColor(value, apply) {
+        materialColorPicker.applyColor = apply
         materialColorPicker.selectedColor = value
         materialColorPicker.hue = Math.max(0, materialColorPicker.selectedColor.hsvHue)
         materialColorPicker.saturation = materialColorPicker.selectedColor.hsvSaturation
@@ -709,7 +717,12 @@ GridLayout {
     }
 
     TabPage {
+        id: indicatorsPage
         visible: root.activeTab === 2
+
+        readonly property bool customFill: !MaterialTheme.mdmAppearance || WindowAppearance.customProgressFill
+        readonly property color materialTrack: !customFill && root.colors.mdm
+            ? root.colors.mdm.progressTrack : root.colors.background
 
         ColumnLayout {
             width: parent.width
@@ -719,15 +732,22 @@ GridLayout {
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
                 color: root.colors.muted
-                text: qsTr("Classic materials supply the default progress, connection and speed graph styles.")
+                text: qsTr("Classic materials supply the default connection and speed graph styles.")
             }
-            Heading { text: qsTr("Progress") }
+            Heading { text: qsTr("Progress fill") }
+            GlassSwitch {
+                objectName: "customProgressFill"
+                visible: MaterialTheme.mdmAppearance
+                text: qsTr("Use custom progress fill")
+                checked: WindowAppearance.customProgressFill
+                onToggled: WindowAppearance.set("customProgressFill", checked)
+            }
             GridLayout {
                 Layout.fillWidth: true
-                columns: !MaterialTheme.mdmAppearance && (!root.sideTabs || width >= 320) ? 2 : 1
+                columns: width >= 320 ? 2 : 1
                 IndicatorChoice {
-                    visible: !MaterialTheme.mdmAppearance
-                    label: qsTr("Progress layout")
+                    enabled: indicatorsPage.customFill
+                    label: qsTr("Fill layout")
                     model: WindowAppearance.progressLayoutChoices
                     selection: WindowAppearance.progressLayout
                     onChosen: value => WindowAppearance.set("progressLayout", value)
@@ -739,22 +759,22 @@ GridLayout {
                     onChosen: value => WindowAppearance.set("progressShape", value)
                 }
                 IndicatorColorChoice {
-                    visible: !MaterialTheme.mdmAppearance
-                    label: qsTr("Progress colors")
+                    enabled: indicatorsPage.customFill
+                    label: qsTr("Fill colors")
                     indicatorRole: "progress"
                     selection: MaterialTheme.progressPalette
                     onChosen: value => MaterialTheme.progressPalette = value
                 }
                 IndicatorChoice {
-                    visible: !MaterialTheme.mdmAppearance
-                    label: qsTr("Progress animation")
+                    enabled: indicatorsPage.customFill
+                    label: qsTr("Fill animation")
                     model: WindowAppearance.animationChoices
                     selection: WindowAppearance.progressAnimation
                     onChosen: value => WindowAppearance.set("progressAnimation", value)
                 }
                 IndicatorChoice {
-                    visible: !MaterialTheme.mdmAppearance
-                    label: qsTr("Progress lighting")
+                    enabled: indicatorsPage.customFill
+                    label: qsTr("Fill theme")
                     model: WindowAppearance.lightingChoices
                     selection: WindowAppearance.progressLighting
                     onChosen: value => WindowAppearance.set("progressLighting", value)
@@ -766,16 +786,61 @@ GridLayout {
                 onChangedByUser: value => WindowAppearance.set("progressThickness", value)
             }
             GlassProgress {
-                Layout.preferredWidth: parent.width * .53
+                objectName: "progressFillPreview"
+                Layout.preferredWidth: parent.width * .64
                 baseHeight: 38
                 value: .64
-                shape: WindowAppearance.progressShape === "material" ?
-                    (["bubble", "prism", "ice"].includes(profile.shape) ? profile.shape : "round") : WindowAppearance.progressShape
                 animationStyle: WindowAppearance.progressAnimation
                 startColor: MaterialTheme.progressColors[0]
                 endColor: MaterialTheme.progressColors[1]
                 showLabel: true
                 animated: visible && root.previewActive
+            }
+
+            Heading { text: qsTr("Progress track") }
+            Label {
+                Layout.fillWidth: true
+                color: root.colors.muted
+                text: qsTr("Appearance of the unfilled part of the bar.")
+                wrapMode: Text.WordWrap
+            }
+            GridLayout {
+                Layout.fillWidth: true
+                columns: width >= 320 ? 2 : 1
+
+                IndicatorChoice {
+                    label: qsTr("Track finish")
+                    model: WindowAppearance.progressTrackFinishChoices
+                    selection: WindowAppearance.progressTrackFinish
+                    onChosen: value => WindowAppearance.set("progressTrackFinish", value)
+                }
+                IndicatorChoice {
+                    label: qsTr("Track color")
+                    model: WindowAppearance.colorValid(selection)
+                        ? WindowAppearance.progressTrackColorChoices.concat([{label: qsTr("Custom color"), value: selection}])
+                        : WindowAppearance.progressTrackColorChoices
+                    selection: WindowAppearance.progressTrackColor
+                    colorOptionPreview: value => {
+                        const colors = WindowAppearance.trackColors(value)
+                        return colors.length ? colors : [indicatorsPage.materialTrack, indicatorsPage.materialTrack]
+                    }
+                    onChosen: value => WindowAppearance.set("progressTrackColor", value)
+                }
+            }
+            GlassButton {
+                objectName: "chooseProgressTrackColor"
+                text: qsTr("Pick a track color…")
+                onClicked: root.editColor(WindowAppearance.progressTrackColors[0] || indicatorsPage.materialTrack,
+                    color => WindowAppearance.set("progressTrackColor", color))
+            }
+            GlassProgress {
+                objectName: "progressTrackPreview"
+                Layout.preferredWidth: parent.width * .64
+                baseHeight: 38
+                value: 0
+                showLabel: true
+                startColor: MaterialTheme.progressColors[0]
+                endColor: MaterialTheme.progressColors[1]
             }
             Heading { text: qsTr("Connections") }
             GridLayout {
@@ -997,9 +1062,7 @@ GridLayout {
         id: materialColorPicker
         objectName: "materialColorPicker"
 
-        property string materialId
-        property string role
-        property bool buttonColor: false
+        property var applyColor: null
         property real hue: 0
         property real saturation: 0
         property real brightness: 1
@@ -1017,11 +1080,8 @@ GridLayout {
         palette.highlight: root.colors.accent
 
         onAccepted: {
-            const value = WindowAppearance.colorText(selectedColor)
-            if (buttonColor)
-                WindowAppearance.setButtonPaletteColor(materialId, role, value)
-            else
-                WindowAppearance.setMaterialColor(materialId, role, value)
+            if (applyColor)
+                applyColor(WindowAppearance.colorText(selectedColor))
         }
 
         function updatePreview() {

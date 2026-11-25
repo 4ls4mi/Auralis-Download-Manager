@@ -15,6 +15,10 @@ QtObject {
     readonly property int progressThickness: preferences.progressThickness
     readonly property string progressAnimation: preferences.progressAnimation
     readonly property string progressLighting: preferences.progressLighting
+    readonly property bool customProgressFill: preferences.customProgressFill
+    readonly property string progressTrackFinish: preferences.progressTrackFinish
+    readonly property string progressTrackColor: preferences.progressTrackColor
+    readonly property var progressTrackColors: trackColors(progressTrackColor)
     readonly property string connectionShape: preferences.connectionShape
     readonly property int connectionBlockSize: preferences.connectionBlockSize
     readonly property string connectionAnimation: preferences.connectionAnimation
@@ -32,6 +36,22 @@ QtObject {
         {label: qsTr("Thin line"), value: "thin-line"},
         {label: qsTr("Striped fill"), value: "striped-fill"}
     ]
+    readonly property var progressTrackFinishChoices: [
+        {label: qsTr("Material default"), value: "default"},
+        {label: qsTr("Clear glass"), value: "clear"},
+        {label: qsTr("Frosted"), value: "frosted"},
+        {label: qsTr("Recessed"), value: "recessed"}
+    ]
+    readonly property var progressTrackTints: ({
+        ice: { label: qsTr("Ice"), color: "#a8d8ef" },
+        violet: { label: qsTr("Violet"), color: "#9b78d7" },
+        teal: { label: qsTr("Teal"), color: "#41b8b3" },
+        amber: { label: qsTr("Amber"), color: "#da9b4c" }
+    })
+    readonly property var progressTrackColorChoices: [{label: qsTr("Material default"), value: "material"}]
+        .concat(Object.keys(progressTrackTints).map(id => ({label: progressTrackTints[id].label, value: id})))
+        .concat(Object.keys(MaterialTheme.indicatorPalettes).map(id =>
+            ({label: MaterialTheme.indicatorPalettes[id].label, value: "palette:" + id})))
     readonly property var animationChoices: [
         {label: qsTr("Classic"), value: "classic"},
         {label: qsTr("Normal (no motion)"), value: "none"},
@@ -99,6 +119,7 @@ QtObject {
             mainMode: "desktop", detailsMode: "desktop", mainMedia: "", detailsMedia: "",
             mainColor: "", detailsColor: "", progressShape: "material", progressLayout: "classic",
             materialCustomizations: {}, progressThickness: 100, connectionBlockSize: 100,
+            customProgressFill: false, progressTrackFinish: "default", progressTrackColor: "material",
             progressAnimation: "classic", progressLighting: "polished", connectionShape: "material",
             connectionAnimation: "classic", connectionLighting: "polished",
             graphShape: "area", graphAnimation: "classic", graphLighting: "polished"
@@ -108,6 +129,12 @@ QtObject {
     function set(key, value) {
         if (key === "progressThickness" || key === "connectionBlockSize")
             value = indicatorSize(value, preferences[key])
+        else if (key === "progressTrackFinish")
+            value = trackFinishFor(value, progressTrackFinish)
+        else if (key === "progressTrackColor")
+            value = trackColorFor(value, progressTrackColor)
+        else if (key === "customProgressFill" && typeof value !== "boolean")
+            return
         if (preferences[key] !== value)
             preferences = Object.assign({}, preferences, {[key]: value})
     }
@@ -290,6 +317,40 @@ QtObject {
             ? value : fallback
     }
 
+    function trackFinishFor(value, fallback) {
+        return progressTrackFinishChoices.some(choice => choice.value === value) ? value : fallback
+    }
+
+    function trackColorFor(value, fallback) {
+        if (typeof value !== "string")
+            return fallback
+        if (value === "material" || Object.prototype.hasOwnProperty.call(progressTrackTints, value))
+            return value
+        if (colorValid(value))
+            return value.toLowerCase()
+        if (value.startsWith("palette:")) {
+            const id = paletteFor(value.slice(8), "")
+            if (id && id !== "material")
+                return "palette:" + id
+        }
+        return fallback
+    }
+
+    function trackColors(value) {
+        if (Object.prototype.hasOwnProperty.call(progressTrackTints, value)) {
+            const color = progressTrackTints[value].color
+            return [color, color]
+        }
+        if (colorValid(value))
+            return [value, value]
+        if (typeof value === "string" && value.startsWith("palette:")) {
+            const id = paletteFor(value.slice(8), "")
+            if (id && id !== "material")
+                return MaterialTheme.indicatorPalettes[id].colors
+        }
+        return []
+    }
+
     function store() {
         if (loaded) persistence.saved = JSON.stringify(snapshot())
     }
@@ -311,6 +372,8 @@ QtObject {
             "mh-glass-graph-indicator": MaterialTheme.effectiveGraphPalette,
             "mh-glass-progress-shape": shape(progressShape),
             "mh-glass-progress-material": "liquid-glass",
+            "mh-glass-track-finish": progressTrackFinish,
+            "mh-glass-track-color": progressTrackColor,
             "mh-glass-connection-shape": shape(connectionShape),
             "mh-glass-connection-material": "liquid-glass",
             "mh-glass-graph-shape": graphShape,
@@ -389,6 +452,9 @@ QtObject {
             materialCustomizations: validMaterialCustomizations(saved.materialCustomizations, original.materialCustomizations),
             progressAnimation: indicatorAnimation(saved.progressAnimation, original.progressAnimation),
             progressLighting: indicatorLighting(saved.progressLighting, original.progressLighting),
+            customProgressFill: typeof saved.customProgressFill === "boolean" ? saved.customProgressFill : original.customProgressFill,
+            progressTrackFinish: trackFinishFor(saved.progressTrackFinish ?? data["mh-glass-track-finish"], original.progressTrackFinish),
+            progressTrackColor: trackColorFor(saved.progressTrackColor ?? data["mh-glass-track-color"], original.progressTrackColor),
             connectionShape: indicatorShape(saved.connectionShape || data["mh-glass-connection-shape"], original.connectionShape),
             connectionAnimation: indicatorAnimation(saved.connectionAnimation, original.connectionAnimation),
             connectionLighting: indicatorLighting(saved.connectionLighting, original.connectionLighting),
@@ -419,7 +485,8 @@ QtObject {
                 connectionIndicator: MaterialTheme.effectiveConnectionPalette, graphIndicator: MaterialTheme.effectiveGraphPalette, progressMaterial: legacy["mh-glass-progress-material"],
                 connectionMaterial: legacy["mh-glass-connection-material"], graphMaterial: "gradient",
                 progressShape: legacy["mh-glass-progress-shape"], connectionShape: legacy["mh-glass-connection-shape"],
-                graphShape: graphShape, trackFinish: "recessed", trackColor: "ice",
+                graphShape: graphShape, trackFinish: progressTrackFinish,
+                trackColor: progressTrackColor === "material" || colorValid(progressTrackColor) ? "ice" : progressTrackColor,
                 connectionTrackFinish: "recessed", connectionTrackColor: "ice"
             },
             qt: {
@@ -428,6 +495,8 @@ QtObject {
                 progressLayout: progressLayout, progressThickness: progressThickness,
                 connectionBlockSize: connectionBlockSize, materialCustomization: materialCustomization(material),
                 progressAnimation: progressAnimation, progressLighting: progressLighting,
+                customProgressFill: customProgressFill,
+                progressTrackFinish: progressTrackFinish, progressTrackColor: progressTrackColor,
                 connectionShape: connectionShape, connectionAnimation: connectionAnimation, connectionLighting: connectionLighting,
                 graphAnimation: graphAnimation, graphLighting: graphLighting,
                 reducedMotion: MaterialTheme.reducedMotion,
@@ -477,6 +546,10 @@ QtObject {
             connectionBlockSize: indicatorSize(value.qt?.connectionBlockSize, connectionBlockSize),
             progressAnimation: indicatorAnimation(value.qt?.progressAnimation, progressAnimation),
             progressLighting: indicatorLighting(value.qt?.progressLighting, progressLighting),
+            customProgressFill: typeof value.qt?.customProgressFill === "boolean" ? value.qt.customProgressFill : customProgressFill,
+            // Older Qt exports used placeholder values for the legacy backdrop fields.
+            progressTrackFinish: trackFinishFor(value.qt ? value.qt.progressTrackFinish : options.trackFinish, progressTrackFinish),
+            progressTrackColor: trackColorFor(value.qt ? value.qt.progressTrackColor : options.trackColor, progressTrackColor),
             connectionShape: indicatorShape(value.qt?.connectionShape || options.connectionShape, connectionShape),
             connectionAnimation: indicatorAnimation(value.qt?.connectionAnimation, connectionAnimation),
             connectionLighting: indicatorLighting(value.qt?.connectionLighting, connectionLighting),

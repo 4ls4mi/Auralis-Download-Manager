@@ -1338,8 +1338,10 @@ AuralisWindow {
                                 readonly property int blockHeight: Math.round((root.compactView ? 23
                                     : root.compactWidth || root.compactHeight ? 34 : 39) * root.connectionBlockScale)
                                 readonly property int blockWidth: Geometry.connectionBlockWidth(blockHeight)
+                                // The grid's own width is capped by the cells it has already laid out.
+                                // Measure the pane to determine how many columns fit.
                                 columns: Math.max(1, Math.min(8,
-                                    Math.floor((width + columnSpacing) / (blockWidth + columnSpacing))))
+                                    Math.floor((connectionPane.availableWidth + columnSpacing) / (blockWidth + columnSpacing))))
                                 rowSpacing: root.displayConnectionFlow ? Math.round(26 * root.pipeScale) : 5
                                 columnSpacing: root.compactView ? 3 : 4
                                 Repeater {

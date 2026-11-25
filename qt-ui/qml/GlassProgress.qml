@@ -28,10 +28,13 @@ Item {
     property color trackColor: profile.background
 
     readonly property var profile: MaterialTheme.profile(material)
+    readonly property bool usesMaterialProgress: !WindowAppearance.customProgressFill && Boolean(profile.mdm)
+    readonly property var trackPaint: customTrackPaint(WindowAppearance.progressTrackFinish,
+        WindowAppearance.progressTrackColors)
     readonly property var finish: Lighting.style(lightingStyle)
     readonly property string layoutKind: LayoutGeometry.style(layoutStyle)
     readonly property bool classicLayout: layoutKind === "classic"
-    readonly property bool labelAtEnd: showLabel && (Boolean(profile.mdm) || layoutKind === "thin-line")
+    readonly property bool labelAtEnd: showLabel && (usesMaterialProgress || layoutKind === "thin-line")
     readonly property string transferStatus: transferState.toLowerCase()
     readonly property color statusTrackTint: layoutKind !== "status-track" ? "transparent"
         : transferStatus === "paused" || transferStatus === "stopped" ? profile.caution
@@ -42,10 +45,10 @@ Item {
     readonly property int contour: shape === "bubble" ? 1 : shape === "ice" ? 4
         : ["prism", "chamfer"].includes(shape) ? 2
         : ["square", "plain"].includes(shape) ? 3 : 0
-    readonly property bool renderWithShader: !profile.mdm && classicLayout && width >= 12 && height >= 7
+    readonly property bool renderWithShader: !usesMaterialProgress && classicLayout && width >= 12 && height >= 7
         && GraphicsInfo.api !== GraphicsInfo.Software && GraphicsInfo.api !== GraphicsInfo.Unknown
     readonly property int motionKind: animationStyle === "water" ? 1 : animationStyle === "jelly" ? 2 : 0
-    readonly property bool canAnimate: !profile.mdm && animationStyle !== "none" && animated && visible
+    readonly property bool canAnimate: !usesMaterialProgress && animationStyle !== "none" && animated && visible
         && width >= 12 && height >= 7 && !MaterialTheme.reducedMotion
     readonly property bool liquidMoving: canAnimate && amount > 0 && amount < 1
     readonly property real amount: Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0
@@ -58,6 +61,35 @@ Item {
     Accessible.role: Accessible.ProgressBar
     Accessible.name: qsTr("Download progress")
     Accessible.description: qsTr("%1 percent").arg(Math.round(amount * 100))
+
+    function customTrackPaint(finishStyle, colors) {
+        if (finishStyle === "default" && colors.length === 0)
+            return null
+
+        const mix = MaterialTheme.mix
+        const rgba = MaterialTheme.rgba
+        const materialColor = usesMaterialProgress ? profile.mdm.progressTrack
+            : mix(trackColor, profile.ink, profile.light ? .16 : .24, 1)
+        const first = colors[0] ?? materialColor
+        const last = colors[1] ?? first
+        const tint = color => statusTrackTint.a > 0 ? mix(color, statusTrackTint, .30, 1) : color
+        const light = "#f2f8ff"
+        const shade = "#0d1320"
+        const top = mix(first, light, .56, 1)
+        const bottom = mix(last, shade, .53, 1)
+
+        if (finishStyle === "clear")
+            return { start: rgba(tint(first), .36), end: rgba(tint(last), .36),
+                upper: rgba(top, .40), lower: rgba(last, .30), edge: rgba(top, .39) }
+        if (finishStyle === "frosted")
+            return { start: mix(tint(first), light, .34, .76), end: mix(tint(last), light, .34, .76),
+                upper: rgba(light, .51), lower: rgba(top, .23), edge: rgba(top, .64) }
+        if (finishStyle === "recessed")
+            return { start: mix(tint(first), shade, .42, .91), end: mix(tint(last), shade, .42, .91),
+                upper: rgba(shade, .65), lower: rgba(top, .28), edge: rgba(bottom, .77) }
+        return { start: rgba(tint(first), .71), end: rgba(tint(last), .71),
+            upper: rgba(top, .28), lower: rgba(bottom, .32), edge: rgba(top, .48) }
+    }
 
     Behavior on shownAmount {
         enabled: progress.canAnimate
@@ -85,12 +117,13 @@ Item {
         anchors.rightMargin: progress.labelAtEnd ? amountLabel.width + 8 : 0
         anchors.top: parent.top
         anchors.bottom: parent.bottom
-        active: Boolean(progress.profile.mdm)
+        active: progress.usesMaterialProgress
         sourceComponent: MdmProgressBar {
             appearance: progress.profile
             amount: progress.amount
             shape: progress.shapeChoice === "material" ? "material" : progress.shape
             thicknessScale: progress.thicknessScale
+            trackPaint: progress.trackPaint
         }
     }
 
@@ -102,6 +135,11 @@ Item {
             property color liquidStart: progress.firstTone.glow
             property color liquidEnd: progress.lastTone.glow
             property color glassTint: progress.trackColor
+            property color trackStart: progress.trackPaint?.start ?? "transparent"
+            property color trackEnd: progress.trackPaint?.end ?? "transparent"
+            property color trackUpper: progress.trackPaint?.upper ?? "transparent"
+            property color trackLower: progress.trackPaint?.lower ?? "transparent"
+            property color trackEdge: progress.trackPaint?.edge ?? "transparent"
             property vector4d lighting: Qt.vector4d(progress.finish.halo, progress.finish.reflection,
                 progress.finish.depth, progress.finish.caustic)
             property real amount: progress.shownAmount
@@ -121,7 +159,7 @@ Item {
         anchors.rightMargin: progress.labelAtEnd ? amountLabel.width + 8 : 1.5
         anchors.verticalCenter: parent.verticalCenter
         height: LayoutGeometry.trackHeight(Math.max(0, progress.height - 3), progress.layoutKind, progress.thicknessScale)
-        active: !progress.profile.mdm && !progress.renderWithShader
+        active: !progress.usesMaterialProgress && !progress.renderWithShader
 
         sourceComponent: Item {
             id: vessel
@@ -261,6 +299,52 @@ Item {
                     }
                     PathSvg { path: vessel.trackPath }
                 }
+            }
+
+            Loader {
+                x: vessel.front
+                width: vessel.remainder
+                height: vessel.height
+                clip: true
+                active: Boolean(progress.trackPaint) && width > 0
+
+                sourceComponent: Item {
+                    Shape {
+                        x: -vessel.front
+                        width: vessel.width
+                        height: vessel.height
+                        preferredRendererType: Shape.CurveRenderer
+
+                        ShapePath {
+                            strokeWidth: 1
+                            strokeColor: progress.trackPaint?.edge ?? "transparent"
+                            fillGradient: LinearGradient {
+                                x2: vessel.width
+                                y2: 0
+                                GradientStop { position: 0; color: progress.trackPaint?.start ?? "transparent" }
+                                GradientStop { position: 1; color: progress.trackPaint?.end ?? "transparent" }
+                            }
+                            PathSvg { path: vessel.trackPath }
+                        }
+
+                        ShapePath {
+                            strokeWidth: -1
+                            fillGradient: LinearGradient {
+                                x2: 0
+                                y2: vessel.height
+                                GradientStop { position: 0; color: progress.trackPaint?.upper ?? "transparent" }
+                                GradientStop { position: .50; color: "transparent" }
+                                GradientStop { position: 1; color: progress.trackPaint?.lower ?? "transparent" }
+                            }
+                            PathSvg { path: vessel.trackPath }
+                        }
+                    }
+                }
+            }
+
+            Shape {
+                anchors.fill: parent
+                preferredRendererType: Shape.CurveRenderer
 
                 ShapePath {
                     strokeWidth: 2 * vessel.glowSize + 1
