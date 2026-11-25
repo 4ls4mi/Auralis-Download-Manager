@@ -211,6 +211,7 @@ QVariantList fontOptions(const QList<FontSource> &catalog, QFontDatabase::Writin
         options.append(QVariantMap{
             {QStringLiteral("label"), font.name},
             {QStringLiteral("available"), !family.isEmpty()},
+            {QStringLiteral("bundled"), !font.fileStem.isEmpty()},
             {QStringLiteral("value"), family.isEmpty() ? font.name : family}});
     }
     return options;

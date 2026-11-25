@@ -731,7 +731,8 @@ int runDesktop(QApplication &app, int activeInterfaceScale, bool startHidden, bo
         for (const auto &options : {typography.englishFontOptions(), typography.arabicFontOptions()}) {
             for (const auto &entry : options) {
                 const auto option = entry.toMap();
-                if (!option.value(QStringLiteral("available")).toBool()) {
+                if (option.value(QStringLiteral("bundled")).toBool()
+                    && !option.value(QStringLiteral("available")).toBool()) {
                     qCritical() << "Could not load packaged interface font:" << option.value(QStringLiteral("label")).toString();
                     return 1;
                 }
