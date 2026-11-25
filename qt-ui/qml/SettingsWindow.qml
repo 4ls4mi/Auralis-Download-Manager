@@ -1079,7 +1079,6 @@ AuralisWindow {
                                         font.pixelSize: TypographyScale.pixels(26)
                                         font.weight: Font.Bold
                                         font.family: "monospace"
-                                        selectByMouse: true
                                     }
                                     Label {
                                         Layout.fillWidth: true
@@ -1095,7 +1094,6 @@ AuralisWindow {
                                             text: modelData
                                             color: root.colors.text
                                             wrapMode: Text.WrapAnywhere
-                                            selectByMouse: true
                                         }
                                     }
                                 }
