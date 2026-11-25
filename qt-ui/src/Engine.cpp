@@ -757,31 +757,24 @@ bool Engine::applyBackdrop(QWindow *window, bool enabled, bool dark) const
     const auto hwnd = reinterpret_cast<HWND>(window->winId());
     constexpr DWORD SystemBackdropType = 38;
     constexpr DWORD ImmersiveDarkMode = 20;
-    int current = 0;
-    if (FAILED(DwmGetWindowAttribute(hwnd, SystemBackdropType, &current, sizeof current)))
-        return false;
-    // Desktop Acrylic uses a solid fallback when the window is inactive.
-    // Clear it behind Settings so the Qt window can keep its own alpha.
-    // Native Acrylic fills a rectangular DWM surface even where Qt's shaped window is clipped.
+    constexpr int NoBackdrop = 1;
+    constexpr int DesktopAcrylic = 3;
+    // Acrylic belongs to the Windows compositor and can extend beyond the Qt scene's shape.
     const bool shaped = window->property("frameCornerRadius").toInt() > 0;
-    const bool useAcrylic = enabled && !shaped && GetForegroundWindow() == hwnd;
-    if (useAcrylic) {
+    if (enabled && !shaped && GetForegroundWindow() == hwnd) {
         const BOOL darkMode = dark;
         DwmSetWindowAttribute(hwnd, ImmersiveDarkMode, &darkMode, sizeof darkMode);
+        const MARGINS extend{-1, -1, -1, -1};
+        if (SUCCEEDED(DwmExtendFrameIntoClientArea(hwnd, &extend))
+            && SUCCEEDED(DwmSetWindowAttribute(hwnd, SystemBackdropType, &DesktopAcrylic, sizeof DesktopAcrylic)))
+            return true;
     }
-    constexpr int None = 1;
-    constexpr int DesktopAcrylic = 3;
-    const int type = useAcrylic ? DesktopAcrylic : None;
-    const int margin = useAcrylic ? -1 : 0;
-    const MARGINS margins{margin, margin, margin, margin};
-    if (FAILED(DwmExtendFrameIntoClientArea(hwnd, &margins)))
-        return false;
-    if (FAILED(DwmSetWindowAttribute(hwnd, SystemBackdropType, &type, sizeof type))) {
-        const MARGINS reset{0, 0, 0, 0};
-        DwmExtendFrameIntoClientArea(hwnd, &reset);
-        return false;
-    }
-    return useAcrylic;
+
+    // Reset both parts even if the system backdrop attribute is unavailable on this Windows version.
+    DwmSetWindowAttribute(hwnd, SystemBackdropType, &NoBackdrop, sizeof NoBackdrop);
+    const MARGINS reset{0, 0, 0, 0};
+    DwmExtendFrameIntoClientArea(hwnd, &reset);
+    return false;
 #else
     Q_UNUSED(window);
     Q_UNUSED(enabled);
@@ -802,6 +795,8 @@ void Engine::setWindowCornerRadius(QWindow *window, int radius) const
 #ifdef Q_OS_WIN
     const bool wasShaped = !window->mask().isEmpty();
     if (window->isVisible() && shaped != wasShaped) {
+        if (shaped)
+            applyBackdrop(window, false, false);
         // Prevent DWM from drawing a rectangular non-client frame around a shaped window.
         const auto hwnd = reinterpret_cast<HWND>(window->winId());
         const DWMNCRENDERINGPOLICY policy = shaped ? DWMNCRP_DISABLED : DWMNCRP_USEWINDOWSTYLE;
@@ -821,9 +816,15 @@ void Engine::setWindowCornerRadius(QWindow *window, int radius) const
     const qreal height = window->height();
     const qreal reachX = qMin(qreal(radius), width / 2);
     const qreal reachY = qMin(radius * (113.0 / 114.0), height / 2);
-    const bool allowCoverageFringe =
+    [[maybe_unused]] const bool antialiasing =
         WindowOutline::configureAntialiasing(window, QSizeF(reachX, reachY), corners);
-    const qreal fringe = allowCoverageFringe ? 2 : 0;
+#ifdef Q_OS_WIN
+    // Clip the native HWND to the same outline as the scene. Extra pixels in the region
+    // can expose the compositor's background when it ignores the scene's transparent fringe.
+    constexpr qreal fringe = 0;
+#else
+    const qreal fringe = antialiasing ? 2 : 0;
+#endif
     // Cache samples of the approved superellipse and mirror them around the four corners.
     constexpr int segments = 48;
     static const auto quarter = [] {

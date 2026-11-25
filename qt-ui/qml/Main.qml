@@ -527,6 +527,7 @@ AuralisWindow {
     Settings {
         id: windowPreferences
         category: "MainWindow"
+        property bool appearanceHintPending: false
         property bool compactView: false
         property int fullWidth: 810
         property int fullHeight: 525
@@ -617,6 +618,16 @@ AuralisWindow {
         onUpdateDetailsRequested: updateNotice.showUpdate(settingsWindow)
         onConfigChanged: if (config) enginePrompts.settings = config
     }
+    Connections {
+        target: settingsWindow
+        function clearAppearanceHint() {
+            if (settingsWindow.visible && settingsWindow.category === "Appearance")
+                windowPreferences.appearanceHintPending = false
+        }
+        function onCategoryChanged() { clearAppearanceHint() }
+        function onVisibleChanged() { clearAppearanceHint() }
+    }
+
     UpdateNotice {
         id: updateNotice
         backend: engine
@@ -1253,14 +1264,25 @@ AuralisWindow {
                     spacing: 8
 
                     GlassButton {
+                        id: donationButton
                         objectName: "mainDonatePatreon"
-                        visible: !root.compactView
-                        Layout.preferredHeight: 34
-                        text: qsTr("Donate on Patreon")
-                        filled: true
-                        accent: root.colors.light ? "#a64f25" : "#ffbd7d"
-                        font.weight: Font.DemiBold
-                        onClicked: Qt.openUrlExternally("https://www.patreon.com/c/Alsamii")
+                        action: settingsWindow.donationAction
+                        Layout.preferredWidth: 35
+                        Layout.preferredHeight: 30
+                        padding: 3
+                        accent: root.colors.secondary
+                        Accessible.name: text
+                        Accessible.role: Accessible.Link
+                        ToolTip.visible: hovered || visualFocus
+                        ToolTip.text: donationButton.text
+                        ToolTip.delay: 420
+                        contentItem: DashboardIcon {
+                            symbol: "support"
+                            ink: donationButton.iconInk
+                            surface: donationButton.faceColor
+                            relief: donationButton.enabled
+                            transform: Translate { y: donationButton.faceOffset }
+                        }
                     }
                     GlassButton {
                         id: compactButton
@@ -1435,7 +1457,7 @@ AuralisWindow {
                             AppMenuItem { symbol: "refresh"; text: qsTr("Check for updates"); enabled: updateNotice.updateSupported; onTriggered: updateNotice.manualCheck() }
                             AppMenuItem { symbol: "details"; text: qsTr("Updates & about"); onTriggered: settingsWindow.showCategory("Updates") }
                             AppMenuItem { symbol: "details"; text: qsTr("Project guide"); onTriggered: Qt.openUrlExternally("https://github.com/4ls4mi/Auralis-Download-Manager#guides-and-recovery") }
-                            AppMenuItem { visible: root.compactView; text: qsTr("Donate on Patreon"); onTriggered: Qt.openUrlExternally("https://www.patreon.com/c/Alsamii") }
+                            AppMenuItem { visible: root.compactView; symbol: "support"; action: settingsWindow.donationAction }
                         }
                     }
                     Item { Layout.fillWidth: true; Layout.fillHeight: root.sideMenus }
@@ -1527,6 +1549,32 @@ AuralisWindow {
                         }
                     }
                     Item { Layout.fillWidth: true }
+                }
+            }
+        }
+
+        Frame {
+            objectName: "appearanceHint"
+            Layout.fillWidth: true
+            visible: windowPreferences.appearanceHintPending && engine.ready && !startupSetup.blockingAnnouncements
+            padding: 6
+            background: GlassSurface { role: "card" }
+            contentItem: RowLayout {
+                spacing: 8
+                Label {
+                    Layout.fillWidth: true
+                    text: qsTr("Make Auralis yours with themes, colors, and effects.")
+                    color: root.colors.muted
+                    font.pixelSize: TypographyScale.pixels(12)
+                    wrapMode: Text.WordWrap
+                }
+                GlassButton {
+                    text: qsTr("Explore appearance")
+                    onClicked: settingsWindow.showCategory("Appearance")
+                }
+                GlassButton {
+                    text: qsTr("Dismiss")
+                    onClicked: windowPreferences.appearanceHintPending = false
                 }
             }
         }

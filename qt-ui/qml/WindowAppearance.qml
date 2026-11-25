@@ -84,7 +84,7 @@ QtObject {
 
     function defaults() {
         return {
-            cornerRadius: 12, cornerPlacement: "all",
+            cornerRadius: 12, cornerPlacement: "top",
             mainMode: "desktop", detailsMode: "desktop", mainMedia: "", detailsMedia: "",
             mainColor: "", detailsColor: "", progressShape: "bubble", progressLayout: "classic",
             progressAnimation: "classic", progressLighting: "polished", connectionShape: "material",

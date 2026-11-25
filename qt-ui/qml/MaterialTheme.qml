@@ -5,7 +5,7 @@ import QtQuick
 QtObject {
     id: theme
 
-    readonly property string defaultMaterial: "carbon"
+    readonly property string defaultMaterial: "mdm-classic"
     property string current: defaultMaterial
     property string mdmMode: "system"
     property var mdmPresets: ({})
@@ -349,7 +349,7 @@ QtObject {
         const mdm = mdmProfile(id);
         if (mdm)
             return mdm;
-        let result = Object.prototype.hasOwnProperty.call(builtins, id) ? builtins[id] : builtins[defaultMaterial];
+        let result = Object.prototype.hasOwnProperty.call(builtins, id) ? builtins[id] : builtins.carbon;
         const stored = Object.prototype.hasOwnProperty.call(userMaterials, id) ? userMaterials[id] : null;
         if (stored) {
             const byFinish = {

@@ -13,6 +13,7 @@ ColumnLayout {
     property bool automaticChecks: true
     property var release: null
     property bool backdropAvailable: false
+    required property Action donationAction
     signal updatePresentationRequested(string value)
     signal automaticChecksRequested(bool value)
     signal updateCheckRequested()
@@ -186,12 +187,13 @@ ColumnLayout {
             Copy { text: qsTr("Auralis also brings together torrent recovery and gallery downloads. If an eligible direct download is interrupted, it can verify saved pieces against a matching torrent and reuse them while BitTorrent fetches the missing data.") }
             Copy { text: qsTr("Send files from your browser, choose video or audio qualities on supported sites, or download a site gallery with gallery-dl.") }
             Copy { text: qsTr("Choose window materials and adjust progress, connection and graph colors and animations independently. Export appearance settings or back up download history and supported transfer files.") }
+            Heading { text: qsTr("Support Auralis"); Layout.topMargin: 6 }
             Copy { text: qsTr("Your support helps fund new apps, tools, and Arabic game localization.") }
             GlassButton {
                 objectName: "settingsDonatePatreon"
-                text: qsTr("Donate on Patreon")
-                filled: true
-                onClicked: Qt.openUrlExternally("https://www.patreon.com/c/Alsamii")
+                action: root.donationAction
+                Accessible.role: Accessible.Link
+                accent: root.colors.secondary
             }
         }
     }

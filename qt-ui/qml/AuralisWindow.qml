@@ -13,7 +13,7 @@ ApplicationWindow {
     readonly property var fontSettings: typeof typography === "undefined" ? null : typography
     property bool frameShapingEnabled: true
     readonly property int frameCornerMask: {
-        if (!frameShapingEnabled || MaterialTheme.mdmAppearance || visibility !== Window.Windowed)
+        if (!frameShapingEnabled || visibility !== Window.Windowed)
             return 0
         return ({square: 0, top: 3, bottom: 12, all: 15})[WindowAppearance.cornerPlacement]
     }
