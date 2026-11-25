@@ -68,9 +68,8 @@ Item {
 
         const mix = MaterialTheme.mix
         const rgba = MaterialTheme.rgba
-        const materialColor = usesMaterialProgress ? profile.mdm.progressTrack
-            : mix(trackColor, profile.ink, profile.light ? .16 : .24, 1)
-        const first = colors[0] ?? materialColor
+        const materialColor = usesMaterialProgress ? profile.mdm?.progressTrack : undefined
+        const first = colors[0] ?? materialColor ?? mix(trackColor, profile.ink, profile.light ? .16 : .24, 1)
         const last = colors[1] ?? first
         const tint = color => statusTrackTint.a > 0 ? mix(color, statusTrackTint, .30, 1) : color
         const light = "#f2f8ff"
