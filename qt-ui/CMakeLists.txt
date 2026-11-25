@@ -108,9 +108,65 @@ qt_add_resources(auralis-download-manager "branding"
         assets/sounds/auralis-queue-stopped.wav
 )
 
+# Reuse the original icon files and their notices from the desktop engine's source tree.
+set(classic_assets "${CMAKE_CURRENT_SOURCE_DIR}/../crates/app/assets")
+foreach(icon_kind IN ITEMS tb cat ui ft page)
+    file(GLOB matching_icons CONFIGURE_DEPENDS
+        "${classic_assets}/themes/*/icons/*/${icon_kind}-*.png"
+        "${classic_assets}/themes/*/icons/*/${icon_kind}-*.svg")
+    list(APPEND classic_theme_icons ${matching_icons})
+endforeach()
+list(SORT classic_theme_icons)
+file(GLOB classic_icon_notices CONFIGURE_DEPENDS
+    "${classic_assets}/themes/*/icons/LICENSE"
+    "${classic_assets}/themes/*/icons/COPYING"
+    "${classic_assets}/themes/*/icons/SOURCES.txt")
+set(classic_silk_icons
+    "${classic_assets}/icons/silk/folder.png"
+    "${classic_assets}/icons/silk/folder_go.png"
+    "${classic_assets}/icons/silk/folder_page.png"
+    "${classic_assets}/icons/silk/page_white_zip.png"
+    "${classic_assets}/icons/silk/page_white.png"
+    "${classic_assets}/icons/silk/music.png"
+    "${classic_assets}/icons/silk/application_xp.png"
+    "${classic_assets}/icons/silk/film.png"
+    "${classic_assets}/icons/silk/tick.png"
+    "${classic_assets}/icons/silk/page_white_stack.png"
+    "${classic_assets}/icons/silk/readme.txt"
+    "${classic_assets}/icons/lucide/LICENSE")
+
+# Include monochrome vector source in the index so Qt can recolor it at the
+# current scale without reading local files from QML or flattening the artwork.
+set(classic_icon_index ".pragma library\n\nvar paths = {\n")
+foreach(icon IN LISTS classic_theme_icons)
+    file(RELATIVE_PATH icon_path "${classic_assets}" "${icon}")
+    if(icon_path MATCHES "(/metro/.*|-symbolic)[.]svg$")
+        set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${icon}")
+        file(READ "${icon}" symbolic_svg)
+        string(REPLACE "\\" "\\\\" symbolic_svg "${symbolic_svg}")
+        string(REPLACE "\"" "\\\"" symbolic_svg "${symbolic_svg}")
+        string(REPLACE "\r" "\\r" symbolic_svg "${symbolic_svg}")
+        string(REPLACE "\n" "\\n" symbolic_svg "${symbolic_svg}")
+        string(REPLACE "\t" "\\t" symbolic_svg "${symbolic_svg}")
+        string(APPEND classic_icon_index "    \"${icon_path}\": \"${symbolic_svg}\",\n")
+    else()
+        list(APPEND classic_image_files "${icon}")
+        string(APPEND classic_icon_index "    \"${icon_path}\": true,\n")
+    endif()
+endforeach()
+string(APPEND classic_icon_index "}\n")
+qt_add_resources(auralis-download-manager "classic_icons"
+    PREFIX "/auralis/classic"
+    BASE "${classic_assets}"
+    FILES ${classic_image_files} ${classic_icon_notices} ${classic_silk_icons}
+)
+set(classic_icon_resources "${CMAKE_CURRENT_BINARY_DIR}/ClassicIconResources.js")
+file(CONFIGURE OUTPUT "${classic_icon_resources}" CONTENT "${classic_icon_index}" @ONLY)
+
 # Keep the components adjacent in the module so relative JavaScript imports
 # behave the same in the compiled package and the Qt tooling.
 file(GLOB qml_components CONFIGURE_DEPENDS "qml/*.qml" "qml/*.js")
+list(APPEND qml_components "${classic_icon_resources}")
 foreach(component IN LISTS qml_components)
     get_filename_component(filename "${component}" NAME)
     set_source_files_properties("${component}" PROPERTIES QT_RESOURCE_ALIAS "${filename}")

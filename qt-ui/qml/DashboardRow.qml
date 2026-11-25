@@ -27,6 +27,11 @@ Item {
     property bool transferring: false
     property bool animationsAllowed: true
     property bool compactView: false
+    property bool classicMode: false
+    property int classicHeight: 19
+    property var classicColumns: []
+    property var classicValues: ({})
+    property string classicFileIcon: ""
     property real waterPhase: 0
     readonly property real blockScale: (WindowAppearance.connectionBlockSize ?? 100) / 100
     readonly property int baseRowHeight: compactView ? (recoveryLabel.length ? 52 : 40)
@@ -53,7 +58,7 @@ Item {
     signal opened()
     signal optionsRequested()
 
-    implicitHeight: Math.max(baseRowHeight, Math.ceil(
+    implicitHeight: classicMode ? classicHeight : Math.max(baseRowHeight, Math.ceil(
         (compactView ? 13 : 19) * blockScale + TypographyScale.pixels(12) + 8))
     Accessible.role: Accessible.ListItem
     Accessible.name: [fileName, sizeLabel, statusLabel, speedLabel, connectionLabel].filter(Boolean).join(", ")
@@ -62,7 +67,7 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        radius: row.colors.panelRadius || (row.studioChrome ? 5 : 8)
+        radius: row.classicMode ? 0 : row.colors.panelRadius || (row.studioChrome ? 5 : 8)
         color: row.chosen
             ? (row.studioChrome && row.colors.navigationFill
                 ? row.colors.rowSelectionFill || row.colors.navigationFill
@@ -74,7 +79,7 @@ Item {
             : Qt.alpha(row.colors.accent, row.cursorFocused ? .9 : .66)
 
         Rectangle {
-            visible: row.studioChrome && row.chosen
+            visible: !row.classicMode && row.studioChrome && row.chosen
             anchors.top: parent.top
             anchors.bottom: parent.bottom
             anchors.left: parent.left
@@ -102,7 +107,21 @@ Item {
         }
     }
 
+    Loader {
+        anchors.fill: parent
+        active: row.classicMode
+        sourceComponent: ClassicTableCells {
+            columns: row.classicColumns
+            colors: row.colors
+            values: row.classicValues
+            fileIcon: row.classicFileIcon
+            selected: row.chosen
+            torrentSource: row.torrent
+        }
+    }
+
     RowLayout {
+        visible: !row.classicMode
         anchors.fill: parent
         anchors.leftMargin: 11
         anchors.rightMargin: 11
@@ -236,9 +255,8 @@ Item {
                             required property int index
                             readonly property var worker: row.workers[index] || ({})
                             Layout.fillWidth: true
-                            baseWidth: row.compactView ? 10 : 16
                             baseHeight: row.compactView ? 12 : 18
-                            Layout.maximumWidth: row.blockScale < 1 ? implicitWidth : Infinity
+                            Layout.maximumWidth: implicitWidth
                             value: TransferData.assigned(worker.id, row.telemetry.segments)
                             receiving: row.transferring && worker.state === "Receiving"
                             phase: row.waterPhase
@@ -295,11 +313,12 @@ Item {
     Rectangle {
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.leftMargin: 10
-        anchors.rightMargin: 10
+        anchors.leftMargin: row.classicMode ? 0 : 10
+        anchors.rightMargin: anchors.leftMargin
         anchors.bottom: parent.bottom
         height: 1
-        color: (row.studioChrome && row.colors.surfaceLine) || row.colors.divider
+        color: row.classicMode ? Qt.alpha(row.colors.divider, .56)
+            : (row.studioChrome && row.colors.surfaceLine) || row.colors.divider
     }
 
     PlainTextToolTip {

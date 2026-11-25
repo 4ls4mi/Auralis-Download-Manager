@@ -79,7 +79,7 @@ Architecture: amd64
 Section: net
 Priority: optional
 Maintainer: Auralis Download Manager contributors <4ls4mi@users.noreply.github.com>
-Depends: $linked, ca-certificates, $qml_dependencies
+Depends: $linked, ca-certificates, qt6-svg-plugins, $qml_dependencies
 Recommends: qt6-wayland
 Homepage: https://github.com/4ls4mi/Auralis-Download-Manager
 Description: Graphical download manager for direct files and torrents

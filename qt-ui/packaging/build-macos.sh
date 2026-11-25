@@ -77,7 +77,12 @@ iconutil -c icns "$iconset" -o "$resources/auralis.icns"
 
 # Sign the Rust library before macdeployqt signs Qt libraries, plugins and the app.
 codesign --force --sign - "$bundle/Contents/MacOS/libauralis_engine.dylib"
-"$qt_prefix/bin/macdeployqt" "$bundle" -qmldir="$source_dir/qml" -appstore-compliant -codesign=-
+# Theme icons include SVGs referenced from a resource index. Deploy the SVG image
+# plugin explicitly because those files do not link QtSvg or import a QML module.
+svg_plugin="$bundle/Contents/PlugIns/imageformats/libqsvg.dylib"
+mkdir -p "$(dirname "$svg_plugin")"
+cp "$qt_prefix/plugins/imageformats/libqsvg.dylib" "$svg_plugin"
+"$qt_prefix/bin/macdeployqt" "$bundle" -qmldir="$source_dir/qml" -executable="$svg_plugin" -appstore-compliant -codesign=-
 # Qt SQL can be an indirect framework dependency. Auralis does not load its database plugins,
 # some of which reference third-party client libraries outside the application bundle.
 if [[ -d "$bundle/Contents/PlugIns/sqldrivers" ]]; then

@@ -13,10 +13,19 @@ QtObject {
     readonly property bool mdmDark: mdmMode === "dark" || (mdmMode === "system"
         && (Qt.styleHints.colorScheme === Qt.ColorScheme.Dark
             || (Qt.styleHints.colorScheme === Qt.ColorScheme.Unknown && systemColors.window.hsvValue < .5)))
-    readonly property var mdmPresetIds: [
-        "mdm-classic", "mdm-native", "mdm-high-contrast", "mdm-metro", "mdm-adwaita",
-        "mdm-breeze", "mdm-luna", "mdm-aero", "mdm-aqua", "mdm-emerald"
-    ]
+    readonly property var mdmPresetNames: ({
+        "mdm-classic": qsTr("Classic Desktop"),
+        "mdm-native": qsTr("System Accent"),
+        "mdm-high-contrast": qsTr("High Contrast"),
+        "mdm-metro": qsTr("Flat Metro"),
+        "mdm-adwaita": qsTr("Adwaita"),
+        "mdm-breeze": qsTr("Breeze"),
+        "mdm-luna": qsTr("Luna Blue"),
+        "mdm-aero": qsTr("Aero Glass"),
+        "mdm-aqua": qsTr("Aqua Gel"),
+        "mdm-emerald": qsTr("Emerald Fluent")
+    })
+    readonly property var mdmPresetIds: Object.keys(mdmPresetNames)
 
     property SystemPalette systemColors: SystemPalette {
         colorGroup: SystemPalette.Active
@@ -50,7 +59,11 @@ QtObject {
         if (!color)
             return null;
         return preset({
-            name: qsTr("MDM %1").arg(selected.name), mdm: color, mdmProgress: selected.progress,
+            name: mdmPresetNames[id] || selected.name, mdm: color, mdmProgress: selected.progress,
+            mdmIconSet: selected.iconSet || "", mdmIconStyle: selected.iconStyle || "color",
+            mdmCaptionStyle: selected.captionStyle || "system",
+            mdmListRow: selected.listRow, mdmListHeader: selected.listHeader,
+            titleInk: color.captionText || color.text, titleMuted: color.captionInactiveText || color.muted,
             finish: "matte", shape: "round", opaque: true, cleanStudio: true, light: color.light,
             radius: selected.radius, panelRadius: 0, buttonRadius: selected.buttonRadius,
             mdmGlossyButtons: selected.glossyButtons,
@@ -395,7 +408,7 @@ QtObject {
 
     function applyMaterialColors(base, id) {
         const custom = materialCustomizations[id];
-        if (!custom || !(custom.sidebar || custom.content || custom.menu || custom.text))
+        if (!custom || !(custom.sidebar || custom.content || custom.menu || custom.text || custom.header || custom.footer))
             return base;
 
         const layers = Object.assign({}, base.roleFaces);
@@ -418,6 +431,14 @@ QtObject {
             adjusted.summaryFill = layers.summary;
             adjusted.contentOverride = custom.content;
         }
+        if (custom.header) {
+            layers.title = custom.header;
+            adjusted.titleOverride = custom.header;
+        }
+        if (custom.footer) {
+            layers.footer = custom.footer;
+            adjusted.footerOverride = custom.footer;
+        }
         if (custom.menu) {
             adjusted.menuSurface = custom.menu;
             adjusted.menuOverride = custom.menu;
@@ -438,14 +459,19 @@ QtObject {
                 base.rowSelectionFill || center);
             adjusted.summaryInk = controlTextInk(custom.text || base.summaryInk || base.ink,
                 adjusted.summaryFill || base.summaryFill || layers.summary || center);
-            adjusted.titleInk = controlTextInk(text, layers.title || base.background);
-            adjusted.titleMuted = controlTextInk(muted, layers.title || base.background);
+        }
+        if (custom.header || custom.content || custom.text) {
+            adjusted.titleInk = controlTextInk(custom.text || base.titleInk || base.ink, layers.title || base.background);
+            adjusted.titleMuted = controlTextInk(custom.text || base.titleMuted || base.muted, layers.title || base.background);
+        }
+        if (custom.footer || custom.content || custom.text) {
             adjusted.footerInk = controlTextInk(text, layers.footer || base.background);
             adjusted.footerMuted = controlTextInk(muted, layers.footer || base.background);
+            adjusted.footerDestructive = controlTextInk(base.destructive, layers.footer || base.background);
         }
         if (base.mdm) {
             adjusted.mdm = Object.assign({}, base.mdm, {
-                tree: layers.sidebar, list: layers.content, field: layers.field,
+                caption: layers.title, tree: layers.sidebar, list: layers.content, field: layers.field,
                 menu: adjusted.menuSurface || base.mdm.menu,
                 text: adjusted.text || base.mdm.text, muted: adjusted.muted || base.mdm.muted,
                 selectionText: adjusted.rowSelectionInk || base.mdm.selectionText

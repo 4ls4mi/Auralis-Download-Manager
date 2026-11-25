@@ -356,6 +356,7 @@ DetachedDialogWindow {
                 width: Math.min(implicitWidth, footerItems.width)
                 enabled: !root.busy
                 text: qsTr("Don’t show this dialog again")
+                palette.windowText: root.colors.footerInk || root.colors.text
                 onToggled: root.savePreference(checked)
             }
             CompletionButton {

@@ -190,6 +190,8 @@ GridLayout {
             : WindowAppearance.materialColor(MaterialTheme.current, option.role)
         readonly property color fallbackColor: {
             switch (option.role) {
+            case "header": return root.colors.roleFaces?.title || root.colors.background
+            case "footer": return root.colors.roleFaces?.footer || root.colors.background
             case "sidebar": return root.colors.roleFaces?.sidebar || root.colors.background
             case "content": return root.colors.roleFaces?.content || root.colors.background
             case "menu": return MaterialTheme.menuColors.surface
@@ -240,13 +242,13 @@ GridLayout {
                 delegate: Button {
                     id: swatch
                     required property string modelData
+                    required property int index
                     padding: 0
                     implicitWidth: 28
                     implicitHeight: 28
                     hoverEnabled: true
-                    Accessible.name: qsTr("Use %1 for %2").arg(modelData).arg(field.option.label)
-                    ToolTip.visible: hovered
-                    ToolTip.text: modelData
+                    Accessible.name: qsTr("Suggested color %1 for %2").arg(index + 1).arg(field.option.label)
+                    Accessible.selected: modelData === field.chosenColor
                     onClicked: field.choose(modelData)
 
                     background: Rectangle {
@@ -440,6 +442,10 @@ GridLayout {
 
                 Repeater {
                     model: [
+                        {role: "header", label: qsTr("Header"),
+                            suggestions: ["#272341", "#214659", "#5a3245"]},
+                        {role: "footer", label: qsTr("Footer"),
+                            suggestions: ["#2e2944", "#233f4c", "#57374a"]},
                         {role: "sidebar", label: qsTr("Sidebar"),
                             suggestions: ["#322762", "#19465a", "#643b4e"]},
                         {role: "content", label: qsTr("Content"),
@@ -713,7 +719,7 @@ GridLayout {
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
                 color: root.colors.muted
-                text: qsTr("MDM presets set the progress bar, downloaded byte ranges, and speed graph.")
+                text: qsTr("Classic materials supply the default progress, connection and speed graph styles.")
             }
             Heading { text: qsTr("Progress") }
             GridLayout {
@@ -935,8 +941,61 @@ GridLayout {
         }
     }
 
+    component ColorSlider: GlassSlider {
+        id: control
+
+        required property Gradient spectrum
+        required property color sample
+
+        Layout.fillWidth: true
+        from: 0
+        to: 1
+
+        background: Rectangle {
+            id: strip
+
+            implicitWidth: 200
+            implicitHeight: 16
+            x: control.leftPadding + control.thumbExtent / 2
+            y: control.topPadding + (control.availableHeight - height) / 2
+            width: Math.max(0, control.availableWidth - control.thumbExtent)
+            height: implicitHeight
+            radius: height / 2
+            gradient: control.spectrum
+            transform: Scale {
+                origin.x: strip.width / 2
+                xScale: control.mirrored ? -1 : 1
+            }
+        }
+
+        handle: Item {
+            implicitWidth: control.thumbExtent
+            implicitHeight: control.thumbExtent
+            x: control.leftPadding + control.visualPosition * (control.availableWidth - width)
+            y: control.topPadding + (control.availableHeight - height) / 2
+
+            Rectangle {
+                anchors.fill: parent
+                radius: width / 2
+                color: "#171823"
+                border.width: control.visualFocus ? 2 : 0
+                border.color: MaterialTheme.controlIconInk(root.colors.accent, root.colors.background)
+            }
+
+            Rectangle {
+                anchors.fill: parent
+                anchors.margins: 3
+                radius: width / 2
+                color: control.sample
+                border.width: 2
+                border.color: "white"
+            }
+        }
+    }
+
     Dialog {
         id: materialColorPicker
+        objectName: "materialColorPicker"
 
         property string materialId
         property string role
@@ -969,14 +1028,6 @@ GridLayout {
             selectedColor = Qt.hsva(hue === 1 ? 0 : hue, saturation, brightness, 1)
         }
 
-        function setColorFromHex(value) {
-            const color = MaterialTheme.rgba(value, 1)
-            hue = Math.max(0, color.hsvHue)
-            saturation = color.hsvSaturation
-            brightness = color.hsvValue
-            selectedColor = color
-        }
-
         contentItem: ColumnLayout {
             spacing: 10
 
@@ -986,36 +1037,24 @@ GridLayout {
                 radius: 8
                 color: materialColorPicker.selectedColor
                 border.color: MaterialTheme.controlIconInk(root.colors.divider, color)
-
-                Label {
-                    anchors.centerIn: parent
-                    text: WindowAppearance.colorText(materialColorPicker.selectedColor).toUpperCase()
-                    color: MaterialTheme.controlTextInk(root.colors.text, materialColorPicker.selectedColor)
-                }
+                Accessible.role: Accessible.Graphic
+                Accessible.name: qsTr("Selected color")
             }
 
-            RowLayout {
-                Layout.fillWidth: true
-                Label { text: qsTr("Hex color"); color: root.colors.text }
-                TextField {
-                    Layout.fillWidth: true
-                    text: WindowAppearance.colorText(materialColorPicker.selectedColor).toUpperCase()
-                    placeholderText: "#RRGGBB"
-                    Accessible.name: qsTr("Hex color")
-                    selectByMouse: true
-                    maximumLength: 7
-                    validator: RegularExpressionValidator { regularExpression: /#[0-9a-fA-F]{6}/ }
-                    onTextEdited: {
-                        if (acceptableInput)
-                            materialColorPicker.setColorFromHex(text)
-                    }
-                }
-            }
             Label { text: qsTr("Hue"); color: root.colors.text }
-            GlassSlider {
-                Layout.fillWidth: true
-                from: 0
-                to: 1
+            ColorSlider {
+                objectName: "materialHueSlider"
+                spectrum: Gradient {
+                    orientation: Gradient.Horizontal
+                    GradientStop { position: 0; color: "#ff0000" }
+                    GradientStop { position: 1 / 6; color: "#ffff00" }
+                    GradientStop { position: 2 / 6; color: "#00ff00" }
+                    GradientStop { position: 3 / 6; color: "#00ffff" }
+                    GradientStop { position: 4 / 6; color: "#0000ff" }
+                    GradientStop { position: 5 / 6; color: "#ff00ff" }
+                    GradientStop { position: 1; color: "#ff0000" }
+                }
+                sample: Qt.hsva(value === 1 ? 0 : value, 1, 1, 1)
                 stepSize: 1 / 360
                 value: materialColorPicker.hue
                 Accessible.name: qsTr("Hue")
@@ -1029,10 +1068,13 @@ GridLayout {
                 }
             }
             Label { text: qsTr("Saturation"); color: root.colors.text }
-            GlassSlider {
-                Layout.fillWidth: true
-                from: 0
-                to: 1
+            ColorSlider {
+                spectrum: Gradient {
+                    orientation: Gradient.Horizontal
+                    GradientStop { position: 0; color: Qt.hsva(0, 0, materialColorPicker.brightness, 1) }
+                    GradientStop { position: 1; color: Qt.hsva(materialColorPicker.hue, 1, materialColorPicker.brightness, 1) }
+                }
+                sample: materialColorPicker.selectedColor
                 stepSize: .01
                 value: materialColorPicker.saturation
                 Accessible.name: qsTr("Saturation")
@@ -1042,10 +1084,13 @@ GridLayout {
                 }
             }
             Label { text: qsTr("Brightness"); color: root.colors.text }
-            GlassSlider {
-                Layout.fillWidth: true
-                from: 0
-                to: 1
+            ColorSlider {
+                spectrum: Gradient {
+                    orientation: Gradient.Horizontal
+                    GradientStop { position: 0; color: "black" }
+                    GradientStop { position: 1; color: Qt.hsva(materialColorPicker.hue, materialColorPicker.saturation, 1, 1) }
+                }
+                sample: materialColorPicker.selectedColor
                 stepSize: .01
                 value: materialColorPicker.brightness
                 Accessible.name: qsTr("Brightness")

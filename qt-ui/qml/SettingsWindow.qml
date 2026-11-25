@@ -28,6 +28,23 @@ AuralisWindow {
     readonly property int resizeInset: 14
     readonly property bool roundedFrame: frameCornerRadius > 0
     readonly property var colors: MaterialTheme.palette
+    readonly property bool classicLayout: MaterialTheme.mdmAppearance
+    readonly property color classicPageFace: colors.contentOverride || colors.mdm?.tabPage
+        || colors.roleFaces?.content || colors.background
+    readonly property color classicTabFace: colors.mdm?.tab || colors.background
+    readonly property color classicTabBorder: colors.mdm?.headerLine || colors.divider
+    readonly property color classicPageInk: MaterialTheme.controlTextInk(colors.textOverride || colors.text, classicPageFace)
+    readonly property color captionInk: (classicLayout && !active ? colors.titleMuted : colors.titleInk) || colors.text
+    readonly property var classicFrontTabs: ["General", "Browser Integration", "Downloads",
+        "Connection", "Appearance", "Updates"]
+    readonly property var classicBackTabs: ["Advanced", "Media Helpers", "Accounts", "Torrents", "Display", "Scheduler"]
+    readonly property var classicTabs: classicFrontTabs.concat(classicBackTabs).map(id => sections.find(section => section.id === id))
+    readonly property var classicPageIcons: ({
+        "General": "page-general", "Browser Integration": "page-general", "Downloads": "page-downloads",
+        "Connection": "page-connection", "Appearance": "page-regional", "Updates": "page-remote",
+        "Advanced": "page-proxy", "Media Helpers": "page-logins", "Accounts": "page-logins",
+        "Torrents": "page-file-types", "Display": "page-regional", "Scheduler": "page-archives"
+    })
     readonly property bool wideSweepVisible: wideSweep.visible && wideSweep.available
     readonly property GlassButton selectedNavigationButton: {
         if (!term) {
@@ -351,7 +368,7 @@ AuralisWindow {
             id: wideSweep
             objectName: "settingsWideSweep"
             anchors.fill: parent
-            visible: MaterialTheme.wideSweepEnabled && root.visible && root.visibility !== Window.Minimized
+            visible: !root.classicLayout && MaterialTheme.wideSweepEnabled && root.visible && root.visibility !== Window.Minimized
             sidebar: navigationSidebar
             pane: settingsPane
             viewport: navigation
@@ -413,8 +430,22 @@ AuralisWindow {
 
     component Card: Frame {
         Layout.fillWidth: true
-        padding: 14
-        background: GlassSurface { role: "content"; roundedPanel: true; backdropAvailable: settingsBackdrop.backdropAvailable }
+        padding: root.classicLayout ? 6 : 14
+        background: Item {
+            GlassSurface {
+                anchors.fill: parent
+                visible: !root.classicLayout
+                role: "content"
+                roundedPanel: true
+                backdropAvailable: settingsBackdrop.backdropAvailable
+            }
+            Rectangle {
+                anchors.fill: parent
+                visible: root.classicLayout
+                color: root.classicPageFace
+                border.color: root.classicTabBorder
+            }
+        }
     }
 
     Action {
@@ -424,17 +455,18 @@ AuralisWindow {
     }
 
     header: ColumnLayout {
+        id: headerStack
         spacing: 0
         ToolBar {
             Layout.fillWidth: true
             padding: 0
-            leftInset: root.roundedFrame ? 0 : 8
+            leftInset: root.classicLayout || root.roundedFrame ? 0 : 8
             rightInset: leftInset
-            topInset: root.roundedFrame ? 0 : 5
-            bottomInset: root.roundedFrame ? 0 : 2
+            topInset: root.classicLayout || root.roundedFrame ? 0 : 5
+            bottomInset: root.classicLayout || root.roundedFrame ? 0 : 2
             background: GlassSurface {
                 role: "title"
-                roundedPanel: !root.roundedFrame
+                roundedPanel: !root.classicLayout && !root.roundedFrame
                 radius: roundedPanel ? Math.max(12, profile.radius) : 0
                 backdropAvailable: settingsBackdrop.backdropAvailable
             }
@@ -444,12 +476,14 @@ AuralisWindow {
                 spacing: 7
                 Item {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 45
+                    Layout.preferredHeight: root.classicLayout ? 27 : 45
                     BrandMark {
                         id: settingsBrand
                         anchors.left: parent.left
-                        anchors.leftMargin: Math.max(15, root.frameSafeInset)
+                        anchors.leftMargin: Math.max(root.classicLayout ? 7 : 15, root.frameSafeInset)
                         anchors.verticalCenter: parent.verticalCenter
+                        width: root.classicLayout ? 15 : implicitWidth
+                        height: width
                     }
                     Label {
                         anchors.left: settingsBrand.right
@@ -458,8 +492,9 @@ AuralisWindow {
                         anchors.verticalCenter: parent.verticalCenter
                         text: root.title
                         elide: Text.ElideRight
-                        font.weight: Font.DemiBold
-                        color: root.colors.titleInk || root.colors.text
+                        font.weight: root.classicLayout ? Font.Normal : Font.DemiBold
+                        font.pixelSize: root.classicLayout ? TypographyScale.pixels(12) : root.font.pixelSize
+                        color: root.captionInk
                     }
                     CaptionMoveArea {
                         objectName: "settingsTitleDragArea"
@@ -470,6 +505,7 @@ AuralisWindow {
                 }
                 GlassButton {
                     objectName: "settingsHeaderDonatePatreon"
+                    visible: !root.classicLayout
                     action: donatePatreon
                     Layout.preferredHeight: 30
                     leftPadding: 9
@@ -477,30 +513,64 @@ AuralisWindow {
                     accent: root.colors.secondary
                     Accessible.role: Accessible.Link
                 }
-                CaptionControls {
-                    maximized: root.visibility === Window.Maximized
-                    closeLabel: qsTr("Close settings")
-                    onMinimizeRequested: root.showMinimized()
-                    onMaximizeRequested: root.toggleMaximize()
-                    onCloseRequested: root.close()
+                Loader {
+                    active: root.classicLayout
+                    visible: active
+                    sourceComponent: Basic.Button {
+                        id: classicClose
+                        objectName: "closeCaption"
+                        implicitWidth: 34
+                        implicitHeight: 25
+                        padding: 0
+                        hoverEnabled: true
+                        Accessible.name: qsTr("Close settings")
+                        onClicked: root.close()
+                        background: Rectangle {
+                            color: classicClose.hovered || classicClose.down
+                                ? root.colors.mdm?.captionClose || root.colors.destructive : "transparent"
+                        }
+                        contentItem: Item {
+                            ClassicToolbarIcon {
+                                anchors.centerIn: parent
+                                width: 12
+                                height: 12
+                                iconName: "ui-close"
+                                ink: classicClose.hovered || classicClose.down
+                                    ? root.colors.mdm?.captionCloseText || MaterialTheme.contrastInk(classicClose.background.color)
+                                    : root.captionInk
+                            }
+                        }
+                    }
+                }
+                Loader {
+                    active: !root.classicLayout
+                    visible: active
+                    sourceComponent: CaptionControls {
+                        maximized: root.visibility === Window.Maximized
+                        closeLabel: qsTr("Close settings")
+                        onMinimizeRequested: root.showMinimized()
+                        onMaximizeRequested: root.toggleMaximize()
+                        onCloseRequested: root.close()
+                    }
                 }
                 Item { Layout.preferredWidth: Math.max(root.resizeInset, root.frameSafeInset - settingsTitleRow.spacing) }
             }
         }
         ToolBar {
+            parent: root.classicLayout ? classicFooter : headerStack
             objectName: "settingsCommands"
             Layout.fillWidth: true
-            leftPadding: Math.max(root.resizeInset + 2, root.frameSafeInset)
-            rightPadding: Math.max(root.resizeInset + 2, root.frameSafeInset)
-            topPadding: 4
+            leftPadding: root.classicLayout ? 8 : Math.max(root.resizeInset + 2, root.frameSafeInset)
+            rightPadding: root.classicLayout ? 8 : Math.max(root.resizeInset + 2, root.frameSafeInset)
+            topPadding: root.classicLayout ? 2 : 4
             bottomPadding: 5
-            leftInset: root.roundedFrame ? 0 : 8
+            leftInset: root.classicLayout || root.roundedFrame ? 0 : 8
             rightInset: leftInset
             topInset: root.roundedFrame ? 0 : 2
             bottomInset: root.roundedFrame ? 0 : 1
             background: GlassSurface {
-                role: "toolbar"
-                roundedPanel: !root.roundedFrame
+                role: root.classicLayout ? "footer" : "toolbar"
+                roundedPanel: !root.classicLayout && !root.roundedFrame
                 radius: roundedPanel ? Math.max(12, profile.radius) : 0
                 backdropAvailable: settingsBackdrop.backdropAvailable
             }
@@ -511,35 +581,157 @@ AuralisWindow {
                     text: root.saving ? qsTr("Saving…") : root.reading ? qsTr("Loading settings…") : root.notice ||
                         (engine.ready ? qsTr("Auralis %1").arg(engine.version) : engine.status)
                     elide: Text.ElideRight
-                    color: root.colors.muted
+                    font.pixelSize: root.classicLayout ? TypographyScale.pixels(11) : root.font.pixelSize
+                    color: root.classicLayout ? root.colors.footerMuted || root.colors.muted : root.colors.muted
                 }
                 GlassButton {
                     objectName: "openSetupWizard"
+                    Layout.preferredHeight: root.classicLayout ? 23 : implicitHeight
+                    font.pixelSize: TypographyScale.pixels(root.classicLayout ? 11 : 13)
                     text: qsTranslate("StartupSetup", "Set up Auralis")
                     enabled: engine.ready
                     onClicked: root.setupRequested()
                 }
                 GlassButton {
                     objectName: "settingsDone"
-                    text: qsTr("Done")
+                    Layout.preferredWidth: root.classicLayout ? 73 : implicitWidth
+                    Layout.preferredHeight: root.classicLayout ? 23 : implicitHeight
+                    font.pixelSize: TypographyScale.pixels(root.classicLayout ? 11 : 13)
+                    text: root.classicLayout ? qsTr("OK") : qsTr("Done")
                     accent: root.colors.positive
                     highlighted: true
                     onClicked: root.close()
+                }
+                GlassButton {
+                    visible: root.classicLayout
+                    Layout.preferredWidth: 73
+                    Layout.preferredHeight: 23
+                    font.pixelSize: TypographyScale.pixels(11)
+                    text: qsTr("Help")
+                    onClicked: Qt.openUrlExternally("https://github.com/4ls4mi/Auralis-Download-Manager#guides-and-feedback")
                 }
             }
         }
     }
 
-    RowLayout {
+    footer: ColumnLayout {
+        id: classicFooter
+        visible: root.classicLayout
+        spacing: 0
+    }
+
+    GridLayout {
         id: settingsLayout
         anchors.fill: parent
-        anchors.margins: 12
-        anchors.rightMargin: root.resizeInset
-        anchors.bottomMargin: Math.max(root.resizeInset, root.frameSafeInset)
-        spacing: 12
+        anchors.margins: root.classicLayout ? 7 : 12
+        anchors.rightMargin: root.classicLayout ? 7 : root.resizeInset
+        anchors.bottomMargin: root.classicLayout ? 4 : Math.max(root.resizeInset, root.frameSafeInset)
+        columns: 2
+        columnSpacing: 12
+        rowSpacing: 0
+
+        GridLayout {
+            objectName: "classicSettingsTabs"
+            Accessible.role: Accessible.PageTabList
+            visible: root.classicLayout
+            Layout.row: 0
+            Layout.column: 0
+            Layout.columnSpan: 2
+            Layout.fillWidth: true
+            Layout.leftMargin: 2
+            Layout.rightMargin: 2
+            columns: 6
+            rowSpacing: 1
+            columnSpacing: 1
+            uniformCellWidths: true
+
+            Repeater {
+                id: classicTabsRepeater
+                model: root.classicLayout ? root.classicTabs : []
+                delegate: Basic.TabButton {
+                    id: classicTab
+                    required property var modelData
+                    required property int index
+                    readonly property bool selected: root.category === modelData.id && !root.term
+                    readonly property bool firstRow: (index < root.classicFrontTabs.length)
+                        !== root.classicFrontTabs.includes(root.category)
+                    readonly property color face: selected ? root.classicPageFace
+                        : hovered ? root.colors.mdm?.tabHot || root.classicTabFace : root.classicTabFace
+                    readonly property color ink: MaterialTheme.controlTextInk(root.colors.textOverride || root.colors.text, face)
+
+                    Layout.row: firstRow ? 0 : 1
+                    Layout.column: index % root.classicFrontTabs.length
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    Layout.preferredHeight: Math.max(19, implicitContentHeight + 4)
+                    padding: 2
+                    leftPadding: 4
+                    rightPadding: 4
+                    hoverEnabled: true
+                    checkable: false
+                    text: modelData.name
+                    font.pixelSize: TypographyScale.pixels(11)
+                    focusPolicy: selected || root.term ? Qt.StrongFocus : Qt.ClickFocus
+                    Accessible.role: Accessible.PageTab
+                    Accessible.selected: selected
+                    Accessible.description: modelData.detail
+                    ToolTip.visible: hovered && tabTitle.truncated
+                    ToolTip.text: text
+                    onClicked: root.showCategory(modelData.id)
+
+                    Keys.onPressed: event => {
+                        if (root.term)
+                            return
+                        const step = root.LayoutMirroring.enabled ? -1 : 1
+                        const last = root.classicTabs.length - 1
+                        let next
+                        switch (event.key) {
+                        case Qt.Key_Home: next = 0; break
+                        case Qt.Key_End: next = last; break
+                        case Qt.Key_Left: next = index - step; break
+                        case Qt.Key_Right: next = index + step; break
+                        default: return
+                        }
+                        const target = classicTabsRepeater.itemAt(Math.max(0, Math.min(last, next)))
+                        if (target) {
+                            root.showCategory(target.modelData.id)
+                            target.forceActiveFocus(Qt.TabFocusReason)
+                            event.accepted = true
+                        }
+                    }
+
+                    contentItem: Label {
+                        id: tabTitle
+                        text: classicTab.text
+                        font: classicTab.font
+                        color: classicTab.ink
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                        elide: Text.ElideRight
+                    }
+                    background: Rectangle {
+                        color: classicTab.face
+                        border.color: classicTab.visualFocus ? root.colors.accent : root.classicTabBorder
+                        Rectangle {
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.bottom: parent.bottom
+                            anchors.margins: 1
+                            anchors.bottomMargin: 0
+                            height: 1
+                            visible: classicTab.selected
+                            color: classicTab.face
+                        }
+                    }
+                }
+            }
+        }
 
         Frame {
             id: navigationSidebar
+            visible: !root.classicLayout
+            Layout.row: 0
+            Layout.column: 0
             Layout.fillHeight: true
             Layout.preferredWidth: 188
             padding: 9
@@ -607,19 +799,31 @@ AuralisWindow {
 
         Frame {
             id: settingsPane
+            Layout.row: root.classicLayout ? 1 : 0
+            Layout.column: root.classicLayout ? 0 : 1
+            Layout.columnSpan: root.classicLayout ? 2 : 1
             Layout.fillWidth: true
             Layout.fillHeight: true
-            padding: 13
-            background: GlassSurface {
-                visible: !root.wideSweepVisible
-                role: "content"
-                roundedPanel: true
-                backdropAvailable: settingsBackdrop.backdropAvailable
+            padding: root.classicLayout ? 7 : 13
+            background: Item {
+                GlassSurface {
+                    anchors.fill: parent
+                    visible: !root.classicLayout && !root.wideSweepVisible
+                    role: "content"
+                    roundedPanel: true
+                    backdropAvailable: settingsBackdrop.backdropAvailable
+                }
+                Rectangle {
+                    anchors.fill: parent
+                    visible: root.classicLayout
+                    color: root.classicPageFace
+                    border.color: root.classicTabBorder
+                }
             }
 
             ColumnLayout {
                 anchors.fill: parent
-                spacing: 10
+                spacing: root.classicLayout ? 5 : 10
 
                 TextField {
                     id: search
@@ -628,6 +832,7 @@ AuralisWindow {
                     placeholderText: qsTr("Search settings…")
                     Accessible.name: placeholderText
                     selectByMouse: true
+                    font.pixelSize: root.classicLayout ? TypographyScale.pixels(11) : root.font.pixelSize
                     color: root.colors.text
                     placeholderTextColor: root.colors.muted
                     background: GlassSurface { role: "field"; backdropAvailable: settingsBackdrop.backdropAvailable }
@@ -645,32 +850,57 @@ AuralisWindow {
                     ColumnLayout {
                         id: settingsContent
                         width: scrollViewport.columnWidth
-                        spacing: 12
+                        spacing: root.classicLayout ? 6 : 12
 
-                        Label {
+                        RowLayout {
                             Layout.fillWidth: true
-                            text: root.term ? qsTr("Search results") : root.chosen.name
-                            color: root.colors.text
-                            font.pixelSize: TypographyScale.pixels(26)
-                            font.weight: Font.Bold
+                            spacing: 8
+                            Loader {
+                                active: root.classicLayout && !root.term
+                                visible: active
+                                Layout.preferredWidth: 28
+                                Layout.preferredHeight: 28
+                                sourceComponent: ClassicToolbarIcon {
+                                    iconName: root.classicPageIcons[root.category] || "page-general"
+                                    ink: root.classicPageInk
+                                }
+                            }
+                            Label {
+                                Layout.fillWidth: true
+                                text: root.term ? qsTr("Search results") : root.chosen.name
+                                color: root.classicLayout ? root.classicPageInk : root.colors.text
+                                font.pixelSize: TypographyScale.pixels(root.classicLayout ? 13 : 26)
+                                font.weight: Font.Bold
+                                horizontalAlignment: root.classicLayout ? Text.AlignRight : Text.AlignLeft
+                                Accessible.description: root.term ? "" : root.chosen.detail
+                            }
+                        }
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 1
+                            visible: root.classicLayout
+                            color: root.classicTabBorder
                         }
 
-                        PaneCopy { visible: !root.term; text: root.chosen.detail }
+                        PaneCopy { visible: !root.term && !root.classicLayout; text: root.chosen.detail }
                         PaneCopy {
                             visible: Boolean(root.term) && !root.visibleFields.length
-                            text: root.destinationSections.length ? qsTr("Open a matching section from the sidebar.") : qsTr("No matching settings.")
+                            text: root.destinationSections.length
+                                ? root.classicLayout ? qsTr("Open a matching settings tab.") : qsTr("Open a matching section from the sidebar.")
+                                : qsTr("No matching settings.")
                         }
 
                         Card {
                             visible: root.visibleFields.length > 0
                             ColumnLayout {
                                 width: parent.width
-                                spacing: 12
+                                spacing: root.classicLayout ? 4 : 12
                                 Repeater {
                                     model: root.visibleFields
                                     delegate: SettingsField {
                                         required property var modelData
                                         Layout.fillWidth: true
+                                        spacing: root.classicLayout ? 3 : 8
                                         field: modelData
                                         cookieBrowser: root.cookieBrowser
                                         busy: root.saving || !engine.ready || backups.busy

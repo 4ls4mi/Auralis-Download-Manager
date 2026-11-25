@@ -20,6 +20,14 @@ AuralisWindow {
     flags: Qt.Window | Qt.FramelessWindowHint
 
     readonly property var colors: MaterialTheme.palette
+    readonly property bool classicLayout: MaterialTheme.mdmAppearance && !compactView
+    readonly property bool centeredCaption: classicLayout
+        && ["metro", "adwaita", "breeze", "aqua"].includes(colors.mdmCaptionStyle)
+    readonly property color captionInk: colors.titleOverride ? colors.titleInk
+        : classicLayout ? (!active ? colors.mdm?.captionInactiveText : colors.mdm?.captionText) || colors.ink
+        : colors.titleInk || colors.ink
+    readonly property color classicToolbarInk: MaterialTheme.controlTextInk(colors.textOverride || colors.ink,
+        colors.roleFaces?.toolbar || colors.background)
     readonly property bool studioChrome: colors.cleanStudio === true
     readonly property string materialLayout: colors.layout || ""
     readonly property bool violetRail: materialLayout === "violetRail"
@@ -76,7 +84,7 @@ AuralisWindow {
         return queues.length ? queues[0] : null
     }
     readonly property bool compact: width < 920
-    readonly property int layoutInset: visibility === Window.Maximized ? 0 : compactView ? 5 : 8
+    readonly property int layoutInset: visibility === Window.Maximized ? 0 : compactView || classicLayout ? 5 : 8
     readonly property int frameBleed: frameCornerRadius > 0 ? layoutInset : 0
     readonly property bool online: engine.ready
     readonly property string filterTitle: filterType === "category"
@@ -105,6 +113,42 @@ AuralisWindow {
     property int sortOrder: 0
     readonly property var downloadSortLabels: [qsTr("Newest first"), qsTr("Oldest first"), qsTr("Name"), qsTr("Size"), qsTr("Status")]
     property bool showSidebar: true
+    property bool classicCategoriesExpanded: true
+    property bool classicUnfinishedExpanded: false
+    property bool classicQueuesExpanded: false
+    property bool classicSearchOpen: false
+    readonly property int classicRowHeight: TypographyScale.pixels(colors.mdmListRow || 19)
+    readonly property int classicHeaderHeight: TypographyScale.pixels(colors.mdmListHeader || 24)
+    readonly property var classicColumns: [
+        {key: "source", label: qsTr("Source"), width: 63},
+        {key: "file", label: qsTr("File Name"), width: Math.max(158, list.width - 605)},
+        {key: "queue", label: qsTr("Q"), width: 24},
+        {key: "size", label: qsTr("Size"), width: 73},
+        {key: "status", label: qsTr("Status"), width: 70},
+        {key: "time", label: qsTr("Time left"), width: 78},
+        {key: "speed", label: qsTr("Transfer rate"), width: 96},
+        {key: "peers", label: qsTr("Peers"), width: 54},
+        {key: "ratio", label: qsTr("Share ratio"), width: 79},
+        {key: "lastTry", label: qsTr("Last try"), width: 123},
+        {key: "added", label: qsTr("Added"), width: 123},
+        {key: "description", label: qsTr("Description"), width: 150}
+    ]
+    readonly property int classicTableWidth: classicColumns.reduce((total, column) => total + column.width, 0)
+
+    function classicFileIcon(file, torrent) {
+        if (torrent) return "ft-torrent"
+        const extension = String(file).split(".").pop().toLowerCase()
+        if (["zip", "rar", "7z", "gz", "tar", "xz"].includes(extension)) return "ft-archive"
+        if (["mp3", "flac", "wav", "aac", "ogg"].includes(extension)) return "ft-audio"
+        if (["mp4", "mkv", "mov", "webm", "avi"].includes(extension)) return "ft-video"
+        if (["png", "webp", "jpg", "jpeg", "gif"].includes(extension)) return "ft-image"
+        if (["exe", "msi", "deb", "rpm", "appimage"].includes(extension)) return "ft-executable"
+        if (["iso", "dmg", "img"].includes(extension)) return "ft-disk-image"
+        if (["doc", "docx", "odt", "epub"].includes(extension)) return "ft-document"
+        if (extension === "pdf") return "ft-pdf"
+        if (extension === "txt") return "ft-text"
+        return "ft-generic"
+    }
     property var chosenIds: []
     property string selectionAnchor: ""
     property string focusedTransferId: ""
@@ -527,7 +571,7 @@ AuralisWindow {
     Settings {
         id: windowPreferences
         category: "MainWindow"
-        property bool appearanceHintPending: false
+        property bool classicAppearanceHintDismissed: false
         property bool compactView: false
         property int fullWidth: 810
         property int fullHeight: 525
@@ -617,15 +661,6 @@ AuralisWindow {
         }
         onUpdateDetailsRequested: updateNotice.showUpdate(settingsWindow)
         onConfigChanged: if (config) enginePrompts.settings = config
-    }
-    Connections {
-        target: settingsWindow
-        function clearAppearanceHint() {
-            if (settingsWindow.visible && settingsWindow.category === "Appearance")
-                windowPreferences.appearanceHintPending = false
-        }
-        function onCategoryChanged() { clearAppearanceHint() }
-        function onVisibleChanged() { clearAppearanceHint() }
     }
 
     UpdateNotice {
@@ -787,7 +822,11 @@ AuralisWindow {
         id: findAction
         text: qsTr("Find a download")
         shortcut: "Ctrl+F"
-        onTriggered: searchField.forceActiveFocus()
+        onTriggered: {
+            if (root.classicLayout)
+                root.classicSearchOpen = true
+            searchField.forceActiveFocus()
+        }
     }
     Action {
         id: refreshAction
@@ -1169,6 +1208,84 @@ AuralisWindow {
         }
     }
 
+    component ClassicCategoryRow: Item {
+        id: treeRow
+        property string text
+        property string iconName
+        property string count
+        property int level: 0
+        property bool branch: false
+        property bool expanded: false
+        property bool selected: false
+        signal toggled()
+        signal activated()
+
+        width: parent ? parent.width : 0
+        height: Math.max(19, TypographyScale.pixels(12) + 6)
+        readonly property color face: selected
+            ? root.colors.rowSelectionFill || root.colors.accent : root.colors.roleFaces?.sidebar || root.colors.background
+        readonly property color ink: MaterialTheme.controlTextInk(selected
+            ? root.colors.rowSelectionInk || root.sidebarInk : root.sidebarInk, face)
+
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: 3 + treeRow.level * 15
+            spacing: 0
+            Button {
+                visible: treeRow.level === 0
+                Layout.preferredWidth: 14
+                Layout.fillHeight: true
+                text: treeRow.branch ? (treeRow.expanded ? "⌄" : "›") : ""
+                enabled: treeRow.branch
+                padding: 0
+                Accessible.name: treeRow.expanded ? qsTr("Collapse %1").arg(treeRow.text)
+                    : qsTr("Expand %1").arg(treeRow.text)
+                onClicked: treeRow.toggled()
+                background: null
+                contentItem: Label {
+                    text: parent.text
+                    color: root.sidebarInk
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+            }
+            Button {
+                id: categoryChoice
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                text: treeRow.text
+                padding: 1
+                hoverEnabled: true
+                Accessible.selected: treeRow.selected
+                onClicked: treeRow.activated()
+                background: Rectangle {
+                    color: treeRow.selected ? treeRow.face
+                        : categoryChoice.hovered ? Qt.alpha(root.sidebarInk, .08) : "transparent"
+                    border.width: categoryChoice.visualFocus ? 1 : 0
+                    border.color: treeRow.ink
+                }
+                contentItem: RowLayout {
+                    spacing: 4
+                    ClassicToolbarIcon {
+                        iconName: treeRow.iconName
+                        ink: treeRow.ink
+                        Layout.preferredWidth: 16
+                        Layout.preferredHeight: 16
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        Layout.minimumWidth: 0
+                        text: treeRow.text + (treeRow.count ? " (" + treeRow.count + ")" : "")
+                        color: treeRow.ink
+                        elide: Text.ElideRight
+                        textFormat: Text.PlainText
+                        font.pixelSize: TypographyScale.pixels(11)
+                    }
+                }
+            }
+        }
+    }
+
     component LibraryScrollBar: ScrollBar {
         id: grip
         implicitWidth: 7
@@ -1200,11 +1317,11 @@ AuralisWindow {
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: root.layoutInset
-        spacing: root.compactView ? 4 : 7
+        spacing: root.classicLayout ? 2 : root.compactView ? 4 : 7
 
         Item {
             Layout.fillWidth: true
-            Layout.preferredHeight: root.compactView ? 36 : 43
+            Layout.preferredHeight: root.classicLayout ? 28 : root.compactView ? 36 : 43
             GlassSurface {
                 anchors.fill: parent
                 anchors.leftMargin: -root.frameBleed
@@ -1229,22 +1346,24 @@ AuralisWindow {
                 anchors.rightMargin: Math.max(6, root.frameSafeInset - root.layoutInset)
                 spacing: 8
                 BrandMark {
-                    Layout.preferredWidth: root.compactView ? 24 : 29
-                    Layout.preferredHeight: root.compactView ? 24 : 29
+                    visible: !root.classicLayout || !["adwaita", "aqua"].includes(root.colors.mdmCaptionStyle)
+                    Layout.preferredWidth: root.classicLayout ? 16 : root.compactView ? 24 : 29
+                    Layout.preferredHeight: root.classicLayout ? 16 : root.compactView ? 24 : 29
                 }
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 0
                     Label {
                         Layout.fillWidth: true
-                        text: qsTr("Auralis")
-                        color: root.colors.titleInk || root.colors.ink
-                        font.pixelSize: TypographyScale.pixels(17)
-                        font.weight: Font.Bold
+                        visible: !root.centeredCaption
+                        text: root.classicLayout ? root.title : qsTr("Auralis")
+                        color: root.captionInk
+                        font.pixelSize: TypographyScale.pixels(root.classicLayout ? 12 : 17)
+                        font.weight: root.classicLayout ? Font.Normal : Font.Bold
                         elide: Text.ElideRight
                     }
                     Label {
-                        visible: !root.compactView
+                        visible: !root.compactView && !root.classicLayout
                         Layout.fillWidth: true
                         text: qsTr("Download Manager")
                         color: root.colors.titleMuted || root.colors.muted
@@ -1253,13 +1372,14 @@ AuralisWindow {
                     }
                 }
                 Rectangle {
+                    visible: !root.classicLayout
                     Layout.preferredWidth: 7
                     Layout.preferredHeight: 7
                     radius: width / 2
                     color: root.online ? root.colors.positive : root.colors.caution
                 }
                 Label {
-                    visible: !root.compactView
+                    visible: !root.compactView && !root.classicLayout
                     text: root.online ? qsTr("Connected") : qsTr("Offline")
                     color: root.colors.titleMuted || root.colors.muted
                     font.pixelSize: TypographyScale.pixels(12)
@@ -1340,13 +1460,24 @@ AuralisWindow {
                     }
                 }
             }
+            Label {
+                visible: root.centeredCaption
+                anchors.centerIn: parent
+                width: Math.max(0, parent.width - 2 * (titleActions.width + 10))
+                text: root.title
+                color: root.captionInk
+                horizontalAlignment: Text.AlignHCenter
+                font.pixelSize: TypographyScale.pixels(12)
+                font.bold: root.colors.mdmCaptionStyle === "adwaita"
+                elide: Text.ElideRight
+            }
         }
 
         Item {
             id: topMenuDock
             visible: !root.sideMenus
             Layout.fillWidth: true
-            Layout.preferredHeight: root.compactView ? 27 : 31
+            Layout.preferredHeight: root.classicLayout ? 22 : root.compactView ? 27 : 31
 
             Item {
                 id: menuPanel
@@ -1355,9 +1486,11 @@ AuralisWindow {
 
                 Rectangle {
                     anchors.fill: parent
-                    radius: 10
+                    radius: root.classicLayout ? 0 : 10
                     visible: !root.sideMenus
-                    color: MaterialTheme.menuColors.surface
+                    color: root.classicLayout && !root.colors.menuOverride
+                        ? root.colors.mdm?.menubar || MaterialTheme.menuColors.surface
+                        : MaterialTheme.menuColors.surface
                 }
 
                 GridLayout {
@@ -1474,15 +1607,16 @@ AuralisWindow {
             id: topActionDock
             visible: !root.materialDashboard || root.compactView
             Layout.fillWidth: true
-            Layout.preferredHeight: root.compactView ? 37 : 51
+            Layout.preferredHeight: root.classicLayout ? 64 : root.compactView ? 37 : 51
             Item {
                 id: actionPanel
                 parent: root.materialDashboard && !root.compactView ? workspaceActionDock : topActionDock
                 anchors.fill: parent
 
-                GlassSurface { anchors.fill: parent; role: "toolbar"; roundedPanel: true }
+                GlassSurface { anchors.fill: parent; role: "toolbar"; roundedPanel: !root.classicLayout }
                 RowLayout {
                     id: actionControls
+                    visible: !root.classicLayout
                     anchors.fill: parent
                     anchors.leftMargin: 7
                     anchors.rightMargin: 7
@@ -1555,31 +1689,70 @@ AuralisWindow {
                     }
                     Item { Layout.fillWidth: true }
                 }
-            }
-        }
 
-        Frame {
-            objectName: "appearanceHint"
-            Layout.fillWidth: true
-            visible: windowPreferences.appearanceHintPending && engine.ready && !startupSetup.blockingAnnouncements
-            padding: 6
-            background: GlassSurface { role: "card" }
-            contentItem: RowLayout {
-                spacing: 8
-                Label {
-                    Layout.fillWidth: true
-                    text: qsTr("Make Auralis yours with themes, colors, and effects.")
-                    color: root.colors.muted
-                    font.pixelSize: TypographyScale.pixels(12)
-                    wrapMode: Text.WordWrap
-                }
-                GlassButton {
-                    text: qsTr("Explore appearance")
-                    onClicked: settingsWindow.showCategory("Appearance")
-                }
-                GlassButton {
-                    text: qsTr("Dismiss")
-                    onClicked: windowPreferences.appearanceHintPending = false
+                RowLayout {
+                    objectName: "classicActionControls"
+                    visible: root.classicLayout
+                    anchors.fill: parent
+                    anchors.margins: 2
+                    spacing: 0
+                    Repeater {
+                        model: [
+                            {command: addUrl, glyph: "tb-add-url", label: qsTr("Add URL")},
+                            {command: addTorrent, glyph: "tb-add-torrent", label: qsTr("Add Torrent")},
+                            {command: resumeTransfers, glyph: "tb-resume", label: qsTr("Resume")},
+                            {command: pauseTransfers, glyph: "tb-stop", label: qsTr("Stop")},
+                            {command: stopAll, glyph: "tb-stop-all", label: qsTr("Stop All")},
+                            {command: removeSelection, glyph: "tb-delete", label: qsTr("Delete")},
+                            {command: removeCompleted, glyph: "tb-delete-completed", label: qsTr("Delete Completed")},
+                            {command: settingsAction, glyph: "tb-options", label: qsTr("Options")},
+                            {command: schedulerAction, glyph: "tb-scheduler", label: qsTr("Scheduler")},
+                            {command: startQueue, glyph: "tb-start-queue", label: qsTr("Start Queue")},
+                            {command: stopQueue, glyph: "tb-stop-queue", label: qsTr("Stop Queue")}
+                        ]
+                        delegate: Button {
+                            id: classicTool
+                            required property var modelData
+
+                            Layout.fillWidth: true
+                            Layout.maximumWidth: 86
+                            Layout.fillHeight: true
+                            action: modelData.command
+                            text: modelData.label
+                            hoverEnabled: true
+                            padding: 2
+                            background: Rectangle {
+                                color: classicTool.down ? root.colors.mdm?.toolbarPressed || root.colors.mdm?.buttonPressed || root.colors.divider
+                                    : classicTool.hovered || classicTool.visualFocus
+                                        ? root.colors.mdm?.toolbarHot || root.colors.mdm?.buttonHot || root.colors.background : "transparent"
+                                border.width: classicTool.visualFocus ? 1 : 0
+                                border.color: root.colors.mdm?.focusRing || root.colors.accent
+                                radius: Math.min(3, root.colors.radius)
+                            }
+                            contentItem: ColumnLayout {
+                                spacing: 3
+                                ClassicToolbarIcon {
+                                    iconName: classicTool.modelData.glyph
+                                    ink: classicTool.enabled ? root.classicToolbarInk
+                                        : root.colors.mdm?.textDisabled || root.colors.muted
+                                    Layout.alignment: Qt.AlignHCenter
+                                    Layout.preferredWidth: 32
+                                    Layout.preferredHeight: 32
+                                }
+                                Label {
+                                    Layout.fillWidth: true
+                                    text: classicTool.text
+                                    color: classicTool.enabled ? root.classicToolbarInk
+                                        : root.colors.mdm?.textDisabled || root.colors.muted
+                                    font.pixelSize: TypographyScale.pixels(10)
+                                    horizontalAlignment: Text.AlignHCenter
+                                    elide: Text.ElideRight
+                                }
+                            }
+                            ToolTip.visible: hovered
+                            ToolTip.text: text
+                        }
+                    }
                 }
             }
         }
@@ -1654,10 +1827,10 @@ AuralisWindow {
             Frame {
                 id: librarySidebar
                 visible: root.showSidebar && !root.compactView
-                Layout.preferredWidth: root.compact ? 151 : 184
+                Layout.preferredWidth: root.classicLayout ? 149 : root.compact ? 151 : 184
                 Layout.fillHeight: true
-                padding: 6
-                background: GlassSurface { visible: !root.wideSweepVisible; role: "sidebar"; roundedPanel: true }
+                padding: root.classicLayout ? 2 : 6
+                background: GlassSurface { visible: !root.wideSweepVisible; role: "sidebar"; roundedPanel: !root.classicLayout }
                 ScrollView {
                     id: libraryScroll
                     anchors.fill: parent
@@ -1669,9 +1842,9 @@ AuralisWindow {
                     Column {
                         id: libraryRows
                         width: libraryScroll.availableWidth
-                        spacing: 3
+                        spacing: root.classicLayout ? 0 : 3
                         Repeater {
-                            model: root.statusFilters
+                            model: root.classicLayout ? [] : root.statusFilters
                             delegate: LibraryButton {
                                 required property var modelData
                                 width: parent.width
@@ -1685,6 +1858,7 @@ AuralisWindow {
                             }
                         }
                         Label {
+                            visible: !root.classicLayout
                             text: qsTr("Categories")
                             color: root.sidebarMuted
                             leftPadding: 8
@@ -1694,7 +1868,7 @@ AuralisWindow {
                             font.weight: Font.DemiBold
                         }
                         Repeater {
-                            model: root.categories.filter(category => category.key !== "General")
+                            model: root.classicLayout ? [] : root.categories.filter(category => category.key !== "General")
                             delegate: LibraryButton {
                                 required property var modelData
                                 required property int index
@@ -1708,7 +1882,7 @@ AuralisWindow {
                             }
                         }
                         Label {
-                            visible: root.queues.length > 0
+                            visible: !root.classicLayout && root.queues.length > 0
                             text: qsTr("Queues")
                             color: root.sidebarMuted
                             leftPadding: 8
@@ -1718,7 +1892,7 @@ AuralisWindow {
                             font.weight: Font.DemiBold
                         }
                         Repeater {
-                            model: root.queues
+                            model: root.classicLayout ? [] : root.queues
                             delegate: LibraryButton {
                                 required property var modelData
                                 required property int index
@@ -1731,6 +1905,110 @@ AuralisWindow {
                                 accent: modelData.running ? root.colors.positive
                                     : MaterialTheme.navigationColor(index + 4, root.fogSlate || root.colors.light)
                                 onClicked: root.chooseFilter("queue", modelData.name)
+                            }
+                        }
+                        Column {
+                            objectName: "classicCategoryTree"
+                            visible: root.classicLayout
+                            width: parent.width
+
+                            RowLayout {
+                                width: parent.width
+                                height: 20
+                                Label {
+                                    Layout.fillWidth: true
+                                    text: qsTr("Categories")
+                                    leftPadding: 4
+                                    color: root.sidebarInk
+                                    font.pixelSize: TypographyScale.pixels(11)
+                                }
+                                Button {
+                                    Layout.preferredWidth: 19
+                                    Layout.fillHeight: true
+                                    text: "×"
+                                    padding: 0
+                                    Accessible.name: qsTr("Hide categories")
+                                    onClicked: root.showSidebar = false
+                                    background: null
+                                }
+                            }
+                            Rectangle { width: parent.width; height: 1; color: root.colors.divider }
+
+                            ClassicCategoryRow {
+                                text: qsTr("All Downloads")
+                                iconName: "cat-all"
+                                count: String(root.counts.all)
+                                branch: true
+                                expanded: root.classicCategoriesExpanded
+                                selected: root.filterType === "status" && root.filterKey === "all"
+                                onToggled: root.classicCategoriesExpanded = !root.classicCategoriesExpanded
+                                onActivated: root.chooseFilter("status", "all")
+                            }
+                            Repeater {
+                                model: root.classicLayout && root.classicCategoriesExpanded
+                                    ? root.categories.filter(category => category.key !== "General") : []
+                                delegate: ClassicCategoryRow {
+                                    required property var modelData
+                                    readonly property string key: String(modelData.key).toLowerCase()
+                                    text: modelData.name
+                                    level: 1
+                                    iconName: ["compressed", "documents", "music", "programs", "video", "torrents"].includes(key)
+                                        ? "cat-" + key : "cat-folder"
+                                    selected: root.filterType === "category" && root.filterKey === modelData.key
+                                    onActivated: root.chooseFilter("category", modelData.key)
+                                }
+                            }
+                            ClassicCategoryRow {
+                                text: qsTr("Unfinished")
+                                iconName: "cat-unfinished"
+                                count: String(root.counts.unfinished)
+                                branch: true
+                                expanded: root.classicUnfinishedExpanded
+                                selected: root.filterType === "status" && root.filterKey === "unfinished"
+                                onToggled: root.classicUnfinishedExpanded = !root.classicUnfinishedExpanded
+                                onActivated: root.chooseFilter("status", "unfinished")
+                            }
+                            Repeater {
+                                model: root.classicLayout && root.classicUnfinishedExpanded ? root.statusFilters.slice(1, 3) : []
+                                delegate: ClassicCategoryRow {
+                                    required property var modelData
+                                    level: 1
+                                    text: modelData.label
+                                    iconName: "cat-folder"
+                                    count: String(root.counts[modelData.key])
+                                    selected: root.filterType === "status" && root.filterKey === modelData.key
+                                    onActivated: root.chooseFilter("status", modelData.key)
+                                }
+                            }
+                            ClassicCategoryRow {
+                                text: qsTr("Finished")
+                                iconName: "cat-finished"
+                                count: String(root.counts.finished)
+                                selected: root.filterType === "status" && root.filterKey === "finished"
+                                onActivated: root.chooseFilter("status", "finished")
+                            }
+                            ClassicCategoryRow {
+                                text: qsTr("Queues")
+                                iconName: "cat-queues"
+                                branch: root.queues.length > 0
+                                expanded: root.classicQueuesExpanded
+                                onToggled: root.classicQueuesExpanded = !root.classicQueuesExpanded
+                                onActivated: {
+                                    if (root.currentQueue)
+                                        root.chooseFilter("queue", root.currentQueue.name)
+                                }
+                            }
+                            Repeater {
+                                model: root.classicLayout && root.classicQueuesExpanded ? root.queues : []
+                                delegate: ClassicCategoryRow {
+                                    required property var modelData
+                                    level: 1
+                                    text: modelData.name
+                                    iconName: "cat-folder"
+                                    count: String(modelData.ids.length)
+                                    selected: root.filterType === "queue" && root.filterKey === modelData.name
+                                    onActivated: root.chooseFilter("queue", modelData.name)
+                                }
                             }
                         }
                     }
@@ -1761,11 +2039,11 @@ AuralisWindow {
                 Layout.fillHeight: true
                 Layout.fillWidth: true
                 Layout.minimumWidth: 0
-                padding: root.compactView ? 5 : 9
-                background: GlassSurface { visible: !root.wideSweepVisible; role: "content"; roundedPanel: true }
+                padding: root.classicLayout ? 1 : root.compactView ? 5 : 9
+                background: GlassSurface { visible: !root.wideSweepVisible; role: "content"; roundedPanel: !root.classicLayout }
                 ColumnLayout {
                     anchors.fill: parent
-                    spacing: root.compactView ? 3 : root.materialDashboard ? 8 : 5
+                    spacing: root.classicLayout ? 0 : root.compactView ? 3 : root.materialDashboard ? 8 : 5
                     Item {
                         id: workspaceActionDock
                         visible: root.materialDashboard && !root.compactView
@@ -1773,9 +2051,11 @@ AuralisWindow {
                         Layout.preferredHeight: 44
                     }
                     RowLayout {
+                        visible: !root.classicLayout || root.classicSearchOpen || root.searchTerm.length > 0
                         Layout.fillWidth: true
                         spacing: 7
                         ColumnLayout {
+                            visible: !root.classicLayout
                             Layout.fillWidth: true
                             spacing: 1
                             Label {
@@ -1802,7 +2082,7 @@ AuralisWindow {
                         }
                         GlassComboBox {
                             id: sortSelector
-                            visible: !root.compactView
+                            visible: !root.compactView && !root.classicLayout
                             Layout.preferredWidth: root.compact ? 115 : 132
                             model: root.downloadSortLabels
                             currentIndex: root.sortOrder
@@ -1812,6 +2092,7 @@ AuralisWindow {
                         TextField {
                             id: searchField
                             objectName: "downloadSearch"
+                            Layout.fillWidth: root.classicLayout
                             Layout.preferredWidth: root.compact ? 133 : 206
                             placeholderText: qsTr("Search downloads…")
                             color: root.colors.ink
@@ -1819,14 +2100,17 @@ AuralisWindow {
                             leftPadding: 10
                             selectByMouse: true
                             onTextChanged: root.searchTerm = text
-                            Keys.onEscapePressed: clear()
+                            Keys.onEscapePressed: {
+                                clear()
+                                root.classicSearchOpen = false
+                            }
                             background: GlassSurface { role: "field" }
                             Accessible.name: qsTr("Search downloads")
                         }
                     }
                     RowLayout {
                         Layout.fillWidth: true
-                        visible: !root.compactView && root.chosenIds.length > 0
+                        visible: !root.classicLayout && !root.compactView && root.chosenIds.length > 0
                         NumeralLabel {
                             valueText: qsTr("%1 selected").arg(root.chosenItems.length)
                             color: root.colors.ink
@@ -1945,6 +2229,7 @@ AuralisWindow {
                         }
                     }
                     Item {
+                        visible: !root.classicLayout
                         Layout.preferredHeight: root.compactView ? 25 : 30
                         Layout.fillWidth: true
                         GlassSurface { anchors.fill: parent; role: "field"; roundedPanel: true }
@@ -2005,7 +2290,7 @@ AuralisWindow {
                         Layout.fillHeight: true
                         Layout.fillWidth: true
                         clip: true
-                        spacing: 2
+                        spacing: root.classicLayout ? 0 : 2
                         model: rows
                         currentIndex: -1
                         focus: true
@@ -2026,6 +2311,70 @@ AuralisWindow {
                         Accessible.role: Accessible.List
                         Accessible.name: qsTr("Downloads list")
                         ScrollBar.vertical: LibraryScrollBar { id: downloadsScrollBar }
+                        flickableDirection: root.classicLayout ? Flickable.AutoFlickDirection : Flickable.VerticalFlick
+                        contentWidth: root.classicLayout ? root.classicTableWidth : width
+                        headerPositioning: ListView.OverlayHeader
+                        header: root.classicLayout ? classicHeader : null
+                        Component {
+                            id: classicHeader
+                            Rectangle {
+                                objectName: "classicDownloadsHeader"
+                                width: root.classicTableWidth
+                                height: root.classicHeaderHeight
+                                color: root.colors.mdm?.header || root.colors.roleFaces?.field || root.colors.background
+                                ClassicTableCells {
+                                    anchors.fill: parent
+                                    columns: root.classicColumns
+                                    colors: root.colors
+                                    heading: true
+                                    onSortRequested: column => {
+                                        if (column === "file") root.sortOrder = 2
+                                        else if (column === "size") root.sortOrder = 3
+                                        else if (column === "status") root.sortOrder = 4
+                                        else if (column === "added") root.sortOrder = root.sortOrder === 0 ? 1 : 0
+                                    }
+                                }
+                            }
+                        }
+                        Canvas {
+                            id: classicGrid
+                            parent: list
+                            anchors.fill: parent
+                            z: -1
+                            visible: root.classicLayout
+                            readonly property color line: Qt.alpha(root.colors.divider, .48)
+                            readonly property real scrollX: list.contentX
+                            readonly property real scrollY: list.contentY
+                            readonly property var columns: root.classicColumns
+                            onScrollXChanged: requestPaint()
+                            onScrollYChanged: requestPaint()
+                            onLineChanged: requestPaint()
+                            onColumnsChanged: requestPaint()
+                            onVisibleChanged: requestPaint()
+                            onPaint: {
+                                const ctx = getContext("2d")
+                                ctx.clearRect(0, 0, width, height)
+                                if (!visible || root.classicRowHeight <= 0) return
+                                ctx.strokeStyle = line
+                                ctx.lineWidth = 1
+                                ctx.beginPath()
+                                let x = -scrollX
+                                for (const column of columns) {
+                                    x += column.width
+                                    ctx.moveTo(Math.floor(x) + .5, 0)
+                                    ctx.lineTo(Math.floor(x) + .5, height)
+                                }
+                                for (let y = root.classicHeaderHeight - scrollY % root.classicRowHeight;
+                                        y < height; y += root.classicRowHeight) {
+                                    ctx.moveTo(0, Math.floor(y) + .5)
+                                    ctx.lineTo(width, Math.floor(y) + .5)
+                                }
+                                ctx.stroke()
+                            }
+                        }
+                        ScrollBar.horizontal: ScrollBar {
+                            policy: root.classicLayout ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff
+                        }
                         TapHandler {
                             acceptedButtons: Qt.RightButton
                             onTapped: point => {
@@ -2047,7 +2396,7 @@ AuralisWindow {
                             required property real length
                             required property real transferSpeed
                             readonly property var visual: root.visualById[transferId] || ({})
-                            width: ListView.view.width - root.listGutter
+                            width: root.classicLayout ? root.classicTableWidth : ListView.view.width - root.listGutter
                             height: implicitHeight
                             colors: root.colors
                             indicatorWidth: root.indicatorColumnWidth
@@ -2065,6 +2414,26 @@ AuralisWindow {
                             timeLabel: TransferData.timeLeft({status: status, size: length, downloaded: bytes, speed: transferSpeed})
                             progress: status === "Complete" ? 1 : length > 0 ? Math.max(0, Math.min(1, bytes / length)) : 0
                             torrent: visual.is_torrent === true
+                            classicMode: root.classicLayout
+                            classicHeight: root.classicRowHeight
+                            classicColumns: root.classicColumns
+                            classicFileIcon: classicMode ? root.classicFileIcon(file, torrent) : ""
+                            classicValues: classicMode ? {
+                                "source": torrent ? qsTr("Torrent") : qsTr("Web"),
+                                "file": file,
+                                "queue": root.queues.findIndex(queue => queue.ids.some(id => String(id) === transferId)) + 1 || "",
+                                "size": length < 0 ? "" : TransferData.bytes(length),
+                                "status": status !== "Complete" && length > 0 && bytes > 0
+                                    ? (progress * 100).toLocaleString(Qt.locale(), "f", 2) + "%" : statusLabel,
+                                "time": timeLabel,
+                                "speed": speedLabel,
+                                "peers": torrent && visual.torrent?.peers !== undefined ? visual.torrent.peers : "",
+                                "ratio": torrent && bytes > 0 && visual.torrent?.uploaded !== undefined
+                                    ? (Number(visual.torrent.uploaded) / bytes).toLocaleString(Qt.locale(), "f", 2) : "",
+                                "lastTry": visual.last_try || "",
+                                "added": visual.added || "",
+                                "description": visual.description || ""
+                            } : {}
                             mixed: visual.direct_recovery === true
                             chosen: root.chosenSet.has(transferId)
                             cursorFocused: list.activeFocus && root.focusedTransferId === transferId
@@ -2124,7 +2493,7 @@ AuralisWindow {
                         ColumnLayout {
                             anchors.centerIn: parent
                             spacing: 8
-                            visible: rows.count === 0
+                            visible: !root.classicLayout && rows.count === 0
                             DashboardIcon { symbol: "folder"; ink: root.colors.muted; Layout.alignment: Qt.AlignHCenter; Layout.preferredWidth: 31; Layout.preferredHeight: 31 }
                             Label {
                                 Layout.alignment: Qt.AlignHCenter
@@ -2217,9 +2586,83 @@ AuralisWindow {
             }
         }
 
+        Frame {
+            objectName: "appearanceHint"
+            visible: MaterialTheme.mdmAppearance && !windowPreferences.classicAppearanceHintDismissed
+                && engine.ready && !startupSetup.blockingAnnouncements
+            Layout.alignment: Qt.AlignRight
+            Layout.maximumWidth: Math.min(320, root.width - 2 * root.layoutInset)
+            padding: 1
+            background: Rectangle {
+                color: root.colors.roleFaces?.footer || root.colors.background
+                border.color: root.colors.divider
+                radius: Math.min(4, root.colors.radius)
+            }
+            contentItem: RowLayout {
+                spacing: 1
+                GlassButton {
+                    id: appearanceHintLink
+                    objectName: "exploreAppearanceHint"
+                    text: qsTr("Customize colors & layout")
+                    Layout.preferredHeight: 24
+                    leftPadding: 6
+                    rightPadding: 7
+                    topPadding: 1
+                    bottomPadding: 1
+                    onClicked: {
+                        windowPreferences.classicAppearanceHintDismissed = true
+                        settingsWindow.showCategory("Appearance")
+                    }
+                    contentItem: RowLayout {
+                        spacing: 6
+                        Rectangle {
+                            readonly property var example: MaterialTheme.profile("violet-rail-wide-sweep")
+                            Layout.preferredWidth: 32
+                            Layout.preferredHeight: 16
+                            radius: 3
+                            color: example.roleFaces?.content || example.background
+                            border.color: example.accent
+                            Accessible.ignored: true
+                            Rectangle {
+                                anchors.left: parent.left
+                                anchors.top: parent.top
+                                anchors.bottom: parent.bottom
+                                anchors.margins: 1
+                                width: 9
+                                radius: 2
+                                color: parent.example.railFill || parent.example.accent
+                            }
+                            Rectangle {
+                                anchors.verticalCenter: parent.verticalCenter
+                                x: 13
+                                width: 14
+                                height: 3
+                                radius: 1.5
+                                color: parent.example.accent
+                            }
+                        }
+                        Label {
+                            text: qsTr("Customize colors & layout")
+                            color: appearanceHintLink.buttonInk
+                            font.pixelSize: TypographyScale.pixels(11)
+                        }
+                    }
+                }
+                GlassButton {
+                    objectName: "dismissAppearanceHint"
+                    text: "×"
+                    Accessible.name: qsTr("Hide customization hint")
+                    Layout.preferredWidth: 24
+                    Layout.preferredHeight: 24
+                    padding: 1
+                    onClicked: windowPreferences.classicAppearanceHintDismissed = true
+                }
+            }
+        }
+
         Item {
             Layout.fillWidth: true
-            Layout.preferredHeight: root.compactView ? 36 : 55
+            Layout.preferredHeight: root.classicLayout ? 22 : root.compactView ? 36 : 55
             Item {
                 id: footerSurface
                 anchors.fill: parent
@@ -2228,13 +2671,34 @@ AuralisWindow {
                 anchors.bottomMargin: -root.frameBleed
                 GlassSurface {
                     anchors.fill: parent
-                    visible: !root.wideSweepVisible
+                    visible: !root.wideSweepVisible || Boolean(root.colors.footerOverride)
                     role: "footer"
                     roundedPanel: root.frameCornerRadius === 0
                     radius: roundedPanel ? Math.max(12, profile.radius) : 0
                 }
             }
             RowLayout {
+                visible: root.classicLayout
+                anchors.fill: parent
+                anchors.margins: 4
+                NumeralLabel {
+                    valueText: qsTr("%n download(s)", "", root.downloads.length)
+                    color: root.colors.footerMuted || root.colors.muted
+                    font.pixelSize: TypographyScale.pixels(11)
+                }
+                Item { Layout.fillWidth: true }
+                NumeralLabel {
+                    Layout.maximumWidth: parent.width * .68
+                    valueText: root.actionError || (root.counts.downloading
+                        ? qsTr("%1 downloading, %2").arg(root.counts.downloading).arg(TransferData.rate(engine.dashboard.speed || 0)) : "")
+                    color: root.actionError ? root.colors.footerDestructive || root.colors.destructive
+                        : root.colors.footerMuted || root.colors.muted
+                    elide: Text.ElideRight
+                    font.pixelSize: TypographyScale.pixels(11)
+                }
+            }
+            RowLayout {
+                visible: !root.classicLayout
                 anchors.fill: parent
                 anchors.leftMargin: Math.max(11, root.frameSafeInset - root.layoutInset)
                 anchors.rightMargin: Math.max(9, root.frameSafeInset - root.layoutInset)
@@ -2250,7 +2714,7 @@ AuralisWindow {
                         required property var modelData
                         Layout.preferredWidth: footerMetric.implicitWidth + (root.fogSlate && !root.compactView ? 20 : 0)
                         Layout.preferredHeight: footerMetric.implicitHeight + (root.fogSlate && !root.compactView ? 12 : 0)
-                        GlassSurface { anchors.fill: parent; visible: root.fogSlate && !root.compactView; role: "card" }
+                        GlassSurface { anchors.fill: parent; visible: root.fogSlate && !root.compactView && !root.colors.footerOverride; role: "card" }
                         ColumnLayout {
                             id: footerMetric
                             anchors.centerIn: parent
@@ -2303,7 +2767,7 @@ AuralisWindow {
                     visible: !root.compactView || Boolean(root.actionError)
                     Layout.preferredWidth: Math.min(root.compactView ? 134 : 240, Math.ceil(implicitWidth))
                     valueText: root.actionError || (root.online ? qsTr("Auralis %1").arg(engine.version) : engine.status || qsTr("Offline"))
-                    color: root.actionError ? root.colors.destructive : root.colors.footerMuted || root.colors.muted
+                    color: root.actionError ? root.colors.footerDestructive || root.colors.destructive : root.colors.footerMuted || root.colors.muted
                     elide: Text.ElideRight
                     font.pixelSize: TypographyScale.pixels(11)
                     PlainTextToolTip {

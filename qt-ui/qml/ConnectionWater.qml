@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Window
 import "IndicatorLighting.js" as Lighting
+import "MaterialGeometry.js" as Geometry
 
 Canvas {
     id: vessel
@@ -56,11 +57,11 @@ Canvas {
     property real lastPhase: 0
     property real jellyPhase: 0
 
-    property real baseWidth: 32
     property real baseHeight: 38
     readonly property real blockScale: (WindowAppearance.connectionBlockSize ?? 100) / 100
-    implicitWidth: Math.round(baseWidth * blockScale)
-    implicitHeight: Math.round(baseHeight * blockScale)
+    readonly property int blockHeight: Math.round(baseHeight * blockScale)
+    implicitWidth: Geometry.connectionBlockWidth(blockHeight)
+    implicitHeight: Geometry.connectionBlockHeight(width, blockHeight)
     Accessible.ignored: true
 
     onAvailableChanged: requestPaint()

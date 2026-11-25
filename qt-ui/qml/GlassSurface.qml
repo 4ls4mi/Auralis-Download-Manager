@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Shapes
+import QtQuick.Window
 import "MaterialGeometry.js" as Geometry
 
 Item {
@@ -27,7 +28,34 @@ Item {
     readonly property bool sculpted: ["bubble", "aero"].includes(profile.shape)
     readonly property bool stacked: ["smoke", "frost"].includes(profile.shape)
     readonly property bool faceted: ["prism", "ice", "chamfer"].includes(profile.shape)
-    readonly property bool flatStudio: profile.cleanStudio === true
+    // Exact header/footer colors keep their contrast over any desktop, picture or video.
+    readonly property bool customChrome: role === "title" ? Boolean(profile.titleOverride)
+        : role === "footer" && Boolean(profile.footerOverride)
+    readonly property bool classicTitle: role === "title" && Boolean(profile.mdm) && !customChrome
+    readonly property color inactiveCaption: profile.mdm?.captionInactive || "transparent"
+    readonly property bool useInactiveCaption: classicTitle && !Window.window?.active && inactiveCaption.a > 0
+    readonly property color captionFace: useInactiveCaption ? inactiveCaption : flatFace
+    readonly property string captionStyle: profile.mdmCaptionStyle || "system"
+    readonly property bool shadedCaption: classicTitle && ["luna", "aero", "aqua"].includes(captionStyle)
+    readonly property var captionStops: {
+        if (!shadedCaption)
+            return []
+        const supplied = useInactiveCaption ? profile.mdm?.captionInactiveStops : profile.mdm?.captionStops
+        if (supplied?.length >= 2)
+            return supplied
+        const bar = captionFace
+        const gloss = profile.mdm?.gloss || profile.upper
+        if (captionStyle === "aqua")
+            return [{position: 0, color: MaterialTheme.mix(bar, gloss, .60, 1)}, {position: 1, color: bar}]
+        const luna = captionStyle === "luna"
+        return [
+            {position: 0, color: MaterialTheme.mix(bar, gloss, .45, 1)},
+            {position: luna ? .12 : .50, color: MaterialTheme.mix(bar, gloss, luna ? .12 : .20, 1)},
+            {position: .50, color: bar},
+            {position: 1, color: MaterialTheme.mix(bar, luna ? "#000000" : gloss, .10, 1)}
+        ]
+    }
+    readonly property bool flatStudio: profile.cleanStudio === true || customChrome
     readonly property bool studioPanel: profile.panelRadius !== undefined
         && ["card", "summary", "connections"].includes(role)
     readonly property bool cleanChrome: profile.opaque || profile.softChrome === true
@@ -73,8 +101,17 @@ Item {
         radius: surface.profile.mdm ? surface.role === "field" ? surface.profile.radius : 0
             : !surface.shell && (surface.roundedPanel || surface.role === "field" || surface.studioPanel)
                 ? surface.radius : 0
-        color: surface.profile.mdm ? surface.flatFace
+        color: surface.classicTitle ? surface.captionFace
+            : surface.customChrome || surface.profile.mdm ? surface.flatFace
             : surface.shell ? surface.backing : MaterialTheme.rgba(surface.flatFace, surface.flatFaceOpacity)
+        gradient: surface.shadedCaption ? classicCaptionGradient : null
+        Gradient {
+            id: classicCaptionGradient
+            GradientStop { position: surface.captionStops[0]?.position ?? 0; color: surface.captionStops[0]?.color || surface.captionFace }
+            GradientStop { position: surface.captionStops[1]?.position ?? 1; color: surface.captionStops[1]?.color || surface.captionFace }
+            GradientStop { position: surface.captionStops[2]?.position ?? 1; color: surface.captionStops[2]?.color || surface.captionFace }
+            GradientStop { position: surface.captionStops[3]?.position ?? 1; color: surface.captionStops[3]?.color || surface.captionFace }
+        }
         border.width: surface.shell || surface.roundedPanel || surface.role === "field" ? 1 : 0
         border.color: surface.profile.surfaceLine || surface.profile.divider
 

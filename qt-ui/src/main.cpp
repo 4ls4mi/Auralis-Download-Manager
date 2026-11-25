@@ -608,7 +608,6 @@ void seedFreshProfile(const QString &profile)
         return;
     settings.setValue(QStringLiteral("WindowAppearance/saved"), QString::fromUtf8(appearance.readAll()));
     settings.setValue(QStringLiteral("FirstLaunchSetup/languagePending"), true);
-    settings.setValue(QStringLiteral("MainWindow/appearanceHintPending"), true);
     settings.setValue(QStringLiteral("MainWindow/fullWidth"), 810);
     settings.setValue(QStringLiteral("MainWindow/fullHeight"), 525);
     settings.setValue(QStringLiteral("SettingsWindowLayout/initialWidth"), 675);

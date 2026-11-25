@@ -22,7 +22,7 @@ QtObject {
     readonly property string graphShape: preferences.graphShape
     readonly property string graphAnimation: preferences.graphAnimation
     readonly property string graphLighting: preferences.graphLighting
-    readonly property var materialColorRoles: ["sidebar", "content", "menu", "text"]
+    readonly property var materialColorRoles: ["header", "footer", "sidebar", "content", "menu", "text"]
     readonly property var buttonColorRoles: ["accent", "secondary", "positive", "caution", "destructive"]
     readonly property var buttonPaletteIds: ["material", "cool", "warm", "custom"]
     readonly property var progressLayoutChoices: [

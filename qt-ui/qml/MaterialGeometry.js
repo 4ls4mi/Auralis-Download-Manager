@@ -176,3 +176,12 @@ function barHighlights(width, height, shape, lower) {
     }
     return path;
 }
+
+// Use the same horizontal proportions when a connection is resized or fitted to a narrow row.
+function connectionBlockWidth(height) {
+    return Math.ceil(height * 1.25);
+}
+
+function connectionBlockHeight(width, requestedHeight) {
+    return Math.max(1, Math.min(requestedHeight, Math.floor(width / 1.25)));
+}
