@@ -90,11 +90,37 @@ EOF
 name="Auralis.Download.Manager_${version}_debian13_amd64.deb"
 dpkg-deb --root-owner-group --build "$tree" "$stage/$name"
 dpkg-deb --extract "$stage/$name" "$stage/installed"
-install -d -m 700 "$stage/profile" "$stage/runtime" "$stage/config" "$stage/cache" "$stage/data"
-QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
-    MDM_DATA_DIR="$stage/profile" XDG_RUNTIME_DIR="$stage/runtime" \
-    XDG_CONFIG_HOME="$stage/config" XDG_CACHE_HOME="$stage/cache" XDG_DATA_HOME="$stage/data" \
-    timeout 120 "$stage/installed/usr/bin/auralis-download-manager" --engine-smoke
+installed="$stage/installed/usr/bin/auralis-download-manager"
+run_smoke() {
+    local fixture=$1
+    shift
+    install -d -m 700 "$fixture" "$fixture"/{profile,runtime,config,cache,data}
+    QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
+        MDM_DATA_DIR="$fixture/profile" XDG_RUNTIME_DIR="$fixture/runtime" \
+        XDG_CONFIG_HOME="$fixture/config" XDG_CACHE_HOME="$fixture/cache" XDG_DATA_HOME="$fixture/data" \
+        "$@"
+}
+smoke_status=0
+run_smoke "$stage/smoke" timeout 120 "$installed" --engine-smoke || smoke_status=$?
+if (( smoke_status != 0 )) || [[ ! -f "$stage/smoke/profile/qt-engine-smoke.ok" ]]; then
+    log="$stage/smoke/profile/qt-smoke-console.log"
+    if [[ -f $log ]]; then
+        cat "$log" >&2
+    fi
+    echo "The packaged Debian app failed its smoke test (exit $smoke_status)." >&2
+    # Capture a symbolic trace on CI. The retry is diagnostic and cannot pass the gate.
+    if (( smoke_status == 139 )) && command -v gdb >/dev/null; then
+        debug="$stage/debug"
+        install -Dm755 "$build/ui/auralis-download-manager" "$debug/auralis-download-manager"
+        install -Dm755 "$build/engine/release/libauralis_engine.so" "$debug/libauralis_engine.so"
+        run_smoke "$debug/smoke" timeout 45 gdb -nx -batch \
+            -ex 'set debuginfod enabled off' -ex 'set disable-randomization off' \
+            -ex run -ex 'thread apply all bt 20' \
+            --args "$debug/auralis-download-manager" --engine-smoke >&2 || true
+    fi
+    exit "$((smoke_status == 0 ? 1 : smoke_status))"
+fi
+cat "$stage/smoke/profile/qt-engine-smoke.ok"
 
 mv -- "$stage/$name" "$build/dist/$name"
 (cd "$build/dist" && sha256sum "$name" > "$name.sha256")

@@ -35,7 +35,7 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
-            build-essential ca-certificates clang cmake curl dpkg-dev git golang-go \
+            build-essential ca-certificates clang cmake curl dpkg-dev gdb git golang-go \
             libclang-dev libegl-dev libgl-dev libudev-dev libvulkan-dev \
             ninja-build perl pkg-config \
             qt6-base-dev qt6-declarative-dev qt6-l10n-tools qt6-multimedia-dev \
