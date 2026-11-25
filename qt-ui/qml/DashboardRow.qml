@@ -223,7 +223,7 @@ Item {
                 Layout.minimumWidth: row.compactView ? 41 : 46
                 spacing: 1
                 RowLayout {
-                    visible: row.workers.length > 0
+                    visible: !row.colors.mdm && row.workers.length > 0
                     Layout.fillWidth: true
                     Layout.preferredHeight: row.compactView ? 13 : 19
                     spacing: 1
@@ -245,6 +245,13 @@ Item {
                             endColor: MaterialTheme.connectionColors[1]
                         }
                     }
+                }
+                MdmSegmentMap {
+                    visible: Boolean(row.colors.mdm) && !row.torrent && totalBytes > 0
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: row.compactView ? 10 : 15
+                    segments: row.telemetry.segments || []
+                    totalBytes: Number(row.telemetry.total || 0)
                 }
                 NumeralLabel {
                     Layout.fillWidth: true

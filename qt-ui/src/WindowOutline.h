@@ -4,5 +4,5 @@ class QSizeF;
 class QWindow;
 
 namespace WindowOutline {
-bool configureAntialiasing(QWindow *window, const QSizeF &reach);
+bool configureAntialiasing(QWindow *window, const QSizeF &reach, int corners = 15);
 }

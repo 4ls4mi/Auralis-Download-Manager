@@ -1855,8 +1855,15 @@ AuralisWindow {
                                 anchors.margins: 10
                                 spacing: 3
                                 Label { text: qsTr("Connections"); color: root.colors.muted; font.pixelSize: TypographyScale.pixels(11) }
+                                MdmSegmentMap {
+                                    visible: Boolean(root.colors.mdm)
+                                    width: parent.width
+                                    height: implicitHeight
+                                    segments: root.currentVisual.segments || []
+                                    totalBytes: Number(root.currentVisual.total || 0)
+                                }
                                 Repeater {
-                                    model: connectionSummary.workers
+                                    model: root.colors.mdm ? [] : connectionSummary.workers
                                     delegate: Rectangle {
                                         required property var modelData
                                         required property int index

@@ -165,11 +165,18 @@ QString browserHelper()
 QStringList nativeHostPaths(const QString &browserId)
 {
     const auto chrome = QStringLiteral("Software\\Google\\Chrome\\NativeMessagingHosts\\") + NativeHost;
+    const auto chromium = QStringLiteral("Software\\Chromium\\NativeMessagingHosts\\") + NativeHost;
     if (browserId == QStringLiteral("chrome"))
         return {chrome};
     if (browserId == QStringLiteral("edge"))
-        return {QStringLiteral("Software\\Microsoft\\Edge\\NativeMessagingHosts\\") + NativeHost,
-                QStringLiteral("Software\\Chromium\\NativeMessagingHosts\\") + NativeHost, chrome};
+        return {QStringLiteral("Software\\Microsoft\\Edge\\NativeMessagingHosts\\") + NativeHost, chromium, chrome};
+    if (browserId == QStringLiteral("brave"))
+        return {chromium, chrome,
+                QStringLiteral("Software\\BraveSoftware\\Brave-Browser\\NativeMessagingHosts\\") + NativeHost};
+    if (browserId == QStringLiteral("chromium") || browserId == QStringLiteral("opera")
+        || browserId == QStringLiteral("vivaldi") || browserId == QStringLiteral("helium")
+        || browserId == QStringLiteral("thorium"))
+        return {chromium, chrome};
     return {};
 }
 
@@ -474,11 +481,19 @@ bool verifyApprovalExecutable(const ProcessHandle &file, const QString &path)
 
 }
 
+QString BrowserSetup::validatedBrowserExecutable(const QString &path)
+{
+    if (!isLocalFilePath(path))
+        return {};
+    const QFileInfo file(path);
+    const auto executable = QDir::toNativeSeparators(file.canonicalFilePath());
+    return isLocalFilePath(executable) && file.isFile()
+        && file.suffix().compare(QStringLiteral("exe"), Qt::CaseInsensitive) == 0 ? executable : QString();
+}
+
 BrowserSetup::Handler BrowserSetup::defaultHttpsHandler()
 {
-    const QFileInfo path(queryHttpsAssociation(ASSOCSTR_EXECUTABLE));
-    const auto executable = QDir::toNativeSeparators(path.canonicalFilePath());
-    return {isLocalFilePath(executable) && path.isFile() ? executable : QString(),
+    return {validatedBrowserExecutable(queryHttpsAssociation(ASSOCSTR_EXECUTABLE)),
             queryHttpsAssociation(ASSOCSTR_FRIENDLYAPPNAME)};
 }
 
@@ -514,11 +529,17 @@ BrowserSetup::NativeHostStatus BrowserSetup::nativeHostStatus(const QString &bro
         return {};
 
     bool userHostsAllowed = true;
-    const auto path = policyPath(browserId);
+    auto path = policyPath(browserId);
+    if (browserId == QStringLiteral("brave"))
+        path = QStringLiteral("\\SOFTWARE\\Policies\\BraveSoftware\\Brave");
+    if (browserId == QStringLiteral("chromium"))
+        path = QStringLiteral("\\SOFTWARE\\Policies\\Chromium");
     const auto userHostsPolicy = QStringLiteral("NativeMessagingUserLevelHosts");
     const auto unreadablePolicy = QCoreApplication::translate("BrowserSetup",
         "Auralis could not read the browser’s native messaging policy.");
     for (const auto hive : {HKEY_LOCAL_MACHINE, HKEY_CURRENT_USER}) {
+        if (path.isEmpty())
+            break;
         const auto root = hive == HKEY_LOCAL_MACHINE ? QStringLiteral("HKEY_LOCAL_MACHINE") : QStringLiteral("HKEY_CURRENT_USER");
         for (const auto format : {QSettings::Registry64Format, QSettings::Registry32Format}) {
             const auto view = format == QSettings::Registry64Format ? KEY_WOW64_64KEY : KEY_WOW64_32KEY;

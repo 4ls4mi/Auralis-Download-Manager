@@ -12,11 +12,15 @@ ApplicationWindow {
 
     readonly property var fontSettings: typeof typography === "undefined" ? null : typography
     property bool frameShapingEnabled: true
-    readonly property int frameCornerRadius: frameShapingEnabled && visibility === Window.Windowed
-        ? Math.round(114 * Math.max(0, Math.min(1, width / 1080, height / 660))) : 0
+    readonly property int frameCornerMask: {
+        if (!frameShapingEnabled || MaterialTheme.mdmAppearance || visibility !== Window.Windowed)
+            return 0
+        return ({square: 0, top: 3, bottom: 12, all: 15})[WindowAppearance.cornerPlacement]
+    }
+    readonly property int frameCornerRadius: frameCornerMask ? WindowAppearance.cornerRadius : 0
     readonly property int frameResizeInset: Math.ceil(frameCornerRadius * (1 - Math.pow(0.5, 1 / 3.05)))
     readonly property int frameSafeInset: {
-        if (!frameCornerRadius)
+        if (!frameCornerRadius || !(frameCornerMask & 3))
             return 0
         // Reserve room at both sides of a caption that starts at least 8 logical pixels from the edge.
         const rise = frameCornerRadius * 113 / 114
@@ -30,6 +34,7 @@ ApplicationWindow {
     }
 
     Component.onCompleted: Qt.callLater(refreshFrameShape)
+    onFrameCornerMaskChanged: Qt.callLater(refreshFrameShape)
     onFrameCornerRadiusChanged: Qt.callLater(refreshFrameShape)
 
     Connections {

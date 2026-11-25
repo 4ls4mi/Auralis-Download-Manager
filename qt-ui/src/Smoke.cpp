@@ -189,10 +189,14 @@ void EngineSmoke::inspectTransfers()
             if (!m_framePresented || download.value(QStringLiteral("downloaded")).toLongLong() <= 0)
                 return;
 #ifdef Q_OS_WIN
-            if (m_window->rendererInterface()->graphicsApi() != QSGRendererInterface::Direct3D12) {
-                fail(QStringLiteral("The installed progress window did not render with Direct3D 12."));
+            const bool requestedDirect3D12 = qgetenv("QSG_RHI_BACKEND") == QByteArrayLiteral("d3d12");
+            const auto expectedApi = requestedDirect3D12 ? QSGRendererInterface::Direct3D12
+                                                        : QSGRendererInterface::Direct3D11;
+            if (m_window->rendererInterface()->graphicsApi() != expectedApi) {
+                fail(QStringLiteral("The installed progress window did not render with the requested Windows renderer."));
                 return;
             }
+            qInfo("Smoke: using Direct3D %d.", requestedDirect3D12 ? 12 : 11);
 #endif
             if (!m_resizeVerified) {
                 if (!m_expectedProgressSize.isValid()) {

@@ -27,7 +27,7 @@ Item {
     readonly property var finish: Lighting.style(lightingStyle)
     readonly property string layoutKind: LayoutGeometry.style(layoutStyle)
     readonly property bool classicLayout: layoutKind === "classic"
-    readonly property bool labelAtEnd: showLabel && layoutKind === "thin-line"
+    readonly property bool labelAtEnd: showLabel && (Boolean(profile.mdm) || layoutKind === "thin-line")
     readonly property string transferStatus: transferState.toLowerCase()
     readonly property color statusTrackTint: layoutKind !== "status-track" ? "transparent"
         : transferStatus === "paused" || transferStatus === "stopped" ? profile.caution
@@ -37,10 +37,10 @@ Item {
     readonly property real glowMargin: Math.round(Math.max(3, Math.min(5, height * .14)) * finish.haloWidth)
     readonly property int contour: shape === "bubble" ? 1 : ["prism", "ice", "chamfer"].includes(shape) ? 2
         : ["square", "plain"].includes(shape) ? 3 : 0
-    readonly property bool renderWithShader: classicLayout && width >= 12 && height >= 7
+    readonly property bool renderWithShader: !profile.mdm && classicLayout && width >= 12 && height >= 7
         && GraphicsInfo.api !== GraphicsInfo.Software && GraphicsInfo.api !== GraphicsInfo.Unknown
     readonly property int motionKind: animationStyle === "water" ? 1 : animationStyle === "jelly" ? 2 : 0
-    readonly property bool canAnimate: animationStyle !== "none" && animated && visible
+    readonly property bool canAnimate: !profile.mdm && animationStyle !== "none" && animated && visible
         && width >= 12 && height >= 7 && !MaterialTheme.reducedMotion
     readonly property bool liquidMoving: canAnimate && amount > 0 && amount < 1
     readonly property real amount: Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0
@@ -74,6 +74,19 @@ Item {
         sourceComponent: shader
     }
 
+    Loader {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.rightMargin: progress.labelAtEnd ? amountLabel.width + 8 : 0
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        active: Boolean(progress.profile.mdm)
+        sourceComponent: MdmProgressBar {
+            appearance: progress.profile
+            amount: progress.amount
+        }
+    }
+
     Component {
         id: shader
         ShaderEffect {
@@ -101,7 +114,7 @@ Item {
         anchors.rightMargin: progress.labelAtEnd ? amountLabel.width + 8 : 1.5
         anchors.verticalCenter: parent.verticalCenter
         height: LayoutGeometry.trackHeight(Math.max(0, progress.height - 3), progress.layoutKind)
-        active: !progress.renderWithShader
+        active: !progress.profile.mdm && !progress.renderWithShader
 
         sourceComponent: Item {
             id: vessel

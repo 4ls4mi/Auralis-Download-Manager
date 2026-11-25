@@ -14,6 +14,8 @@ ColumnLayout {
     property bool checking: false
     property string activeAction: ""
     property var status: null
+    property string preferredBrowser: ""
+    readonly property var installedBrowsers: Array.from(status?.installedBrowsers || [])
     property string problem: ""
     property string feedback: ""
     property bool feedbackFailed: false
@@ -56,12 +58,14 @@ ColumnLayout {
         if (checking || acting)
             return
         checking = true
-        engine.request({local: "browserExtensionStatus"}, function(value, error) {
+        engine.request({local: "browserExtensionStatus", browserExecutable: preferredBrowser}, function(value, error) {
             if (error || !value) {
                 problem = qsTr("Could not check your browser setup.")
             } else {
-                const browserChanged = status?.browserId !== value.browserId
+                const browserChanged = status?.browserExecutable !== value.browserExecutable
                 const previouslyInstalled = installed
+                if (preferredBrowser && preferredBrowser !== value.browserExecutable)
+                    preferredBrowser = ""
                 status = value
                 problem = ""
                 if (browserChanged || (!previouslyInstalled && installed)) {
@@ -99,7 +103,8 @@ ColumnLayout {
         activeAction = action
         feedback = ""
         feedbackFailed = false
-        engine.request({local: action, expectedBrowser: browserId}, function(value, error) {
+        engine.request({local: action, expectedBrowser: browserId,
+            browserExecutable: status.browserExecutable}, function(value, error) {
             if (error || !value?.ok) {
                 feedbackFailed = true
                 feedback = error || value?.message || qsTr("Could not complete browser setup.")
@@ -148,6 +153,22 @@ ColumnLayout {
         font.weight: Font.DemiBold
     }
 
+    GlassComboBox {
+        objectName: "installedBrowserSelector"
+        Layout.fillWidth: true
+        visible: root.installedBrowsers.length > 1
+        enabled: visible && !root.acting && !root.checking && !root.confirming
+        model: root.installedBrowsers
+        textRole: "name"
+        valueRole: "executable"
+        currentIndex: root.installedBrowsers.findIndex(browser => browser.executable === root.status?.browserExecutable)
+        Accessible.name: qsTr("Installed browsers")
+        onActivated: {
+            root.preferredBrowser = currentValue
+            root.refresh()
+        }
+    }
+
     Label {
         objectName: "browserSetupStatus"
         Layout.fillWidth: true
@@ -166,7 +187,7 @@ ColumnLayout {
             if (!browser)
                 return qsTr("Auralis could not detect your default browser.")
             if (!root.status?.browserSupported)
-                return qsTr("Guided extension setup is unavailable for your default browser, %1.").arg(browser)
+                return qsTr("The Chrome Web Store listing is unavailable in %1. Choose a Chromium browser such as Brave, Chrome, or Edge.").arg(browser)
             if (root.installed && root.status?.connectedRecently)
                 return qsTr("Verified the Auralis extension connection in %1.").arg(browser)
             if (root.installed && root.hostNeedsAttention)

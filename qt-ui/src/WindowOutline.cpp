@@ -82,12 +82,13 @@ public:
         setZ(1000000);
     }
 
-    void updateShape(const QSizeF &size, const QSizeF &reach)
+    void updateShape(const QSizeF &size, const QSizeF &reach, int corners)
     {
-        if (size == QSizeF(width(), height()) && reach == m_reach && isVisible())
+        if (size == QSizeF(width(), height()) && reach == m_reach && corners == m_corners && isVisible())
             return;
         setSize(size);
         m_reach = reach;
+        m_corners = corners;
         setVisible(true);
         update();
     }
@@ -123,6 +124,11 @@ protected:
             const bool bottom = corner >= 2;
             const float edgeX = right ? windowWidth : 0;
             const float edgeY = bottom ? windowHeight : 0;
+            if (!(m_corners & (1 << corner))) {
+                for (int point = 0; point < 4; ++point)
+                    vertices[corner * 4 + point].set(edgeX, edgeY, 0, 0);
+                continue;
+            }
             const float innerX = right ? edgeX - cornerWidth : cornerWidth;
             const float innerY = bottom ? edgeY - cornerHeight : cornerHeight;
             vertices[corner * 4].set(edgeX, edgeY, 0, 0);
@@ -137,10 +143,11 @@ protected:
 
 private:
     QSizeF m_reach;
+    int m_corners = 15;
 };
 }
 
-bool WindowOutline::configureAntialiasing(QWindow *window, const QSizeF &reach)
+bool WindowOutline::configureAntialiasing(QWindow *window, const QSizeF &reach, int corners)
 {
     auto *quickWindow = qobject_cast<QQuickWindow *>(window);
     if (!quickWindow)
@@ -157,6 +164,6 @@ bool WindowOutline::configureAntialiasing(QWindow *window, const QSizeF &reach)
     }
     if (!item)
         item = new OutlineItem(content);
-    item->updateShape(window->size(), reach);
+    item->updateShape(window->size(), reach, corners);
     return true;
 }

@@ -29,6 +29,7 @@
 #include <QQmlContext>
 #include <QQuickStyle>
 #include <QQuickWindow>
+#include <QScopeGuard>
 #include <QSet>
 #include <QSettings>
 #include <QStandardPaths>
@@ -569,10 +570,6 @@ int main(int argc, char **argv)
 
     const auto launchEnvironment = QProcessEnvironment::systemEnvironment();
     addBundledTools();
-#ifdef Q_OS_WIN
-    QQuickWindow::setSceneGraphBackend(QStringLiteral("rhi"));
-    QQuickWindow::setGraphicsApi(QSGRendererInterface::Direct3D12);
-#endif
     QQuickStyle::setStyle(QStringLiteral("Basic"));
     QQuickWindow::setDefaultAlphaBuffer(true);
 
@@ -632,6 +629,16 @@ int runDesktop(QApplication &app, int activeInterfaceScale, bool startHidden, bo
 {
     // Keep the lock until the engine and its workers have finished shutting down.
     std::optional<QLockFile> instanceLock;
+#ifdef Q_OS_WIN
+    QString rendererRecoveryPath;
+    bool rendererSessionComplete = false;
+    const auto rendererRecoveryCleanup = qScopeGuard([&] {
+        if (rendererSessionComplete && !rendererRecoveryPath.isEmpty()
+            && QFile::exists(rendererRecoveryPath) && !QFile::remove(rendererRecoveryPath)) {
+            qWarning("Could not clear the DirectX 12 recovery marker.");
+        }
+    });
+#endif
     // QML bindings must be destroyed before their native context objects.
     std::optional<Typography> typographyLifetime;
     std::optional<Engine> engineLifetime;
@@ -665,6 +672,44 @@ int runDesktop(QApplication &app, int activeInterfaceScale, bool startHidden, bo
     QLocalServer::removeServer(serverName);
     if (!local.listen(serverName))
         return 1;
+
+#ifdef Q_OS_WIN
+    auto graphicsApi = QSGRendererInterface::Direct3D11;
+    if (!smoke)
+        rendererRecoveryPath = QDir(engine.dataDirectory()).filePath(QStringLiteral("qt-directx12-session"));
+
+    if (qgetenv("QSG_RHI_BACKEND") == QByteArrayLiteral("d3d12")) {
+        QFile session(rendererRecoveryPath);
+        if (smoke || (QDir().mkpath(engine.dataDirectory())
+                      && session.open(QIODevice::WriteOnly | QIODevice::NewOnly))) {
+            graphicsApi = QSGRendererInterface::Direct3D12;
+        } else if (session.exists()) {
+            qWarning("Starting with DirectX 11 after an unfinished or unresponsive DirectX 12 session.");
+        } else {
+            qWarning("Starting with DirectX 11 because the DirectX 12 recovery marker could not be written.");
+        }
+    }
+    QQuickWindow::setSceneGraphBackend(QStringLiteral("rhi"));
+    QQuickWindow::setGraphicsApi(graphicsApi);
+
+    // Keep the marker if the GUI recovers from a sustained stall. The next launch can
+    // switch renderers safely after the current session has saved its downloads.
+    bool rendererStalled = false;
+    ULONGLONG previousGuiTick = 0;
+    QTimer rendererHeartbeat;
+    if (!smoke && graphicsApi == QSGRendererInterface::Direct3D12
+        && QueryUnbiasedInterruptTime(&previousGuiTick)) {
+        QObject::connect(&rendererHeartbeat, &QTimer::timeout, &app, [&] {
+            ULONGLONG now = 0;
+            if (!QueryUnbiasedInterruptTime(&now))
+                return;
+            constexpr ULONGLONG stallThreshold = 15ULL * 10'000'000; // Fifteen seconds in 100 ns units.
+            rendererStalled = rendererStalled || now - previousGuiTick >= stallThreshold;
+            previousGuiTick = now;
+        });
+        rendererHeartbeat.start(1000);
+    }
+#endif
 
     seedFreshProfile(engine.dataDirectory());
     applyReferenceWindowSizes();
@@ -762,6 +807,9 @@ int runDesktop(QApplication &app, int activeInterfaceScale, bool startHidden, bo
     QTimer::singleShot(0, &engine, &Engine::start);
     if (smoke) qInfo("Smoke: starting the Qt event loop and Rust service.");
     const int code = app.exec();
+#ifdef Q_OS_WIN
+    rendererSessionComplete = !rendererStalled && (code == 0 || code == Engine::RestartExitCode);
+#endif
     if (smoke) qInfo("Smoke: event loop finished with exit code %d.", code);
     if (code == Engine::RestartExitCode)
         restartError = QCoreApplication::translate("AppRestart",
