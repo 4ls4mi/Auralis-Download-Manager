@@ -24,6 +24,7 @@ struct NativeHostStatus {
     QString problem;
 };
 
+QString validatedBrowserExecutable(const QString &path);
 Handler defaultHttpsHandler();
 QUrl storeUrl();
 QStringList browserPolicyRefreshArguments(const QString &browserId, const QString &executable);

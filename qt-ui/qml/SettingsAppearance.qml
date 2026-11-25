@@ -237,7 +237,7 @@ GridLayout {
         ColumnLayout {
             width: parent.width
             spacing: 12
-            Heading { text: qsTr("Surface material") }
+            Heading { text: qsTr("Appearance preset") }
 
             GridLayout {
                 Layout.fillWidth: true
@@ -266,15 +266,33 @@ GridLayout {
                 }
             }
 
-            Heading { text: qsTr("Window background opacity") }
+            Heading {
+                visible: MaterialTheme.mdmAppearance
+                text: qsTr("Theme mode")
+            }
+            Choice {
+                visible: MaterialTheme.mdmAppearance
+                selection: MaterialTheme.mdmMode
+                model: [
+                    {label: qsTr("Follow system"), value: "system"},
+                    {label: qsTr("Light"), value: "light"},
+                    {label: qsTr("Dark"), value: "dark"}
+                ]
+                Accessible.name: qsTr("Theme mode")
+                onActivated: MaterialTheme.mdmMode = currentValue
+            }
+
+            Heading { visible: !MaterialTheme.mdmAppearance; text: qsTr("Window background opacity") }
             NumeralLabel {
                 Layout.fillWidth: true
+                visible: !MaterialTheme.mdmAppearance
                 valueText: qsTr("100% is solid. Lower values show more of the background.")
                 color: root.colors.muted
                 wrapMode: Text.WordWrap
             }
 
             RowLayout {
+                visible: !MaterialTheme.mdmAppearance
                 Layout.fillWidth: true
                     GlassSlider {
                     objectName: "translucencySlider"
@@ -297,9 +315,10 @@ GridLayout {
                 }
             }
 
-            Heading { text: qsTr("Theme tint") }
+            Heading { visible: !MaterialTheme.mdmAppearance; text: qsTr("Theme tint") }
 
             RowLayout {
+                visible: !MaterialTheme.mdmAppearance
                 Layout.fillWidth: true
                 GlassButton {
                     text: qsTr("Choose tint color")
@@ -322,9 +341,10 @@ GridLayout {
                 NumeralLabel { valueText: qsTr("%1%").arg(Math.round(MaterialTheme.tintStrength * 100)); color: root.colors.text }
             }
 
-            Heading { text: qsTr("Accent override") }
+            Heading { visible: !MaterialTheme.mdmAppearance; text: qsTr("Accent override") }
 
             Flow {
+                visible: !MaterialTheme.mdmAppearance
                 Layout.fillWidth: true
                 spacing: 6
                 GlassButton {
@@ -344,7 +364,7 @@ GridLayout {
             }
 
             Label {
-                visible: MaterialTheme.colorTheme !== null
+                visible: !MaterialTheme.mdmAppearance && MaterialTheme.colorTheme !== null
                 text: MaterialTheme.colorTheme ? qsTr("Current theme: %1").arg(MaterialTheme.colorTheme.name) : ""
                 color: root.colors.text
             }
@@ -354,10 +374,53 @@ GridLayout {
                 spacing: 8
 
                 GlassButton { text: qsTr("Import material…"); enabled: !root.busy; onClicked: { root.fileAction = "material"; inputFile.open() } }
-                GlassButton { text: qsTr("Export material…"); enabled: !root.busy; onClicked: root.save("material") }
+                GlassButton { text: qsTr("Export material…"); enabled: !root.busy && !MaterialTheme.mdmAppearance; onClicked: root.save("material") }
                 GlassButton { text: qsTr("Import theme…"); enabled: !root.busy; onClicked: { root.fileAction = "theme"; inputFile.open() } }
                 GlassButton { text: qsTr("Export theme…"); enabled: !root.busy; onClicked: root.save("theme") }
-                GlassButton { text: qsTr("Use material colors"); enabled: Boolean(MaterialTheme.colorTheme); onClicked: MaterialTheme.colorTheme = null }
+                GlassButton { text: qsTr("Use material colors"); visible: !MaterialTheme.mdmAppearance; enabled: Boolean(MaterialTheme.colorTheme); onClicked: MaterialTheme.colorTheme = null }
+            }
+        }
+    }
+
+    TabPage {
+        visible: root.activeTab === 1
+        ColumnLayout {
+            width: parent.width
+            spacing: 10
+            Heading { text: qsTr("Window corners") }
+            Choice {
+                enabled: !MaterialTheme.mdmAppearance
+                selection: WindowAppearance.cornerPlacement
+                model: [
+                    {label: qsTr("Square"), value: "square"},
+                    {label: qsTr("Round top corners"), value: "top"},
+                    {label: qsTr("Round bottom corners"), value: "bottom"},
+                    {label: qsTr("Round all corners"), value: "all"}
+                ]
+                Accessible.name: qsTr("Which corners to round")
+                onActivated: WindowAppearance.set("cornerPlacement", currentValue)
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                Label { text: qsTr("Radius"); color: root.colors.text }
+                GlassSlider {
+                    Layout.fillWidth: true
+                    enabled: !MaterialTheme.mdmAppearance && WindowAppearance.cornerPlacement !== "square"
+                    from: 0
+                    to: 40
+                    stepSize: 1
+                    live: false
+                    value: WindowAppearance.cornerRadius
+                    Accessible.name: qsTr("Window corner radius")
+                    onValueChanged: {
+                        if (value !== WindowAppearance.cornerRadius)
+                            WindowAppearance.set("cornerRadius", Math.round(value))
+                    }
+                }
+                Label {
+                    text: qsTr("%1 px").arg(WindowAppearance.cornerRadius)
+                    color: root.colors.muted
+                }
             }
         }
     }
@@ -371,8 +434,8 @@ GridLayout {
             id: backgroundCard
             required property int index
             required property var modelData
-            pageRow: index
-            visible: root.activeTab === 1
+            pageRow: index + 1
+            visible: root.activeTab === 1 && !MaterialTheme.mdmAppearance
             readonly property var selected: WindowAppearance.background(modelData.key)
 
             ColumnLayout {
@@ -420,8 +483,16 @@ GridLayout {
         ColumnLayout {
             width: parent.width
             spacing: 10
+            Label {
+                visible: MaterialTheme.mdmAppearance
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                color: root.colors.muted
+                text: qsTr("MDM presets set the progress bar, downloaded byte ranges, and speed graph.")
+            }
             Heading { text: qsTr("Progress") }
             GridLayout {
+                visible: !MaterialTheme.mdmAppearance
                 Layout.fillWidth: true
                 columns: !root.sideTabs || width >= 320 ? 2 : 1
                 IndicatorChoice {
@@ -469,6 +540,7 @@ GridLayout {
             }
             Heading { text: qsTr("Connections") }
             GridLayout {
+                visible: !MaterialTheme.mdmAppearance
                 Layout.fillWidth: true
                 columns: !root.sideTabs || width >= 320 ? 2 : 1
                 IndicatorChoice {
@@ -496,7 +568,15 @@ GridLayout {
                     onChosen: value => WindowAppearance.set("connectionLighting", value)
                 }
             }
+            MdmSegmentMap {
+                visible: MaterialTheme.mdmAppearance
+                Layout.fillWidth: true
+                totalBytes: 100
+                segments: [{start: 0, cursor: 25, end: 25}, {start: 25, cursor: 38, end: 50},
+                    {start: 50, cursor: 76, end: 80}, {start: 80, cursor: 80, end: 100}]
+            }
             RowLayout {
+                visible: !MaterialTheme.mdmAppearance
                 Layout.fillWidth: true
                 Repeater {
                     model: [.32, .68, .80, .49, .98, .82]
@@ -516,12 +596,14 @@ GridLayout {
             }
             Label {
                 Layout.fillWidth: true
+                visible: !MaterialTheme.mdmAppearance
                 text: qsTr("The pipes in the download window follow your progress and connection colors, lighting, and animation.")
                 color: root.colors.muted
                 wrapMode: Text.WordWrap
             }
             Heading { text: qsTr("Transfer speed graph") }
             GridLayout {
+                visible: !MaterialTheme.mdmAppearance
                 Layout.fillWidth: true
                 columns: !root.sideTabs || width >= 320 ? 2 : 1
                 IndicatorChoice {

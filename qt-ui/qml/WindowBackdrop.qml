@@ -5,7 +5,7 @@ import QtMultimedia
 Item {
     id: root
 
-    required property Window hostWindow
+    required property AuralisWindow hostWindow
     property string target: "details"
     readonly property var selection: WindowAppearance.background(target)
     readonly property bool customColor: selection.mode === "solid"
@@ -39,6 +39,7 @@ Item {
         target: root.hostWindow
         function onVisibleChanged() { Qt.callLater(root.refresh); root.syncPlayback() }
         function onActiveChanged() { Qt.callLater(root.refresh) }
+        function onFrameCornerRadiusChanged() { Qt.callLater(root.refresh) }
     }
 
     Connections {

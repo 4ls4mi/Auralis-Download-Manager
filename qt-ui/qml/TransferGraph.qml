@@ -26,7 +26,8 @@ Canvas {
     readonly property color smokeEnd: MaterialTheme.mix(endpointTone.glow, "#070912", .88, 1)
     readonly property bool compact: compactStyle || height < 38
     readonly property bool jellyFlow: animationStyle === "jelly"
-    readonly property bool flowEnabled: flowActive && visible && available && !paintingPaused
+    readonly property var mdmColors: MaterialTheme.palette.mdm
+    readonly property bool flowEnabled: !mdmColors && flowActive && visible && available && !paintingPaused
         && !MaterialTheme.reducedMotion && samples.length > 1 && width >= 2 && height >= 3
         && animationStyle !== "none"
         && (!Window.window || (Window.window.visible && Window.window.visibility !== Window.Minimized))
@@ -37,6 +38,7 @@ Canvas {
     onCompactChanged: requestPaint()
     onPaintingPausedChanged: if (!paintingPaused) requestPaint()
     onLineColorChanged: requestPaint()
+    onMdmColorsChanged: requestPaint()
     onEndpointColorChanged: requestPaint()
     onGridColorChanged: requestPaint()
     onLightChanged: requestPaint()
@@ -471,6 +473,14 @@ Canvas {
 
         const peak = Math.max(1, ...samples) * 1.15
         const range = Math.max(1, height - Math.min(8, height * .32))
+        if (mdmColors) {
+            trace(ctx, peak, floor, range)
+            ctx.globalAlpha = 1
+            ctx.strokeStyle = mdmColors.accent
+            ctx.lineWidth = 1
+            ctx.stroke()
+            return
+        }
         const first = lineTone
         const last = endpointTone
         const glow = gradient(ctx, first.glow, last.glow)

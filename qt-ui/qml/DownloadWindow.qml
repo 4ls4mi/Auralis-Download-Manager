@@ -58,7 +58,7 @@ AuralisWindow {
     readonly property bool ordinary: !!(telemetry && !telemetry.is_torrent && !telemetry.is_video && !telemetry.is_gallery && !telemetry.is_remote)
     readonly property bool runningTransfer: !!(item && item.status === "Downloading")
     readonly property bool feedingConnections: runningTransfer && workerRows.some(connectionHasData)
-    readonly property bool displayFlow: activeTab === 0 && !!item && !!item.url
+    readonly property bool displayFlow: !colors.mdm && activeTab === 0 && !!item && !!item.url
     readonly property bool displayConnectionFlow: displayFlow && workerRows.length > 0
     readonly property real pipeScale: compactView ? .68 : 1
     readonly property int pipeInset: Math.round(32 * pipeScale)
@@ -1017,7 +1017,7 @@ AuralisWindow {
                     rowSpacing: root.compactView ? 4 : root.compactWidth || root.compactHeight ? 6 : 8
                     Pane {
                         id: connectionPane
-                        visible: !root.compactView || !!root.torrent || root.workerRows.length > 0
+                        visible: !root.compactView || !!root.torrent || root.workerRows.length > 0 || Boolean(root.colors.mdm)
                         Layout.fillWidth: true
                         Layout.minimumWidth: 0
                         Layout.preferredWidth: root.compactView ? 1 : root.transferLayout === "violetRail" ? 315 : 355
@@ -1068,12 +1068,20 @@ AuralisWindow {
                                 valueText: root.torrent ? qsTr("Upload %1  ·  Sent %2\nInfo hash %3").arg(Transfer.rate(root.torrent.upload_speed)).arg(Transfer.bytes(root.torrent.uploaded)).arg(root.torrent.info_hash || "—") : ""
                             }
                             Label {
-                                visible: !root.compactView && !root.torrent && !(root.telemetry && root.telemetry.connections && root.telemetry.connections.length)
+                                visible: !root.colors.mdm && !root.compactView && !root.torrent && !(root.telemetry && root.telemetry.connections && root.telemetry.connections.length)
                                 text: qsTr("No active connection data")
                                 color: root.colors.muted
                             }
+                            MdmSegmentMap {
+                                visible: Boolean(root.colors.mdm) && !root.torrent
+                                Layout.fillWidth: true
+                                segments: root.telemetry?.segments || []
+                                totalBytes: Number(root.telemetry?.total || 0)
+                                paintingPaused: root.interactiveFrame
+                            }
                             GridLayout {
                                 id: waterGrid
+                                visible: !root.colors.mdm
                                 objectName: "downloadConnectionGrid"
                                 Layout.fillWidth: true
                                 Layout.minimumWidth: 0
@@ -1085,7 +1093,7 @@ AuralisWindow {
                                 Repeater {
                                     id: waterWorkers
                                     objectName: "downloadConnectionWorkers"
-                                    model: root.workerRows.length
+                                    model: root.colors.mdm ? 0 : root.workerRows.length
                                     delegate: Item {
                                         id: worker
                                         required property int index

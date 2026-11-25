@@ -6261,6 +6261,7 @@ impl App {
                 serde_json::json!({
                     "id": i.id,
                     "segments": segments,
+                    "total": i.size,
                     "chunk_count": i.chunk_count.unwrap_or_else(|| self.settings.connections_for(&i.url)),
                     "active_connections": connections.iter().filter(|c| c["state"] == "Receiving" || c["state"] == "Connecting").count(),
                     "connections": connections,

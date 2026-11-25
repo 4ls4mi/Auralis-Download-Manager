@@ -374,8 +374,11 @@ pub const WINDOWS_PROGRAMS: &[(&str, Option<&str>, &str)] = &[
     ("chrome.exe", Some(r"\chromium\"), "Chromium"),
     ("msedge.exe", None, "Microsoft Edge"),
     ("brave.exe", None, "Brave"),
+    ("brave-origin.exe", Some(r"\bravesoftware\"), "Brave"),
     ("vivaldi.exe", None, "Vivaldi"),
     ("opera.exe", None, "Opera"),
+    ("launcher.exe", Some(r"\opera\"), "Opera"),
+    ("launcher.exe", Some(r"\opera gx\"), "Opera"),
     ("thorium.exe", None, "Thorium"),
     ("firefox.exe", None, "Mozilla Firefox"),
     ("zen.exe", None, "Zen Browser"),
@@ -387,7 +390,7 @@ pub const WINDOWS_PROGRAMS: &[(&str, Option<&str>, &str)] = &[
 /// Windows: the browser `program` (a full path) is, by its file name and folder; none for a
 /// program not in the table (or a `chrome.exe` in another folder).
 pub fn windows_named(program: &str) -> Option<&'static str> {
-    let lower = program.to_lowercase();
+    let lower = program.to_lowercase().replace('/', "\\");
     let file = lower.rsplit(['\\', '/']).next().unwrap_or(&lower);
     WINDOWS_PROGRAMS
         .iter()

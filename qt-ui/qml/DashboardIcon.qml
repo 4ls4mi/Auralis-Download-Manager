@@ -27,6 +27,7 @@ Item {
     readonly property var paths: ({
         app: "M4 4 H20 V20 H4 Z M12 6 V15 M8 11 L12 15 L16 11",
         studioMark: "M2 15 C5 15 6 6 10 6 C14 6 15 18 18 18 C20 18 21 12 22 12",
+        support: "M12 20 L4.8 13 C.6 8.8 4.3 3.5 8.1 4.8 C9.8 5.3 10.9 6.3 12 7.8 C13.1 6.3 14.2 5.3 15.9 4.8 C19.7 3.5 23.4 8.8 19.2 13 Z",
         add: "M12 4 V20 M4 12 H20",
         torrent: "M5 3 H14 L19 8 V21 H5 Z M14 3 V8 H19 M10 8 V17 M8 10 L10 8 L12 10 M8 15 L10 17 L12 15",
         start: "M8 4 L20 12 L8 20 Z",

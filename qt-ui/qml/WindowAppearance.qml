@@ -8,6 +8,8 @@ QtObject {
 
     property bool loaded: false
     property var preferences: defaults()
+    readonly property int cornerRadius: preferences.cornerRadius
+    readonly property string cornerPlacement: preferences.cornerPlacement
     readonly property string progressShape: preferences.progressShape
     readonly property string progressLayout: preferences.progressLayout
     readonly property string progressAnimation: preferences.progressAnimation
@@ -58,6 +60,7 @@ QtObject {
     property Connections materialPersistence: Connections {
         target: MaterialTheme
         function onCurrentChanged() { root.store() }
+        function onMdmModeChanged() { root.store() }
         function onTranslucencyChanged() { root.store() }
         function onTintColorChanged() { root.store() }
         function onTintStrengthChanged() { root.store() }
@@ -81,6 +84,7 @@ QtObject {
 
     function defaults() {
         return {
+            cornerRadius: 12, cornerPlacement: "top",
             mainMode: "desktop", detailsMode: "desktop", mainMedia: "", detailsMedia: "",
             mainColor: "", detailsColor: "", progressShape: "bubble", progressLayout: "classic",
             progressAnimation: "classic", progressLighting: "polished", connectionShape: "material",
@@ -94,6 +98,8 @@ QtObject {
     }
 
     function background(target) {
+        if (MaterialTheme.mdmAppearance)
+            return {mode: "solid", media: "", color: MaterialTheme.palette.background}
         const prefix = target === "main" ? "main" : "details"
         return {
             mode: preferences[prefix + "Mode"],
@@ -193,6 +199,7 @@ QtObject {
             "mh-glass-qt-appearance": JSON.stringify(Object.assign({}, preferences, {
                 tint: colorText(MaterialTheme.tintColor),
                 colorTheme: MaterialTheme.colorTheme,
+                mdmMode: MaterialTheme.mdmMode,
                 forcedAccent: MaterialTheme.forcedAccent,
                 reducedMotion: MaterialTheme.reducedMotion,
                 progressPalette: MaterialTheme.progressPalette,
@@ -217,7 +224,7 @@ QtObject {
         } catch (error) { console.warn("Could not load stored materials", String(error)) }
 
         const value = data["mh-glass-material"]
-        if (typeof value === "string" && (MaterialTheme.builtins[value] || MaterialTheme.userMaterials[value]))
+        if (typeof value === "string" && MaterialTheme.hasMaterial(value))
             MaterialTheme.current = value
         else if (complete)
             MaterialTheme.current = MaterialTheme.defaultMaterial
@@ -236,6 +243,8 @@ QtObject {
         if (validPalette(saved.colorTheme)) MaterialTheme.colorTheme = saved.colorTheme
         else if (complete) MaterialTheme.colorTheme = null
         MaterialTheme.forcedAccent = optionalColor(saved.forcedAccent, complete ? "" : MaterialTheme.forcedAccent)
+        MaterialTheme.mdmMode = validChoice(saved.mdmMode, ["system", "light", "dark"],
+            complete ? "system" : MaterialTheme.mdmMode)
         MaterialTheme.progressPalette = paletteFor(saved.progressPalette,
             paletteFor(data["mh-glass-indicator"], complete ? "material" : MaterialTheme.progressPalette))
         MaterialTheme.connectionPalette = paletteFor(saved.connectionPalette,
@@ -246,6 +255,9 @@ QtObject {
         const original = complete ? defaults() : preferences
         const modes = ["desktop", "solid", "wallpaper"]
         preferences = {
+            cornerRadius: Number.isInteger(saved.cornerRadius) && saved.cornerRadius >= 0 && saved.cornerRadius <= 40
+                ? saved.cornerRadius : original.cornerRadius,
+            cornerPlacement: validChoice(saved.cornerPlacement, ["square", "top", "bottom", "all"], original.cornerPlacement),
             mainMode: validChoice(saved.mainMode || data["mh-glass-back-main"], modes, original.mainMode),
             detailsMode: validChoice(saved.detailsMode || data["mh-glass-back-details"], modes, original.detailsMode),
             mainMedia: fileUrl(saved.mainMedia ?? data["mh-glass-wall-main"] ?? original.mainMedia),
@@ -268,7 +280,7 @@ QtObject {
     function exportTheme() {
         const profile = MaterialTheme.palette
         const material = MaterialTheme.current
-        const builtIn = ["brushed-glass", "frosted-water-351", "rose-pine", "window-glass", "oversimplified",
+        const builtIn = MaterialTheme.isMdmPreset(material) || ["brushed-glass", "frosted-water-351", "rose-pine", "window-glass", "oversimplified",
             "builtin-obsidian-matte", "builtin-smoked-glass", "builtin-black-glass", "builtin-pearl-frost",
             "builtin-aurora-night", "builtin-aurora-ice"].includes(material)
         const legacy = snapshot()
@@ -291,6 +303,7 @@ QtObject {
             },
             qt: {
                 material: material, tint: colorText(MaterialTheme.tintColor), progressShape: progressShape,
+                mdmMode: MaterialTheme.mdmMode,
                 progressLayout: progressLayout,
                 progressAnimation: progressAnimation, progressLighting: progressLighting,
                 connectionShape: connectionShape, connectionAnimation: connectionAnimation, connectionLighting: connectionLighting,
@@ -319,8 +332,9 @@ QtObject {
             if (value.qt && MaterialTheme.builtins[value.qt.material]) material = value.qt.material
             else material = MaterialTheme.installMaterial(value.customMaterial)
         }
-        if (!(MaterialTheme.builtins[material] || MaterialTheme.userMaterials[material])) return false
+        if (!MaterialTheme.hasMaterial(material)) return false
         MaterialTheme.current = material
+        MaterialTheme.mdmMode = validChoice(value.qt?.mdmMode, ["system", "light", "dark"], MaterialTheme.mdmMode)
         MaterialTheme.colorTheme = value.qt?.colorTheme === null ? null
             : validPalette(value.qt?.colorTheme) ? value.qt.colorTheme : value.palette
         MaterialTheme.translucency = typeof options.glassTranslucency === "number" ? options.glassTranslucency / 100 : -1

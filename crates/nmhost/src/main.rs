@@ -1365,16 +1365,14 @@ fn register(all_users: bool) -> Result<(), String> {
     register_windows(all_users, true)
 }
 
-/// The installed Auralis app registers only the selected Chrome or Edge browser.
+/// Register the native host for the selected Chromium browser.
 #[cfg(windows)]
 fn register_native_browser(browser: &str) -> Result<(), String> {
     portable_refused()?;
     temporary_refused()?;
-    let key = match browser {
-        "chrome" => r"Software\Google\Chrome\NativeMessagingHosts",
-        "edge" => r"Software\Microsoft\Edge\NativeMessagingHosts",
-        _ => return Err("This browser does not support guided Auralis setup".into()),
-    };
+    let key = mdm_ipc::extension::StoreBrowser::from_id(browser)
+        .ok_or("This browser does not support guided Auralis setup")?
+        .windows_native_host_key();
     let manifest = own_manifest(Family::Chromium, true)?;
     reg_point("HKCU", key, &manifest)
 }

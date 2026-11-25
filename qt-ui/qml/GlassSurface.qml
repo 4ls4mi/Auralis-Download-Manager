@@ -66,9 +66,11 @@ Item {
     Rectangle {
         anchors.fill: parent
         visible: surface.flatStudio
-        radius: !surface.shell && (surface.roundedPanel || surface.role === "field" || surface.studioPanel)
-            ? surface.radius : 0
-        color: surface.shell ? surface.backing : MaterialTheme.rgba(surface.flatFace, surface.flatFaceOpacity)
+        radius: surface.profile.mdm ? surface.role === "field" ? surface.profile.radius : 0
+            : !surface.shell && (surface.roundedPanel || surface.role === "field" || surface.studioPanel)
+                ? surface.radius : 0
+        color: surface.profile.mdm ? surface.flatFace
+            : surface.shell ? surface.backing : MaterialTheme.rgba(surface.flatFace, surface.flatFaceOpacity)
         border.width: surface.shell || surface.roundedPanel || surface.role === "field" ? 1 : 0
         border.color: surface.profile.surfaceLine || surface.profile.divider
 

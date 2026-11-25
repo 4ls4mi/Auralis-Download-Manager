@@ -14,8 +14,8 @@ $env:MDM_DATA_DIR = $data
 $env:MDM_DOWNLOADS = Join-Path $data 'downloads'
 $env:AURALIS_TEST_SKIP_HOST = '1'
 $env:QSG_INFO = '1'
-# Confirm the installed application selects Direct3D 12 over legacy overrides.
-$env:QSG_RHI_BACKEND = 'd3d11'
+# Exercise the default renderer with the legacy software option present.
+$env:QSG_RHI_BACKEND = $null
 $env:QT_QUICK_BACKEND = 'software'
 New-Item -ItemType Directory -Force -Path $data, $env:MDM_DOWNLOADS | Out-Null
 
@@ -161,11 +161,15 @@ try {
     Run-Fixture $exe @('--engine-smoke', '--device=software') 90000
     if (!(Test-Path $marker)) { throw 'The installed application did not verify start, pause, resume, and transfer integrity.' }
     Get-Content -LiteralPath $marker | ForEach-Object { Write-Host $_ }
+    $console = Join-Path $data 'qt-smoke-console.log'
+    if (!(Test-Path -LiteralPath $console) -or
+        !(Select-String -LiteralPath $console -SimpleMatch 'Smoke: using Direct3D 11.' -Quiet)) {
+        throw 'The installed application did not select Direct3D 11 by default.'
+    }
 
     # Exercise the in-app updater's NSIS arguments and wait for the installed app
     # to verify a loopback transfer again after the installer launches it.
     $upgradeArgs = @('/P', '/UPDATE', '/R', '/NOREG', '/ARGS=--engine-smoke', "/D=$fixture")
-    $console = Join-Path $data 'qt-smoke-console.log'
     Remove-Item -LiteralPath $marker, $console -Force -ErrorAction SilentlyContinue
     Write-Host 'Testing passive upgrade with the installed executable locked.'
     $uninstallMarker = Join-Path $data 'keep-after-blocked-uninstall.txt'
@@ -218,7 +222,7 @@ try {
     if ((Test-Path $exe) -or !(Test-Path $ownedByUser) -or !(Test-Path $portableMarker) -or !(Test-Path $marker)) {
         throw 'The uninstaller did not remove only the packaged application files.'
     }
-    Write-Host 'Verified silent install, native icons, Direct3D 12 rendering during start and resume, passive upgrade relaunch, and scoped uninstallation.'
+    Write-Host 'Verified silent install, native icons, Direct3D 11 rendering during start and resume, passive upgrade relaunch, and scoped uninstallation.'
 } finally {
     Get-Process -Name 'auralis-download-manager' -ErrorAction SilentlyContinue |
         Where-Object { $_.Path -ieq $exe } | Stop-Process -Force -ErrorAction SilentlyContinue

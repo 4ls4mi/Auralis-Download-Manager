@@ -45,6 +45,8 @@ mod netwatch;
 mod options;
 mod pacfetch;
 mod palette;
+mod qt_appearance;
+pub use qt_appearance::embedded_appearance_presets;
 mod playlistdlg;
 mod progress;
 mod properties;
@@ -309,6 +311,41 @@ pub fn can_start_in_tray() -> bool {
 /// No application window or second downloader executable is started.
 pub fn run_embedded_downloader() -> Result<(), String> {
     headless::run_embedded()
+}
+
+/// Windows browser registrations and installed programs for the embedded desktop interface.
+#[cfg(windows)]
+pub fn embedded_windows_browsers() -> Vec<(String, std::path::PathBuf)> {
+    let mut browsers = win32::browsers();
+    // Brave can be installed per user even when its default-app registration is missing.
+    for variable in ["LOCALAPPDATA", "ProgramFiles", "ProgramFiles(x86)", "ProgramW6432"] {
+        let Some(root) = std::env::var_os(variable).map(std::path::PathBuf::from) else {
+            continue;
+        };
+        if !root.is_absolute() {
+            continue;
+        }
+        for (channel, name) in [
+            ("Brave-Browser", "Brave"),
+            ("Brave-Browser-Beta", "Brave Beta"),
+            ("Brave-Browser-Dev", "Brave Dev"),
+            ("Brave-Browser-Nightly", "Brave Nightly"),
+            ("Brave-Origin", "Brave Origin"),
+            ("Brave-Origin-Beta", "Brave Origin Beta"),
+            ("Brave-Origin-Nightly", "Brave Origin Nightly"),
+        ] {
+            let application = root.join("BraveSoftware").join(channel).join("Application");
+            for executable in ["brave.exe", "brave-origin.exe"] {
+                let path = application.join(executable);
+                if path.is_file() && !browsers.iter().any(|(_, known)| {
+                    known.to_string_lossy().eq_ignore_ascii_case(&path.to_string_lossy())
+                }) {
+                    browsers.push((name.to_owned(), path));
+                }
+            }
+        }
+    }
+    browsers
 }
 
 /// Read the embedded interface's language before loading its first window.

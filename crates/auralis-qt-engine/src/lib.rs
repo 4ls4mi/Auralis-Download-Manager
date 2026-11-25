@@ -57,9 +57,25 @@ pub unsafe extern "C" fn auralis_engine_request(input: *const u8, length: usize)
             if action == "interface-language" {
                 return Ok(json!(mdm_app::embedded_interface_language()));
             }
+            if action == "appearance-presets" {
+                return Ok(mdm_app::embedded_appearance_presets(
+                    request["systemAccent"].as_str().unwrap_or_default(),
+                ));
+            }
             #[cfg(windows)]
             if action.starts_with("update-") {
                 return updater::dispatch(action, &request);
+            }
+            #[cfg(windows)]
+            if action == "installed-browsers" {
+                return Ok(json!(
+                    mdm_app::embedded_windows_browsers()
+                        .into_iter()
+                        .map(|(name, program)| {
+                            json!({"name": name, "executable": program.to_string_lossy()})
+                        })
+                        .collect::<Vec<_>>()
+                ));
             }
             if action == "browser-extension-status" {
                 use mdm_ipc::extension::StoreBrowser;

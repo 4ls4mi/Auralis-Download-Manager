@@ -49,6 +49,7 @@ AuralisWindow {
     property string problem: ""
     property string notice: ""
     property var availableUpdate: null
+    property alias donationAction: donatePatreon
     signal updateCheckRequested()
     signal setupRequested()
     signal updateDetailsRequested()
@@ -415,6 +416,12 @@ AuralisWindow {
         background: GlassSurface { role: "content"; roundedPanel: true; backdropAvailable: settingsBackdrop.backdropAvailable }
     }
 
+    Action {
+        id: donatePatreon
+        text: qsTranslate("SettingsUpdates", "Donate on Patreon")
+        onTriggered: Qt.openUrlExternally("https://www.patreon.com/c/Alsamii")
+    }
+
     header: ColumnLayout {
         spacing: 0
         ToolBar {
@@ -459,6 +466,15 @@ AuralisWindow {
                         anchors.fill: parent
                         onDoubleClickRequested: root.toggleMaximize()
                     }
+                }
+                GlassButton {
+                    objectName: "settingsHeaderDonatePatreon"
+                    action: donatePatreon
+                    Layout.preferredHeight: 30
+                    leftPadding: 9
+                    rightPadding: 9
+                    accent: root.colors.secondary
+                    Accessible.role: Accessible.Link
                 }
                 CaptionControls {
                     maximized: root.visibility === Window.Maximized
@@ -812,6 +828,7 @@ AuralisWindow {
 
                         SettingsUpdates {
                             Layout.fillWidth: true
+                            donationAction: donatePatreon
                             visible: !root.term && root.category === "Updates"
                             backdropAvailable: settingsBackdrop.backdropAvailable
                             updatePresentation: root.updatePresentation

@@ -13,6 +13,7 @@ Basic.Button {
     property bool filled: false
     property color accent: danger ? materialPalette.destructive : materialPalette.accent
     readonly property var materialPalette: MaterialTheme.profile(material)
+    readonly property var mdmColors: materialPalette.mdm
     readonly property var finish: MaterialTheme.buttonFinishes[materialPalette.finish]
     readonly property color activeAccent: MaterialTheme.safeAccent(MaterialTheme.forcedAccent || accent, materialPalette.light)
     readonly property color vividAccent: MaterialTheme.vividControlAccent(activeAccent, materialPalette.light)
@@ -28,10 +29,12 @@ Basic.Button {
         Math.max(.93, backingOpacity))
     readonly property bool accentFill: enabled && (selectedFace || hovered || down || visualFocus)
     readonly property color faceColor: accentFill ? engagedFace : restingFace
-    readonly property color buttonInk: MaterialTheme.controlTextInk(materialPalette.text, faceColor)
-    readonly property color iconInk: !enabled ? MaterialTheme.mix(materialPalette.muted, neutralFace, .36, 1)
+    readonly property color buttonInk: mdmColors
+        ? !enabled ? mdmColors.textDisabled : selectedFace ? mdmColors.buttonAccentText : mdmColors.buttonText
+        : MaterialTheme.controlTextInk(materialPalette.text, faceColor)
+    readonly property color iconInk: mdmColors ? buttonInk : !enabled ? MaterialTheme.mix(materialPalette.muted, neutralFace, .36, 1)
         : MaterialTheme.controlIconInk(vividAccent, faceColor)
-    property real faceOffset: enabled ? down ? 1.55 : hovered ? -.45 : 0 : 0
+    property real faceOffset: enabled && !mdmColors ? down ? 1.55 : hovered ? -.45 : 0 : 0
 
     hoverEnabled: true
     font.pixelSize: TypographyScale.pixels(13)
@@ -77,11 +80,42 @@ Basic.Button {
         readonly property string focusPath: Geometry.buttonFrame(.7 + focusInset, .7 + focusInset,
             width - 1.4 - 2 * focusInset, faceHeight - 2 * focusInset, radius - focusInset, outline)
 
-        opacity: control.enabled ? 1 : .54
+        opacity: control.enabled || control.mdmColors ? 1 : .54
+
+        Loader {
+            anchors.fill: parent
+            active: Boolean(control.mdmColors)
+            sourceComponent: Rectangle {
+                id: classicButton
+                anchors.fill: parent
+                radius: control.materialPalette.buttonRadius
+                gradient: control.materialPalette.mdmGlossyButtons ? classicGloss : null
+                Gradient {
+                    id: classicGloss
+                    GradientStop {
+                        position: 0
+                        color: MaterialTheme.mix(classicButton.color, control.mdmColors.gloss, .46, 1)
+                    }
+                    GradientStop { position: .55; color: classicButton.color }
+                    GradientStop {
+                        position: 1
+                        color: MaterialTheme.mix(classicButton.color, control.mdmColors.buttonBorder, .22, 1)
+                    }
+                }
+                color: !control.enabled ? control.mdmColors.buttonDisabled
+                    : control.selectedFace ? control.mdmColors.buttonAccent
+                    : control.down ? control.mdmColors.buttonPressed
+                    : control.hovered ? control.mdmColors.buttonHot : control.mdmColors.button
+                border.width: 1
+                border.color: !control.enabled ? control.mdmColors.buttonDisabledBorder
+                    : control.visualFocus ? control.mdmColors.focusRing : control.mdmColors.buttonBorder
+            }
+        }
 
         // The well stays in place as the cap lifts or settles into it.
         Shape {
             anchors.fill: parent
+            visible: !control.mdmColors
             transform: Translate { y: 1.7 }
             preferredRendererType: Shape.CurveRenderer
             ShapePath {
@@ -93,6 +127,7 @@ Basic.Button {
 
         Shape {
             anchors.fill: parent
+            visible: !control.mdmColors
             transform: Translate { y: control.faceOffset }
             preferredRendererType: Shape.CurveRenderer
 
@@ -149,6 +184,7 @@ Basic.Button {
         }
 
         ButtonLighting {
+            visible: !control.mdmColors
             anchors.fill: parent
             transform: Translate { y: control.faceOffset }
             material: control.material
@@ -163,7 +199,7 @@ Basic.Button {
             transform: Translate { y: control.faceOffset }
             preferredRendererType: Shape.CurveRenderer
             opacity: control.visualFocus && control.enabled ? 1 : 0
-            visible: opacity > 0
+            visible: !control.mdmColors && opacity > 0
 
             Behavior on opacity {
                 enabled: !MaterialTheme.reducedMotion

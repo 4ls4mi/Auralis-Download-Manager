@@ -5,8 +5,69 @@ import QtQuick
 QtObject {
     id: theme
 
-    readonly property string defaultMaterial: "carbon"
+    readonly property string defaultMaterial: "mdm-classic"
     property string current: defaultMaterial
+    property string mdmMode: "system"
+    property var mdmPresets: ({})
+    readonly property bool mdmAppearance: isMdmPreset(current)
+    readonly property bool mdmDark: mdmMode === "dark" || (mdmMode === "system"
+        && (Qt.styleHints.colorScheme === Qt.ColorScheme.Dark
+            || (Qt.styleHints.colorScheme === Qt.ColorScheme.Unknown && systemColors.window.hsvValue < .5)))
+    readonly property var mdmPresetIds: [
+        "mdm-classic", "mdm-native", "mdm-high-contrast", "mdm-metro", "mdm-adwaita",
+        "mdm-breeze", "mdm-luna", "mdm-aero", "mdm-aqua", "mdm-emerald"
+    ]
+
+    property SystemPalette systemColors: SystemPalette {
+        colorGroup: SystemPalette.Active
+        onHighlightChanged: Qt.callLater(theme.loadMdmPresets)
+    }
+
+    Component.onCompleted: Qt.callLater(loadMdmPresets)
+
+    function loadMdmPresets() {
+        if (typeof engine === "undefined" || typeof engine.request !== "function")
+            return;
+        engine.request({shellAction: "appearance-presets", systemAccent: String(systemColors.highlight)},
+            (presets, error) => {
+                if (!error && presets?.["mdm-classic"])
+                    mdmPresets = presets;
+            });
+    }
+
+    function isMdmPreset(id) {
+        return mdmPresetIds.includes(id);
+    }
+
+    function hasMaterial(id) {
+        return isMdmPreset(id) || Object.prototype.hasOwnProperty.call(builtins, id)
+            || Object.prototype.hasOwnProperty.call(userMaterials, id);
+    }
+
+    function mdmProfile(id) {
+        const selected = mdmPresets[id];
+        const color = mdmDark ? selected?.dark : selected?.light;
+        if (!color)
+            return null;
+        return preset({
+            name: qsTr("MDM %1").arg(selected.name), mdm: color, mdmProgress: selected.progress,
+            finish: "matte", shape: "round", opaque: true, cleanStudio: true, light: color.light,
+            radius: selected.radius, panelRadius: 0, buttonRadius: selected.buttonRadius,
+            mdmGlossyButtons: selected.glossyButtons,
+            translucency: 0, gloss: 0, bevel: 0,
+            background: color.background, ink: color.text, text: color.text, muted: color.muted,
+            edge: color.buttonBorder, shade: color.background, upper: color.gloss, accent: color.accent,
+            secondary: color.accent, divider: color.divider, surfaceLine: color.divider,
+            positive: color.positive, caution: color.warning, destructive: color.error,
+            buttonFace: color.button, rowSelectionFill: color.selection, rowSelectionInk: color.selectionText,
+            sidebarInk: color.text, sidebarMuted: color.muted, navigationInk: color.text,
+            navigationFill: color.tree, railFill: color.tree,
+            menuSurface: color.menu, menuHighlight: color.menuHot, menuRail: color.menuBorder,
+            roleFaces: {title: color.caption, field: color.field, sidebar: color.tree, content: color.list,
+                toolbar: color.background, footer: color.background, card: color.background,
+                connections: color.background, summary: color.background}
+        });
+    }
     readonly property bool wideSweepEnabled: current === "violet-rail-wide-sweep"
     property real translucency: -1
     property color tintColor: "#7298bc"
@@ -264,7 +325,7 @@ QtObject {
     readonly property var menuColors: menuPalette(palette)
     readonly property var materials: Object.keys(builtins)
         .filter(id => id !== "window-glass")
-        .concat(Object.keys(userMaterials))
+        .concat(Object.keys(userMaterials), mdmPresetIds.filter(id => Boolean(mdmPresets[id])))
         .map(id => ({ id: id, name: profile(id).name }))
 
     function preset(options) {
@@ -285,7 +346,10 @@ QtObject {
     }
 
     function profile(id) {
-        let result = Object.prototype.hasOwnProperty.call(builtins, id) ? builtins[id] : builtins[defaultMaterial];
+        const mdm = mdmProfile(id);
+        if (mdm)
+            return mdm;
+        let result = Object.prototype.hasOwnProperty.call(builtins, id) ? builtins[id] : builtins.carbon;
         const stored = Object.prototype.hasOwnProperty.call(userMaterials, id) ? userMaterials[id] : null;
         if (stored) {
             const byFinish = {
@@ -554,6 +618,8 @@ QtObject {
     }
 
     function opacityFor(id) {
+        if (isMdmPreset(id))
+            return 1;
         const style = profile(id);
         const amount = translucency >= 0 ? translucency : style.opaque ? 0 : style.translucency;
         return Math.max(0, Math.min(1, 1 - amount));

@@ -90,6 +90,12 @@ const HANDSHAKE_LIFETIME: Duration = Duration::from_secs(120);
 pub enum StoreBrowser {
     Chrome,
     Edge,
+    Brave,
+    Chromium,
+    Vivaldi,
+    Opera,
+    Helium,
+    Thorium,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -141,10 +147,31 @@ impl BrowserExtensionEvidence {
 }
 
 impl StoreBrowser {
+    const ALL: [Self; 8] = [
+        Self::Chrome,
+        Self::Edge,
+        Self::Brave,
+        Self::Chromium,
+        Self::Vivaldi,
+        Self::Opera,
+        Self::Helium,
+        Self::Thorium,
+    ];
+
+    pub fn from_id(id: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|browser| browser.id() == id)
+    }
+
     pub fn id(self) -> &'static str {
         match self {
             Self::Chrome => "chrome",
             Self::Edge => "edge",
+            Self::Brave => "brave",
+            Self::Chromium => "chromium",
+            Self::Vivaldi => "vivaldi",
+            Self::Opera => "opera",
+            Self::Helium => "helium",
+            Self::Thorium => "thorium",
         }
     }
 
@@ -152,21 +179,29 @@ impl StoreBrowser {
         match self {
             Self::Chrome => "Google Chrome",
             Self::Edge => "Microsoft Edge",
+            Self::Brave => "Brave",
+            Self::Chromium => "Chromium",
+            Self::Vivaldi => "Vivaldi",
+            Self::Opera => "Opera",
+            Self::Helium => "Helium",
+            Self::Thorium => "Thorium",
         }
     }
 
-    fn marker(self) -> &'static str {
+    pub fn windows_native_host_key(self) -> &'static str {
         match self {
-            Self::Chrome => "extension-chrome-store-handshake",
-            Self::Edge => "extension-edge-store-handshake",
+            Self::Chrome => r"Software\Google\Chrome\NativeMessagingHosts",
+            Self::Edge => r"Software\Microsoft\Edge\NativeMessagingHosts",
+            _ => r"Software\Chromium\NativeMessagingHosts",
         }
     }
 
-    fn unpacked_marker(self) -> &'static str {
-        match self {
-            Self::Chrome => "extension-chrome-auralis-unpacked-handshake",
-            Self::Edge => "extension-edge-auralis-unpacked-handshake",
-        }
+    fn marker(self) -> String {
+        format!("extension-{}-store-handshake", self.id())
+    }
+
+    fn unpacked_marker(self) -> String {
+        format!("extension-{}-auralis-unpacked-handshake", self.id())
     }
 
     /// The browser owning the Windows HTTPS handler or launching the native host. Chromium
@@ -174,20 +209,27 @@ impl StoreBrowser {
     pub fn from_windows_executable(program: &str) -> Option<Self> {
         let path = program.to_ascii_lowercase().replace('/', "\\");
         let (directory, executable) = path.rsplit_once('\\')?;
-        let (vendor, channel) = directory.strip_suffix(r"\application")?.rsplit_once('\\')?;
-        if executable == "chrome.exe"
-            && vendor.ends_with(r"\google")
-            && ["chrome", "chrome beta", "chrome dev", "chrome sxs"].contains(&channel)
+        if let Some((vendor, channel)) = directory
+            .strip_suffix(r"\application")
+            .and_then(|base| base.rsplit_once('\\'))
         {
-            return Some(Self::Chrome);
+            if executable == "chrome.exe"
+                && vendor.ends_with(r"\google")
+                && ["chrome", "chrome beta", "chrome dev", "chrome sxs"].contains(&channel)
+            {
+                return Some(Self::Chrome);
+            }
+            if executable == "msedge.exe"
+                && vendor.ends_with(r"\microsoft")
+                && ["edge", "edge beta", "edge dev", "edge sxs"].contains(&channel)
+            {
+                return Some(Self::Edge);
+            }
         }
-        if executable == "msedge.exe"
-            && vendor.ends_with(r"\microsoft")
-            && ["edge", "edge beta", "edge dev", "edge sxs"].contains(&channel)
-        {
-            return Some(Self::Edge);
-        }
-        None
+        let name = crate::browsers::windows_named(&path)?;
+        Self::ALL
+            .into_iter()
+            .find(|browser| !matches!(browser, Self::Chrome | Self::Edge) && browser.name() == name)
     }
 
     /// Discover a project copy in the default data folder for this Windows channel.
@@ -199,14 +241,35 @@ impl StoreBrowser {
         if !root.is_absolute() || Self::from_windows_executable(program) != Some(self) {
             return BrowserExtensionEvidence::default();
         }
-        let Some(channel) = program.rsplit(['\\', '/']).nth(2) else {
-            return BrowserExtensionEvidence::default();
+        let channel = program.rsplit(['\\', '/']).nth(2).unwrap_or_default();
+        let data = match self {
+            Self::Chrome => root.join("Google").join(channel),
+            Self::Edge => root.join("Microsoft").join(channel),
+            Self::Brave => {
+                let path = program.replace('/', "\\").to_ascii_lowercase();
+                let Some((_, channel)) = path.rsplit_once(r"\bravesoftware\") else {
+                    return BrowserExtensionEvidence::default();
+                };
+                let channel = channel.split('\\').next().unwrap_or_default();
+                if ![
+                    "brave-browser",
+                    "brave-browser-beta",
+                    "brave-browser-dev",
+                    "brave-browser-nightly",
+                    "brave-origin",
+                    "brave-origin-beta",
+                    "brave-origin-nightly",
+                ]
+                .contains(&channel)
+                {
+                    return BrowserExtensionEvidence::default();
+                }
+                root.join("BraveSoftware").join(channel)
+            }
+            // Other Chromium browsers report installation when the native host connects.
+            _ => return BrowserExtensionEvidence::default(),
         };
-        let vendor = match self {
-            Self::Chrome => "Google",
-            Self::Edge => "Microsoft",
-        };
-        Self::extension_presence_in(&root.join(vendor).join(channel).join("User Data"))
+        Self::extension_presence_in(&data.join("User Data"))
     }
 
     fn extension_presence_in(root: &Path) -> BrowserExtensionEvidence {
@@ -612,8 +675,8 @@ fn browser_store_status_in(
         let (record_browser, id) = record.split_once('\t')?;
         (record_browser == browser.name() && id == expected_id).then_some(modified)
     };
-    let store_handshake = store_id().and_then(|id| handshake(browser.marker(), id));
-    let unpacked_handshake = handshake(browser.unpacked_marker(), AURALIS_UNPACKED_ID);
+    let store_handshake = store_id().and_then(|id| handshake(&browser.marker(), id));
+    let unpacked_handshake = handshake(&browser.unpacked_marker(), AURALIS_UNPACKED_ID);
     // A recent handshake identifies the caller at that time. A current
     // uninstall supersedes that cached signal for that extension alone.
     let connected_source = [
@@ -829,6 +892,40 @@ mod tests {
         );
         assert_eq!(
             StoreBrowser::from_windows_executable(r"C:\Imput\Helium\Application\chrome.exe"),
+            Some(StoreBrowser::Helium)
+        );
+        for (program, expected) in [
+            (
+                r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe",
+                StoreBrowser::Brave,
+            ),
+            (
+                r"D:\BraveSoftware\Brave-Origin\Application\brave-origin.exe",
+                StoreBrowser::Brave,
+            ),
+            (
+                "C:/Users/a/AppData/Local/Chromium/Application/chrome.exe",
+                StoreBrowser::Chromium,
+            ),
+            (
+                r"C:\Users\a\AppData\Local\Programs\Opera GX\launcher.exe",
+                StoreBrowser::Opera,
+            ),
+            (r"C:\Vivaldi\Application\vivaldi.exe", StoreBrowser::Vivaldi),
+            (r"C:\Thorium\Application\thorium.exe", StoreBrowser::Thorium),
+        ] {
+            assert_eq!(
+                StoreBrowser::from_windows_executable(program),
+                Some(expected)
+            );
+            assert_eq!(StoreBrowser::from_id(expected.id()), Some(expected));
+        }
+        assert_eq!(
+            StoreBrowser::from_windows_executable(r"C:\Unknown\launcher.exe"),
+            None
+        );
+        assert_eq!(
+            StoreBrowser::from_windows_executable(r"C:\Firefox\firefox.exe"),
             None
         );
         assert_eq!(

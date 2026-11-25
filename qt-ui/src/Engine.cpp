@@ -277,8 +277,37 @@ QVariantMap Engine::dispatch(const QVariantMap &command) const
                            {QStringLiteral("externalOfferProblem"), QString()}, {QStringLiteral("legacyPolicyRemovable"), false}};
 #ifdef Q_OS_WIN
         if (!m_smoke) {
-            const auto handler = BrowserSetup::defaultHttpsHandler();
+            const auto defaultHandler = BrowserSetup::defaultHttpsHandler();
+            auto handler = defaultHandler;
+            const auto selected = command.value(QStringLiteral("browserExecutable")).toString();
+            QStringList executablePaths;
+            QVariantList installedBrowsers;
+            const auto addBrowser = [&](const BrowserSetup::Handler &candidate) {
+                if (candidate.executable.isEmpty()
+                    || executablePaths.contains(candidate.executable, Qt::CaseInsensitive))
+                    return;
+                executablePaths.push_back(candidate.executable);
+                installedBrowsers.push_back(QVariantMap{{QStringLiteral("executable"), candidate.executable},
+                                                        {QStringLiteral("name"), candidate.name}});
+                if (candidate.executable.compare(selected, Qt::CaseInsensitive) == 0 || handler.executable.isEmpty())
+                    handler = candidate;
+            };
+            addBrowser(defaultHandler);
+            if (browserStatus || !selected.isEmpty()) {
+                const auto response = exchange({{QStringLiteral("shellAction"), QStringLiteral("installed-browsers")}});
+                for (const auto &entry : response.value(QStringLiteral("result")).toList()) {
+                    const auto browser = entry.toMap();
+                    addBrowser({BrowserSetup::validatedBrowserExecutable(browser.value(QStringLiteral("executable")).toString()),
+                                browser.value(QStringLiteral("name")).toString()});
+                }
+                if (!selected.isEmpty() && !executablePaths.contains(selected, Qt::CaseInsensitive) && !browserStatus)
+                    return failure(tr("This browser is no longer available. Choose an installed browser."));
+            }
             status.insert(QStringLiteral("browser"), handler.name);
+            status.insert(QStringLiteral("browserExecutable"), handler.executable);
+            status.insert(QStringLiteral("installedBrowsers"), installedBrowsers);
+            const bool isDefault = !handler.executable.isEmpty()
+                && handler.executable.compare(defaultHandler.executable, Qt::CaseInsensitive) == 0;
             const auto browserStatusForHandler = [this, &handler] {
                 return exchange({{QStringLiteral("shellAction"), QStringLiteral("browser-extension-status")},
                                  {QStringLiteral("executable"), handler.executable}});
@@ -291,17 +320,16 @@ QVariantMap Engine::dispatch(const QVariantMap &command) const
             const auto expectedBrowser = command.value(QStringLiteral("expectedBrowser")).toString();
             const bool browserSpecified = (openStore || repairHost) && !expectedBrowser.isEmpty();
             if ((offerExtension || removeOffer || removeLegacyPolicy || browserSpecified) && expectedBrowser != browserId)
-                return failure(tr("The Windows default browser changed. Review browser setup again."));
-            if (browserId != QStringLiteral("chrome") && browserId != QStringLiteral("edge")) {
+                return failure(tr("The browser changed. Review browser setup again."));
+            if (!browserResult.value(QStringLiteral("browserSupported")).toBool()) {
                 if (browserStatus)
                     return result(status);
-                // Retain manual host repair for other bundles and browsers. Guided setup
-                // and background preparation only register the selected Chrome or Edge key.
+                // Preserve manual repair for other bundles and browsers.
                 if (repairHost) {
                     const auto error = BrowserSetup::registerNativeHost({}, true);
                     return error.isEmpty() ? result(QVariantMap{{QStringLiteral("ok"), true}}) : failure(error);
                 }
-                return failure(tr("Guided extension setup is available for Chrome and Edge when one is your Windows default browser."));
+                return failure(tr("This browser is unable to use the Auralis listing in the Chrome Web Store."));
             }
             const QString store = BrowserSetup::storeUrl().toString(QUrl::FullyEncoded);
             if (browserStatus) {
@@ -314,7 +342,7 @@ QVariantMap Engine::dispatch(const QVariantMap &command) const
                 status.insert(QStringLiteral("nativeHostCanRegister"), host.canRegister);
                 status.insert(QStringLiteral("nativeHostProblem"), host.problem);
                 status.insert(QStringLiteral("legacyPolicyRemovable"), BrowserSetup::legacyPolicyRemovable(browserId));
-                if (browserId == QStringLiteral("chrome")) {
+                if (browserId == QStringLiteral("chrome") && isDefault) {
                     const auto offer = BrowserSetup::chromeOfferStatus();
                     status.insert(QStringLiteral("externalOfferAvailable"), offer.available && canPrepare);
                     status.insert(QStringLiteral("externalOfferRegistered"), offer.registered);
@@ -328,8 +356,11 @@ QVariantMap Engine::dispatch(const QVariantMap &command) const
                 return error.isEmpty() ? result(QVariantMap{{QStringLiteral("ok"), true},
                     {QStringLiteral("nativeHostRegistered"), true}}) : failure(error);
             }
-            const auto browserStillSelected = [&handler] {
-                return BrowserSetup::defaultHttpsHandler().executable.compare(handler.executable, Qt::CaseInsensitive) == 0;
+            const bool requiresDefault = selected.isEmpty() || offerExtension || removeOffer;
+            const auto browserStillSelected = [&handler, requiresDefault] {
+                const auto current = requiresDefault ? BrowserSetup::defaultHttpsHandler().executable
+                    : BrowserSetup::validatedBrowserExecutable(handler.executable);
+                return current.compare(handler.executable, Qt::CaseInsensitive) == 0;
             };
             if (removeLegacyPolicy) {
                 bool approvalRequired = false;
@@ -344,7 +375,7 @@ QVariantMap Engine::dispatch(const QVariantMap &command) const
                 return result(QVariantMap{{QStringLiteral("ok"), true}, {QStringLiteral("legacyPolicyRemoved"), true},
                                           {QStringLiteral("refreshRequested"), refreshRequested}});
             }
-            if ((offerExtension || removeOffer) && browserId != QStringLiteral("chrome"))
+            if ((offerExtension || removeOffer) && (browserId != QStringLiteral("chrome") || !isDefault))
                 return failure(tr("Chrome can offer the extension only when it is your Windows default browser."));
             if (removeOffer) {
                 const auto error = BrowserSetup::removeChromeOffer();
@@ -385,8 +416,8 @@ QVariantMap Engine::dispatch(const QVariantMap &command) const
                                           {QStringLiteral("browserOpened"), browserOpened}, {QStringLiteral("pending"), true}});
             }
             const auto registrationError = BrowserSetup::registerNativeHost(browserId, false);
-            if (!QProcess::startDetached(handler.executable, {store}))
-                return failure(tr("Could not open the Windows default browser."));
+            if (!browserStillSelected() || !QProcess::startDetached(handler.executable, {store}))
+                return failure(tr("Could not open the selected browser."));
             QVariantMap opened{{QStringLiteral("ok"), true}, {QStringLiteral("openedInBrowser"), true},
                                {QStringLiteral("nativeHostRegistered"), registrationError.isEmpty()}};
             if (!registrationError.isEmpty())
@@ -417,9 +448,9 @@ void Engine::start()
                 return;
             const auto status = exchange({{QStringLiteral("shellAction"), QStringLiteral("browser-extension-status")},
                                           {QStringLiteral("executable"), handler.executable}});
-            const auto browserId = status.value(QStringLiteral("result")).toMap().value(QStringLiteral("browserId")).toString();
-            if (browserId == QStringLiteral("chrome") || browserId == QStringLiteral("edge"))
-                BrowserSetup::registerNativeHost(browserId, false);
+            const auto browser = status.value(QStringLiteral("result")).toMap();
+            if (browser.value(QStringLiteral("browserSupported")).toBool())
+                BrowserSetup::registerNativeHost(browser.value(QStringLiteral("browserId")).toString(), false);
         });
     }
 #endif
@@ -726,34 +757,24 @@ bool Engine::applyBackdrop(QWindow *window, bool enabled, bool dark) const
     const auto hwnd = reinterpret_cast<HWND>(window->winId());
     constexpr DWORD SystemBackdropType = 38;
     constexpr DWORD ImmersiveDarkMode = 20;
-    int current = 0;
-    if (FAILED(DwmGetWindowAttribute(hwnd, SystemBackdropType, &current, sizeof current)))
-        return false;
-    // Desktop Acrylic uses a solid fallback when the window is inactive.
-    // Clear it behind Settings so the Qt window can keep its own alpha.
-    const bool useAcrylic = enabled && GetForegroundWindow() == hwnd;
-    if (useAcrylic) {
+    constexpr int NoBackdrop = 1;
+    constexpr int DesktopAcrylic = 3;
+    // Acrylic belongs to the Windows compositor and can extend beyond the Qt scene's shape.
+    const bool shaped = window->property("frameCornerRadius").toInt() > 0;
+    if (enabled && !shaped && GetForegroundWindow() == hwnd) {
         const BOOL darkMode = dark;
         DwmSetWindowAttribute(hwnd, ImmersiveDarkMode, &darkMode, sizeof darkMode);
+        const MARGINS extend{-1, -1, -1, -1};
+        if (SUCCEEDED(DwmExtendFrameIntoClientArea(hwnd, &extend))
+            && SUCCEEDED(DwmSetWindowAttribute(hwnd, SystemBackdropType, &DesktopAcrylic, sizeof DesktopAcrylic)))
+            return true;
     }
-    constexpr int None = 1;
-    constexpr int DesktopAcrylic = 3;
-    const int type = useAcrylic ? DesktopAcrylic : None;
-    const int margin = useAcrylic ? -1 : 0;
-    const MARGINS margins{margin, margin, margin, margin};
-    if (FAILED(DwmExtendFrameIntoClientArea(hwnd, &margins)))
-        return false;
-    if (FAILED(DwmSetWindowAttribute(hwnd, SystemBackdropType, &type, sizeof type))) {
-        const MARGINS reset{0, 0, 0, 0};
-        DwmExtendFrameIntoClientArea(hwnd, &reset);
-        return false;
-    }
-    if (current != type) {
-        const auto radius = window->property("frameCornerRadius");
-        if (radius.isValid())
-            setWindowCornerRadius(window, radius.toInt());
-    }
-    return useAcrylic;
+
+    // Reset both parts even if the system backdrop attribute is unavailable on this Windows version.
+    DwmSetWindowAttribute(hwnd, SystemBackdropType, &NoBackdrop, sizeof NoBackdrop);
+    const MARGINS reset{0, 0, 0, 0};
+    DwmExtendFrameIntoClientArea(hwnd, &reset);
+    return false;
 #else
     Q_UNUSED(window);
     Q_UNUSED(enabled);
@@ -766,9 +787,23 @@ void Engine::setWindowCornerRadius(QWindow *window, int radius) const
 {
     if (!window)
         return;
+    const auto configuredCorners = window->property("frameCornerMask");
+    const int corners = configuredCorners.isValid() ? configuredCorners.toInt() & 15 : 15;
     const auto state = window->windowStates();
-    if (radius <= 0 || !(window->flags() & Qt::FramelessWindowHint)
-        || state.testAnyFlags(Qt::WindowMaximized | Qt::WindowFullScreen)) {
+    const bool shaped = radius > 0 && corners && (window->flags() & Qt::FramelessWindowHint)
+        && !state.testAnyFlags(Qt::WindowMaximized | Qt::WindowFullScreen);
+#ifdef Q_OS_WIN
+    const bool wasShaped = !window->mask().isEmpty();
+    if (window->isVisible() && shaped != wasShaped) {
+        if (shaped)
+            applyBackdrop(window, false, false);
+        // Prevent DWM from drawing a rectangular non-client frame around a shaped window.
+        const auto hwnd = reinterpret_cast<HWND>(window->winId());
+        const DWMNCRENDERINGPOLICY policy = shaped ? DWMNCRP_DISABLED : DWMNCRP_USEWINDOWSTYLE;
+        DwmSetWindowAttribute(hwnd, DWMWA_NCRENDERING_POLICY, &policy, sizeof policy);
+    }
+#endif
+    if (!shaped) {
         WindowOutline::configureAntialiasing(window, {});
         if (!window->mask().isEmpty())
             window->setMask({});
@@ -781,20 +816,15 @@ void Engine::setWindowCornerRadius(QWindow *window, int radius) const
     const qreal height = window->height();
     const qreal reachX = qMin(qreal(radius), width / 2);
     const qreal reachY = qMin(radius * (113.0 / 114.0), height / 2);
-    bool allowCoverageFringe = WindowOutline::configureAntialiasing(window, QSizeF(reachX, reachY));
+    [[maybe_unused]] const bool antialiasing =
+        WindowOutline::configureAntialiasing(window, QSizeF(reachX, reachY), corners);
 #ifdef Q_OS_WIN
-    if (allowCoverageFringe && window->isVisible()) {
-        // Windows draws native Acrylic separately from Qt's scene. Keep the region tight there.
-        constexpr DWORD SystemBackdropType = 38;
-        constexpr int DesktopAcrylic = 3;
-        int backdrop = 0;
-        const auto hwnd = reinterpret_cast<HWND>(window->winId());
-        if (SUCCEEDED(DwmGetWindowAttribute(hwnd, SystemBackdropType, &backdrop, sizeof backdrop))
-            && backdrop == DesktopAcrylic)
-            allowCoverageFringe = false;
-    }
+    // Clip the native HWND to the same outline as the scene. Extra pixels in the region
+    // can expose the compositor's background when it ignores the scene's transparent fringe.
+    constexpr qreal fringe = 0;
+#else
+    const qreal fringe = antialiasing ? 2 : 0;
 #endif
-    const qreal fringe = allowCoverageFringe ? 2 : 0;
     // Cache samples of the approved superellipse and mirror them around the four corners.
     constexpr int segments = 48;
     static const auto quarter = [] {
@@ -810,18 +840,21 @@ void Engine::setWindowCornerRadius(QWindow *window, int radius) const
     }();
     QPolygon outline;
     outline.reserve(qsizetype(quarter.size()) * 4);
-    for (const auto &p : quarter)
-        outline << QPointF(qMin(width, width - reachX + reachX * p.y() + fringe),
-                           qMax(0.0, reachY - reachY * p.x() - fringe)).toPoint();
-    for (const auto &p : quarter)
-        outline << QPointF(qMin(width, width - reachX + reachX * p.x() + fringe),
-                           qMin(height, height - reachY + reachY * p.y() + fringe)).toPoint();
-    for (const auto &p : quarter)
-        outline << QPointF(qMax(0.0, reachX - reachX * p.y() - fringe),
-                           qMin(height, height - reachY + reachY * p.x() + fringe)).toPoint();
-    for (const auto &p : quarter)
-        outline << QPointF(qMax(0.0, reachX - reachX * p.x() - fringe),
-                           qMax(0.0, reachY - reachY * p.y() - fringe)).toPoint();
+    for (const int corner : {1, 3, 2, 0}) {
+        const bool right = corner % 2;
+        const bool bottom = corner >= 2;
+        const qreal edgeX = right ? width : 0;
+        const qreal edgeY = bottom ? height : 0;
+        if (!(corners & (1 << corner))) {
+            outline << QPointF(edgeX, edgeY).toPoint();
+            continue;
+        }
+        for (const auto &point : quarter) {
+            const qreal x = qMax(0.0, reachX * (1 - (right == bottom ? point.x() : point.y())) - fringe);
+            const qreal y = qMax(0.0, reachY * (1 - (right == bottom ? point.y() : point.x())) - fringe);
+            outline << QPointF(right ? edgeX - x : x, bottom ? edgeY - y : y).toPoint();
+        }
+    }
     const QRegion mask(outline);
     if (mask != window->mask())
         window->setMask(mask);
