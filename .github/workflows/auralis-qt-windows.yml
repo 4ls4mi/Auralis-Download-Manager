@@ -30,17 +30,8 @@ on:
         default: false
   push:
     branches: [wip/auralis-qt-shell]
-    paths:
-      - 'qt-ui/**'
-      - 'crates/**'
-      - 'auralis-extension/**'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - 'rust-toolchain.toml'
-      - '.cargo/**'
-      - '.github/scripts/**'
-      - '.github/workflows/auralis-qt-windows.yml'
-      - 'docs/glass-releases/**'
+    # Job conditions below use explicit build/publish commit markers. A path
+    # filter here would silently discard publish-only documentation commits.
 
 permissions:
   contents: read
