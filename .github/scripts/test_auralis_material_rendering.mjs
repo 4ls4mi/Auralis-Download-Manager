@@ -34,7 +34,7 @@ function canvas() {
 
 const layouts = ["liquid-capsule", "jelly-beads", "braided-ribbon", "prism-segments", "molten-glass", "orbit-marker"];
 test("all creative progress renderers clip to the real progress boundary at narrow and normal sizes", () => {
-  const code = method(progress, "capsule") + method(progress, "paint") + ";paint(ctx);";
+  const code = method(progress, "capsule") + method(progress, "drawProgress") + ";drawProgress(ctx);";
   for (const layoutStyle of layouts) for (const width of [2, 20, 300]) for (const height of [2, 16, 32]) {
     for (const amount of [0, .01, .68, 1, -1, 2, NaN]) {
       const fraction = Number.isFinite(amount) ? Math.max(0, Math.min(1, amount)) : 0;

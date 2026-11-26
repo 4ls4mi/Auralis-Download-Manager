@@ -38,7 +38,7 @@ Canvas {
         ctx.closePath()
     }
 
-    function paint(ctx) {
+    function drawProgress(ctx) {
         ctx.reset()
         ctx.clearRect(0, 0, width, height)
         if (width < 3 || height < 3) return
@@ -162,6 +162,6 @@ Canvas {
     }
     onPaint: {
         const ctx = getContext("2d")
-        if (ctx) paint(ctx)
+        if (ctx) drawProgress(ctx)
     }
 }
