@@ -85,7 +85,10 @@ test("browser-flagged downloads are handed over with a warning", async () => {
   const candidate = await script.candidate(flagged, url);
   assert.equal(candidate.browserWarning, true);
   assert.equal(await script.offer(flagged, url, candidate), true);
-  assert.equal(native.find(([, message]) => message.url === url)?.[1].browserWarning, true);
+  const handoff = native.find(([, message]) => message.url === url)?.[1];
+  assert.equal(handoff.browserWarning, true);
+  assert.equal(handoff.browserCredentialsUnavailable, true);
+  assert.equal(handoff.cookies, "");
   assert.equal((await script.candidate({ url, danger: "safe" }, url)).browserWarning, false);
 });
 
@@ -185,7 +188,7 @@ test("an observed anonymous Firefox redirect keeps its original download address
   assert.equal(download.cookies, "");
 });
 
-test("anonymous Chromium downloads are handed over without leaking stored cookies", async () => {
+test("anonymous Chromium downloads can be handed over without a request ID", async () => {
   const publicUrl = "https://files.example.test/public.zip";
   const sessionUrl = "https://files.example.test/reports/export.zip";
   const unavailableUrl = "https://files.example.test/unavailable.zip";
@@ -195,15 +198,11 @@ test("anonymous Chromium downloads are handed over without leaking stored cookie
   } });
   const item = (url) => ({ url, page: "https://files.example.test/", danger: "safe" });
   assert.equal(await script.offer(item(publicUrl), publicUrl, { name: "public.zip" }), true);
-  assert.equal(await script.offer(item(sessionUrl), sessionUrl, { name: "export.zip" }), true);
-  assert.equal(await script.offer(item(unavailableUrl), unavailableUrl, { name: "unavailable.zip" }), true);
+  assert.equal(await script.offer(item(sessionUrl), sessionUrl, { name: "export.zip" }), false);
+  assert.equal(await script.offer(item(unavailableUrl), unavailableUrl, { name: "unavailable.zip" }), false);
   const downloads = native.map(([, message]) => message).filter((message) => message.url);
-  assert.deepEqual(downloads.map(({ url, cookies }) => [url, cookies]), [
-    [publicUrl, ""], [sessionUrl, ""], [unavailableUrl, ""],
-  ]);
+  assert.deepEqual(downloads.map(({ url, cookies }) => [url, cookies]), [[publicUrl, ""]]);
   assert.equal(Boolean(downloads[0].browserCredentialsUnavailable), false);
-  assert.equal(downloads[1].browserCredentialsUnavailable, true);
-  assert.equal(downloads[2].browserCredentialsUnavailable, true);
 });
 
 const popup = { id: "fixture", url: "chrome-extension://fixture/popup.html" };

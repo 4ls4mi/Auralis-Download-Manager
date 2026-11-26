@@ -2252,10 +2252,19 @@ async function offer(item, url, { name, post, browserWarning = false, browserCre
   let cookies = anonymous || credentialsUnavailable ? "" : downloadCookie(item, first, url);
   if (!anonymous && !credentialsUnavailable
       && (cookies === null || (cookies === undefined && !(await canHandOffAnonymously(first, url, item))))) {
-    // Do not replay a session we cannot verify across this request. Try the app without those
-    // browser credentials and make the user aware that an account may still be required.
-    cookies = "";
-    credentialsUnavailable = true;
+    if (browserWarning) {
+      // A browser-flagged download still goes through Auralis after the user sees its warning;
+      // never copy an uncertain browser session into that transfer.
+      cookies = "";
+      credentialsUnavailable = true;
+    } else {
+      // Keep URL-derived names out of the notice: a file route can contain a session token.
+      const basename = (item.filename || "").split(/[\\/]/).pop() || "";
+      const fromAddress = nameGuessed || basename === addressName(first) || basename === addressName(url);
+      const privateDownload = Boolean(item.incognito);
+      await noteLeft("browser-session", fromAddress ? "" : basename, first, privateDownload, privateDownload).catch(() => {});
+      return false;
+    }
   }
   const reply = await handOff({
     url: first,
