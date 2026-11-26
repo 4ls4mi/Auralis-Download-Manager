@@ -20,7 +20,7 @@ async function browser(firefox, { listCookies, links = [] } = {}) {
     events.get(name).push(fn);
   } });
   const eventsFor = (prefix, names) => Object.fromEntries(names.map((name) => [name, event(prefix + name)]));
-  const options = { ok: true, version: "0.5.2", types: "ZIP", capture: true };
+  const options = { ok: true, version: "0.5.2", types: "ZIP EXE", capture: true };
   const script = vm.createContext({
     URL, URLSearchParams, TextDecoder, console, setTimeout, clearTimeout,
     navigator: { userAgent: "Auralis fixture" },
@@ -198,61 +198,43 @@ test("anonymous Chromium downloads can be handed over without a request ID", asy
   } });
   const item = (url) => ({ url, page: "https://files.example.test/", danger: "safe" });
   assert.equal(await script.offer(item(publicUrl), publicUrl, { name: "public.zip" }), true);
-  assert.equal(await script.offer(item(sessionUrl), sessionUrl, { name: "export.zip" }), false);
-  assert.equal(await script.offer(item(unavailableUrl), unavailableUrl, { name: "unavailable.zip" }), false);
+  assert.equal(await script.offer(item(sessionUrl), sessionUrl, { name: "export.zip" }), true);
+  assert.equal(await script.offer(item(unavailableUrl), unavailableUrl, { name: "unavailable.zip" }), true);
   const downloads = native.map(([, message]) => message).filter((message) => message.url);
-  assert.deepEqual(downloads.map(({ url, cookies }) => [url, cookies]), [[publicUrl, ""]]);
+  assert.deepEqual(downloads.map(({ url, cookies }) => [url, cookies]), [[publicUrl, ""], [sessionUrl, ""], [unavailableUrl, ""]]);
+  assert.ok(downloads.slice(1).every((entry) => entry.browserCredentialsUnavailable));
   assert.equal(Boolean(downloads[0].browserCredentialsUnavailable), false);
 });
 
 const popup = { id: "fixture", url: "chrome-extension://fixture/popup.html" };
 
-test("Chromium continues a browser-session download and explains why in the popup", async () => {
-  const session = "https://files.example.test/download?ticket=local-fixture";
-  const urlNamed = "https://files.example.test/local-fixture.zip";
-  const fixture = await browser(false, { listCookies: async () => [{ name: "fixture", value: "local" }] });
-  const { emit, native, message, downloadActions } = fixture;
-  async function browserContinues(item) {
-    const result = await new Promise((resolve) => emit("download", { danger: "safe", ...item }, resolve));
-    assert.equal(result.conflictAction, "uniquify");
-    await new Promise((resolve) => setImmediate(resolve));
-    const { declined } = await message({ type: "state" }, popup);
-    return plain(declined);
+test("Chromium captures ReShade executables with uncertain cookies and browser danger flags", async () => {
+  const url = "https://reshade.me/downloads/ReShade_Setup_6.8.0_Addon.exe";
+  for (const danger of ["safe", "uncommon", "content", "unwanted", "dangerous", "unsigned"]) {
+    const { emit, native, downloadActions } = await browser(false);
+    let suggested = false;
+    emit("download", { id: 7, url, finalUrl: url, filename: "ReShade_Setup_6.8.0_Addon.exe", danger }, () => { suggested = true; });
+    for (let i = 0; i < 20 && !downloadActions.some(([action]) => action === "cancel"); i++)
+      await new Promise((resolve) => setImmediate(resolve));
+    const handoff = native.map(([, entry]) => entry).find((entry) => entry.url === url);
+    assert.ok(handoff, danger);
+    assert.equal(handoff.cookies, "");
+    assert.equal(handoff.browserCredentialsUnavailable, true);
+    assert.equal(Boolean(handoff.browserWarning), danger !== "safe");
+    assert.ok(downloadActions.some(([action, id]) => action === "cancel" && id === 7));
+    assert.equal(suggested, false, "do not release the download back to the browser");
   }
-
-  const named = await browserContinues({ id: 1, url: session, filename: "C:\\Downloads\\report.zip" });
-  assert.equal(named.why, "browser-session");
-  assert.equal(named.name, "report.zip");
-  assert.equal(named.site, "files.example.test");
-
-  const unnamed = await browserContinues({ id: 2, url: urlNamed, filename: "local-fixture.zip" });
-  assert.equal(unnamed.why, "browser-session");
-  assert.equal(unnamed.name, "");
-
-  const privateDownload = await browserContinues({ id: 3, url: session, filename: "private.zip", incognito: true });
-  assert.equal(privateDownload.why, "browser-session");
-  assert.equal(privateDownload.name, "");
-  assert.equal(privateDownload.site, "");
-
-  const requests = native.map(([, entry]) => entry);
-  assert.deepEqual(requests.filter((entry) => entry.declined).map((entry) => entry.declined), [
-    { why: "browser-session", name: "report.zip", site: "files.example.test" },
-    { why: "browser-session", name: "", site: "files.example.test" },
-  ]);
-  assert.ok(requests.every((entry) => !("url" in entry || "cookies" in entry || "private" in entry)));
-  assert.deepEqual(downloadActions, []);
 });
 
-test("Firefox resumes a browser-session download without offering it to Auralis", async () => {
-  const { emit, native, message, downloadActions } = await browser(true, {
-    listCookies: async () => [{ name: "fixture", value: "local" }],
-  });
-  const url = "https://files.example.test/download";
+test("Firefox captures uncertain browser sessions without copying cookies", async () => {
+  const { emit, native, downloadActions } = await browser(true);
+  const url = "https://files.example.test/report.zip";
   await Promise.all(emit("download", { id: 4, url, filename: "report.zip", danger: "safe" }));
-  const { declined } = await message({ type: "state" }, popup);
-  assert.equal(declined.why, "browser-session");
-  assert.deepEqual(downloadActions, [["pause", 4], ["resume", 4]]);
-  assert.ok(native.every(([, entry]) => !entry.url && !entry.cookies));
+  const handoff = native.map(([, entry]) => entry).find((entry) => entry.url === url);
+  assert.equal(handoff.cookies, "");
+  assert.equal(handoff.browserCredentialsUnavailable, true);
+  assert.ok(downloadActions.some(([action, id]) => action === "cancel" && id === 4));
+  assert.ok(!downloadActions.some(([action]) => action === "resume"));
 });
 
 test("selection import sends its link list without the page's cookies", async () => {

@@ -1,0 +1,49 @@
+name: Refresh public extension packages
+on:
+  push:
+    branches: [wip/auralis-qt-shell]
+    paths: ['.github/workflows/auralis-refresh-extensions.yml']
+permissions:
+  contents: read
+jobs:
+  refresh:
+    if: github.repository == '4ls4mi/Auralis-Download-Manager' && contains(github.event.head_commit.message, '[refresh-extensions-122]')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Validate and package Chrome and Firefox
+        shell: python
+        run: |
+          import json, pathlib, zipfile, subprocess
+          subprocess.run(["node", "--test", ".github/scripts/test_auralis_extension_boundary.mjs"], check=True)
+          source = pathlib.Path("auralis-extension")
+          for script in source.glob("*.js"):
+              subprocess.run(["node", "--check", str(script)], check=True)
+          for browser in ("chrome", "firefox"):
+              name = "manifest.firefox.json" if browser == "firefox" else "manifest.json"
+              manifest = json.loads((source / name).read_text())
+              assert manifest["version"] == "1.2.2"
+              manifest.pop("key", None)
+              with zipfile.ZipFile(f"auralis-{browser}-1.2.2.zip", "w", zipfile.ZIP_DEFLATED) as archive:
+                  for path in sorted(source.rglob("*")):
+                      if path.is_file() and path.name not in ("manifest.json", "manifest.firefox.json", "manifest.safari.json"):
+                          archive.write(path, path.relative_to(source))
+                  archive.writestr("manifest.json", json.dumps(manifest, indent=2) + "\n")
+      - name: Replace extension assets on the latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="$(gh api "repos/$GH_REPO/releases/latest" --jq .tag_name)"
+          test "$tag" = "v0.3.95"
+          gh release upload "$tag" auralis-chrome-1.2.2.zip auralis-firefox-1.2.2.zip --clobber
+          for asset in auralis-chromium.zip auralis-firefox.zip; do
+            gh release delete-asset "$tag" "$asset" --yes
+          done
+          gh release view "$tag" --json assets --jq '.assets[].name'
