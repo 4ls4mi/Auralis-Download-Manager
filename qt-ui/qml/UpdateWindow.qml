@@ -67,6 +67,10 @@ DetachedDialogWindow {
     }
 
     function beginCheck(awaitAutomaticCheck) {
+        if (backend.storeEdition) {
+            Qt.openUrlExternally("ms-windows-store://downloadsandupdates")
+            return
+        }
         if (requestInProgress) { present(); return }
         closeWhenCurrent.stop()
         stage = "checking"

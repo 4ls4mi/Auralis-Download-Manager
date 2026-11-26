@@ -1,10 +1,13 @@
 # Compile and stage the native Qt app, engine DLL, browser host and Deno.
-param([string]$PrivateFontDirectory, [switch]$BundleReleaseFonts)
+param([string]$PrivateFontDirectory, [switch]$BundleReleaseFonts, [switch]$StoreEdition, [switch]$StageOnly)
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
 $releaseFontKey = $env:AURALIS_RELEASE_FONT_KEY
+if ($StoreEdition -and (!$StageOnly -or $BundleReleaseFonts -or $PrivateFontDirectory)) {
+    throw 'Store builds require -StageOnly and use the standard redistributable fonts.'
+}
 Remove-Item Env:AURALIS_RELEASE_FONT_KEY -ErrorAction SilentlyContinue
 if ($PrivateFontDirectory -and $BundleReleaseFonts) {
     throw 'Choose either private fonts or the release font bundle.'
@@ -20,6 +23,7 @@ $source = Join-Path $repo 'qt-ui'
 $version = [regex]::Match((Get-Content (Join-Path $source 'CMakeLists.txt') -Raw), 'project\s*\(\s*AuralisQt\s+VERSION\s+(\d+\.\d+\.\d+)\s').Groups[1].Value
 if (!$version) { throw 'AuralisQt project version was not found.' }
 $build = Join-Path $env:AURALIS_QT_WORK 'cmake'
+if ($StoreEdition) { $build = Join-Path $env:AURALIS_QT_WORK 'cmake-store' }
 $builtApp = Join-Path $build 'application'
 $jobName = "run-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
 $installerKind = 'setup'
@@ -53,6 +57,7 @@ Push-Location $repo
 try {
     $configure = @('-S',$source,'-B',$build,'-G','Visual Studio 17 2022','-A','x64',
         "-DCMAKE_PREFIX_PATH:PATH=$env:AURALIS_QT_ROOT","-DCMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE:PATH=$builtApp")
+    $configure += "-DAURALIS_STORE_EDITION:BOOL=$($StoreEdition.IsPresent.ToString().ToUpperInvariant())"
     $cache = Join-Path $build 'CMakeCache.txt'
     if (Test-Path -LiteralPath $cache) {
         $cachedSource = Select-String -LiteralPath $cache -Pattern '^CMAKE_HOME_DIRECTORY:INTERNAL=(.*)$' -List |
@@ -137,6 +142,18 @@ try {
         if (!(Test-Path -LiteralPath (Join-Path $stage $file) -PathType Leaf)) { throw "Missing deployed package file: $file" }
     }
     Get-ChildItem -LiteralPath $stage -Recurse -File -Filter '*.pdb' | Remove-Item -Force
+
+    if ($StageOnly) {
+        if ($StoreEdition) {
+            # No elevated Chrome-policy helper or NSIS uninstaller in the Store payload.
+            Remove-Item -LiteralPath (Join-Path $stage 'auralis-chrome-approval.exe')
+            @{edition='microsoft-store'; version=$version; architecture='x64'} |
+                ConvertTo-Json | Set-Content -LiteralPath (Join-Path $stage 'auralis-distribution.json') -Encoding utf8
+        }
+        if ($env:GITHUB_ENV) { "AURALIS_QT_STAGE=$stage" >> $env:GITHUB_ENV }
+        Write-Output $stage
+        return
+    }
 
     $installed = @(Get-ChildItem -LiteralPath $stage -Recurse -File | Sort-Object FullName)
     $uninstall = Join-Path $job 'uninstall-files.nsh'

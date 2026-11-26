@@ -1,9 +1,11 @@
-# SignPath application — submitted, approval pending
+# SignPath application — rejected
 
 An application based on this draft was submitted on 26 November 2026 with the
 owner-provided account details and agreements. The provider confirmed:
 "Form submitted. Thank you, we'll be in touch soon."
-Signing is not configured or approved. Private contact details are not recorded here.
+The owner reports that SignPath rejected the request due to insufficient project
+stars. Signing is not configured or approved. Private contact details are not
+recorded here.
 
 Project: Auralis Download Manager
 

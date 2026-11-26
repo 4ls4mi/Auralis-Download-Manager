@@ -578,7 +578,11 @@ int main(int argc, char **argv)
                            QDir(profile).filePath(QStringLiteral("qt-settings")));
     }
     const bool exitRequest = arguments.contains(QStringLiteral("--exit")) || arguments.contains(QStringLiteral("/exit"));
-    const bool startHidden = arguments.contains(QStringLiteral("--auralis-startup-minimized"));
+    bool startHidden = arguments.contains(QStringLiteral("--auralis-startup-minimized"));
+#ifdef AURALIS_STORE_EDITION
+    if (arguments.contains(QStringLiteral("--auralis-store-startup")))
+        startHidden = QSettings().value(QStringLiteral("StoreStartup/mode"), QStringLiteral("minimized")) != QStringLiteral("window");
+#endif
 
     const auto launchEnvironment = QProcessEnvironment::systemEnvironment();
     addBundledTools();

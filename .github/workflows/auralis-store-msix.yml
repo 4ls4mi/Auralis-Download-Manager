@@ -1,0 +1,89 @@
+name: Auralis Microsoft Store MSIX
+
+on:
+  push:
+    branches: [wip/auralis-qt-shell]
+  workflow_dispatch:
+    inputs:
+      identity_name:
+        description: Package/Identity/Name from Partner Center
+        required: true
+        type: string
+      publisher:
+        description: Package/Identity/Publisher from Partner Center (CN=...)
+        required: true
+        type: string
+      publisher_display_name:
+        description: Publisher display name from Partner Center
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: auralis-self-hosted-windows
+  cancel-in-progress: false
+
+jobs:
+  msix:
+    if: >-
+      github.repository == '4ls4mi/Auralis-Download-Manager' &&
+      (github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[build-auralis-store]'))
+    runs-on: [self-hosted, Windows, X64, auralis]
+    timeout-minutes: 180
+    defaults:
+      run:
+        working-directory: auralis-store-source
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: auralis-store-source
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Prepare the verified native toolchain
+        shell: pwsh
+        run: ./qt-ui/packaging/windows-tools.ps1
+      - name: Build the Store edition without private font bundles
+        shell: pwsh
+        env:
+          CARGO_PROFILE_RELEASE_LTO: thin
+          CARGO_PROFILE_RELEASE_CODEGEN_UNITS: '4'
+        run: ./qt-ui/packaging/build-windows.ps1 -StoreEdition -StageOnly
+      - name: Validate and package MSIX
+        shell: pwsh
+        env:
+          STORE_IDENTITY: ${{ inputs.identity_name }}
+          STORE_PUBLISHER: ${{ inputs.publisher }}
+          STORE_PUBLISHER_DISPLAY: ${{ inputs.publisher_display_name }}
+        run: |
+          if (!$env:STORE_IDENTITY) {
+            $identity = Get-Content qt-ui/packaging/store-identity.json -Raw | ConvertFrom-Json
+            $env:STORE_IDENTITY = $identity.name
+            $env:STORE_PUBLISHER = $identity.publisher
+            $env:STORE_PUBLISHER_DISPLAY = $identity.publisherDisplayName
+          }
+          ./qt-ui/packaging/pack-msix.ps1 -StageDirectory $env:AURALIS_QT_STAGE `
+            -IdentityName $env:STORE_IDENTITY -Publisher $env:STORE_PUBLISHER `
+            -PublisherDisplayName $env:STORE_PUBLISHER_DISPLAY `
+            -OutputDirectory (Join-Path $env:AURALIS_QT_JOB 'store-package')
+      - name: Upload unsigned submission package for Store certification
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: auralis-microsoft-store-msix
+          path: |
+            ${{ env.AURALIS_STORE_PACKAGE }}
+            ${{ env.AURALIS_STORE_PACKAGE }}.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+      - name: Remove only this job's staging
+        if: always()
+        shell: pwsh
+        run: |
+          if ($env:AURALIS_QT_JOB -and $env:AURALIS_QT_WORK) {
+            $expected = Join-Path $env:AURALIS_QT_WORK "run-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+            if ([IO.Path]::GetFullPath($env:AURALIS_QT_JOB) -ieq [IO.Path]::GetFullPath($expected)) {
+              Remove-Item -LiteralPath $expected -Recurse -Force -ErrorAction SilentlyContinue
+            }
+          }

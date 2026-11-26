@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.21)
 project(AuralisQt VERSION 0.3.100 LANGUAGES CXX)
+option(AURALIS_STORE_EDITION "Build the MSIX edition with Store-managed updates" OFF)
+if(AURALIS_STORE_EDITION AND NOT WIN32)
+    message(FATAL_ERROR "The Microsoft Store edition requires Windows")
+endif()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -28,6 +32,11 @@ qt_add_executable(auralis-download-manager WIN32 MACOSX_BUNDLE
 )
 
 target_compile_definitions(auralis-download-manager PRIVATE AURALIS_VERSION="${PROJECT_VERSION}")
+if(AURALIS_STORE_EDITION)
+    target_compile_definitions(auralis-download-manager PRIVATE AURALIS_STORE_EDITION)
+    target_sources(auralis-download-manager PRIVATE src/StoreStartup.cpp src/StoreStartup.h)
+    target_link_libraries(auralis-download-manager PRIVATE windowsapp)
+endif()
 target_link_libraries(auralis-download-manager PRIVATE
     Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Qml Qt6::Quick Qt6::QuickControls2
     Qt6::Quick3D Qt6::Concurrent Qt6::Network Qt6::Multimedia

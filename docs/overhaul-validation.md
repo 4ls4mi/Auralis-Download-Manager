@@ -42,7 +42,8 @@ Runner verification: https://github.com/4ls4mi/Auralis-Download-Manager/actions/
   official NSIS packs for 56 of those locales. See localization-coverage.md.
 - No trusted signing identity is configured. Free SignPath signing requires
   project approval. The application was submitted on 26 November 2026 and the
-  provider displayed its submission confirmation. Approval is pending.
+  provider displayed its submission confirmation. The owner later reported rejection
+  because the project has too few stars; signing remains unavailable.
 - Full optional Rust regression suite was not requested for this runner build;
   the targeted checks above passed.
 

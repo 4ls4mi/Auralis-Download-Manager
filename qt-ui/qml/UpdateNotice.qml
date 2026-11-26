@@ -19,7 +19,7 @@ Window {
     property string presentation: "toast"
     property var availableUpdate: null
 
-    property bool updateSupported: Qt.platform.os === "windows"
+    property bool updateSupported: Qt.platform.os === "windows" && !backend?.storeEdition
     property int checkInterval: 15 * 60 * 1000
     readonly property bool canCheck: automaticChecks && updateSupported && Boolean(backend)
         && backend.interactiveSetup !== false && !backend.quitting

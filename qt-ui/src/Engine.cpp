@@ -4,6 +4,9 @@
 #include "LocalFiles.h"
 #include "WindowOutline.h"
 #include "WindowShadow.h"
+#ifdef AURALIS_STORE_EDITION
+#include "StoreStartup.h"
+#endif
 
 #include <QCoreApplication>
 #include <QDesktopServices>
@@ -47,7 +50,9 @@ QVariantMap result(const QVariant &value)
 
 QVariantMap startupSettings()
 {
-#ifdef Q_OS_WIN
+#ifdef AURALIS_STORE_EDITION
+    return StoreStartup::settings();
+#elif defined(Q_OS_WIN)
     QSettings registry(QStringLiteral("HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"),
                        QSettings::NativeFormat);
     const QString name = QStringLiteral("Auralis Download Manager");
@@ -67,7 +72,9 @@ QVariantMap setStartupSettings(const QVariantMap &command)
     const bool enabled = command.value(QStringLiteral("enabled")).toBool();
     if (mode != QStringLiteral("window") && mode != QStringLiteral("minimized"))
         return failure(QObject::tr("Choose a valid startup window mode."));
-#ifdef Q_OS_WIN
+#ifdef AURALIS_STORE_EDITION
+    return StoreStartup::save(command);
+#elif defined(Q_OS_WIN)
     QSettings registry(QStringLiteral("HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"),
                        QSettings::NativeFormat);
     const QString name = QStringLiteral("Auralis Download Manager");
@@ -220,6 +227,11 @@ QVariantMap Engine::decode(char *output) const
 
 QVariantMap Engine::exchange(const QVariantMap &command) const
 {
+#ifdef AURALIS_STORE_EDITION
+    // Guard every bridge path, including the fast update-progress request.
+    if (command.value(QStringLiteral("shellAction")).toString().startsWith(QStringLiteral("update-")))
+        return failure(tr("This edition is updated by Microsoft Store. Open the Store to check for updates."));
+#endif
     if (!m_request || !m_free)
         return failure(tr("The bundled Auralis engine could not be loaded."));
     const QByteArray input = QJsonDocument::fromVariant(command).toJson(QJsonDocument::Compact);
@@ -250,8 +262,10 @@ QVariantMap Engine::dispatch(const QVariantMap &command) const
         }
         return exchange(command);
     }
-    if (local == QStringLiteral("startupSettings"))
-        return result(startupSettings());
+    if (local == QStringLiteral("startupSettings")) {
+        const auto settings = startupSettings();
+        return settings.contains(QStringLiteral("error")) ? settings : result(settings);
+    }
     if (local == QStringLiteral("setStartupSettings"))
         return setStartupSettings(command);
     const bool browserStatus = local == QStringLiteral("browserExtensionStatus");
@@ -260,6 +274,8 @@ QVariantMap Engine::dispatch(const QVariantMap &command) const
     const bool removeOffer = local == QStringLiteral("removeBrowserExtensionOffer");
     const bool removeLegacyPolicy = local == QStringLiteral("removeLegacyBrowserExtensionPolicy");
     const bool repairHost = local == QStringLiteral("registerBrowserHost");
+    if (storeEdition() && (offerExtension || removeOffer || removeLegacyPolicy))
+        return failure(tr("Install the browser extension from its marketplace. This Store edition does not change browser extension policies. Use the original installer to remove a policy left by an older installation."));
     if (browserStatus || openStore || offerExtension || removeOffer || removeLegacyPolicy || repairHost) {
         QVariantMap status{{QStringLiteral("browser"), QString()}, {QStringLiteral("browserId"), QString()},
                            {QStringLiteral("browserSupported"), false}, {QStringLiteral("extensionPresent"), false},
@@ -335,12 +351,12 @@ QVariantMap Engine::dispatch(const QVariantMap &command) const
                 status.insert(QStringLiteral("nativeHostRegistered"), host.registered);
                 status.insert(QStringLiteral("nativeHostCanRegister"), host.canRegister);
                 status.insert(QStringLiteral("nativeHostProblem"), host.problem);
-                status.insert(QStringLiteral("legacyPolicyRemovable"), BrowserSetup::legacyPolicyRemovable(browserId));
+                status.insert(QStringLiteral("legacyPolicyRemovable"), !storeEdition() && BrowserSetup::legacyPolicyRemovable(browserId));
                 if (browserId == QStringLiteral("chrome") && isDefault) {
                     const auto offer = BrowserSetup::chromeOfferStatus();
-                    status.insert(QStringLiteral("externalOfferAvailable"), offer.available && canPrepare);
+                    status.insert(QStringLiteral("externalOfferAvailable"), !storeEdition() && offer.available && canPrepare);
                     status.insert(QStringLiteral("externalOfferRegistered"), offer.registered);
-                    status.insert(QStringLiteral("externalOfferRemovable"), offer.removable);
+                    status.insert(QStringLiteral("externalOfferRemovable"), !storeEdition() && offer.removable);
                     status.insert(QStringLiteral("externalOfferProblem"), offer.available && !canPrepare ? host.problem : offer.problem);
                 }
                 return result(status);
@@ -724,6 +740,9 @@ void Engine::setReleaseUpdateHintsEnabled(bool enabled)
 {
 #ifdef Q_OS_WIN
     enabled = enabled && !m_smoke;
+#ifdef AURALIS_STORE_EDITION
+    enabled = false;
+#endif
     if (enabled == m_releaseHintsEnabled)
         return;
     m_releaseHintsEnabled = enabled;

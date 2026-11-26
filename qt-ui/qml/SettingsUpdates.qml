@@ -20,7 +20,7 @@ ColumnLayout {
     signal updateDetailsRequested()
 
     readonly property var colors: MaterialTheme.palette
-    readonly property bool supportsUpdates: Qt.platform.os === "windows"
+    readonly property bool supportsUpdates: Qt.platform.os === "windows" && !engine.storeEdition
     readonly property bool currentPage: visible && Boolean(Window.window?.visible)
         && Window.window.visibility !== Window.Minimized && engine.ready
     readonly property string releasePage: "https://github.com/4ls4mi/Auralis-Download-Manager/releases"
@@ -125,13 +125,20 @@ ColumnLayout {
             }
             Copy {
                 visible: !root.supportsUpdates || Boolean(root.release?.version)
-                text: !root.supportsUpdates ? qsTr("The installer updater is available on Windows.")
+                text: engine.storeEdition ? qsTr("Microsoft Store manages updates for this edition.")
+                    : !root.supportsUpdates ? qsTr("The installer updater is available on Windows.")
                     : qsTr("Auralis %1 is available.").arg(root.release?.version || "")
             }
 
             Flow {
                 Layout.fillWidth: true
                 spacing: 8
+                GlassButton {
+                    visible: engine.storeEdition
+                    text: qsTr("Open Microsoft Store updates")
+                    filled: true
+                    onClicked: Qt.openUrlExternally("ms-windows-store://downloadsandupdates")
+                }
                 GlassButton {
                     objectName: "settingsCheckForUpdates"
                     visible: root.supportsUpdates

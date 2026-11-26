@@ -27,6 +27,7 @@ class Engine final : public QObject
     Q_PROPERTY(QString status READ status NOTIFY statusChanged)
     Q_PROPERTY(QString dataDirectory READ dataDirectory CONSTANT)
     Q_PROPERTY(QString version READ version CONSTANT)
+    Q_PROPERTY(bool storeEdition READ storeEdition CONSTANT)
     Q_PROPERTY(QString interfaceLanguage READ interfaceLanguage NOTIFY interfaceLanguageChanged)
     Q_PROPERTY(bool startHidden READ startHidden CONSTANT)
     Q_PROPERTY(bool trayAvailable READ trayAvailable CONSTANT)
@@ -46,6 +47,13 @@ public:
     QString status() const { return m_status; }
     QString dataDirectory() const { return m_profile; }
     QString version() const;
+    bool storeEdition() const {
+#ifdef AURALIS_STORE_EDITION
+        return true;
+#else
+        return false;
+#endif
+    }
     QString interfaceLanguage() const { return m_interfaceLanguage; }
     bool startHidden() const { return m_startHidden; }
     bool trayAvailable() const;

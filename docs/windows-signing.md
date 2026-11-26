@@ -7,8 +7,11 @@ self-signed certificate does not remove public SmartScreen warnings.
 approved open-source projects. Its [terms](https://signpath.org/terms) and project
 review apply; acceptance is not automatic. An application using the public
 repository and its license/build information was submitted on 26 November 2026.
-The provider acknowledged submission; eligibility and signing approval are pending.
-The current release remains unsigned until an approved identity is integrated.
+The owner subsequently reported that SignPath rejected the request because the
+project does not have enough stars. No SignPath signing identity is available.
+The current GitHub release remains unsigned. The separate Microsoft Store MSIX
+route is documented in [microsoft-store.md](microsoft-store.md); Microsoft signing
+applies to Store distribution and does not sign the GitHub EXE installer.
 
 After approval, configure the assigned organization, project, signing policy,
 artifact configuration and credentials in the release environment. Integration
