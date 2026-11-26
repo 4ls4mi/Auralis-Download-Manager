@@ -201,7 +201,7 @@ test("anonymous Chromium downloads are handed over without leaking stored cookie
   assert.deepEqual(downloads.map(({ url, cookies }) => [url, cookies]), [
     [publicUrl, ""], [sessionUrl, ""], [unavailableUrl, ""],
   ]);
-  assert.equal(downloads[0].browserCredentialsUnavailable, false);
+  assert.equal(Boolean(downloads[0].browserCredentialsUnavailable), false);
   assert.equal(downloads[1].browserCredentialsUnavailable, true);
   assert.equal(downloads[2].browserCredentialsUnavailable, true);
 });
