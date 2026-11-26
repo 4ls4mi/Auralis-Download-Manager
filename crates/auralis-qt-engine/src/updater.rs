@@ -26,6 +26,17 @@ struct Candidate {
     size: u64,
     staged: Option<PathBuf>,
 }
+
+#[derive(Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StagedInstaller {
+    version: String,
+    url: String,
+    sha256: String,
+    size: u64,
+    file_name: String,
+}
+
 static CANDIDATE: OnceLock<Mutex<Option<Candidate>>> = OnceLock::new();
 static TRANSFER: Mutex<Option<TransferProgress>> = Mutex::new(None);
 
@@ -270,6 +281,9 @@ fn check(current: &str) -> Result<UpdateStatus, String> {
             }
         }
     }
+    if let Some(candidate) = next.as_mut() {
+        candidate.staged = restore_staged_installer(candidate);
+    }
     let status = match &next {
         Some(c) => UpdateStatus {
             state: "available",
@@ -290,7 +304,9 @@ fn check(current: &str) -> Result<UpdateStatus, String> {
             .as_mut()
             .filter(|new| new.url == old.url && new.sha256 == old.sha256 && new.size == old.size)
         {
-            new.staged = old.staged.take();
+            if let Some(staged) = old.staged.take() {
+                new.staged = Some(staged);
+            }
         } else if let Some(staged) = old.staged.take() {
             let _ = fs::remove_file(staged);
         }
@@ -316,6 +332,131 @@ fn hash_file(path: &std::path::Path) -> Result<(String, u64), String> {
     }
     Ok((hex::encode(hash.finalize()), n))
 }
+
+fn updates_directory() -> Result<PathBuf, String> {
+    std::env::var_os("LOCALAPPDATA")
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute())
+        .ok_or_else(|| String::from("The Windows user profile is unavailable"))
+        .map(|path| path.join("Auralis Download Manager Updates"))
+}
+
+fn staged_manifest_path(candidate: &Candidate) -> Result<PathBuf, String> {
+    if candidate.sha256.len() != 64
+        || !candidate
+            .sha256
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit())
+    {
+        return Err("The update digest is invalid".into());
+    }
+    Ok(updates_directory()?.join(format!("staged-update-{}.json", candidate.sha256)))
+}
+
+fn staged_installer_path(folder: &std::path::Path, file_name: &str) -> Option<PathBuf> {
+    let name = std::path::Path::new(file_name);
+    if name.file_name().and_then(|value| value.to_str()) != Some(file_name)
+        || !file_name.starts_with("auralis-update-")
+        || !file_name.ends_with(".exe")
+    {
+        return None;
+    }
+    Some(folder.join(name))
+}
+
+fn restore_staged_installer(candidate: &Candidate) -> Option<PathBuf> {
+    let folder = updates_directory().ok()?;
+    let manifest = staged_manifest_path(candidate).ok()?;
+    let bytes = match fs::read(&manifest) {
+        Ok(bytes) => bytes,
+        Err(_) => return None,
+    };
+    let saved: StagedInstaller = match serde_json::from_slice(&bytes) {
+        Ok(saved) => saved,
+        Err(_) => {
+            let _ = fs::remove_file(manifest);
+            return None;
+        }
+    };
+    let path = staged_installer_path(&folder, &saved.file_name);
+    let matches = saved.version == candidate.version
+        && saved.url == candidate.url
+        && saved.sha256 == candidate.sha256
+        && saved.size == candidate.size;
+    let Some(path) = path.filter(|_| matches) else {
+        let _ = fs::remove_file(manifest);
+        return None;
+    };
+    match hash_file(&path) {
+        Ok((hash, size)) if hash == candidate.sha256 && size == candidate.size => Some(path),
+        _ => {
+            let _ = fs::remove_file(path);
+            let _ = fs::remove_file(manifest);
+            None
+        }
+    }
+}
+
+fn persist_staged_installer(
+    candidate: &Candidate,
+    installer: &std::path::Path,
+) -> Result<PathBuf, String> {
+    let folder = updates_directory()?;
+    let file_name = installer
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| staged_installer_path(&folder, name).as_deref() == Some(installer))
+        .ok_or("The staged installer path is invalid")?;
+    let manifest = staged_manifest_path(candidate)?;
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_nanos();
+    let temporary = folder.join(format!("staged-update-{}-{nonce}.tmp", candidate.sha256));
+    let record = StagedInstaller {
+        version: candidate.version.clone(),
+        url: candidate.url.clone(),
+        sha256: candidate.sha256.clone(),
+        size: candidate.size,
+        file_name: file_name.to_owned(),
+    };
+    let result = (|| -> Result<(), String> {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)
+            .map_err(|e| e.to_string())?;
+        file.write_all(&serde_json::to_vec(&record).map_err(|e| e.to_string())?)
+            .map_err(|e| e.to_string())?;
+        file.sync_all().map_err(|e| e.to_string())?;
+        drop(file);
+        if manifest.exists() {
+            fs::remove_file(&manifest).map_err(|e| e.to_string())?;
+        }
+        fs::rename(&temporary, &manifest).map_err(|e| e.to_string())
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(temporary);
+    }
+    result.map(|()| manifest)
+}
+
+fn clear_staged_installer(candidate: &Candidate, installer: &std::path::Path) {
+    let _ = fs::remove_file(installer);
+    if let Ok(manifest) = staged_manifest_path(candidate) {
+        let _ = fs::remove_file(manifest);
+    }
+    if let Ok(mut state) = lock() {
+        if let Some(current) = state.as_mut().filter(|current| {
+            current.url == candidate.url
+                && current.sha256 == candidate.sha256
+                && current.size == candidate.size
+        }) {
+            current.staged = None;
+        }
+    }
+}
+
 fn selected_candidate(version: &str) -> Result<Candidate, String> {
     let current = lock()?;
     let candidate = current.as_ref().ok_or("Check for an update first")?;
@@ -358,11 +499,7 @@ fn copy_installer(
 fn stage_installer(c: &Candidate) -> Result<PathBuf, String> {
     // Custom download profiles can be shared or portable. The installer belongs
     // in the Windows user's own profile, independent of the download state.
-    let folder = std::env::var_os("LOCALAPPDATA")
-        .map(PathBuf::from)
-        .filter(|path| path.is_absolute())
-        .ok_or("The Windows user profile is unavailable")?
-        .join("Auralis Download Manager Updates");
+    let folder = updates_directory()?;
     fs::create_dir_all(&folder).map_err(|e| e.to_string())?;
     let nonce = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -411,6 +548,13 @@ fn stage_installer(c: &Candidate) -> Result<PathBuf, String> {
 
 fn download(version: &str) -> Result<u64, String> {
     let c = selected_candidate(version)?;
+    if let Some(staged) = c.staged.as_ref() {
+        if matches!(hash_file(staged), Ok((ref hash, size)) if hash == &c.sha256 && size == c.size) {
+            report_transfer(&c, "ready", c.size);
+            return Ok(c.size);
+        }
+        clear_staged_installer(&c, staged);
+    }
     report_transfer(&c, "connecting", 0);
     let result = (|| {
         let staged = stage_installer(&c)?;
@@ -422,6 +566,10 @@ fn download(version: &str) -> Result<u64, String> {
             let _ = fs::remove_file(staged);
             return Err("The selected release changed; check again".into());
         };
+        if let Err(error) = persist_staged_installer(&c, &staged) {
+            let _ = fs::remove_file(&staged);
+            return Err(error);
+        }
         if let Some(previous) = next.staged.replace(staged) {
             let _ = fs::remove_file(previous);
         }
@@ -457,7 +605,7 @@ fn system_directory() -> Result<PathBuf, String> {
 fn install(version: &str) -> Result<(), String> {
     use std::os::windows::process::CommandExt;
     let c = selected_candidate(version)?;
-    let installer = c.staged.ok_or("Download the update first")?;
+    let installer = c.staged.as_ref().ok_or("Download the update first")?;
     let (hash, size) = hash_file(&installer)?;
     if hash != c.sha256 || size != c.size {
         return Err("The downloaded installer has changed; download again".into());
@@ -469,6 +617,8 @@ fn install(version: &str) -> Result<(), String> {
             "Automatic updates require the installed version of Auralis Download Manager".into(),
         );
     }
+    let updates = updates_directory()?;
+    let manifest = staged_manifest_path(&c)?;
     let system = system_directory()?;
     // Paths and integrity data travel as environment variables, never as PowerShell source.
     std::process::Command::new(system.join("WindowsPowerShell/v1.0/powershell.exe"))
@@ -484,6 +634,8 @@ fn install(version: &str) -> Result<(), String> {
         .env("AURALIS_UPDATE_PID", std::process::id().to_string())
         .env("AURALIS_UPDATE_INSTALLER", &installer)
         .env("AURALIS_UPDATE_OLD", &exe)
+        .env("AURALIS_UPDATE_LOG", updates.join("update.log"))
+        .env("AURALIS_UPDATE_MANIFEST", manifest)
         .env("AURALIS_UPDATE_SHA256", &c.sha256)
         .env("AURALIS_UPDATE_SIZE", c.size.to_string())
         .creation_flags(0x08000000)
