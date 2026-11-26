@@ -1335,6 +1335,8 @@ impl FileInfo {
             "url": self.url.to_string(), "save_as": self.save_as,
             "category": self.category.key(), "description": self.description,
             "remember": self.remember, "size": self.size(),
+            "browser_warning": self.context.browser_warning,
+            "browser_credentials_unavailable": self.context.browser_credentials_unavailable,
             "probing": self.info.is_none(),
             "error": self.info.as_ref().and_then(|r| r.as_ref().err()),
             "server": { "country_code": country, "place":server.as_ref().map(crate::whereis::glass), "rtt_ms": server.as_ref().and_then(|s| s.rtt_ms) },
@@ -1428,6 +1430,8 @@ impl FileInfo {
         // The "Download through" line (#44) takes a row of its own while an account takes the
         // address: the window grows by it.
         let dy = if self.through.is_some() { 26.0 } else { 0.0 };
+        let browser_warning = self.context.browser_warning || self.context.browser_credentials_unavailable;
+        let warning_extra = if browser_warning { 56.0 } else { 0.0 };
         // Preview has 92 px for its label in this language (#192), from 8 px after the group box
         // (it ends at 462) to the window's edge (562): where it needs more, the window grows by it
         // and the right column (icon, size, Preview) widens, its centre moving by half of it.
@@ -1443,7 +1447,7 @@ impl FileInfo {
             ctx,
             "file-info",
             "Download File Info",
-            [570.0 + wide, 234.0 + dy],
+            [570.0 + wide, 234.0 + dy + warning_extra],
             true,
             winui::BG(),
             |ui, o| {
@@ -1608,6 +1612,37 @@ impl FileInfo {
                 )
                 .changed();
 
+                if browser_warning {
+                    let warning = match (
+                        self.context.browser_warning,
+                        self.context.browser_credentials_unavailable,
+                    ) {
+                        (true, true) => format!(
+                            "{} {}",
+                            crate::i18n::t("The browser marked this download as potentially unsafe. Continue only if you trust its source."),
+                            crate::i18n::t("Auralis could not safely reuse this browser's sign-in. It will try without browser credentials, so downloads that require an account may fail."),
+                        ),
+                        (true, false) => crate::i18n::t(
+                            "The browser marked this download as potentially unsafe. Continue only if you trust its source.",
+                        )
+                        .to_owned(),
+                        (false, true) => crate::i18n::t(
+                            "Auralis could not safely reuse this browser's sign-in. It will try without browser credentials, so downloads that require an account may fail.",
+                        )
+                        .to_owned(),
+                        (false, false) => String::new(),
+                    };
+                    winui::paragraph(
+                        &p,
+                        o.x + 96.0,
+                        o.y + if dy > 0.0 { 211.0 } else { 176.0 },
+                        &warning,
+                        if self.context.browser_warning { winui::ERROR() } else { winui::MUTED() },
+                        o.x + 462.0,
+                        13.0,
+                    );
+                }
+
                 // Through a debrid account (#44): ticked, the service unlocks the link; unticked,
                 // the address is downloaded directly. Either way it is looked up again.
                 if let Some(through) = &self.through {
@@ -1638,7 +1673,7 @@ impl FileInfo {
                 winui::text_right(
                     &p,
                     o.x + 88.0,
-                    o.y + 193.0 + dy,
+                    o.y + 193.0 + dy + warning_extra,
                     crate::i18n::t("Server"),
                     winui::TEXT(),
                 );
@@ -1646,7 +1681,7 @@ impl FileInfo {
                     None => crate::whereis::line(
                         ui,
                         o.x + 96.0,
-                        o.y + 193.0 + dy,
+                        o.y + 193.0 + dy + warning_extra,
                         o.x + 462.0,
                         None,
                         "file-info",
@@ -1657,7 +1692,7 @@ impl FileInfo {
                             crate::whereis::line(
                                 ui,
                                 o.x + 96.0,
-                                o.y + 193.0 + dy,
+                                o.y + 193.0 + dy + warning_extra,
                                 o.x + 462.0,
                                 Some(&seen),
                                 "file-info",
@@ -1668,7 +1703,7 @@ impl FileInfo {
                         let (rect, cut) = winui::text_fit(
                             &p,
                             o.x + 96.0,
-                            o.y + 193.0 + dy,
+                            o.y + 193.0 + dy + warning_extra,
                             reason,
                             winui::ERROR(),
                             o.x + 462.0,
@@ -1730,7 +1765,7 @@ impl FileInfo {
                 };
                 let later = winui::button(
                     ui,
-                    r(o, later_at.0, 206.0 + dy, later_at.1, 21.0),
+                    r(o, later_at.0, 206.0 + dy + warning_extra, later_at.1, 21.0),
                     "Download Later",
                     later_kind,
                     false,
@@ -1739,8 +1774,12 @@ impl FileInfo {
                 let later = winui::why_disabled(later, blocked.is_some(), blocked.unwrap_or(""));
                 let start = winui::button(
                     ui,
-                    r(o, start_at.0, 206.0 + dy, start_at.1, 21.0),
-                    "Start Download",
+                    r(o, start_at.0, 206.0 + dy + warning_extra, start_at.1, 21.0),
+                    if self.context.browser_warning {
+                        "Download Anyway"
+                    } else {
+                        "Start Download"
+                    },
                     start_kind,
                     true,
                     Some(0),
@@ -1748,7 +1787,7 @@ impl FileInfo {
                 let start = winui::why_disabled(start, blocked.is_some(), blocked.unwrap_or(""));
                 let cancel = winui::button(
                     ui,
-                    r(o, cancel_at.0, 206.0 + dy, cancel_at.1, 21.0),
+                    r(o, cancel_at.0, 206.0 + dy + warning_extra, cancel_at.1, 21.0),
                     "Cancel",
                     ButtonKind::Normal,
                     false,

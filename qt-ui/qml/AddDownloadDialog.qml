@@ -12,6 +12,8 @@ DetachedDialogWindow {
     property var requestInfo: null
     readonly property bool confirming: requestInfo !== null
     readonly property bool waitingForMetadata: confirming && !destinationEdited && requestInfo.info.probing
+    readonly property bool browserWarning: confirming && requestInfo.info.browser_warning === true
+    readonly property bool browserCredentialsUnavailable: confirming && requestInfo.info.browser_credentials_unavailable === true
     property string errorMessage: ""
     property bool destinationEdited: false
     property bool descriptionEdited: false
@@ -232,6 +234,23 @@ DetachedDialogWindow {
             color: root.colors.caution
             wrapMode: Text.WordWrap
         },
+        Label {
+            visible: root.browserWarning
+            Layout.fillWidth: true
+            text: qsTr("Your browser marked this download as potentially unsafe. Continue only if you trust its source.")
+            textFormat: Text.PlainText
+            color: root.colors.destructive
+            font.bold: true
+            wrapMode: Text.WordWrap
+        },
+        Label {
+            visible: root.browserCredentialsUnavailable
+            Layout.fillWidth: true
+            text: qsTr("Auralis could not safely reuse this browser's sign-in. It will try without browser credentials, so downloads that require an account may fail.")
+            textFormat: Text.PlainText
+            color: root.colors.caution
+            wrapMode: Text.WordWrap
+        },
         Label { visible: root.confirming; text: qsTr("Category"); color: root.colors.muted },
         GlassComboBox {
             id: category
@@ -274,7 +293,11 @@ DetachedDialogWindow {
             GlassButton {
                 material: root.material
                 text: qsTr("Browse…")
-                onClicked: savePicker.open()
+                enabled: !root.busy && !root.waitingForMetadata
+                onClicked: {
+                    savePicker.selectedFile = engine.localFileUrl(destination.text.trim())
+                    savePicker.open()
+                }
             }
         },
         NumeralLabel {
@@ -371,7 +394,7 @@ DetachedDialogWindow {
                 material: root.material
                 accent: root.colors.positive
                 objectName: "confirmStartDownload"
-                text: root.busy ? qsTr("Working…") : root.confirming || root.torrentMode ? qsTr("Start download") : qsTr("Continue")
+                text: root.busy ? qsTr("Working…") : root.browserWarning ? qsTr("Download anyway") : root.confirming || root.torrentMode ? qsTr("Start download") : qsTr("Continue")
                 enabled: !root.busy && !root.waitingForMetadata
                 onClicked: root.submit(false)
             }

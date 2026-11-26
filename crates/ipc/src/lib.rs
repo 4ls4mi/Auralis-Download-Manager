@@ -52,11 +52,20 @@ pub struct Command {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub origin: Option<String>,
     pub cookies: Option<String>,
-    /// From the browser: do not apply saved site logins to this verified anonymous release
-    /// asset handoff.
+    /// From the browser: do not apply saved site logins to this verified anonymous public
+    /// release asset handoff.
     #[serde(skip_serializing_if = "is_false")]
     #[schemars(skip)]
     pub browser_anonymous: bool,
+    /// The browser marked this download as potentially unsafe; the user must confirm in File Info.
+    #[serde(skip_serializing_if = "is_false")]
+    #[schemars(skip)]
+    pub browser_warning: bool,
+    /// Browser credentials could not be safely reused; the user should be told the download may
+    /// fail if it needs an account.
+    #[serde(skip_serializing_if = "is_false")]
+    #[schemars(skip)]
+    pub browser_credentials_unavailable: bool,
     /// Use this video's supplied browser cookies instead of global helper cookie settings.
     #[serde(skip_serializing_if = "is_false")]
     #[schemars(skip)]

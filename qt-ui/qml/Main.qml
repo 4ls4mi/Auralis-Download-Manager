@@ -2782,5 +2782,11 @@ AuralisWindow {
         }
     }
 
-    WindowResizeHandles { hostWindow: root }
+    WindowResizeHandles {
+        hostWindow: root
+        coalesceGeometry: true
+        windowMouseEvents: true
+        borderSize: 11
+        cornerSize: 19
+    }
 }

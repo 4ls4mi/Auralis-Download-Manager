@@ -671,7 +671,14 @@ QUrl Engine::localMediaUrl(const QUrl &url) const
 
 QUrl Engine::localFileUrl(const QString &path) const
 {
-    return QFileInfo(path).isAbsolute() ? QUrl::fromLocalFile(path) : QUrl();
+    const auto nativePath = QDir::fromNativeSeparators(path.trimmed());
+    if (nativePath.isEmpty() || nativePath.contains(QChar::Null))
+        return {};
+    const QFileInfo info(nativePath);
+    const auto absolutePath = info.isAbsolute()
+        ? info.absoluteFilePath()
+        : QDir::home().absoluteFilePath(nativePath);
+    return QUrl::fromLocalFile(QDir::cleanPath(absolutePath));
 }
 
 void Engine::dragCompletedFile(QWindow *window, quint64 id, const QJSValue &callback)

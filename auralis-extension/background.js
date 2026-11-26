@@ -175,7 +175,8 @@ async function remoteSend(target, url) {
 // Only a download submission can use the paired destination. Settings and lookups use native().
 // The remote add operation takes only an address, so private downloads use the local host.
 async function submitDownload(message) {
-  if (!message.private && typeof message.url === "string" && /^(?:https?|ftps?|ftpes):\/\//i.test(message.url)) {
+  if (!message.private && !message.anonymous && !message.browserWarning && !message.browserCredentialsUnavailable
+      && typeof message.url === "string" && /^(?:https?|ftps?|ftpes):\/\//i.test(message.url)) {
     const target = await remoteTarget();
     if (target) return remoteSend(target, message.url);
   }
@@ -2165,6 +2166,8 @@ async function handOff(d) {
     // The browser's name is only its address's guess (#948, `addressNamed`): the host checks
     // Options' file types by it, and MDM names the file from the server's own answer.
     ...(d.nameGuessed ? { nameGuessed: true } : {}),
+    ...(d.browserWarning ? { browserWarning: true } : {}),
+    ...(d.browserCredentialsUnavailable ? { browserCredentialsUnavailable: true } : {}),
     ...(d.size > 0 ? { size: d.size } : {}),
     ...(d.mime ? { mime: d.mime } : {}),
     ...(d.post ? { post: d.post.body, postType: d.post.type || "" } : {}),
@@ -2204,7 +2207,6 @@ function colabRuntimeProxy(...urls) {
 // `clicked`: a link just clicked without Alt (Safari's `link`, see `altClicked`).
 async function candidate(item, url, clicked = false) {
   if (!/^https?:/i.test(url)) return null; // blob:, data:, file: stay the browser's
-  if (item.danger && item.danger !== "safe") return null;
   const { paused } = await ext.storage.local.get({ paused: false });
   if (paused) return null;
   const first = firstUrl(item);
@@ -2225,8 +2227,14 @@ async function candidate(item, url, clicked = false) {
   // Smaller than Options' minimum (when the browser knows the size already).
   const size = item.totalBytes > 0 ? item.totalBytes : item.fileSize;
   if (r.minKb > 0 && size > 0 && size < r.minKb * 1024) return left("small");
-  if (!(await siteAccess(first)) && !githubReleaseAsset(first, url)) return left("site-access");
-  return { name, post };
+  const publicRelease = githubReleaseAsset(first, url);
+  const hasSiteAccess = await siteAccess(first);
+  return {
+    name,
+    post,
+    browserWarning: Boolean(item.danger && !["safe", "allowlistedByPolicy", "deepScannedSafe"].includes(item.danger)),
+    browserCredentialsUnavailable: !hasSiteAccess && !publicRelease,
+  };
 }
 
 // Why it stays with the browser, said (the popup, MDM's log).
@@ -2236,17 +2244,18 @@ function leftAlone(c, item, url) {
 
 // Offer the download to the app under `name`; true if it took it. `nameGuessed`: `name` is only
 // its address's (`addressNamed`).
-async function offer(item, url, { name, post }, nameGuessed = false) {
+async function offer(item, url, { name, post, browserWarning = false, browserCredentialsUnavailable = false }, nameGuessed = false) {
   const first = firstUrl(item);
   const publicRelease = githubReleaseAsset(first, url);
-  const cookies = publicRelease ? "" : downloadCookie(item, first, url);
-  if (!publicRelease && (cookies === null || (cookies === undefined && !(await canHandOffAnonymously(first, url, item))))) {
-    // Keep URL-derived names out of the notice: a file route can contain a session token.
-    const basename = (item.filename || "").split(/[\\/]/).pop() || "";
-    const fromAddress = nameGuessed || basename === addressName(first) || basename === addressName(url);
-    const privateDownload = Boolean(item.incognito);
-    noteLeft("browser-session", fromAddress ? "" : basename, first, privateDownload, privateDownload).catch(() => {});
-    return false;
+  const anonymous = publicRelease;
+  let credentialsUnavailable = browserCredentialsUnavailable;
+  let cookies = anonymous || credentialsUnavailable ? "" : downloadCookie(item, first, url);
+  if (!anonymous && !credentialsUnavailable
+      && (cookies === null || (cookies === undefined && !(await canHandOffAnonymously(first, url, item))))) {
+    // Do not replay a session we cannot verify across this request. Try the app without those
+    // browser credentials and make the user aware that an account may still be required.
+    cookies = "";
+    credentialsUnavailable = true;
   }
   const reply = await handOff({
     url: first,
@@ -2258,7 +2267,9 @@ async function offer(item, url, { name, post }, nameGuessed = false) {
     size: item.totalBytes > 0 ? item.totalBytes : item.fileSize,
     mime: item.mime,
     cookies,
-    anonymous: publicRelease,
+    anonymous,
+    browserWarning,
+    browserCredentialsUnavailable: credentialsUnavailable,
     post,
     incognito: item.incognito,
     storeId: item.cookieStoreId,

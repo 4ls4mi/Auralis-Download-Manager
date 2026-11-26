@@ -2211,7 +2211,12 @@ impl App {
     /// Info": once the address answered (name and size known) and its folder exists, the
     /// download starts behind the dialog; the dialog's answer then keeps, moves or drops it.
     fn start_early(&mut self, fi: &mut FileInfo) {
-        if !self.settings.start_immediately || fi.early.is_some() || !fi.probed() {
+        if !self.settings.start_immediately
+            || fi.early.is_some()
+            || !fi.probed()
+            || fi.context.browser_warning
+            || fi.context.browser_credentials_unavailable
+        {
             return;
         }
         // Once Save As has been looked at off the window's thread (#743): its name numbered in
