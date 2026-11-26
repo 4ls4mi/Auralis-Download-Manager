@@ -124,8 +124,8 @@ jobs:
       - name: Package the browser extensions
         shell: pwsh
         run: |
-          node --test .github/scripts/test_auralis_extension_boundary.mjs
-          if ($LASTEXITCODE -ne 0) { throw 'Browser handoff security tests failed.' }
+          node --test .github/scripts/test_auralis_extension_boundary.mjs .github/scripts/test_auralis_material_rendering.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Extension or material renderer regression tests failed.' }
           ./qt-ui/packaging/pack-extensions.ps1
 
       - name: Upload the verified installer

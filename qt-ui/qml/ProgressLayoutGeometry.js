@@ -3,6 +3,12 @@
 
 function style(name) {
     switch (name) {
+    case "liquid-capsule":
+    case "jelly-beads":
+    case "braided-ribbon":
+    case "prism-segments":
+    case "molten-glass":
+    case "orbit-marker":
     case "status-track":
     case "pill-segments":
     case "thin-line":

@@ -33,8 +33,10 @@ Item {
         WindowAppearance.progressTrackColors)
     readonly property var finish: Lighting.style(lightingStyle)
     readonly property string layoutKind: LayoutGeometry.style(layoutStyle)
+    readonly property bool creativeLayout: !usesMaterialProgress && ["liquid-capsule", "jelly-beads",
+        "braided-ribbon", "prism-segments", "molten-glass", "orbit-marker"].includes(layoutKind)
     readonly property bool classicLayout: layoutKind === "classic"
-    readonly property bool labelAtEnd: showLabel && (usesMaterialProgress || layoutKind === "thin-line")
+    readonly property bool labelAtEnd: showLabel && (usesMaterialProgress || creativeLayout || layoutKind === "thin-line")
     readonly property string transferStatus: transferState.toLowerCase()
     readonly property color statusTrackTint: layoutKind !== "status-track" ? "transparent"
         : transferStatus === "paused" || transferStatus === "stopped" ? profile.caution
@@ -158,7 +160,7 @@ Item {
         anchors.rightMargin: progress.labelAtEnd ? amountLabel.width + 8 : 1.5
         anchors.verticalCenter: parent.verticalCenter
         height: LayoutGeometry.trackHeight(Math.max(0, progress.height - 3), progress.layoutKind, progress.thicknessScale)
-        active: !progress.usesMaterialProgress && !progress.renderWithShader
+        active: !progress.usesMaterialProgress && !progress.renderWithShader && !progress.creativeLayout
 
         sourceComponent: Item {
             id: vessel
@@ -705,6 +707,24 @@ Item {
                     }
                 }
             }
+        }
+    }
+
+    Loader {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.rightMargin: progress.showLabel ? amountLabel.width + 8 : 0
+        anchors.verticalCenter: parent.verticalCenter
+        height: progress.height
+        active: progress.creativeLayout
+        sourceComponent: CreativeProgress {
+            amount: progress.amount
+            layoutStyle: progress.layoutKind
+            startColor: progress.startColor
+            endColor: progress.endColor
+            trackColor: progress.trackColor
+            phase: progress.liquidMoving ? progress.wavePhase : 0
+            light: progress.profile.light
         }
     }
 

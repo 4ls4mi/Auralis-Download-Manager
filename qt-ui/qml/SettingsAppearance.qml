@@ -912,6 +912,13 @@ GridLayout {
                 wrapMode: Text.WordWrap
             }
             Heading { text: qsTr("Transfer speed graph") }
+            IndicatorChoice {
+                Layout.fillWidth: true
+                label: qsTr("Graph material")
+                model: WindowAppearance.graphMaterialChoices
+                selection: WindowAppearance.graphMaterial
+                onChosen: value => WindowAppearance.set("graphMaterial", value)
+            }
             GridLayout {
                 visible: !MaterialTheme.mdmAppearance
                 Layout.fillWidth: true

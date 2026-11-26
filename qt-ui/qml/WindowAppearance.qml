@@ -23,6 +23,14 @@ QtObject {
     readonly property int connectionBlockSize: preferences.connectionBlockSize
     readonly property string connectionAnimation: preferences.connectionAnimation
     readonly property string connectionLighting: preferences.connectionLighting
+    readonly property string graphMaterial: preferences.graphMaterial || "default"
+    readonly property var graphMaterialChoices: [
+        {label: qsTr("Theme default"), value: "default"},
+        {label: qsTr("Jelly glass"), value: "jelly"},
+        {label: qsTr("Frosted gel"), value: "frosted"},
+        {label: qsTr("Cut crystal"), value: "crystal"},
+        {label: qsTr("Satin ribbon"), value: "satin"}
+    ]
     readonly property string graphShape: preferences.graphShape
     readonly property string graphAnimation: preferences.graphAnimation
     readonly property string graphLighting: preferences.graphLighting
@@ -34,7 +42,13 @@ QtObject {
         {label: qsTr("Status track"), value: "status-track"},
         {label: qsTr("Pill segments"), value: "pill-segments"},
         {label: qsTr("Thin line"), value: "thin-line"},
-        {label: qsTr("Striped fill"), value: "striped-fill"}
+        {label: qsTr("Striped fill"), value: "striped-fill"},
+        {label: qsTr("Liquid capsule"), value: "liquid-capsule"},
+        {label: qsTr("Jelly beads"), value: "jelly-beads"},
+        {label: qsTr("Braided ribbon"), value: "braided-ribbon"},
+        {label: qsTr("Prism segments"), value: "prism-segments"},
+        {label: qsTr("Molten glass"), value: "molten-glass"},
+        {label: qsTr("Orbit marker"), value: "orbit-marker"}
     ]
     readonly property var progressTrackFinishChoices: [
         {label: qsTr("Material default"), value: "default"},
@@ -122,7 +136,7 @@ QtObject {
             customProgressFill: false, progressTrackFinish: "default", progressTrackColor: "material",
             progressAnimation: "classic", progressLighting: "polished", connectionShape: "material",
             connectionAnimation: "classic", connectionLighting: "polished",
-            graphShape: "area", graphAnimation: "classic", graphLighting: "polished"
+            graphMaterial: "default", graphShape: "area", graphAnimation: "classic", graphLighting: "polished"
         }
     }
 
@@ -458,6 +472,7 @@ QtObject {
             connectionShape: indicatorShape(saved.connectionShape || data["mh-glass-connection-shape"], original.connectionShape),
             connectionAnimation: indicatorAnimation(saved.connectionAnimation, original.connectionAnimation),
             connectionLighting: indicatorLighting(saved.connectionLighting, original.connectionLighting),
+            graphMaterial: validChoice(saved.graphMaterial, ["default", "jelly", "frosted", "crystal", "satin"], original.graphMaterial),
             graphShape: validChoice(saved.graphShape || data["mh-glass-graph-shape"], ["area", "line", "bars"], original.graphShape),
             graphAnimation: indicatorAnimation(saved.graphAnimation, original.graphAnimation),
             graphLighting: indicatorLighting(saved.graphLighting, original.graphLighting)
@@ -498,7 +513,7 @@ QtObject {
                 customProgressFill: customProgressFill,
                 progressTrackFinish: progressTrackFinish, progressTrackColor: progressTrackColor,
                 connectionShape: connectionShape, connectionAnimation: connectionAnimation, connectionLighting: connectionLighting,
-                graphAnimation: graphAnimation, graphLighting: graphLighting,
+                graphMaterial: graphMaterial, graphAnimation: graphAnimation, graphLighting: graphLighting,
                 reducedMotion: MaterialTheme.reducedMotion,
                 forcedAccent: MaterialTheme.forcedAccent, colorTheme: MaterialTheme.colorTheme,
                 progressPalette: MaterialTheme.progressPalette, connectionPalette: MaterialTheme.connectionPalette,
@@ -553,6 +568,7 @@ QtObject {
             connectionShape: indicatorShape(value.qt?.connectionShape || options.connectionShape, connectionShape),
             connectionAnimation: indicatorAnimation(value.qt?.connectionAnimation, connectionAnimation),
             connectionLighting: indicatorLighting(value.qt?.connectionLighting, connectionLighting),
+            graphMaterial: validChoice(value.qt?.graphMaterial, ["default", "jelly", "frosted", "crystal", "satin"], graphMaterial),
             graphShape: validChoice(options.graphShape, ["area", "line", "bars"], graphShape),
             graphAnimation: indicatorAnimation(value.qt?.graphAnimation, graphAnimation),
             graphLighting: indicatorLighting(value.qt?.graphLighting, graphLighting)

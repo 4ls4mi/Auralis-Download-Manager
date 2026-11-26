@@ -1390,19 +1390,26 @@ AuralisWindow {
                         padding: root.classicLayout ? 1 : 3
                         topPadding: 0
                         bottomPadding: 0
+                        leftPadding: 0
+                        rightPadding: 0
                         accent: root.colors.secondary
                         Accessible.name: text
                         Accessible.role: Accessible.Link
                         ToolTip.visible: hovered || visualFocus
                         ToolTip.text: donationButton.text
                         ToolTip.delay: 420
-                        contentItem: DashboardIcon {
-                            symbol: "support"
-                            solid: true
-                            ink: donationButton.buttonInk
-                            surface: donationButton.faceColor
-                            relief: donationButton.enabled
-                            transform: Translate { y: donationButton.faceOffset }
+                        contentItem: Item {
+                            implicitWidth: 20
+                            implicitHeight: 20
+                            DashboardIcon {
+                                anchors.centerIn: parent
+                                width: 18
+                                height: 18
+                                symbol: "support"
+                                solid: true
+                                ink: donationButton.buttonInk
+                                surface: donationButton.faceColor
+                            }
                         }
                     }
                     GlassButton {
@@ -1411,7 +1418,10 @@ AuralisWindow {
                         readonly property string viewLabel: root.compactView ? qsTr("Full view") : qsTr("Compact view")
                         readonly property string viewHint: root.compactView ? qsTr("Return to the full layout")
                             : qsTr("Switch to the compact layout")
-                        Layout.preferredHeight: root.classicLayout ? 22 : 30
+                        Layout.preferredHeight: root.classicLayout ? 24 : 30
+                        topPadding: 0
+                        bottomPadding: 0
+                        font.pixelSize: TypographyScale.pixels(root.classicLayout ? 12 : 13)
                         text: viewLabel
                         font.weight: Font.DemiBold
                         accent: root.colors.accent
@@ -1434,6 +1444,7 @@ AuralisWindow {
                             }
                             Label {
                                 text: compactButton.text
+                                verticalAlignment: Text.AlignVCenter
                                 color: compactButton.buttonInk
                                 font: compactButton.font
                                 Accessible.ignored: true

@@ -15,6 +15,7 @@ Canvas {
     property color endpointColor: MaterialTheme.graphColors[1]
     property color gridColor: MaterialTheme.palette.divider
     property bool light: MaterialTheme.palette.light
+    property string graphMaterial: WindowAppearance.graphMaterial
     property string graphShape: WindowAppearance.graphShape
     readonly property var lineTone: MaterialTheme.neonTone(lineColor)
     readonly property var endpointTone: MaterialTheme.neonTone(endpointColor)
@@ -27,7 +28,7 @@ Canvas {
     readonly property bool compact: compactStyle || height < 38
     readonly property bool jellyFlow: animationStyle === "jelly"
     readonly property var mdmColors: MaterialTheme.palette.mdm
-    readonly property bool flowEnabled: !mdmColors && flowActive && visible && available && !paintingPaused
+    readonly property bool flowEnabled: (!mdmColors || graphMaterial !== "default") && flowActive && visible && available && !paintingPaused
         && !MaterialTheme.reducedMotion && samples.length > 1 && width >= 2 && height >= 3
         && animationStyle !== "none"
         && (!Window.window || (Window.window.visible && Window.window.visibility !== Window.Minimized))
@@ -43,6 +44,7 @@ Canvas {
     onGridColorChanged: requestPaint()
     onLightChanged: requestPaint()
     onGraphShapeChanged: requestPaint()
+    onGraphMaterialChanged: requestPaint()
     onLightingStyleChanged: requestPaint()
     onWidthChanged: requestPaint()
     onHeightChanged: requestPaint()
@@ -370,6 +372,84 @@ Canvas {
         }
     }
 
+    // Material affects the surface, never the position or value of measured samples.
+    function paintJelly(ctx, peak, floor, range, flow) {
+        trace(ctx, peak, floor, range)
+        ctx.lineTo(width - 1, floor)
+        ctx.lineTo(0, floor)
+        ctx.closePath()
+        const body = ctx.createLinearGradient(0, Math.max(0, floor - range), 0, floor)
+        body.addColorStop(0, MaterialTheme.rgba(lineColor, graphMaterial === "frosted" ? .32 : .72))
+        body.addColorStop(.22, MaterialTheme.rgba(endpointColor, graphMaterial === "frosted" ? .22 : .48))
+        body.addColorStop(.65, MaterialTheme.rgba(lineColor, .28))
+        body.addColorStop(1, MaterialTheme.rgba(endpointColor, .56))
+        ctx.fillStyle = body
+        ctx.globalAlpha = 1
+        ctx.fill()
+        ctx.save()
+        ctx.clip()
+        const gloss = ctx.createLinearGradient(0, 0, width, height)
+        gloss.addColorStop(0, graphMaterial === "frosted" ? "#95e7f5ff" : "#70ffffff")
+        gloss.addColorStop(.3, "#08ffffff")
+        gloss.addColorStop(.55, "#38ffffff")
+        gloss.addColorStop(1, "#00ffffff")
+        ctx.fillStyle = gloss
+        ctx.fillRect(0, 0, width, height)
+        if (flow) { ctx.fillStyle = flow; ctx.globalAlpha = .35; ctx.fillRect(0, 0, width, height) }
+        if (graphMaterial === "crystal") {
+            const step = (width - 1) / (samples.length - 1)
+            for (let i = 1; i < samples.length; i++) {
+                const x = (i - 1) * step
+                const top = floor - samples[i - 1] / peak * range
+                const next = floor - samples[i] / peak * range
+                ctx.beginPath()
+                ctx.moveTo(x, top)
+                ctx.lineTo(x + step, next)
+                ctx.lineTo(x + step * .42, floor)
+                ctx.closePath()
+                ctx.fillStyle = i % 2 ? "#40ffffff" : "#550b0630"
+                ctx.fill()
+                ctx.strokeStyle = "#32ffffff"
+                ctx.lineWidth = .6
+                ctx.stroke()
+            }
+        }
+        ctx.restore()
+        trace(ctx, peak, floor, range)
+        ctx.lineJoin = "round"
+        ctx.lineCap = "round"
+        ctx.strokeStyle = MaterialTheme.rgba(lineColor, .38)
+        ctx.lineWidth = compact ? 5 : 7
+        ctx.stroke()
+        ctx.strokeStyle = gradient(ctx, lineTone.edge, endpointTone.edge)
+        ctx.lineWidth = compact ? 2 : 3
+        ctx.stroke()
+        ctx.strokeStyle = "#b8ffffff"
+        ctx.lineWidth = .7
+        ctx.stroke()
+    }
+
+    function paintSatin(ctx, peak, floor, range) {
+        ctx.save()
+        ctx.translate(0, 2)
+        trace(ctx, peak, floor, range)
+        ctx.strokeStyle = "#80000000"
+        ctx.lineWidth = compact ? 4 : 6
+        ctx.lineJoin = "round"
+        ctx.lineCap = "round"
+        ctx.stroke()
+        ctx.restore()
+        trace(ctx, peak, floor, range)
+        ctx.strokeStyle = gradient(ctx, lineColor, endpointColor)
+        ctx.lineWidth = compact ? 3 : 5
+        ctx.lineJoin = "round"
+        ctx.lineCap = "round"
+        ctx.stroke()
+        ctx.strokeStyle = "#a0ffffff"
+        ctx.lineWidth = .8
+        ctx.stroke()
+    }
+
     function paintArea(ctx, peak, floor, range, first, last, flow) {
         trace(ctx, peak, floor, range)
         ctx.lineTo(width - 1, floor)
@@ -473,7 +553,7 @@ Canvas {
 
         const peak = Math.max(1, ...samples) * 1.15
         const range = Math.max(1, height - Math.min(8, height * .32))
-        if (mdmColors) {
+        if (mdmColors && graphMaterial === "default") {
             trace(ctx, peak, floor, range)
             ctx.globalAlpha = 1
             ctx.strokeStyle = mdmColors.accent
@@ -487,6 +567,16 @@ Canvas {
         const core = gradient(ctx, first.core, last.core)
         const edge = gradient(ctx, first.edge, last.edge)
         const flow = flowEnabled ? flowGradient(ctx, first, last) : null
+        if (graphMaterial === "satin") {
+            paintSatin(ctx, peak, floor, range)
+            ctx.globalAlpha = 1
+            return
+        }
+        if (["jelly", "frosted", "crystal"].includes(graphMaterial)) {
+            paintJelly(ctx, peak, floor, range, flow)
+            ctx.globalAlpha = 1
+            return
+        }
         if (graphShape === "bars") {
             drawBars(ctx, peak, floor, range, glow, core, edge, flow)
             ctx.globalAlpha = 1
