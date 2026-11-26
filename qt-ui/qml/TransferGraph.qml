@@ -369,11 +369,37 @@ Canvas {
                 ctx.globalAlpha = (light ? .66 : .84) * (optic === 3 || optic === 4 ? .62 : 1)
                 ctx.fillRect(x, top, barWidth, barHeight)
             }
+            if (graphMaterial !== "default") {
+                ctx.save()
+                ctx.beginPath(); ctx.rect(x, top, barWidth, barHeight); ctx.clip()
+                ctx.globalAlpha = graphMaterial === "carbon" ? .88 : graphMaterial === "aurora-mesh" ? .24 : graphMaterial === "satin" ? .28 : graphMaterial === "frosted" ? .38 : .55
+                const skin = ctx.createLinearGradient(x, top, x + barWidth, floor)
+                const pale = graphMaterial === "pearl" || graphMaterial === "frosted"
+                skin.addColorStop(0, MaterialTheme.mix(lineColor, "#ffffff", pale ? .75 : .35, 1))
+                skin.addColorStop(.3, graphMaterial === "mercury" ? "#f4f7ff" : graphMaterial === "pearl" ? MaterialTheme.mix(endpointColor,"#ffdbf4",.65,1) : MaterialTheme.rgba(endpointColor,.25))
+                skin.addColorStop(.55, graphMaterial === "mercury" || graphMaterial === "carbon" ? "#171f30" : MaterialTheme.rgba(lineColor,.7))
+                skin.addColorStop(1, endpointColor)
+                ctx.fillStyle = skin; ctx.fillRect(x,top,barWidth,barHeight)
+                ctx.globalAlpha = .3 * lighting.reflection
+                ctx.strokeStyle = edge; ctx.lineWidth = .7
+                if (["aurora-mesh", "carbon", "crystal"].includes(graphMaterial)) {
+                    const spacing = graphMaterial === "carbon" ? 4 : 9
+                    for (let y=top; y<floor; y+=spacing) {
+                        ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x+barWidth,y+spacing); ctx.stroke()
+                        if (graphMaterial === "aurora-mesh") { ctx.beginPath();ctx.moveTo(x,y+spacing);ctx.lineTo(x+barWidth,y);ctx.stroke() }
+                    }
+                } else {
+                    ctx.fillStyle = "#ffffff"
+                    ctx.fillRect(x+barWidth*.18,top,Math.max(.6,barWidth*(graphMaterial === "frosted" || graphMaterial === "satin" ? .45 : .12)),barHeight)
+                }
+                ctx.restore()
+            }
         }
     }
 
     // Material affects the surface, never the position or value of measured samples.
     function paintJelly(ctx, peak, floor, range, flow) {
+        if (graphShape === "line") { paintSatin(ctx,peak,floor,range);return }
         trace(ctx, peak, floor, range)
         ctx.lineTo(width - 1, floor)
         ctx.lineTo(0, floor)
@@ -383,7 +409,17 @@ Canvas {
         body.addColorStop(.22, MaterialTheme.rgba(endpointColor, graphMaterial === "frosted" ? .22 : .48))
         body.addColorStop(.65, MaterialTheme.rgba(lineColor, .28))
         body.addColorStop(1, MaterialTheme.rgba(endpointColor, .56))
-        ctx.fillStyle = body
+        if (graphMaterial === "mercury") {
+            const metal=ctx.createLinearGradient(0,0,0,height)
+            metal.addColorStop(0,MaterialTheme.mix(lineColor,"#ffffff",.82,1))
+            metal.addColorStop(.22,"#f2efff");metal.addColorStop(.4,MaterialTheme.mix(endpointColor,"#20242c",.65,1))
+            metal.addColorStop(.65,"#b6bed1");metal.addColorStop(1,MaterialTheme.mix(lineColor,"#0b0d17",.6,1))
+            ctx.fillStyle=metal
+        } else if (graphMaterial === "carbon") ctx.fillStyle=MaterialTheme.mix(lineColor,"#121720",.88,1)
+        else if (graphMaterial === "pearl") ctx.fillStyle=gradient(ctx,MaterialTheme.mix(lineColor,"#edf3ff",.68,.75),MaterialTheme.mix(endpointColor,"#eae1ff",.55,.8))
+        else if (graphMaterial === "aurora-mesh") ctx.fillStyle=MaterialTheme.rgba(lineColor,.12)
+        else if (graphMaterial === "satin") ctx.fillStyle=gradient(ctx,MaterialTheme.rgba(lineColor,.32),MaterialTheme.rgba(endpointColor,.22))
+        else ctx.fillStyle = body
         ctx.globalAlpha = 1
         ctx.fill()
         ctx.save()
@@ -414,6 +450,19 @@ Canvas {
                 ctx.stroke()
             }
         }
+        if (graphMaterial === "aurora-mesh") {
+            ctx.strokeStyle=gradient(ctx,lineColor,endpointColor);ctx.lineWidth=.7;ctx.globalAlpha=.65
+            const step=compact?10:16
+            for(let x=-height;x<width+height;x+=step){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x+height,height);ctx.moveTo(x,height);ctx.lineTo(x+height,0);ctx.stroke()}
+        }
+        if (graphMaterial === "carbon") {
+            ctx.strokeStyle=MaterialTheme.rgba(lineColor,.35);ctx.lineWidth=.6
+            for(let line=1;line<=8;line++){ctx.save();ctx.translate(0,line*(compact?3:5));trace(ctx,peak,floor,range);ctx.stroke();ctx.restore()}
+        }
+        // Apply the selected finish inside the measured area for every material.
+        ctx.globalAlpha=.35
+        ctx.fillStyle=opticalShade(ctx,Math.max(0,floor-range),floor,.7)
+        ctx.fillRect(0,0,width,height)
         ctx.restore()
         trace(ctx, peak, floor, range)
         ctx.lineJoin = "round"
@@ -440,14 +489,24 @@ Canvas {
         ctx.stroke()
         ctx.restore()
         trace(ctx, peak, floor, range)
-        ctx.strokeStyle = gradient(ctx, lineColor, endpointColor)
-        ctx.lineWidth = compact ? 3 : 5
-        ctx.lineJoin = "round"
+        const pale = graphMaterial === "pearl" || graphMaterial === "frosted"
+        const dark = graphMaterial === "carbon"
+        ctx.strokeStyle = gradient(ctx,
+            MaterialTheme.mix(lineColor, dark ? "#161d28" : "#ffffff", dark ? .55 : pale ? .65 : .1,1),
+            MaterialTheme.mix(endpointColor, graphMaterial === "pearl" ? "#ffdbf4" : "#ffffff", graphMaterial === "mercury" ? .85 : graphMaterial === "pearl" ? .65 : .12,1))
+        ctx.lineWidth = (compact ? 3 : 5) * (graphMaterial === "aurora-mesh" ? .6 : graphMaterial === "jelly" ? 1.4 : 1)
+        ctx.lineJoin = graphMaterial === "crystal" ? "bevel" : "round"
         ctx.lineCap = "round"
         ctx.stroke()
-        ctx.strokeStyle = "#a0ffffff"
-        ctx.lineWidth = .8
+        ctx.strokeStyle = gradient(ctx,MaterialTheme.mix(lineColor,"#ffffff",.7,1),MaterialTheme.mix(endpointColor,"#ffffff",.7,1))
+        ctx.lineWidth = .6 + lighting.reflection*.6
         ctx.stroke()
+        if (flowEnabled) {
+            ctx.strokeStyle = flowGradient(ctx,lineTone,endpointTone)
+            ctx.globalAlpha = .6
+            ctx.lineWidth = graphMaterial === "crystal" ? 1.8 : 1
+            ctx.stroke()
+        }
     }
 
     function paintArea(ctx, peak, floor, range, first, last, flow) {
@@ -567,12 +626,17 @@ Canvas {
         const core = gradient(ctx, first.core, last.core)
         const edge = gradient(ctx, first.edge, last.edge)
         const flow = flowEnabled ? flowGradient(ctx, first, last) : null
-        if (graphMaterial === "satin") {
+        if (graphMaterial === "satin" && graphShape === "line") {
             paintSatin(ctx, peak, floor, range)
             ctx.globalAlpha = 1
             return
         }
-        if (["jelly", "frosted", "crystal"].includes(graphMaterial)) {
+        if (graphMaterial !== "default" && graphShape === "bars") {
+            drawBars(ctx,peak,floor,range,glow,core,edge,flow)
+            ctx.globalAlpha=1
+            return
+        }
+        if (["jelly", "frosted", "crystal", "satin", "pearl", "aurora-mesh", "carbon", "mercury"].includes(graphMaterial)) {
             paintJelly(ctx, peak, floor, range, flow)
             ctx.globalAlpha = 1
             return

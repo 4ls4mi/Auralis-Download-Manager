@@ -29,7 +29,11 @@ QtObject {
         {label: qsTr("Jelly glass"), value: "jelly"},
         {label: qsTr("Frosted gel"), value: "frosted"},
         {label: qsTr("Cut crystal"), value: "crystal"},
-        {label: qsTr("Satin ribbon"), value: "satin"}
+        {label: qsTr("Satin ribbon"), value: "satin"},
+        {label: qsTr("Pearl membrane"), value: "pearl"},
+        {label: qsTr("Aurora mesh"), value: "aurora-mesh"},
+        {label: qsTr("Carbon contour"), value: "carbon"},
+        {label: qsTr("Liquid mercury"), value: "mercury"}
     ]
     readonly property string graphShape: preferences.graphShape
     readonly property string graphAnimation: preferences.graphAnimation
@@ -48,7 +52,13 @@ QtObject {
         {label: qsTr("Braided ribbon"), value: "braided-ribbon"},
         {label: qsTr("Prism segments"), value: "prism-segments"},
         {label: qsTr("Molten glass"), value: "molten-glass"},
-        {label: qsTr("Orbit marker"), value: "orbit-marker"}
+        {label: qsTr("Orbit marker"), value: "orbit-marker"},
+        {label: qsTr("Stacked glass tiles"), value: "glass-tiles"},
+        {label: qsTr("Pulse checkpoints"), value: "checkpoints"},
+        {label: qsTr("Tidal ribbon"), value: "tidal-ribbon"},
+        {label: qsTr("Frosted cells"), value: "frosted-cells"},
+        {label: qsTr("Filament core"), value: "filament-core"},
+        {label: qsTr("Twin rails"), value: "twin-rails"}
     ]
     readonly property var progressTrackFinishChoices: [
         {label: qsTr("Material default"), value: "default"},
@@ -72,6 +82,14 @@ QtObject {
         {label: qsTr("Gushing water"), value: "water"},
         {label: qsTr("Jelly"), value: "jelly"}
     ]
+    readonly property var progressAnimationChoices: animationChoices.concat([
+        {label: qsTr("Traveling sheen"), value: "sheen"},
+        {label: qsTr("Soft heartbeat"), value: "heartbeat"},
+        {label: qsTr("Rolling tide"), value: "tide"},
+        {label: qsTr("Elastic gloss"), value: "elastic"},
+        {label: qsTr("Prism glints"), value: "glints"},
+        {label: qsTr("Current flow"), value: "current"}
+    ])
     readonly property var lightingChoices: [
         {label: qsTr("Polished glass"), value: "polished"},
         {label: qsTr("Deep shading"), value: "depth"},
@@ -313,7 +331,7 @@ QtObject {
     }
 
     function indicatorAnimation(value, fallback) {
-        return animationChoices.some(choice => choice.value === value) ? value : fallback
+        return progressAnimationChoices.some(choice => choice.value === value) ? value : fallback
     }
 
     function indicatorLayout(value, fallback) {
@@ -472,7 +490,7 @@ QtObject {
             connectionShape: indicatorShape(saved.connectionShape || data["mh-glass-connection-shape"], original.connectionShape),
             connectionAnimation: indicatorAnimation(saved.connectionAnimation, original.connectionAnimation),
             connectionLighting: indicatorLighting(saved.connectionLighting, original.connectionLighting),
-            graphMaterial: validChoice(saved.graphMaterial, ["default", "jelly", "frosted", "crystal", "satin"], original.graphMaterial),
+            graphMaterial: validChoice(saved.graphMaterial, ["default", "jelly", "frosted", "crystal", "satin", "pearl", "aurora-mesh", "carbon", "mercury"], original.graphMaterial),
             graphShape: validChoice(saved.graphShape || data["mh-glass-graph-shape"], ["area", "line", "bars"], original.graphShape),
             graphAnimation: indicatorAnimation(saved.graphAnimation, original.graphAnimation),
             graphLighting: indicatorLighting(saved.graphLighting, original.graphLighting)
@@ -568,7 +586,7 @@ QtObject {
             connectionShape: indicatorShape(value.qt?.connectionShape || options.connectionShape, connectionShape),
             connectionAnimation: indicatorAnimation(value.qt?.connectionAnimation, connectionAnimation),
             connectionLighting: indicatorLighting(value.qt?.connectionLighting, connectionLighting),
-            graphMaterial: validChoice(value.qt?.graphMaterial, ["default", "jelly", "frosted", "crystal", "satin"], graphMaterial),
+            graphMaterial: validChoice(value.qt?.graphMaterial, ["default", "jelly", "frosted", "crystal", "satin", "pearl", "aurora-mesh", "carbon", "mercury"], graphMaterial),
             graphShape: validChoice(options.graphShape, ["area", "line", "bars"], graphShape),
             graphAnimation: indicatorAnimation(value.qt?.graphAnimation, graphAnimation),
             graphLighting: indicatorLighting(value.qt?.graphLighting, graphLighting)

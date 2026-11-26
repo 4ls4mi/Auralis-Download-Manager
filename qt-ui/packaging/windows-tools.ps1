@@ -22,7 +22,7 @@ function Receive-Pinned([string]$Url, [string]$Destination, [string]$Sha256) {
 $volumes = @(Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' | Sort-Object FreeSpace -Descending)
 $system = $volumes | Where-Object DeviceID -eq $env:SystemDrive | Select-Object -First 1
 $minimumAlternateSpace = 20 * 1024 * 1024 * 1024
-$minimumSystemSpace = 10 * 1024 * 1024 * 1024
+$minimumSystemSpace = 20 * 1024 * 1024 * 1024
 $alternate = $volumes | Where-Object { $_.DeviceID -ne $env:SystemDrive -and $_.FreeSpace -ge $minimumAlternateSpace } | Select-Object -First 1
 $runnerRoot = Join-Path $env:LOCALAPPDATA 'AuralisRunner'
 if ($system -and $system.FreeSpace -lt $minimumSystemSpace -and $alternate) {
@@ -31,7 +31,7 @@ if ($system -and $system.FreeSpace -lt $minimumSystemSpace -and $alternate) {
 # Qt SDK extraction may use a roomy alternate drive while Cargo keeps the
 # same cache path as the existing self-hosted release workflow.
 $rustRoot = Join-Path $env:LOCALAPPDATA 'AuralisRunner'
-if ($system -and $system.FreeSpace -lt 4GB -and $alternate) {
+if ($system -and $system.FreeSpace -lt $minimumSystemSpace -and $alternate) {
     $rustRoot = Join-Path ($alternate.DeviceID + '\') 'AuralisRunner'
 }
 $targetDir = Join-Path $rustRoot 'target'

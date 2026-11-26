@@ -139,6 +139,11 @@ impl App {
             self.apply_options(next);
             return Some(json!({"ok":true}).to_string());
         }
+        if cmd.query.as_deref()==Some("glass-category-settings") {return Some(self.glass_category_settings().to_string());}
+        if cmd.action.as_deref()==Some("glass-category-setting") {
+            let payload=serde_json::from_str(cmd.queue.as_deref().unwrap_or("")).unwrap_or(Value::Null);
+            return Some(self.glass_update_category(payload).to_string());
+        }
         if cmd.query.as_deref()==Some("glass-original-settings"){return Some(self.glass_original_settings().to_string());}
         if cmd.query.as_deref() == Some("glass-clipboard-mode") {
             return Some(json!({"mode": self.glass_clipboard_mode()}).to_string());

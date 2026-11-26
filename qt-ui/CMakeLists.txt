@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(AuralisQt VERSION 0.3.99 LANGUAGES CXX)
+project(AuralisQt VERSION 0.3.100 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -102,6 +102,9 @@ qt_add_resources(auralis-download-manager "branding"
         assets/auralis.ico
         assets/auralis-progress.png
         assets/default-appearance.json
+        assets/setup/language.gif
+        assets/setup/browser.gif
+        assets/setup/helpers.gif
         assets/sounds/auralis-download-complete.wav
         assets/sounds/auralis-download-failed.wav
         assets/sounds/auralis-queue-started.wav
@@ -183,8 +186,14 @@ qt_add_qml_module(auralis-download-manager
     QML_FILES ${qml_components}
 )
 
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+set(auralis_catalog_dir "${CMAKE_CURRENT_BINARY_DIR}/translations")
+execute_process(COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/../tools/i18n/generate-qt-catalogs.py"
+    --output "${auralis_catalog_dir}"
+    COMMAND_ERROR_IS_FATAL ANY)
+file(GLOB auralis_catalogs CONFIGURE_DEPENDS "${auralis_catalog_dir}/auralis_*.ts")
 qt_add_translations(auralis-download-manager
     SOURCE_TARGETS auralis-download-manager
-    TS_FILES i18n/auralis_ar.ts i18n/auralis_es.ts i18n/auralis_zh_CN.ts
+    TS_FILES ${auralis_catalogs}
     RESOURCE_PREFIX "/auralis/i18n"
 )

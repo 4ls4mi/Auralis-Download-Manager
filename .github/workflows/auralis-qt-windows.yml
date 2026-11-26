@@ -93,11 +93,25 @@ jobs:
         shell: pwsh
         run: ./qt-ui/packaging/windows-tools.ps1
 
+      - name: Check build disk space and native installer compiler
+        shell: pwsh
+        run: ./qt-ui/packaging/test-build-environment.ps1
+
       - name: Validate creative progress QML types
         shell: pwsh
         run: |
           & (Join-Path $env:AURALIS_QT_ROOT 'bin/qmllint.exe') --ignore-settings qt-ui/qml/CreativeProgress.qml
           if ($LASTEXITCODE -ne 0) { throw 'Creative progress QML type validation failed.' }
+
+      - name: Render creative progress layouts and shapes
+        shell: pwsh
+        env:
+          QT_QUICK_BACKEND: software
+        run: |
+          & (Join-Path $env:AURALIS_QT_ROOT 'bin/qmltestrunner.exe') -input qt-ui/tests -platform offscreen -o creative-progress-results.txt,txt
+          $testExit = $LASTEXITCODE
+          Get-Content creative-progress-results.txt
+          if ($testExit -ne 0) { throw 'Creative progress rendering tests failed.' }
 
       - name: Build and bundle the Qt installer
         shell: pwsh

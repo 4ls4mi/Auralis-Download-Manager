@@ -6,6 +6,7 @@ import QtQuick.Controls
 import QtQuick.Controls.Basic as Basic
 import QtQuick.Layouts
 import QtQuick.Window
+import "LanguageCatalog.js" as LanguageCatalog
 
 AuralisWindow {
     id: root
@@ -36,7 +37,7 @@ AuralisWindow {
     readonly property color classicPageInk: MaterialTheme.controlTextInk(colors.textOverride || colors.text, classicPageFace)
     readonly property color captionInk: (classicLayout && !active ? colors.titleMuted : colors.titleInk) || colors.text
     readonly property var classicFrontTabs: ["General", "Browser Integration", "Downloads",
-        "Connection", "Save to", "Appearance", "Updates", "Remote"]
+        "Connection", "File types", "Save to", "Appearance", "Updates", "Remote"]
     readonly property var classicBackTabs: ["Advanced", "Media Helpers", "Accounts", "Torrents", "Display", "Scheduler"]
     readonly property int classicTabsColumns: Math.max(classicFrontTabs.length, classicBackTabs.length)
     readonly property var classicTabs: classicFrontTabs.concat(classicBackTabs).map(id => sections.find(section => section.id === id))
@@ -61,6 +62,7 @@ AuralisWindow {
     property string category: "General"
     property var config: null
     property var advancedFields: []
+    property var availableLanguages: LanguageCatalog.languages
     property var networkAdapters: []
     property string networkAdapterState: "idle"
     property bool saving: false
@@ -87,6 +89,7 @@ AuralisWindow {
                 "minimize_to_tray", "close_to_tray", "progress_minimize_to_tray"]},
         {id: "Display", name: qsTr("Display & fonts"), detail: qsTr("Interface size, text size, and font previews"), terms: qsTr("interface app UI window scale size zoom DPI fonts typography preview"), keys: []},
         {id: "Save to", name: qsTr("Save to"), detail: qsTr("Default download folders for each category"), terms: qsTr("save destination location path folder remember category directory"), keys: []},
+        {id: "File types", name: qsTr("File types"), detail: qsTr("Automatic capture, excluded sites, and file-size rules"), terms: qsTr("extensions types capture exclude sites addresses minimum size"), keys: []},
         {id: "Downloads", name: qsTr("Downloads"), detail: qsTr("File rules, folders, and archive extraction"), terms: qsTr("file folder category archive duplicates extract"), keys: []},
         {id: "Connection", name: qsTr("Connection"), detail: qsTr("Speed limits, proxy, and DNS"), terms: qsTr("speed throttle proxy dns network adapter login authentication"),
             keys: ["max_connections", "speed_limit_on", "speed_limit_kb", "global_limit_on", "global_limit_kb", "net_adapter"]},
@@ -153,6 +156,7 @@ AuralisWindow {
     readonly property var extraDetails: ({
         category_dirs: {section: "Save to", description: qsTr("Choose a category and its default download folder. General is used for files without a matching category. Browse for folders, then save your changes.")},
         change_folder_on_last: {section: "Save to"},
+        set_creation_date: {section: "Save to"},
         clipboard_mode: {
             label: qsTr("When a download link is copied"),
             options: [
@@ -169,7 +173,7 @@ AuralisWindow {
         video_cookies_profile: {section: "Media Helpers", description: qsTr("Use the browser’s default profile, enter its profile name, or choose its directory. In Chrome or Edge, open chrome://version or edge://version and look for Profile Path. In Firefox, open about:profiles and use the Root Directory.")}
     })
     readonly property var chosen: sections.find(section => section.id === category) || sections[0]
-    readonly property var hiddenEngineFields: ["update_check", "speed_limit_on"]
+    readonly property var hiddenEngineFields: ["update_check", "speed_limit_on", "category_dirs", "change_folder_on_last"]
     readonly property bool remoteControlEnabled: Boolean(advancedFields.find(field => field.key === "remote_on")?.value)
     readonly property var visibleFields: matchingFields()
     readonly property bool showingNetworkAdapter: visible && visibleFields.some(field => field.key === "net_adapter")
@@ -197,7 +201,7 @@ AuralisWindow {
             if (result) config = result
             if (error) problem = error
             engine.request({query: "glass-original-settings"}, function(data, legacyError) {
-                if (data) advancedFields = data.fields || []
+                if (data) { advancedFields = data.fields || []; if (data.languages) availableLanguages = data.languages }
                 if (legacyError) problem = legacyError
                 reading = false
             })
@@ -285,6 +289,16 @@ AuralisWindow {
                     if (!matchesText(key + " " + field.label + " " + (field.description || "")))
                         continue
                     const entry = Object.assign({}, field, {key: key, value: config[key], section: section.id, basic: true})
+                    if (key === "language") entry.options = availableLanguages
+                    if (key === "max_connections") {
+                        const extended = advancedFields.find(field => field.key === "many_connections")?.value === true
+                        const limit = extended ? 128 : 32
+                        entry.kind = "select"
+                        entry.value = Math.min(limit, Math.max(1, Number(entry.value)))
+                        entry.options = Array.from({length:limit}, (_,i) => ({label:String(i+1),value:i+1}))
+                        entry.description = extended ? qsTr("Choose 1–128 connections per download.")
+                            : qsTr("Choose 1–32. Enable Allow more than 32 connections below to raise the limit to 128.")
+                    }
                     if (key === "net_adapter") {
                         entry.value = String(entry.value ?? "").trim()
                         entry.options = networkAdapterChoices(entry.value)
@@ -324,12 +338,12 @@ AuralisWindow {
             : {action: "glass-original-setting", queue: JSON.stringify(payload)}
         engine.request(command, function(reply, error) {
             saving = false
-            if (error || !reply || reply.ok === false) {
+            if (error || !reply || reply.ok === false || reply.error) {
                 if (field.key === "language") {
                     problem = qsTr("Could not change the interface language.")
                     load()
                 } else {
-                    problem = error || qsTr("Could not save this setting.")
+                    problem = error || reply?.error || qsTr("Could not save this setting.")
                     if (field.key === "browsers") load()
                 }
                 return
@@ -1045,6 +1059,11 @@ AuralisWindow {
                             visible: !root.term && root.category === "Scheduler"
                         }
 
+                        SettingsSaveTo {
+                            Layout.fillWidth: true
+                            visible: !root.term && root.category === "Save to"
+                            onSaved: root.load()
+                        }
                         SettingsAccounts {
                             Layout.fillWidth: true
                             visible: !root.term && root.category === "Accounts"

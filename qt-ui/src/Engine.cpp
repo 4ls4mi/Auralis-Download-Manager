@@ -21,6 +21,7 @@
 #include <QSettings>
 #include <QSystemTrayIcon>
 #include <QTranslator>
+#include <QRegularExpression>
 #include <QWindow>
 #include <QtConcurrentRun>
 
@@ -171,22 +172,17 @@ void Engine::initializeInterfaceLanguage()
 void Engine::applyInterfaceLanguage(const QString &language)
 {
     QString code = language;
-    QString localeName;
-    if (code == QStringLiteral("ar") || code == QStringLiteral("es")) {
-        localeName = code;
-    } else if (code == QStringLiteral("zh-hans")) {
-        localeName = QStringLiteral("zh_CN");
-    } else {
-        code = QStringLiteral("en");
-        localeName = code;
-    }
+    static const QRegularExpression localePattern(QStringLiteral("^[a-z]{2,3}(-[a-z0-9]{2,8})*$"));
+    if (!localePattern.match(code).hasMatch()) code = QStringLiteral("en");
+    QString localeName = code;
+    localeName.replace(QLatin1Char('-'), QLatin1Char('_'));
     if (m_interfaceLanguage == code)
         return;
 
     std::unique_ptr<QTranslator> translator;
     if (code != QStringLiteral("en")) {
         translator = std::make_unique<QTranslator>();
-        if (!translator->load(QStringLiteral(":/auralis/i18n/auralis_%1.qm").arg(localeName))) {
+        if (!translator->load(QStringLiteral(":/auralis/i18n/auralis_%1.qm").arg(code))) {
             qWarning("Could not load the bundled Auralis translation for %s", qPrintable(localeName));
             return;
         }

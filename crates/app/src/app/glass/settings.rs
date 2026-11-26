@@ -134,7 +134,94 @@ impl App {
             }).collect::<Vec<_>>());
             field["columns"][0]["options"]=json!(Category::all().into_iter().map(|c|json!({"label":c.shown(),"value":c.key()})).collect::<Vec<_>>());
         }
-        json!({"fields":fields})
+        for field in &mut fields {
+            let key = field["key"].as_str().unwrap_or("").to_owned();
+            if ["auto_types", "excluded_sites", "excluded_addresses", "capture_min_kb"].contains(&key.as_str()) {
+                field["section"] = json!("File types");
+                let defaults = crate::settings::Settings::default();
+                field["defaultValue"] = match key.as_str() {
+                    "auto_types" => json!(defaults.auto_types),
+                    "excluded_sites" => json!(defaults.excluded_sites),
+                    "excluded_addresses" => json!(defaults.excluded_addresses),
+                    _ => json!(defaults.capture_min_kb),
+                };
+            }
+            if field["kind"] == "number" {
+                if field.get("minimum").is_none() { field["minimum"] = json!(0); }
+                if field.get("maximum").is_none() { field["maximum"] = json!(2147483647); }
+                if key == "torrent_port" { field["maximum"] = json!(65535); }
+            }
+            if key == "conn_exceptions" {
+                field["columns"][1]["options"] = json!((1..=self.settings.connection_limit())
+                    .map(|count|json!({"label":count.to_string(),"value":count})).collect::<Vec<_>>());
+                field["description"] = json!(format!("Choose 1–{} connections for each server pattern.",self.settings.connection_limit()));
+            }
+            if key == "dns_provider" {
+                field["kind"] = json!("select");
+                field["options"] = json!([
+                    {"label":"Cloudflare", "value":"cloudflare"}, {"label":"Google", "value":"google"},
+                    {"label":"Quad9", "value":"quad9"}, {"label":"NextDNS", "value":"nextdns"},
+                    {"label":"AdGuard", "value":"adguard"},
+                    {"label":"Custom", "value":"custom"}]);
+            }
+            if key == "proxy_port" {
+                field["description"] = json!("Port number from your proxy provider, for example 8080. Leave empty when no manual proxy is used.");
+            }
+            if field["kind"] == "text" && field.get("description").is_none() {
+                field["description"] = json!(match key.as_str() {
+                    "auto_types" => "Space-separated file extensions, for example ZIP EXE PDF. Wildcards are supported.",
+                    "excluded_sites" => "Space-separated host patterns, for example *.example.com. Leave empty to exclude no sites.",
+                    "dns_servers" => "Custom DNS server IP addresses separated by spaces. Leave empty when using a provider preset.",
+                    "dns_tls_name" => "Certificate hostname supplied by your DNS provider. Leave empty to use the preset.",
+                    "dns_doh_url" => "HTTPS DNS endpoint supplied by your provider. Leave empty to use the preset.",
+                    "dns_nextdns_id" => "Your NextDNS configuration ID. Only needed for the NextDNS provider.",
+                    "user_agent" => "Optional HTTP User-Agent override. Leave empty to use Auralis's default.",
+                    _ => "Optional custom value. Leave empty to use the default; this field is not a list of choices."
+                });
+            }
+            if key == "auto_types" || key == "excluded_sites" {
+                field["kind"] = json!("multiline");
+            }
+        }
+        json!({"fields":fields, "languages":crate::i18n::languages().into_iter().map(|(_,code,name)|json!({"value":code,"label":name})).collect::<Vec<_>>()})
+    }
+
+    pub(super) fn glass_category_settings(&self) -> Value {
+        json!({"categories": Category::all().into_iter().map(|c| json!({
+            "key":c.key(), "name":c.shown(), "types":c.types_text(), "editable":c.editable(),
+            "folder":self.settings.category_dir(c,&self.downloads).display().to_string(),
+            "remember":self.settings.remember_category_folder(c)
+        })).collect::<Vec<_>>(), "set_creation_date":self.settings.set_creation_date})
+    }
+
+    pub(super) fn glass_update_category(&mut self, payload: Value) -> Value {
+        let operation=payload["operation"].as_str().unwrap_or("");
+        if !["restore", "new", "edit", "save"].contains(&operation) {
+            return json!({"error":"Choose a valid category operation"});
+        }
+        let mut next=self.settings.clone();
+        if operation=="restore" {
+            crate::categories::restore(&mut next);
+        } else {
+            let category=payload["key"].as_str().and_then(|key|Category::all().into_iter().find(|c|c.key()==key));
+            if operation!="new" && category.is_none() {return json!({"error":"Choose a category"});}
+            let name=payload["name"].as_str().unwrap_or("").trim();
+            let types=payload["types"].as_str().unwrap_or("");
+            let folder=payload["folder"].as_str().unwrap_or("").trim();
+            if name.len()>200 || types.len()>16384 || folder.len()>32760 {return json!({"error":"Category values are too long"});}
+            if folder.is_empty() || !std::path::Path::new(folder).is_absolute() {return json!({"error":"Choose an absolute download folder"});}
+            if operation=="new" && name.is_empty() {return json!({"error":"Type the category name"});}
+            if (operation=="new" || category.is_some_and(|c|c.editable())) && Category::all().into_iter().any(|c|Some(c)!=category && c.shown().eq_ignore_ascii_case(name)) {
+                return json!({"error":"A category already uses that name"});
+            }
+            let target=if operation=="new" {crate::categories::Target::New} else {crate::categories::Target::Edit(category.unwrap())};
+            let selected=crate::categories::apply(&mut next,crate::categories::CategoryEdit{target,name:name.into(),types:crate::categories::normalize_types(types),folder:folder.into()},&self.downloads);
+            let key=selected.key().to_string();
+            next.category_folder_memory.retain(|(stored,_)|stored!=&key);
+            next.category_folder_memory.push((key,payload["remember"].as_bool().unwrap_or(true)));
+        }
+        self.apply_options(next);
+        self.glass_category_settings()
     }
 
     pub(super) fn glass_update_original(&mut self,payload:Value)->Value {
@@ -175,7 +262,12 @@ impl App {
                 "extract_subfolder" => next.extract_subfolder=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?,
                 "grabber_check" => next.grabber_check=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?,
                 "grabber_hide_pages" => next.grabber_hide_pages=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?,
-                "many_connections" => next.many_connections=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?,
+                "many_connections" => {
+                    next.many_connections=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?;
+                    let limit=next.connection_limit();
+                    next.max_connections=next.max_connections.min(limit);
+                    for (_,count) in &mut next.conn_exceptions { *count=(*count).min(limit); }
+                },
                 "user_agent" => next.user_agent=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?,
                 "conn_exceptions" => next.conn_exceptions=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?,
                 "proxy_mode" => next.proxy_mode=serde_json::from_value(value.clone()).map_err(|e|e.to_string())?,
@@ -262,7 +354,7 @@ impl App {
             if key=="proxy_mode"&&next.proxy_mode>3||key=="dns_mode"&&next.dns_mode>3||key=="duplicate_action"&&next.duplicate_action>3||key=="extract_subfolder"&&next.extract_subfolder>2 {return Err("Choose a valid option".into());}
             if key=="proxy_port"&&!next.proxy_port.is_empty()&&next.proxy_port.trim().parse::<u16>().ok().filter(|p|*p>0).is_none(){return Err("Proxy port must be 1–65535".into());}
             if key=="remote_port"&&!(1024..=65535).contains(&next.remote_port){return Err("Remote control port must be 1024–65535".into());}
-            if key=="conn_exceptions"&&next.conn_exceptions.iter().any(|(_,n)|!(1..=128).contains(n)){return Err("Connection counts must be 1–128".into());}
+            if key=="conn_exceptions"&&next.conn_exceptions.iter().any(|(_,n)|!(1..=next.connection_limit()).contains(n)){return Err(format!("Connection counts must be 1–{}",next.connection_limit()));}
             if key=="regional"&&next.regional.week_start>6 {return Err("Choose a valid first day of the week".into());}
             if key=="category_dirs"&&next.category_dirs.iter().any(|(key,_)|!Category::all().iter().any(|c|c.key()==key.as_str())) {return Err("Choose a known category".into());}
             Ok(())

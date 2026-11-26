@@ -6377,7 +6377,7 @@ impl App {
             };
             let changed = match key {
                 "language" if crate::headless::embedded()
-                    && matches!(value, "en" | "ar" | "es" | "zh-hans") =>
+                    && crate::i18n::info(value).is_some() =>
                 {
                     self.settings.language = Some(value.into());
                     self.settings.language_asked = true;
@@ -6385,7 +6385,7 @@ impl App {
                     Some(())
                 }
                 "max_connections" => value.parse::<u32>()
-                    .ok().filter(|n| (1..=128).contains(n))
+                    .ok().filter(|n| (1..=self.settings.connection_limit()).contains(n))
                     .map(|n| { self.settings.max_connections = n; }),
                 "speed_limit_kb" => value.parse::<u64>()
                     .ok().filter(|n| *n <= 10_000_000)
@@ -9833,7 +9833,7 @@ impl App {
             &self.rt,
             ctx,
         );
-        fi.remember = self.settings.change_folder_on_last;
+        fi.remember = self.settings.remember_category_folder(fi.category);
         fi.folders = self.settings.folder_history.clone();
         self.glass_info_serial = self.glass_info_serial.wrapping_add(1);
         self.file_info = Some(fi);
@@ -11449,7 +11449,7 @@ impl App {
                 Outcome::Open => false,
                 Outcome::Closed => true,
                 Outcome::Done(add) => {
-                    if self.settings.change_folder_on_last
+                    if self.settings.remember_category_folder(add.category)
                         && self
                             .settings
                             .keep_category_dir(add.category, &add.dir, &self.downloads)
@@ -11485,7 +11485,7 @@ impl App {
                     // Options' "Change folder for this category on last selected", which
                     // Download File Info follows through its box (#475): Music's for a
                     // sound-only choice (#611).
-                    if self.settings.change_folder_on_last
+                    if self.settings.remember_category_folder(v.category())
                         && self.settings.keep_category_dir(
                             v.category(),
                             &v.save_folder(),

@@ -668,7 +668,7 @@ AuralisWindow {
         id: startupSetup
         hostWindow: root
         automatic: engine.interactiveSetup === true
-        languages: settingsWindow.common.language.options
+        languages: settingsWindow.availableLanguages
     }
     AddDownloadDialog { id: addDialog }
     // Preserve QObject ownership without making the dashboard their native parent.

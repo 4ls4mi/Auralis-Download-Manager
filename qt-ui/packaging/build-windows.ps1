@@ -160,11 +160,13 @@ try {
     $installerScript = Join-Path $job 'installer.nsi'
     Copy-Item -LiteralPath $brandIcon -Destination $icon
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'installer.nsi') -Destination $installerScript
+    $languageDirectory = Join-Path $job 'installer-languages'
+    Invoke-Checked 'python' @('tools/installer/generate-nsis-languages.py','--nsis',(Split-Path -Parent $env:AURALIS_QT_NSIS),'--output',$languageDirectory)
     $installer = Join-Path $job "Auralis.Download.Manager_$($version)_x64-$installerKind.exe"
     Push-Location $job
     try {
         Invoke-Checked $env:AURALIS_QT_NSIS @('/V3',"/DVERSION=$version","/DOUTPUT=$installer","/DPAYLOAD=$stage",
-            "/DUNINSTALL_FILES=$uninstall","/DICON=$icon","/DSHORTCUT_ICON=$shortcutIcon",$installerScript)
+            "/DAURALIS_LANGUAGE_DIR=$languageDirectory","/DUNINSTALL_FILES=$uninstall","/DICON=$icon","/DSHORTCUT_ICON=$shortcutIcon",$installerScript)
     } finally { Pop-Location }
     if (!(Test-Path $installer) -or (Get-Item $installer).Length -gt 268435456) {
         throw 'The finished installer is missing or exceeds the size limit for automatic updates.'

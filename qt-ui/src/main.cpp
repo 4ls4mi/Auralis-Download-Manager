@@ -658,6 +658,7 @@ int runDesktop(QApplication &app, int activeInterfaceScale, bool startHidden, bo
     QQmlApplicationEngine qml;
     Engine &engine = engineLifetime.emplace(&qml, startHidden, smoke);
     if (engine.dataDirectory().isEmpty()) {
+        qWarning("Could not initialize the bundled downloader profile.");
         if (!smoke && !exitRequest)
             QMessageBox::critical(nullptr, app.applicationName(), QObject::tr("The bundled Rust downloader could not be opened. Reinstall Auralis."));
         return exitRequest ? 0 : 1;
@@ -673,6 +674,8 @@ int runDesktop(QApplication &app, int activeInterfaceScale, bool startHidden, bo
     if (!instanceLock->tryLock(300)) {
         const bool forwarded = forwardToInstance(serverName, exitRequest ? QByteArrayLiteral("exit\n")
                                                                          : QByteArrayLiteral("activate\n"));
+        if (!forwarded)
+            qWarning() << "Could not acquire the application instance lock or contact its owner:" << instanceLock->error();
         return forwarded ? 0 : 1;
     }
     if (exitRequest)
@@ -683,8 +686,10 @@ int runDesktop(QApplication &app, int activeInterfaceScale, bool startHidden, bo
     local.setSocketOptions(QLocalServer::UserAccessOption);
     local.setMaxPendingConnections(InstanceConnectionLimit);
     QLocalServer::removeServer(serverName);
-    if (!local.listen(serverName))
+    if (!local.listen(serverName)) {
+        qWarning() << "Could not create the local application channel:" << local.errorString();
         return 1;
+    }
 
 #ifdef Q_OS_WIN
     auto graphicsApi = QSGRendererInterface::Direct3D11;

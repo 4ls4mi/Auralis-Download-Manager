@@ -200,6 +200,7 @@ pub struct Settings {
     /// Save to: a folder per category (category label → folder); missing = the default.
     pub category_dirs: Vec<(String, String)>,
     pub change_folder_on_last: bool,
+    pub category_folder_memory: Vec<(String, bool)>,
     /// The addresses typed into Add URL and the folders downloads were saved to, newest first
     /// (the Address and Save As drop lists, as IDM's UrlHistory.txt).
     pub url_history: Vec<String>,
@@ -474,6 +475,7 @@ impl Default for Settings {
             regional: crate::regional::Regional::default(),
             category_dirs: Vec::new(),
             change_folder_on_last: true,
+            category_folder_memory: Vec::new(),
             url_history: Vec::new(),
             folder_history: Vec::new(),
             set_creation_date: false,
@@ -914,6 +916,11 @@ impl Settings {
 
     /// The folder just saved into becomes the category's, when it is another one (an unchanged
     /// folder stays "the default", following Downloads). True when the folder changed.
+    pub fn remember_category_folder(&self, cat: crate::model::Category) -> bool {
+        self.category_folder_memory.iter().find(|(key,_)|key==cat.key().as_ref())
+            .map_or(self.change_folder_on_last, |(_,enabled)|*enabled)
+    }
+
     pub fn keep_category_dir(
         &mut self,
         cat: crate::model::Category,
@@ -1146,6 +1153,20 @@ pub fn own_net() -> mdm_engine::Options {
 #[cfg(test)]
 mod tests {
     use std::path::Path;
+
+    #[test]
+    fn category_folder_memory_overrides_the_legacy_default_and_survives_save() {
+        use crate::model::Category;
+        let mut settings = super::Settings::default();
+        settings.change_folder_on_last = true;
+        let category = Category::all()[0];
+        assert!(settings.remember_category_folder(category));
+        settings.category_folder_memory.push((category.key().to_string(), false));
+        let saved = serde_json::to_value(&settings).unwrap();
+        let restored: super::Settings = serde_json::from_value(saved).unwrap();
+        assert!(!restored.remember_category_folder(category));
+        assert!(restored.change_folder_on_last);
+    }
 
     /// #668: the User-Agent for links added by hand is the default browser's unless one is set.
     /// Saved before, MDM's former default (Internet Explorer 11's) or nothing reads as automatic;

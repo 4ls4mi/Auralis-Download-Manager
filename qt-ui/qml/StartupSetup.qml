@@ -43,8 +43,10 @@ DetachedDialogWindow {
 
     title: qsTr("Set up Auralis")
     objectName: "startupSetupWindow"
-    width: 560
-    minimumHeight: 315
+    width: 720
+    minimumWidth: 540
+    minimumHeight: 500
+    customFrame: true
 
     Settings {
         id: preferences
@@ -267,6 +269,48 @@ DetachedDialogWindow {
     }
 
     bodyContent: [
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: 12
+            RowLayout {
+                Layout.fillWidth: true
+                Repeater {
+                    model: [qsTr("1 · Language"), qsTr("2 · Browser capture"), qsTr("3 · Media helpers")]
+                    delegate: Label {
+                        required property int index
+                        required property string modelData
+                        Layout.fillWidth: true
+                        text: modelData
+                        font.bold: ["language", "browser", "helpers"][index] === root.page
+                        color: font.bold ? root.colors.accent : root.colors.muted
+                        wrapMode: Text.WordWrap
+                    }
+                }
+            }
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: Math.min(180, width * .31)
+                radius: 12
+                color: "#171d2a"
+                clip: true
+                AnimatedImage {
+                    anchors.fill: parent
+                    source: "qrc:/auralis/setup/" + (root.page === "language" ? "language" : root.page === "browser" ? "browser" : "helpers") + ".gif"
+                    fillMode: Image.PreserveAspectFit
+                    playing: root.visible && root.visibility !== Window.Minimized && !MaterialTheme.reducedMotion
+                    cache: true
+                }
+            }
+            Label {
+                Layout.fillWidth: true
+                text: root.page === "language" ? qsTr("Make Auralis yours. Choose the language you use every day.")
+                    : root.page === "browser" ? qsTr("Enable the extension in each browser, then send a download to Auralis.")
+                    : qsTr("Install optional helpers to download videos, join media, and save galleries.")
+                font.pixelSize: TypographyScale.pixels(15)
+                color: root.colors.text
+                wrapMode: Text.WordWrap
+            }
+        },
         ColumnLayout {
             Layout.fillWidth: true
             visible: root.page === "language"

@@ -47,6 +47,10 @@ Var TaskbarPinCheckbox
 Var CreateStartMenuShortcut
 Var CreateDesktopShortcut
 Var OpenForTaskbarPin
+Var StartupCheckbox
+Var StartupMinimizedCheckbox
+Var EnableStartup
+Var StartMinimized
 Var UninstallAppHandle
 Var UninstallHostHandle
 Var UninstallEngineHandle
@@ -61,7 +65,14 @@ Page custom ShortcutOptionsPageCreate ShortcutOptionsPageLeave
 !insertmacro MUI_PAGE_FINISH
 UninstPage custom un.Confirm un.ConfirmLeave
 !insertmacro MUI_UNPAGE_INSTFILES
+!define MUI_LANGDLL_REGISTRY_ROOT HKCU
+!define MUI_LANGDLL_REGISTRY_KEY "${INSTALL_KEY}"
+!define MUI_LANGDLL_REGISTRY_VALUENAME "InstallerLanguage"
+!ifdef AURALIS_LANGUAGE_DIR
+!include "${AURALIS_LANGUAGE_DIR}\languages.nsh"
+!else
 !insertmacro MUI_LANGUAGE "English"
+!endif
 
 Function .onInit
     ${IfNot} ${RunningX64}
@@ -108,6 +119,11 @@ Function .onInit
             StrCpy $INSTDIR $0
         ${EndIf}
     ${EndIf}
+    ${If} $Passive != 1
+    ${AndIf} $Upgrade != 1
+    ${AndIf} $NoRegistration != 1
+        !insertmacro MUI_LANGDLL_DISPLAY
+    ${EndIf}
 FunctionEnd
 
 Function SkipInPassiveMode
@@ -139,8 +155,14 @@ Function ShortcutOptionsPageCreate
     ${NSD_CreateCheckbox} 0 63u 100% 13u "Open Auralis so I can pin it to the taskbar"
     Pop $TaskbarPinCheckbox
     ${NSD_SetState} $TaskbarPinCheckbox ${BST_UNCHECKED}
-    ${NSD_CreateLabel} 12u 81u 93% 35u "Windows requires you to pin apps yourself. After Auralis opens, right-click its taskbar icon and choose Pin to taskbar."
+    ${NSD_CreateLabel} 12u 81u 93% 20u "Windows requires you to pin apps yourself. After Auralis opens, right-click its taskbar icon and choose Pin to taskbar."
     Pop $0
+    ${NSD_CreateCheckbox} 0 106u 100% 13u "Start Auralis with Windows"
+    Pop $StartupCheckbox
+    ${NSD_SetState} $StartupCheckbox ${BST_UNCHECKED}
+    ${NSD_CreateCheckbox} 12u 124u 93% 13u "Start minimized to the system tray"
+    Pop $StartupMinimizedCheckbox
+    ${NSD_SetState} $StartupMinimizedCheckbox ${BST_CHECKED}
     nsDialogs::Show
 FunctionEnd
 
@@ -152,6 +174,8 @@ Function ShortcutOptionsPageLeave
     StrCpy $CreateDesktopShortcut $0
     ${NSD_GetState} $TaskbarPinCheckbox $0
     StrCpy $OpenForTaskbarPin $0
+    ${NSD_GetState} $StartupCheckbox $EnableStartup
+    ${NSD_GetState} $StartupMinimizedCheckbox $StartMinimized
 FunctionEnd
 
 # Refuse an in-use install before copying files. Leave a running instance and its data alone.
@@ -229,6 +253,15 @@ Function .onInstSuccess
         # Refresh the existing executable icon without changing taskbar grouping.
         ExecWait '"$INSTDIR\${APP_EXE}" --refresh-taskbar-icon' $0
         ${If} $ShortcutOptionsChosen == 1
+            ${If} $EnableStartup == ${BST_CHECKED}
+                ${If} $StartMinimized == ${BST_CHECKED}
+                    WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${PRODUCT}" '$\"$INSTDIR\${APP_EXE}$\" --auralis-startup-minimized'
+                ${Else}
+                    WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${PRODUCT}" '$\"$INSTDIR\${APP_EXE}$\" --auralis-startup-window'
+                ${EndIf}
+            ${Else}
+                DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${PRODUCT}"
+            ${EndIf}
             ${If} $CreateStartMenuShortcut == ${BST_CHECKED}
                 CreateShortCut "$SMPROGRAMS\${PRODUCT}.lnk" "$INSTDIR\${APP_EXE}" "" "$INSTDIR\${SHORTCUT_ICON}" 0
             ${Else}

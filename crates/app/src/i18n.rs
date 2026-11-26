@@ -377,12 +377,7 @@ pub fn system_code() -> &'static str {
 
 /// Resolve a saved preference against the languages bundled by the Qt interface.
 pub(crate) fn qt_interface_code(saved: Option<&str>) -> &'static str {
-    match saved.unwrap_or_else(|| system_code()) {
-        "ar" => "ar",
-        "es" | "es-mx" => "es",
-        "zh-hans" => "zh-hans",
-        _ => "en",
-    }
+    info(saved.unwrap_or_else(|| system_code())).map_or("en", |language|language.code)
 }
 
 #[cfg(test)]

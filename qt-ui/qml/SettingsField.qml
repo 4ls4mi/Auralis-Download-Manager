@@ -14,7 +14,7 @@ ColumnLayout {
     property bool busy: false
     property var cells: []
     property var regional: ({})
-    property bool expanded: field.key === "category_dirs"
+    property bool expanded: field.key === "category_dirs" || field.section === "File types"
     property string cookieBrowser: ""
     readonly property bool browserProfile: field.key === "video_cookies_profile"
     readonly property bool browserCapture: field.key === "browsers"
@@ -27,7 +27,7 @@ ColumnLayout {
     ]
     readonly property var colors: MaterialTheme.palette
     readonly property string kind: field.kind || "text"
-    readonly property bool complex: kind === "table" || kind === "lines" || kind === "regional"
+    readonly property bool complex: kind === "table" || kind === "lines" || kind === "multiline" || kind === "regional"
     readonly property bool unavailable: field.key === "cnl_on" || field.key === "cnl_sites"
     readonly property var choices: (field.options || []).map((choice, index) =>
         typeof choice === "string" ? ({label: choice, value: index}) : choice)
@@ -99,7 +99,7 @@ ColumnLayout {
             Label {
                 Layout.fillWidth: true
                 visible: text.length > 0
-                text: root.unavailable ? qsTr("Click’n’Load is unavailable. Existing settings are preserved.") : (root.field.description || "")
+                text: root.unavailable ? qsTr("Click’n’Load is unavailable. Existing settings are preserved.") : (root.kind === "number" ? qsTr("Allowed range: %1–%2. %3").arg(root.field.minimum ?? 0).arg(root.field.maximum ?? 2147483647).arg(root.field.description || "") : root.field.description || "")
                 color: root.colors.muted
                 wrapMode: Text.WordWrap
                 font.pixelSize: TypographyScale.pixels(12)
@@ -112,7 +112,7 @@ ColumnLayout {
             Layout.minimumWidth: root.kind === "boolean" ? 48 : 125
             active: !root.browserCapture && !root.unavailable && !root.browserProfile
             sourceComponent: root.complex ? expandButton : root.kind === "boolean" ? boolControl
-                : root.kind === "select" ? selectControl : root.field.key === "video_cookies_file" ? cookieControl : inputControl
+                : root.kind === "select" ? selectControl : root.field.key === "video_cookies_file" ? cookieControl : root.kind === "number" ? numberControl : inputControl
         }
     }
 
@@ -174,6 +174,18 @@ ColumnLayout {
             palette.buttonText: root.colors.text
             palette.base: root.colors.background
             onActivated: root.commit(currentValue, {})
+        }
+    }
+
+    Component {
+        id: numberControl
+        SpinBox {
+            from: root.field.minimum ?? 0
+            to: root.field.maximum ?? 2147483647
+            value: Number(root.field.value ?? from)
+            editable: true
+            Accessible.name: root.field.label
+            onValueModified: root.commit(value, {})
         }
     }
 
@@ -340,30 +352,41 @@ ColumnLayout {
     Loader {
         Layout.fillWidth: true
         active: root.expanded && root.complex && !root.unavailable && !root.browserCapture
-        sourceComponent: root.sounds ? soundControl : root.kind === "table" ? tableControl : root.kind === "lines" ? linesControl : regionalControl
+        sourceComponent: root.sounds ? soundControl : root.kind === "table" ? tableControl : root.kind === "lines" || root.kind === "multiline" ? linesControl : regionalControl
+    }
+
+    GlassButton {
+        visible: root.field.defaultValue !== undefined
+        Layout.alignment: Qt.AlignRight
+        text: qsTr("Restore default")
+        onClicked: root.commit(root.field.defaultValue, {})
     }
 
     Component {
         id: linesControl
         ColumnLayout {
-            TextArea {
-                id: lines
+            ScrollView {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 108
-                text: (root.field.value || []).join("\n")
-                placeholderText: qsTr("One address per line")
+                clip: true
+                contentWidth: availableWidth
+                TextArea {
+                id: lines
+                text: root.kind === "multiline" ? String(root.field.value || "") : (root.field.value || []).join("\n")
+                placeholderText: root.kind === "multiline" ? qsTr("Separate entries with spaces") : qsTr("One address per line")
                 color: root.colors.text
                 wrapMode: TextEdit.Wrap
                 selectByMouse: true
                 Accessible.name: root.field.label
                 background: GlassSurface { role: "field" }
+                }
             }
 
             GlassButton {
                 Layout.alignment: Qt.AlignRight
                 text: qsTr("Save list")
-                enabled: lines.text !== (root.field.value || []).join("\n")
-                onClicked: root.commit(lines.text.split(/\r?\n/).map(line => line.trim()).filter(Boolean), {})
+                enabled: lines.text !== (root.kind === "multiline" ? String(root.field.value || "") : (root.field.value || []).join("\n"))
+                onClicked: root.commit(root.kind === "multiline" ? lines.text.trim().replace(/\s+/g, " ") : lines.text.split(/\r?\n/).map(line => line.trim()).filter(Boolean), {})
             }
         }
     }

@@ -1,6 +1,6 @@
 [package]
 name = "auralis-qt-engine"
-version = "0.3.99"
+version = "0.3.100"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true

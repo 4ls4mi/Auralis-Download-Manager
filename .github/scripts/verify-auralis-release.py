@@ -38,7 +38,10 @@ def verify(release, version, commit, files, *, draft=True, partial=False):
         if asset.get("size") != path.stat().st_size:
             raise ValueError(f"{path.name}: size mismatch")
         with path.open("rb") as artifact:
-            digest = "sha256:" + hashlib.file_digest(artifact, "sha256").hexdigest()
+            checksum = hashlib.sha256()
+            for block in iter(lambda: artifact.read(1024 * 1024), b""):
+                checksum.update(block)
+            digest = "sha256:" + checksum.hexdigest()
         if asset.get("digest") != digest:
             raise ValueError(f"{path.name}: SHA-256 digest missing or mismatched")
 

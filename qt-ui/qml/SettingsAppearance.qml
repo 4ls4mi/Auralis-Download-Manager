@@ -768,7 +768,7 @@ GridLayout {
                 IndicatorChoice {
                     enabled: indicatorsPage.customFill
                     label: qsTr("Fill animation")
-                    model: WindowAppearance.animationChoices
+                    model: WindowAppearance.progressAnimationChoices
                     selection: WindowAppearance.progressAnimation
                     onChosen: value => WindowAppearance.set("progressAnimation", value)
                 }
@@ -920,7 +920,7 @@ GridLayout {
                 onChosen: value => WindowAppearance.set("graphMaterial", value)
             }
             GridLayout {
-                visible: !MaterialTheme.mdmAppearance
+                visible: !MaterialTheme.mdmAppearance || WindowAppearance.graphMaterial !== "default"
                 Layout.fillWidth: true
                 columns: !root.sideTabs || width >= 320 ? 2 : 1
                 IndicatorChoice {
