@@ -78,11 +78,15 @@ const form = {
   originUrl: "https://files.example.test/reports", requestBody: { formData: { format: ["zip"] } },
 };
 
-test("automatic handoff leaves browser-flagged downloads in the browser", async () => {
-  const { script } = await browser(false);
+test("browser-flagged downloads are handed over with a warning", async () => {
+  const { script, native } = await browser(false);
   const url = "https://files.example.test/report.zip";
-  assert.equal(await script.candidate({ url, danger: "content" }, url), null);
-  assert.ok(await script.candidate({ url, danger: "safe" }, url));
+  const flagged = { url, danger: "content" };
+  const candidate = await script.candidate(flagged, url);
+  assert.equal(candidate.browserWarning, true);
+  assert.equal(await script.offer(flagged, url, candidate), true);
+  assert.equal(native.find(([, message]) => message.url === url)?.[1].browserWarning, true);
+  assert.equal((await script.candidate({ url, danger: "safe" }, url)).browserWarning, false);
 });
 
 test("Firefox replays URL-encoded forms only for their browser request", async () => {
@@ -181,7 +185,7 @@ test("an observed anonymous Firefox redirect keeps its original download address
   assert.equal(download.cookies, "");
 });
 
-test("anonymous Chromium downloads can be handed over without a request ID", async () => {
+test("anonymous Chromium downloads are handed over without leaking stored cookies", async () => {
   const publicUrl = "https://files.example.test/public.zip";
   const sessionUrl = "https://files.example.test/reports/export.zip";
   const unavailableUrl = "https://files.example.test/unavailable.zip";
@@ -191,10 +195,15 @@ test("anonymous Chromium downloads can be handed over without a request ID", asy
   } });
   const item = (url) => ({ url, page: "https://files.example.test/", danger: "safe" });
   assert.equal(await script.offer(item(publicUrl), publicUrl, { name: "public.zip" }), true);
-  assert.equal(await script.offer(item(sessionUrl), sessionUrl, { name: "export.zip" }), false);
-  assert.equal(await script.offer(item(unavailableUrl), unavailableUrl, { name: "unavailable.zip" }), false);
+  assert.equal(await script.offer(item(sessionUrl), sessionUrl, { name: "export.zip" }), true);
+  assert.equal(await script.offer(item(unavailableUrl), unavailableUrl, { name: "unavailable.zip" }), true);
   const downloads = native.map(([, message]) => message).filter((message) => message.url);
-  assert.deepEqual(downloads.map(({ url, cookies }) => [url, cookies]), [[publicUrl, ""]]);
+  assert.deepEqual(downloads.map(({ url, cookies }) => [url, cookies]), [
+    [publicUrl, ""], [sessionUrl, ""], [unavailableUrl, ""],
+  ]);
+  assert.equal(downloads[0].browserCredentialsUnavailable, false);
+  assert.equal(downloads[1].browserCredentialsUnavailable, true);
+  assert.equal(downloads[2].browserCredentialsUnavailable, true);
 });
 
 const popup = { id: "fixture", url: "chrome-extension://fixture/popup.html" };
@@ -378,3 +387,4 @@ test("one media manifest deadline cancels the header and body waits", async () =
     if (body) assert.equal(body.locked, false);
   }
 });
+
