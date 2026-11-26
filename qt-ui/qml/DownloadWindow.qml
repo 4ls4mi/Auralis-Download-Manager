@@ -1192,7 +1192,7 @@ AuralisWindow {
 
                 GridLayout {
                     id: transferOverview
-                    readonly property real cardHeight: root.compactView || root.classicFullView ? 0
+                    readonly property real cardHeight: root.classicFullView ? 0
                         : Math.min(300, Math.max(160, view.availableHeight - downloadStatusCard.height - sections.spacing))
                     objectName: "transferOverview"
                     // Keep the chart and vessel coordinates aligned with the physical pipe gutter.
@@ -1208,7 +1208,7 @@ AuralisWindow {
                     Pane {
                         id: connectionPane
                         objectName: "downloadConnectionPane"
-                        visible: !root.compactView || !!root.torrent || root.workerRows.length > 0 || Boolean(root.colors.mdm)
+                        visible: true
                         Layout.fillWidth: true
                         Layout.minimumWidth: 0
                         Layout.preferredWidth: root.compactView ? 1 : root.transferLayout === "violetRail" ? 315 : 355
@@ -1435,7 +1435,7 @@ AuralisWindow {
                                     }
                                 }
                             }
-                            Item { Layout.fillHeight: true; visible: !root.compactView && !root.classicFullView }
+                            Item { Layout.fillHeight: true; visible: !root.classicFullView }
                         }
                     }
                     Pane {
@@ -1466,7 +1466,7 @@ AuralisWindow {
                             }
                             TransferGraph {
                                 objectName: "downloadSpeedGraph"
-                                Layout.fillHeight: !root.compactView
+                                Layout.fillHeight: true
                                 Layout.minimumHeight: root.compactView ? 44 : 70
                                 Layout.maximumHeight: 250
                                 Layout.fillWidth: true

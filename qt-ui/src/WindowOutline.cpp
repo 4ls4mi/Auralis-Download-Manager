@@ -270,7 +270,7 @@ QImage WindowOutline::shadowImage(const QSize &framePixels, const QSizeF &reachP
         for (int x = 0; x < width; ++x)
             target[x] = uchar(qAlpha(row[x]));
     }
-    for (const qreal logicalRadius : {1.0, 2.0, 3.0}) {
+    for (const qreal logicalRadius : {2.0, 4.0, 6.0}) {
         const int radius = qBound(1, qRound(logicalRadius * scale), padding);
         boxBlur(blurred, scratch, size, radius, true);
         boxBlur(scratch, blurred, size, radius, false);
@@ -280,7 +280,7 @@ QImage WindowOutline::shadowImage(const QSize &framePixels, const QSizeF &reachP
     // the layered popup cannot darken the owner's translucent interior.
     constexpr int offsetX = 0;
     constexpr int offsetY = 0;
-    constexpr int shadowStrength = 132;
+    constexpr int shadowStrength = 178;
     for (int y = 0; y < height; ++y) {
         auto *row = reinterpret_cast<QRgb *>(image.scanLine(y));
         const auto *shadow = y >= offsetY

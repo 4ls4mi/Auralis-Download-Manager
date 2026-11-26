@@ -81,7 +81,7 @@ ApplicationWindow {
         transformOrigin: Item.TopLeft
     }
 
-    // A shallow highlight and inset rim give every application frame depth.
+    // Three thin concentric edges give the frame a raised lip without a thick bezel.
     Item {
         parent: window.contentItem.parent
         width: window.width
@@ -90,19 +90,26 @@ ApplicationWindow {
         visible: window.visibility === Window.Windowed
         Rectangle {
             anchors.fill: parent
+            radius: window.frameCornerRadius
+            color: "transparent"
+            border.width: 1
+            border.color: "#95000000"
+        }
+        Rectangle {
+            anchors.fill: parent
             anchors.margins: 1
             radius: Math.max(0, window.frameCornerRadius - 1)
             color: "transparent"
             border.width: 1
-            border.color: window.interfaceColors.light ? "#65ffffff" : "#38ffffff"
+            border.color: window.interfaceColors.light ? "#b0ffffff" : "#80ffffff"
         }
         Rectangle {
             anchors.fill: parent
-            anchors.margins: 3
-            radius: Math.max(0, window.frameCornerRadius - 3)
+            anchors.margins: 2
+            radius: Math.max(0, window.frameCornerRadius - 2)
             color: "transparent"
             border.width: 1
-            border.color: "#35000000"
+            border.color: "#90000000"
         }
     }
 

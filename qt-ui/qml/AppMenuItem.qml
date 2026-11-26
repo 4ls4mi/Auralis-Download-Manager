@@ -34,6 +34,8 @@ Basic.MenuItem {
         : MaterialTheme.controlTextInk(!enabled ? colors.muted
             : profile.textOverride || (destructive ? colors.danger : colors.ink), idleFace)
 
+    // ListView keeps invisible delegates in its layout unless their height is zero.
+    height: visible ? implicitHeight : 0
     hoverEnabled: true
     leftPadding: 12 + (mirrored ? shortcutSpace : glyphSpace)
     rightPadding: 12 + (mirrored ? glyphSpace : shortcutSpace)

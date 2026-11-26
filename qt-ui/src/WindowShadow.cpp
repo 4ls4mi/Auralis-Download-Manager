@@ -15,7 +15,7 @@ namespace {
 constexpr wchar_t shadowClass[] = L"AuralisDropShadow";
 constexpr wchar_t observerProperty[] = L"AuralisDropShadowObserver";
 constexpr auto observerName = "auralisDropShadow";
-constexpr int shadowPadding = 12;
+constexpr int shadowPadding = 20;
 constexpr int resizeDelay = 75;
 constexpr qint64 maximumShadowPixels = 48'000'000;
 

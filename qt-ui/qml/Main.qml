@@ -1388,6 +1388,8 @@ AuralisWindow {
                         Layout.preferredWidth: root.classicLayout ? 25 : 35
                         Layout.preferredHeight: root.classicLayout ? 21 : 30
                         padding: root.classicLayout ? 1 : 3
+                        topPadding: 0
+                        bottomPadding: 0
                         accent: root.colors.secondary
                         Accessible.name: text
                         Accessible.role: Accessible.Link

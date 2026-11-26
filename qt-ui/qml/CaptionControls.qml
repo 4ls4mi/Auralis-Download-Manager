@@ -117,26 +117,14 @@ RowLayout {
                     GradientStop { position: 1; color: MaterialTheme.mix(button.classicFace, root.colors.shade, .16, 1) }
                 }
             }
-            Loader {
-                active: Boolean(root.classic)
-                anchors.horizontalCenter: parent.horizontalCenter
-                y: classicPlate.y + (classicPlate.height - height) / 2
-                width: root.style === "aqua" && button.symbol !== "tray" ? 12 : 16
-                height: width
-                sourceComponent: ClassicToolbarIcon {
-                    iconName: button.symbol === "tray" ? "ui-to-tray" : "ui-" + button.symbol
-                    ink: button.classicInk
-                }
-            }
             DashboardIcon {
-                visible: !root.classic
                 anchors.centerIn: parent
-                width: 22
-                height: 22
+                width: root.classic ? 16 : 22
+                height: width
                 symbol: button.symbol
                 bold: true
                 relief: button.enabled
-                ink: button.iconInk
+                ink: root.classic ? button.classicInk : button.iconInk
                 surface: button.faceColor
             }
         }

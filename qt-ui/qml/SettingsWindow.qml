@@ -559,7 +559,9 @@ AuralisWindow {
                     visible: true
                     action: donatePatreon
                     Layout.preferredHeight: root.classicLayout ? 23 : 30
-                    Layout.preferredWidth: root.classicLayout ? 28 : implicitWidth
+                    Layout.preferredWidth: root.classicLayout ? 30 : implicitWidth
+                    topPadding: 0
+                    bottomPadding: 0
                     contentItem: RowLayout {
                         spacing: 6
                         DashboardIcon {
@@ -581,45 +583,12 @@ AuralisWindow {
                     accent: root.colors.secondary
                     Accessible.role: Accessible.Link
                 }
-                Loader {
-                    active: root.classicLayout
-                    visible: active
-                    sourceComponent: Basic.Button {
-                        id: classicClose
-                        objectName: "closeCaption"
-                        implicitWidth: 34
-                        implicitHeight: 25
-                        padding: 0
-                        hoverEnabled: true
-                        Accessible.name: qsTr("Close settings")
-                        onClicked: root.close()
-                        background: Rectangle {
-                            color: classicClose.hovered || classicClose.down
-                                ? root.colors.mdm?.captionClose || root.colors.destructive : "transparent"
-                        }
-                        contentItem: Item {
-                            ClassicToolbarIcon {
-                                anchors.centerIn: parent
-                                width: 12
-                                height: 12
-                                iconName: "ui-close"
-                                ink: classicClose.hovered || classicClose.down
-                                    ? root.colors.mdm?.captionCloseText || MaterialTheme.contrastInk(classicClose.background.color)
-                                    : root.captionInk
-                            }
-                        }
-                    }
-                }
-                Loader {
-                    active: !root.classicLayout
-                    visible: active
-                    sourceComponent: CaptionControls {
-                        maximized: root.visibility === Window.Maximized
-                        closeLabel: qsTr("Close settings")
-                        onMinimizeRequested: root.showMinimized()
-                        onMaximizeRequested: root.toggleMaximize()
-                        onCloseRequested: root.close()
-                    }
+                CaptionControls {
+                    maximized: root.visibility === Window.Maximized
+                    closeLabel: qsTr("Close settings")
+                    onMinimizeRequested: root.showMinimized()
+                    onMaximizeRequested: root.toggleMaximize()
+                    onCloseRequested: root.close()
                 }
                 Item { Layout.preferredWidth: Math.max(root.resizeInset, root.frameSafeInset - settingsTitleRow.spacing) }
             }
