@@ -5,9 +5,10 @@ self-signed certificate does not remove public SmartScreen warnings.
 
 [SignPath Foundation](https://signpath.org/) provides free code signing for
 approved open-source projects. Its [terms](https://signpath.org/terms) and project
-review apply; acceptance is not automatic. Apply using the public repository and
-its license/build information. No application or account registration has been
-submitted by the build scripts.
+review apply; acceptance is not automatic. An application using the public
+repository and its license/build information was submitted on 26 November 2026.
+The provider acknowledged submission; eligibility and signing approval are pending.
+The current release remains unsigned until an approved identity is integrated.
 
 After approval, configure the assigned organization, project, signing policy,
 artifact configuration and credentials in the release environment. Integration

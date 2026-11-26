@@ -1,6 +1,9 @@
-# SignPath application draft — owner review required
+# SignPath application — submitted, approval pending
 
-This draft has not been submitted. Signing is not configured or approved.
+An application based on this draft was submitted on 26 November 2026 with the
+owner-provided account details and agreements. The provider confirmed:
+"Form submitted. Thank you, we'll be in touch soon."
+Signing is not configured or approved. Private contact details are not recorded here.
 
 Project: Auralis Download Manager
 
@@ -37,9 +40,9 @@ An Auralis-specific privacy policy must accurately document these connections an
 their controls. The inherited website privacy policy describes the upstream MDM
 project and must not be represented as an approved Auralis policy.
 
-Owner confirmations needed before submission:
+Outstanding provider/onboarding checks:
 
-- Contact details, repository ownership, and MFA status.
+- Repository ownership and MFA status during onboarding.
 - Named committers/reviewers and signing approvers.
 - Eligibility of the current font bundle, or the desired open-source-only edition.
 - An accurate project privacy policy and accepted build-origin configuration.
