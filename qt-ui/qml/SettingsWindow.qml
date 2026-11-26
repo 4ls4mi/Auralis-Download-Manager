@@ -1168,7 +1168,8 @@ AuralisWindow {
 
     WindowResizeHandles {
         hostWindow: root
-        windowMouseEvents: true
+        coalesceGeometry: true
+        windowMouseEvents: false
         borderSize: 11
         cornerSize: 19
         showGrip: true

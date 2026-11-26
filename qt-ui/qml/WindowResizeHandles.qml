@@ -10,7 +10,8 @@ Item {
     property int borderSize: 7
     property int cornerSize: 13
     property bool windowMouseEvents: false
-    property bool coalesceGeometry: false
+    // Batch manual resize updates for every window using these handles.
+    property bool coalesceGeometry: true
     property bool showGrip: false
     property color gripColor: "white"
     readonly property int shapedCornerOffset: hostWindow["frameResizeInset"] ?? 0

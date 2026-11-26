@@ -194,7 +194,7 @@ AuralisWindow {
 
     WindowResizeHandles {
         hostWindow: root
-        coalesceGeometry: root.customFrame
+        coalesceGeometry: true
         showGrip: root.customFrame
         gripColor: root.colors.muted
     }
