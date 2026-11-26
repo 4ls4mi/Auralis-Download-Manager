@@ -276,11 +276,11 @@ QImage WindowOutline::shadowImage(const QSize &framePixels, const QSizeF &reachP
         boxBlur(scratch, blurred, size, radius, false);
     }
 
-    // Bias the shadow toward the lower right. Erase the original silhouette so
+    // Center the shadow around all edges. Erase the original silhouette so
     // the layered popup cannot darken the owner's translucent interior.
-    const int offsetX = qMin(padding, qRound(4 * scale));
-    const int offsetY = qMin(padding, qRound(5 * scale));
-    constexpr int shadowStrength = 108;
+    constexpr int offsetX = 0;
+    constexpr int offsetY = 0;
+    constexpr int shadowStrength = 132;
     for (int y = 0; y < height; ++y) {
         auto *row = reinterpret_cast<QRgb *>(image.scanLine(y));
         const auto *shadow = y >= offsetY

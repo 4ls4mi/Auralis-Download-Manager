@@ -950,12 +950,15 @@ AuralisWindow {
         Item {
             id: scrollContent
             width: view.availableWidth
-            height: implicitHeight
+            height: Math.max(implicitHeight, view.availableHeight)
             implicitHeight: sections.implicitHeight
 
             ColumnLayout {
                 id: sections
-                anchors.fill: parent
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                height: implicitHeight
                 spacing: root.classicFullView ? 5 : root.compactView ? 4 : root.compactWidth || root.compactHeight ? 6 : 8
 
                 Label {
@@ -965,6 +968,7 @@ AuralisWindow {
                 }
 
                 Pane {
+                    id: downloadStatusCard
                     objectName: "downloadStatusCard"
                     visible: !!root.item && root.activeTab === 0
                     Layout.fillWidth: true
@@ -1188,6 +1192,8 @@ AuralisWindow {
 
                 GridLayout {
                     id: transferOverview
+                    readonly property real cardHeight: root.compactView || root.classicFullView ? 0
+                        : Math.min(300, Math.max(160, view.availableHeight - downloadStatusCard.height - sections.spacing))
                     objectName: "transferOverview"
                     // Keep the chart and vessel coordinates aligned with the physical pipe gutter.
                     LayoutMirroring.enabled: false
@@ -1206,6 +1212,7 @@ AuralisWindow {
                         Layout.fillWidth: true
                         Layout.minimumWidth: 0
                         Layout.preferredWidth: root.compactView ? 1 : root.transferLayout === "violetRail" ? 315 : 355
+                        Layout.preferredHeight: Math.max(implicitHeight, transferOverview.cardHeight)
                         Layout.alignment: Qt.AlignTop
                         padding: root.classicFullView ? 0 : root.compactView ? 5 : root.compactWidth || root.compactHeight ? 8 : 11
                         leftPadding: root.displayConnectionFlow ? root.pipeInset : padding
@@ -1428,6 +1435,7 @@ AuralisWindow {
                                     }
                                 }
                             }
+                            Item { Layout.fillHeight: true; visible: !root.compactView && !root.classicFullView }
                         }
                     }
                     Pane {
@@ -1435,6 +1443,7 @@ AuralisWindow {
                         Layout.fillWidth: true
                         Layout.minimumWidth: 0
                         Layout.preferredWidth: root.compactView ? 1 : root.transferLayout === "violetRail" ? 380 : 325
+                        Layout.preferredHeight: Math.max(implicitHeight, transferOverview.cardHeight)
                         Layout.alignment: Qt.AlignTop
                         padding: root.compactView ? 5 : root.compactWidth || root.compactHeight ? 8 : 11
                         background: GlassSurface { material: root.material; role: "card"; backdropAvailable: root.backdropAvailable }
@@ -1457,6 +1466,9 @@ AuralisWindow {
                             }
                             TransferGraph {
                                 objectName: "downloadSpeedGraph"
+                                Layout.fillHeight: !root.compactView
+                                Layout.minimumHeight: root.compactView ? 44 : 70
+                                Layout.maximumHeight: 250
                                 Layout.fillWidth: true
                                 Layout.minimumWidth: 0
                                 Layout.preferredHeight: root.compactView ? 44 : root.compactWidth || root.compactHeight ? 70

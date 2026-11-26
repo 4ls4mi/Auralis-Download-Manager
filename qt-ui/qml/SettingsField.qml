@@ -14,7 +14,7 @@ ColumnLayout {
     property bool busy: false
     property var cells: []
     property var regional: ({})
-    property bool expanded: false
+    property bool expanded: field.key === "category_dirs"
     property string cookieBrowser: ""
     readonly property bool browserProfile: field.key === "video_cookies_profile"
     readonly property bool browserCapture: field.key === "browsers"
@@ -559,6 +559,7 @@ ColumnLayout {
                             Component {
                                 id: rowChoice
                                 GlassComboBox {
+                                    enabled: root.field.key !== "category_dirs"
                                     model: cell.modelData.options
                                     textRole: "label"
                                     valueRole: "value"

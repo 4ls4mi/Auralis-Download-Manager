@@ -81,6 +81,31 @@ ApplicationWindow {
         transformOrigin: Item.TopLeft
     }
 
+    // A shallow highlight and inset rim give every application frame depth.
+    Item {
+        parent: window.contentItem.parent
+        width: window.width
+        height: window.height
+        z: 100000
+        visible: window.visibility === Window.Windowed
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: 1
+            radius: Math.max(0, window.frameCornerRadius - 1)
+            color: "transparent"
+            border.width: 1
+            border.color: window.interfaceColors.light ? "#65ffffff" : "#38ffffff"
+        }
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: 3
+            radius: Math.max(0, window.frameCornerRadius - 3)
+            color: "transparent"
+            border.width: 1
+            border.color: "#35000000"
+        }
+    }
+
     function fontFamilyForText(text) {
         if (!fontSettings || (!fontSettings.englishFamily && !fontSettings.arabicFamily))
             return font.family

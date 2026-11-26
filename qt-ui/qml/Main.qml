@@ -1396,7 +1396,8 @@ AuralisWindow {
                         ToolTip.delay: 420
                         contentItem: DashboardIcon {
                             symbol: "support"
-                            ink: donationButton.iconInk
+                            solid: true
+                            ink: donationButton.buttonInk
                             surface: donationButton.faceColor
                             relief: donationButton.enabled
                             transform: Translate { y: donationButton.faceOffset }

@@ -28,7 +28,8 @@ Canvas {
 
     function bounds(item) {
         const point = item.mapToItem(sweep, 0, 0)
-        return {left: point.x, right: point.x + item.width, top: point.y, bottom: point.y + item.height}
+        const end = item.mapToItem(sweep, item.width, item.height)
+        return {left: point.x, right: end.x, top: point.y, bottom: end.y}
     }
 
     function updatePosition() {
@@ -241,6 +242,7 @@ Canvas {
         function onYChanged() { sweep.schedule() }
         function onWidthChanged() { sweep.schedule() }
         function onHeightChanged() { sweep.schedule() }
+        function onScaleChanged() { sweep.schedule() }
     }
     Connections {
         target: sweep.sidebar

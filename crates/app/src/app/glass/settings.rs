@@ -128,6 +128,10 @@ impl App {
         fields.push(json!({"key":"remote_port","label":"Remote control port","section":"Remote","kind":"number","minimum":1024,"maximum":65535,"value":self.settings.remote_port}));
         fields.push(json!({"key":"proxy_pass","label":"Proxy password","section":"Connection","kind":"password","value":"","saved":!self.settings.proxy_pass.is_empty()}));
         if let Some(field)=fields.iter_mut().find(|f|f["key"]=="category_dirs") {
+            field["fixed"]=json!(true);
+            field["value"]=json!(Category::all().into_iter().map(|c| {
+                (c.key().to_string(), self.settings.category_dir(c, &self.downloads).display().to_string())
+            }).collect::<Vec<_>>());
             field["columns"][0]["options"]=json!(Category::all().into_iter().map(|c|json!({"label":c.shown(),"value":c.key()})).collect::<Vec<_>>());
         }
         json!({"fields":fields})

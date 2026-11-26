@@ -36,7 +36,7 @@ AuralisWindow {
     readonly property color classicPageInk: MaterialTheme.controlTextInk(colors.textOverride || colors.text, classicPageFace)
     readonly property color captionInk: (classicLayout && !active ? colors.titleMuted : colors.titleInk) || colors.text
     readonly property var classicFrontTabs: ["General", "Browser Integration", "Downloads",
-        "Connection", "Appearance", "Updates", "Remote"]
+        "Connection", "Save to", "Appearance", "Updates", "Remote"]
     readonly property var classicBackTabs: ["Advanced", "Media Helpers", "Accounts", "Torrents", "Display", "Scheduler"]
     readonly property int classicTabsColumns: Math.max(classicFrontTabs.length, classicBackTabs.length)
     readonly property var classicTabs: classicFrontTabs.concat(classicBackTabs).map(id => sections.find(section => section.id === id))
@@ -86,6 +86,7 @@ AuralisWindow {
             keys: ["language", "start_immediately", "only_add_to_queue", "confirm_delete", "show_progress", "show_complete", "double_click_open",
                 "minimize_to_tray", "close_to_tray", "progress_minimize_to_tray"]},
         {id: "Display", name: qsTr("Display & fonts"), detail: qsTr("Interface size, text size, and font previews"), terms: qsTr("interface app UI window scale size zoom DPI fonts typography preview"), keys: []},
+        {id: "Save to", name: qsTr("Save to"), detail: qsTr("Default download folders for each category"), terms: qsTr("save destination location path folder remember category directory"), keys: []},
         {id: "Downloads", name: qsTr("Downloads"), detail: qsTr("File rules, folders, and archive extraction"), terms: qsTr("file folder category archive duplicates extract"), keys: []},
         {id: "Connection", name: qsTr("Connection"), detail: qsTr("Speed limits, proxy, and DNS"), terms: qsTr("speed throttle proxy dns network adapter login authentication"),
             keys: ["max_connections", "speed_limit_on", "speed_limit_kb", "global_limit_on", "global_limit_kb", "net_adapter"]},
@@ -150,6 +151,8 @@ AuralisWindow {
         {label: "Whale", value: "whale"}
     ].concat(Qt.platform.os === "osx" ? [{label: "Safari", value: "safari"}] : [])
     readonly property var extraDetails: ({
+        category_dirs: {section: "Save to", description: qsTr("Choose a category and its default download folder. General is used for files without a matching category. Browse for folders, then save your changes.")},
+        change_folder_on_last: {section: "Save to"},
         clipboard_mode: {
             label: qsTr("When a download link is copied"),
             options: [
@@ -551,12 +554,30 @@ AuralisWindow {
                     }
                 }
                 GlassButton {
+                    id: settingsDonateButton
                     objectName: "settingsHeaderDonatePatreon"
-                    visible: !root.classicLayout
+                    visible: true
                     action: donatePatreon
-                    Layout.preferredHeight: 30
-                    leftPadding: 9
-                    rightPadding: 9
+                    Layout.preferredHeight: root.classicLayout ? 23 : 30
+                    Layout.preferredWidth: root.classicLayout ? 28 : implicitWidth
+                    contentItem: RowLayout {
+                        spacing: 6
+                        DashboardIcon {
+                            Layout.preferredWidth: 18
+                            Layout.preferredHeight: 18
+                            symbol: "support"
+                            solid: true
+                            ink: settingsDonateButton.buttonInk
+                        }
+                        Label {
+                            visible: !root.classicLayout
+                            text: settingsDonateButton.text
+                            color: settingsDonateButton.buttonInk
+                            font: settingsDonateButton.font
+                        }
+                    }
+                    leftPadding: root.classicLayout ? 3 : 9
+                    rightPadding: root.classicLayout ? 3 : 9
                     accent: root.colors.secondary
                     Accessible.role: Accessible.Link
                 }
@@ -846,6 +867,7 @@ AuralisWindow {
 
         Frame {
             id: settingsPane
+            Layout.minimumWidth: 0
             Layout.row: root.classicLayout ? 1 : 0
             Layout.column: root.classicLayout ? 0 : 1
             Layout.columnSpan: root.classicLayout ? 2 : 1
