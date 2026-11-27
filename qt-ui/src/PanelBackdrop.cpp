@@ -24,21 +24,9 @@ constexpr DWORD backdropType = 38;
 constexpr DWORD borderColor = 34;
 constexpr DWORD cornerPreference = 33;
 constexpr int noBackdrop = 1;
-constexpr int mica = 2;
-constexpr int desktopAcrylic = 3;
 constexpr int doNotRound = 1;
 constexpr COLORREF noBorder = 0xfffffffe;
 constexpr COLORREF defaultBorder = 0xffffffff;
-
-int materialFor(const QString &finish)
-{
-    if (finish == QLatin1String("mica"))
-        return mica;
-    if (finish == QLatin1String("acrylic") || finish == QLatin1String("blurred")
-        || finish == QLatin1String("frosted"))
-        return desktopAcrylic;
-    return noBackdrop;
-}
 
 struct PanelShape {
     QRect clip;
@@ -82,7 +70,7 @@ public:
         window->installEventFilter(this);
     }
 
-    bool update(const QVariantList &panels, bool enabled, int material)
+    bool update(const QVariantList &panels, bool enabled)
     {
         if (!enabled || !m_window->handle() || !m_window->isVisible()
             || m_window->windowStates().testFlag(Qt::WindowMinimized)) {
@@ -97,7 +85,7 @@ public:
         const qreal scale = m_window->devicePixelRatio();
         RECT frame{};
         if (!GetWindowRect(hwnd, &frame))
-            return m_active;
+            return m_regionSet;
         const QRect windowBounds(0, 0, frame.right - frame.left, frame.bottom - frame.top);
         const auto pixelRect = [scale](const QRectF &rect) {
             return QRect(qRound(rect.left() * scale), qRound(rect.top() * scale),
@@ -137,14 +125,12 @@ public:
             reset();
             return false;
         }
-        if (m_regionSet && m_scale == scale && m_framePixels == windowBounds.size() && m_shapes == shapes) {
-            updateMaterial(material);
-            return m_active;
-        }
+        if (m_regionSet && m_scale == scale && m_framePixels == windowBounds.size() && m_shapes == shapes)
+            return true;
 
         const auto region = CreateRectRgn(0, 0, 0, 0);
         if (!region)
-            return m_active;
+            return m_regionSet;
         bool nonempty = false;
         for (const auto &shape : shapes) {
             QList<POINT> points;
@@ -179,6 +165,10 @@ public:
             DwmGetWindowAttribute(hwnd, darkMode, &m_previousDarkMode, sizeof(m_previousDarkMode));
             DwmGetWindowAttribute(hwnd, borderColor, &m_previousBorder, sizeof(m_previousBorder));
             DwmGetWindowAttribute(hwnd, cornerPreference, &m_previousCorners, sizeof(m_previousCorners));
+            // A system material covers the full HWND bounds even when its window region has gaps.
+            const MARGINS noExtension{0, 0, 0, 0};
+            DwmSetWindowAttribute(hwnd, backdropType, &noBackdrop, sizeof(noBackdrop));
+            DwmExtendFrameIntoClientArea(hwnd, &noExtension);
             const BOOL dark = TRUE;
             DwmSetWindowAttribute(hwnd, darkMode, &dark, sizeof(dark));
             DwmSetWindowAttribute(hwnd, borderColor, &noBorder, sizeof(noBorder));
@@ -186,13 +176,11 @@ public:
             m_regionSet = true; // Windows owns the region after SetWindowRgn succeeds.
         }
 
-        // Keep the cutout even when this finish has no DWM blur or the OS rejects it.
-        updateMaterial(material);
         WindowShadow::updatePanels(m_window, windowBounds.size(), mask, scale);
         m_shapes = std::move(shapes);
         m_framePixels = windowBounds.size();
         m_scale = scale;
-        return m_active;
+        return m_regionSet;
     }
 
 protected:
@@ -205,29 +193,10 @@ protected:
     }
 
 private:
-    void updateMaterial(int material)
-    {
-        if (material == m_requestedMaterial)
-            return;
-        m_requestedMaterial = material;
-        if (material != noBackdrop) {
-            const MARGINS margins{-1, -1, -1, -1};
-            m_active = SUCCEEDED(DwmExtendFrameIntoClientArea(m_hwnd, &margins))
-                && SUCCEEDED(DwmSetWindowAttribute(m_hwnd, backdropType, &material, sizeof(material)));
-            if (m_active)
-                return;
-        }
-        const MARGINS margins{0, 0, 0, 0};
-        DwmSetWindowAttribute(m_hwnd, backdropType, &noBackdrop, sizeof(noBackdrop));
-        DwmExtendFrameIntoClientArea(m_hwnd, &margins);
-        m_active = false;
-    }
-
     void reset()
     {
         if (m_regionSet) {
             WindowShadow::clearPanels(m_window);
-            updateMaterial(noBackdrop);
             DwmSetWindowAttribute(m_hwnd, borderColor, &m_previousBorder, sizeof(m_previousBorder));
             DwmSetWindowAttribute(m_hwnd, cornerPreference, &m_previousCorners, sizeof(m_previousCorners));
             DwmSetWindowAttribute(m_hwnd, darkMode, &m_previousDarkMode, sizeof(m_previousDarkMode));
@@ -235,8 +204,6 @@ private:
         }
         m_hwnd = nullptr;
         m_regionSet = false;
-        m_active = false;
-        m_requestedMaterial = 0;
         m_shapes.clear();
         m_framePixels = {};
     }
@@ -249,13 +216,11 @@ private:
     BOOL m_previousDarkMode = FALSE;
     COLORREF m_previousBorder = defaultBorder;
     int m_previousCorners = 0;
-    int m_requestedMaterial = 0;
     bool m_regionSet = false;
-    bool m_active = false;
 };
 }
 
-bool PanelBackdrop::update(QWindow *window, const QVariantList &panels, bool enabled, const QString &finish)
+bool PanelBackdrop::update(QWindow *window, const QVariantList &panels, bool enabled)
 {
     if (!window)
         return false;
@@ -263,5 +228,5 @@ bool PanelBackdrop::update(QWindow *window, const QVariantList &panels, bool ena
                                                                           Qt::FindDirectChildrenOnly));
     if (!backdrop && enabled)
         backdrop = new Backdrop(window);
-    return backdrop && backdrop->update(panels, enabled, materialFor(finish));
+    return backdrop && backdrop->update(panels, enabled);
 }

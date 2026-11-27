@@ -24,8 +24,8 @@ ApplicationWindow {
     property bool acrylicMode: false
     property bool fracturedDialogFooter: false
     readonly property string acrylicFinish: Qt.styleHints.accessibility.contrastPreference === Qt.HighContrast
-        || MaterialTheme.opacityFor(MaterialTheme.current) >= .99 ? "solid" : MaterialTheme.fracturedFinish
-    property bool acrylicApplied: false
+        ? "solid" : MaterialTheme.fracturedFinish
+    property bool nativePanelShapeApplied: false
     property var acrylicPanels: []
     readonly property bool acrylicRequested: acrylicMode && visible && visibility !== Window.Minimized
         && !(Overlay.overlay?.visible ?? false)
@@ -64,13 +64,12 @@ ApplicationWindow {
     function refreshAcrylic() {
         if (typeof engine === "undefined" || !engine.applyPanelBackdrop)
             return
-        const applied = engine.applyPanelBackdrop(window, acrylicPanels, acrylicRequested, acrylicFinish)
-        if (applied !== acrylicApplied)
-            acrylicApplied = applied
+        const applied = engine.applyPanelBackdrop(window, acrylicPanels, acrylicRequested)
+        if (applied !== nativePanelShapeApplied)
+            nativePanelShapeApplied = applied
     }
 
     onAcrylicRequestedChanged: if (!acrylicRequested) refreshAcrylic()
-    onAcrylicFinishChanged: if (acrylicRequested) refreshAcrylic()
     onAcrylicModeChanged: {
         refreshFrameShape()
         scheduleFrameShapeRefresh()

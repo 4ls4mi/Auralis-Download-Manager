@@ -16,27 +16,56 @@ Item {
     property real requestedOpacity: MaterialTheme.opacityFor(MaterialTheme.current)
 
     readonly property AuralisWindow panelWindow: Window.window as AuralisWindow
-    readonly property bool nativeAcrylic: panelWindow?.acrylicApplied === true
+    readonly property bool nativePanelShape: panelWindow?.nativePanelShapeApplied === true
     property var outlineOverride: null
     readonly property var silhouette: outlineOverride || makeOutline(0, true)
     readonly property var panelVertices: silhouette.vertices
     readonly property string bevelPath: outlineOverride?.bevel || silhouette.path + " " + makeOutline(1.15, false).path
     readonly property string finish: panelWindow?.acrylicFinish || MaterialTheme.fracturedFinish
     readonly property var appearances: ({
-        acrylic: {light: "#c5b5e3", glow: .085, shade: .13, opacity: .92},
-        mica: {light: "#adb2d7", glow: .075, shade: .035, opacity: .82},
-        tinted: {light: face, glow: 0, shade: .11, opacity: 1.24},
-        blurred: {light: "#aba8c9", glow: .055, shade: .045, opacity: .76},
-        translucent: {light: face, glow: 0, shade: .015, opacity: .66},
-        frosted: {light: "#e3d4f5", glow: .15, shade: .075, opacity: 1.02}
+        acrylic: {
+            tint: "#393055", tintStrength: .18, light: "#e2d7ff", sheen: .26,
+            shade: "#1a1127", depth: .29, lift: .12, angle: .24, shoulder: .25,
+            opacity: 1.05, grain: .13
+        },
+        mica: {
+            tint: "#4d546a", tintStrength: .55, light: "#a9bad7", sheen: .18,
+            shade: "#272c40", depth: .20, lift: .025, angle: .9, shoulder: .5,
+            opacity: 1.52, grain: 0
+        },
+        tinted: {
+            tint: "#743950", tintStrength: .46, light: "#af708e", sheen: .06,
+            shade: "#2c1525", depth: .16, lift: 0, angle: .12, shoulder: .40,
+            opacity: 1.43, grain: 0
+        },
+        blurred: {
+            tint: "#263e50", tintStrength: .42, light: "#9bacca", sheen: .15,
+            shade: "#171c36", depth: .20, lift: .09, angle: .64, shoulder: .57,
+            opacity: .83, grain: 0
+        },
+        translucent: {
+            tint: "#171223", tintStrength: .44, light: "#b8cedd", sheen: .045,
+            shade: "#180c21", depth: .14, lift: .025, angle: .13, shoulder: .28,
+            opacity: .63, grain: 0
+        },
+        frosted: {
+            tint: "#634d73", tintStrength: .32, light: "#f7e8ff", sheen: .21,
+            shade: "#3c2d4c", depth: .16, lift: .115, angle: .36, shoulder: .58,
+            opacity: 1.36, grain: .27
+        },
+        solid: {
+            tintStrength: 0, sheen: 0, depth: 0, lift: 0, angle: .22, shoulder: .4,
+            opacity: 1, grain: 0
+        }
     })
     readonly property var appearance: appearances[finish] || appearances.frosted
-    readonly property color upperFace: forceOpaque ? face : MaterialTheme.mix(face, appearance.light, appearance.glow, 1)
-    readonly property color lowerFace: forceOpaque ? face : MaterialTheme.mix(face, "#251631", appearance.shade, 1)
+    readonly property color baseFace: forceOpaque ? face : tone(face, appearance.tint, appearance.tintStrength)
+    readonly property color upperFace: tone(baseFace, appearance.light, appearance.sheen)
+    readonly property color lowerFace: tone(baseFace, appearance.shade, appearance.depth)
+    readonly property color reflectedFace: tone(lowerFace, appearance.light, appearance.lift)
     readonly property real finishOpacity: MaterialTheme.translucency >= 0 ? requestedOpacity
         : Math.min(1, requestedOpacity * appearance.opacity)
-    readonly property real faceOpacity: forceOpaque || finish === "solid" || (finish === "mica" && !nativeAcrylic)
-        ? 1 : readableOpacity()
+    readonly property real faceOpacity: forceOpaque || finish === "solid" ? 1 : readableOpacity()
     property AuralisWindow registeredWindow: null
 
     // Each pair is the distance along an edge and its inward depth. Shared
@@ -98,14 +127,40 @@ Item {
     Component.onCompleted: moveRegistration()
     Component.onDestruction: registeredWindow?.unregisterAcrylicPanel(panel)
 
-    function readableOpacity() {
-        const desktop = MaterialTheme.relativeLuminance(face) < .179 ? "#ffffff" : "#000000"
-        const worstFace = desktop === "#ffffff" ? upperFace : lowerFace
-        const readable = amount => {
-            const color = MaterialTheme.mix(desktop, worstFace, amount, 1)
-            return MaterialTheme.contrastRatio(ink, color) >= 4.5
-                && MaterialTheme.contrastRatio(mutedInk, color) >= 4.5
+    function readableInk(color) {
+        return MaterialTheme.contrastRatio(ink, color) >= 4.5
+            && MaterialTheme.contrastRatio(mutedInk, color) >= 4.5
+    }
+
+    function tone(base, color, strength) {
+        if (strength === 0)
+            return base
+        const grain = appearance.grain * .39 // Maximum opacity of one grain pixel.
+        const readable = candidate => readableInk(MaterialTheme.mix(candidate, "#ffffff", grain, 1))
+            && readableInk(MaterialTheme.mix(candidate, "#000000", grain, 1))
+        const result = MaterialTheme.mix(base, color, strength, 1)
+        if (readable(result))
+            return result
+        let low = 0
+        let high = strength
+        for (let step = 0; step < 5; ++step) {
+            const middle = (low + high) / 2
+            if (readable(MaterialTheme.mix(base, color, middle, 1)))
+                low = middle
+            else
+                high = middle
         }
+        return MaterialTheme.mix(base, color, low, 1)
+    }
+
+    function readableOpacity() {
+        const tones = [upperFace, baseFace, lowerFace, reflectedFace]
+        const backgrounds = ["#ffffff", "#000000"]
+        const grain = appearance.grain * .39
+        const samples = backgrounds.map(desktop => tones.map(color =>
+            MaterialTheme.mix(color, desktop, grain, 1)))
+        const readable = amount => samples.every((colors, index) => colors.every(color =>
+            readableInk(MaterialTheme.mix(backgrounds[index], color, amount, 1))))
         if (readable(finishOpacity))
             return finishOpacity
         let low = finishOpacity
@@ -188,7 +243,7 @@ Item {
         y: .62
         width: panel.width
         height: panel.height
-        visible: !panel.nativeAcrylic
+        visible: !panel.nativePanelShape
         preferredRendererType: Shape.CurveRenderer
 
         ShapePath {
@@ -207,14 +262,69 @@ Item {
             strokeWidth: -1
             fillGradient: LinearGradient {
                 x1: 0; y1: 0
-                x2: panel.width * .22; y2: panel.height
+                x2: panel.width * panel.appearance.angle; y2: panel.height
                 GradientStop { position: 0; color: MaterialTheme.rgba(panel.upperFace, panel.faceOpacity) }
-                GradientStop { position: .40; color: MaterialTheme.rgba(panel.face, panel.faceOpacity) }
-                GradientStop { position: .84; color: MaterialTheme.rgba(panel.lowerFace, panel.faceOpacity) }
-                GradientStop { position: 1; color: MaterialTheme.rgba(panel.face, panel.faceOpacity) }
+                GradientStop { position: panel.appearance.shoulder; color: MaterialTheme.rgba(panel.baseFace, panel.faceOpacity) }
+                GradientStop { position: .79; color: MaterialTheme.rgba(panel.lowerFace, panel.faceOpacity) }
+                GradientStop { position: 1; color: MaterialTheme.rgba(panel.reflectedFace, panel.faceOpacity) }
             }
             PathSvg { path: panel.silhouette.path }
         }
+    }
+
+    Loader {
+        anchors.fill: parent
+        active: panel.appearance.grain > 0
+        sourceComponent: Canvas {
+            id: grainCanvas
+
+            opacity: panel.appearance.grain
+            antialiasing: true
+            property var grainPattern: null
+            readonly property var vertices: panel.panelVertices
+
+            onVerticesChanged: requestPaint()
+            onAvailableChanged: {
+                grainPattern = null
+                if (available)
+                    requestPaint()
+            }
+
+            onPaint: {
+                const painter = getContext("2d")
+                painter.clearRect(0, 0, width, height)
+                if (vertices.length < 3)
+                    return
+
+                if (!grainPattern) {
+                    const tile = painter.createImageData(128, 128)
+                    const pixels = tile.data
+                    let seed = 0x2a9d5613
+                    for (let offset = 0; offset < pixels.length; offset += 4) {
+                        seed = (Math.imul(seed, 1664525) + 1013904223) | 0
+                        const value = seed >>> 31 ? 255 : 0
+                        pixels[offset] = value
+                        pixels[offset + 1] = value
+                        pixels[offset + 2] = value
+                        pixels[offset + 3] = (seed >>> 23) % 100
+                    }
+                    grainPattern = painter.createPattern(tile, "repeat")
+                }
+
+                painter.beginPath()
+                painter.moveTo(vertices[0].x, vertices[0].y)
+                for (let index = 1; index < vertices.length; ++index)
+                    painter.lineTo(vertices[index].x, vertices[index].y)
+                painter.closePath()
+                painter.fillStyle = grainPattern
+                painter.fill()
+            }
+        }
+    }
+
+    Shape {
+        anchors.fill: parent
+        preferredRendererType: Shape.CurveRenderer
 
         ShapePath {
             strokeWidth: -1

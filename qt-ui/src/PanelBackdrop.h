@@ -5,5 +5,5 @@
 class QWindow;
 
 namespace PanelBackdrop {
-bool update(QWindow *window, const QVariantList &panels, bool enabled, const QString &finish);
+bool update(QWindow *window, const QVariantList &panels, bool enabled);
 }

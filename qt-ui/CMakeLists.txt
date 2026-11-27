@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(AuralisQt VERSION 0.3.107 LANGUAGES CXX)
+project(AuralisQt VERSION 0.3.108 LANGUAGES CXX)
 option(AURALIS_STORE_EDITION "Build the MSIX edition with Store-managed updates" OFF)
 if(AURALIS_STORE_EDITION AND NOT WIN32)
     message(FATAL_ERROR "The Microsoft Store edition requires Windows")

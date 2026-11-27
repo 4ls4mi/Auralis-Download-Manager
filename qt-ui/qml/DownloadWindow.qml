@@ -33,7 +33,7 @@ AuralisWindow {
     readonly property color classicPageFace: colors.contentOverride || colors.mdm?.tabPage
         || colors.roleFaces?.card || colors.background
     readonly property bool railTabs: !compactView && sideTabs && !compactWidth && height >= 420
-    readonly property bool useCompactActions: compactView || (compactHeight && !classicFullView)
+    readonly property bool useFooterActions: !classicFullView && (acrylicMode || compactView || compactHeight)
     readonly property color detailDivider: colors.surfaceLine || colors.divider
     readonly property color summaryInk: sideTabs && colors.summaryInk ? colors.summaryInk : colors.text
     readonly property int recoveryTab: 3
@@ -109,7 +109,11 @@ AuralisWindow {
     width: expandedWindowSize.width
     height: expandedWindowSize.height
     minimumWidth: compactView ? 395 : 450
-    minimumHeight: compactView || (classicFullView && !classicDetailsVisible) ? 270 : 340
+    // Reserve a scrollable row of details even when the footer actions wrap at a larger interface scale.
+    minimumHeight: Math.max(compactView || (classicFullView && !classicDetailsVisible) ? 270 : 340,
+        acrylicMode && useFooterActions
+            ? Math.ceil((header?.implicitHeight ?? 0) + (actionFooter.implicitHeight + resizeInset + 2 * panelInset + 48) * interfaceScale)
+            : 0)
     color: "transparent"
     acrylicMode: interfaceColors.layout === "fracturedPearl"
     flags: Qt.Window | Qt.FramelessWindowHint
@@ -863,8 +867,9 @@ AuralisWindow {
     }
 
     Pane {
-        id: compactActions
-        visible: root.useCompactActions
+        id: actionFooter
+        objectName: "downloadActionFooter"
+        visible: root.useFooterActions
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.leftMargin: root.outerPanelInset
@@ -872,7 +877,7 @@ AuralisWindow {
         anchors.bottom: parent.bottom
         anchors.bottomMargin: root.resizeInset
         implicitHeight: downloadActions.implicitHeight + topPadding + bottomPadding
-        padding: root.compactView ? 4 : 6
+        padding: root.acrylicMode ? 9 : root.compactView ? 4 : 6
         background: GlassSurface {
             material: root.material
             role: root.acrylicMode || root.colors.footerOverride ? "footer" : "toolbar"
@@ -885,9 +890,11 @@ AuralisWindow {
     GridLayout {
         id: downloadActions
         objectName: "downloadActionGroup"
-        parent: root.useCompactActions ? compactActions.contentItem : inlineActionArea
+        parent: root.useFooterActions ? actionFooter.contentItem : inlineActionArea
         anchors.centerIn: parent
         width: parent ? (root.classicFullView ? parent.width : Math.min(implicitWidth, parent.width)) : implicitWidth
+        readonly property real buttonMaximumWidth: root.acrylicMode && root.useFooterActions
+            ? actionFooter.availableWidth : Infinity
         readonly property real actionWidth: [classicDetailsToggle, pauseResume, openFile, openFolder, stopClose]
             .filter(button => button.parent === downloadActions && button.visible)
             .reduce((total, button) => total + Math.max(button.Layout.minimumWidth, button.implicitWidth) + columnSpacing,
@@ -923,6 +930,7 @@ AuralisWindow {
             visible: !!root.item && !root.finished
             enabled: !root.busy && (root.runningTransfer || (!root.recoveryBusy && !(root.telemetry && root.telemetry.recovery_damaged)))
             Layout.minimumWidth: 96
+            Layout.maximumWidth: downloadActions.buttonMaximumWidth
             Layout.minimumHeight: root.classicFullView ? 23 : root.compactView ? 32 : 36
             Layout.preferredHeight: root.classicFullView ? 23 : implicitHeight
             topPadding: root.classicFullView ? 2 : 7
@@ -935,6 +943,7 @@ AuralisWindow {
             id: openFolder
             objectName: "openDownloadFolder"
             parent: root.compactView ? downloadActions : transferCommandFlow
+            Layout.maximumWidth: downloadActions.buttonMaximumWidth
             Layout.minimumHeight: 32
             material: root.material
             text: qsTr("Open folder")
@@ -945,6 +954,7 @@ AuralisWindow {
             id: openFile
             objectName: "openDownloadedFile"
             parent: root.compactView ? downloadActions : transferCommandFlow
+            Layout.maximumWidth: downloadActions.buttonMaximumWidth
             Layout.minimumHeight: 32
             material: root.material
             text: qsTr("Open file")
@@ -958,6 +968,7 @@ AuralisWindow {
             material: root.material
             text: root.runningTransfer ? qsTr("Cancel…") : qsTr("Close")
             Layout.minimumWidth: 96
+            Layout.maximumWidth: downloadActions.buttonMaximumWidth
             Layout.minimumHeight: root.classicFullView ? 23 : root.compactView ? 32 : 36
             Layout.preferredHeight: root.classicFullView ? 23 : implicitHeight
             topPadding: root.classicFullView ? 2 : 7
@@ -1036,8 +1047,8 @@ AuralisWindow {
         objectName: "downloadDetailsScroll"
         anchors.top: parent.top
         anchors.topMargin: root.classicFullView ? 0 : root.panelInset
-        anchors.bottom: root.useCompactActions ? compactActions.top : parent.bottom
-        anchors.bottomMargin: root.useCompactActions ? root.panelInset : root.bodyBottomInset
+        anchors.bottom: root.useFooterActions ? actionFooter.top : parent.bottom
+        anchors.bottomMargin: root.useFooterActions ? root.panelInset : root.bodyBottomInset
         anchors.left: root.railTabs ? transferRail.right : parent.left
         anchors.leftMargin: root.classicFullView ? root.outerPanelInset + 8 : root.railTabs ? 0 : root.panelInset
         anchors.right: parent.right
@@ -1298,7 +1309,7 @@ AuralisWindow {
 
                 Item {
                     id: inlineActions
-                    visible: !root.useCompactActions
+                    visible: !root.useFooterActions
                     Layout.fillWidth: true
                     implicitHeight: visible ? downloadActions.implicitHeight + 1 : 0
                     Item {
