@@ -39,12 +39,19 @@ Item {
     readonly property bool studioChrome: colors.cleanStudio === true
     readonly property string fileSymbol: mixed ? "mixed" : torrent ? "peers"
         : studioChrome && (telemetry.is_video || /\.(mp4|mkv|mov|webm|avi|m4v)$/i.test(fileName)) ? "video" : "file"
-    readonly property int connectionCount: torrent ? Number(telemetry.torrent?.peers || 0) : Number(telemetry.active_connections || 0)
+    readonly property var counts: TransferData.connectionCounts(telemetry)
+    readonly property int connectionCount: torrent ? Number(telemetry.torrent?.peers || 0)
+        : transferState && !transferring ? 0 : counts.active
+    readonly property int slotCount: Math.max(counts.active, counts.configured)
+    readonly property bool usesSlotGrid: !torrent && slotCount > 4
     readonly property string connectionLabel: torrent
         ? (connectionCount === 1 ? qsTr("1 peer") : qsTr("%1 peers").arg(connectionCount))
+        : counts.configured > 0 ? qsTr("%1 active, %2 configured").arg(connectionCount).arg(counts.configured)
         : (connectionCount === 1 ? qsTr("1 connection") : qsTr("%1 connections").arg(connectionCount))
-    readonly property var workers: torrent ? [] : (telemetry.connections || [])
-        .filter(connection => connection.state === "Receiving" || connection.state === "Connecting").slice(0, 4)
+    readonly property string connectionReadout: torrent ? connectionLabel
+        : counts.configured > 0 ? qsTr("%1/%2").arg(connectionCount).arg(counts.configured) : String(connectionCount)
+    readonly property var workers: torrent || usesSlotGrid || colors.mdm || !transferring
+        ? [] : TransferData.runningConnections(telemetry)
     NumberAnimation on waterPhase {
         from: 0
         to: Math.PI * 2
@@ -268,6 +275,16 @@ Item {
                         }
                     }
                 }
+                Loader {
+                    active: !row.colors.mdm && row.usesSlotGrid && row.transferring
+                    visible: active
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Math.round((row.compactView ? 13 : 19) * row.blockScale)
+                    sourceComponent: ConnectionSlotGrid {
+                        activeCount: row.connectionCount
+                        configuredCount: row.counts.configured
+                    }
+                }
                 MdmSegmentMap {
                     visible: Boolean(row.colors.mdm) && !row.torrent && totalBytes > 0
                     Layout.fillWidth: true
@@ -278,7 +295,7 @@ Item {
                 NumeralLabel {
                     Layout.fillWidth: true
                     color: row.colors.muted
-                    valueText: row.connectionLabel
+                    valueText: row.connectionReadout
                     elide: Text.ElideRight
                     font.pixelSize: TypographyScale.pixels(10)
                 }
@@ -322,10 +339,11 @@ Item {
     }
 
     PlainTextToolTip {
-        visible: pointer.containsMouse && (fileNameLabel.truncated || row.torrent || row.recoveryLabel.length > 0)
+        visible: pointer.containsMouse && (fileNameLabel.truncated || row.torrent || row.counts.configured > 0 || row.recoveryLabel.length > 0)
         delay: 650
         text: row.fileName + (row.mixed ? "\n" + qsTr("Started directly and continued via BitTorrent")
             : row.torrent ? "\n" + qsTr("BitTorrent download") : "")
+            + (row.torrent || row.counts.configured > 0 ? "\n" + row.connectionLabel : "")
             + (row.recoveryLabel.length ? "\n" + row.recoveryLabel : "")
     }
 }

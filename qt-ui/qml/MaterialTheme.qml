@@ -173,44 +173,6 @@ QtObject {
     })
 
     readonly property var builtins: ({
-        "mint-transfer-deck": preset({
-            name: qsTr("Mint Transfer Deck"), finish: "frosted", shape: "round", cleanStudio: true,
-            frostedStudio: true, layout: "mintDeck", light: true,
-            background: "#d8f0e9", edge: "#fcfffe", shade: "#498477", upper: "#ffffff",
-            accent: "#007d58", secondary: "#329c85", ink: "#17352d", text: "#17352d", muted: "#365e53",
-            divider: "#99c5b8", positive: "#087a57", caution: "#855213", destructive: "#a62b51",
-            buttonFace: "#e4f3ee", sidebarInk: "#173b32", sidebarMuted: "#355b50",
-            navigationFill: "#007c58", navigationInk: "#f2fff9", rowSelectionFill: "#bde6d9",
-            rowSelectionInk: "#163d32", summaryFill: "#08634f", summaryInk: "#f1fff9",
-            menuSurface: "#f0faf6", menuHighlight: "#00805d", menuRail: "#58ba9d",
-            translucency: .62, gloss: .77, radius: 15, bevel: 3.4, panelRadius: 14,
-            indicatorDefaults: {
-                progress: {palette: "emerald", colors: ["#229e80", "#68dbc2"]},
-                connections: {palette: "emerald", colors: ["#29ad8c", "#91e5cc"]},
-                graph: {palette: "emerald", colors: ["#74e4ba", "#bcf8de"]}
-            },
-            roleFaces: {title: "#edf8f4", toolbar: "#edf8f4", sidebar: "#edf9f4", content: "#f5fbf8",
-                        footer: "#dbeee6", field: "#e9f5ef", card: "#e6f3ed", connections: "#e3f3ed"}
-        }),
-        "dark-studio": preset({
-            name: qsTr("Dark Studio"), finish: "frosted", shape: "round", cleanStudio: true,
-            frostedStudio: true, layout: "darkStudio",
-            background: "#242c3c", edge: "#a0b2cd", shade: "#0e1727", upper: "#e8f3ff",
-            accent: "#ff958c", secondary: "#83d9c9", ink: "#f1f5ff", muted: "#c5cfe3",
-            divider: "#54647b", positive: "#8ee0c9", caution: "#ffd192", destructive: "#ff8b9b",
-            buttonFace: "#333e53", sidebarInk: "#242c3c", sidebarMuted: "#364357",
-            navigationFill: "#e5edf9", navigationInk: "#202d40", rowSelectionFill: "#3c4c67",
-            rowSelectionInk: "#f9fbff", summaryFill: "#35425a", summaryInk: "#f1f5ff",
-            menuSurface: "#273345", menuHighlight: "#ff958c", menuRail: "#83d9c9",
-            translucency: .65, gloss: .76, radius: 17, bevel: 3.4, panelRadius: 12,
-            indicatorDefaults: {
-                progress: {palette: "coral", colors: ["#f88e86", "#ffc4b6"]},
-                connections: {palette: "emerald", colors: ["#73cfbd", "#acf0de"]},
-                graph: {palette: "jade-brass", colors: ["#7addce", "#adccfb"]}
-            },
-            roleFaces: {title: "#303c52", toolbar: "#293448", sidebar: "#cbd6e6", content: "#252e41",
-                        footer: "#263144", field: "#29364b", card: "#354159", connections: "#2b4652"}
-        }),
         "fog-slate": preset({
             name: qsTr("Fog Slate"), finish: "matte", shape: "round", opaque: true, cleanStudio: true,
             layout: "fogSlate", background: "#2a2f3b", edge: "#555b6a", shade: "#1e222c", upper: "#e1e6ef",

@@ -56,7 +56,6 @@ Item {
         ]
     }
     readonly property bool flatStudio: profile.cleanStudio === true || customChrome
-    readonly property bool frostedStudioLayer: profile.frostedStudio === true && !shell && !customChrome && !customLayer
     readonly property bool studioPanel: profile.panelRadius !== undefined
         && ["card", "summary", "connections"].includes(role)
     readonly property bool cleanChrome: profile.opaque || profile.softChrome === true
@@ -105,27 +104,13 @@ Item {
         color: surface.classicTitle ? surface.captionFace
             : surface.customChrome || surface.profile.mdm ? surface.flatFace
             : surface.shell ? surface.backing : MaterialTheme.rgba(surface.flatFace, surface.flatFaceOpacity)
-        gradient: surface.shadedCaption ? classicCaptionGradient : surface.frostedStudioLayer ? studioGradient : null
+        gradient: surface.shadedCaption ? classicCaptionGradient : null
         Gradient {
             id: classicCaptionGradient
             GradientStop { position: surface.captionStops[0]?.position ?? 0; color: surface.captionStops[0]?.color || surface.captionFace }
             GradientStop { position: surface.captionStops[1]?.position ?? 1; color: surface.captionStops[1]?.color || surface.captionFace }
             GradientStop { position: surface.captionStops[2]?.position ?? 1; color: surface.captionStops[2]?.color || surface.captionFace }
             GradientStop { position: surface.captionStops[3]?.position ?? 1; color: surface.captionStops[3]?.color || surface.captionFace }
-        }
-        Gradient {
-            id: studioGradient
-            GradientStop {
-                position: 0
-                color: MaterialTheme.mix(surface.flatFace, surface.profile.upper, .23 * surface.reflectivity,
-                                         surface.flatFaceOpacity)
-            }
-            GradientStop { position: .56; color: Qt.alpha(surface.flatFace, surface.flatFaceOpacity) }
-            GradientStop {
-                position: 1
-                color: MaterialTheme.mix(surface.flatFace, surface.profile.shade, .13 * surface.reflectivity,
-                                         surface.flatFaceOpacity)
-            }
         }
         border.width: surface.shell || surface.roundedPanel || surface.role === "field" ? 1 : 0
         border.color: surface.profile.surfaceLine || surface.profile.divider

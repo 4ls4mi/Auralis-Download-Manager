@@ -74,6 +74,20 @@ function connectionLabel(state) {
     }
 }
 
+function runningConnections(telemetry) {
+    return (telemetry?.connections || [])
+        .filter(connection => connection.state === "Receiving" || connection.state === "Connecting")
+}
+
+function connectionCounts(telemetry) {
+    const configuredValue = Number(telemetry?.chunk_count)
+    const configured = Number.isFinite(configuredValue) ? Math.max(0, Math.trunc(configuredValue)) : 0
+    const value = telemetry?.active_connections
+    const active = value !== null && value !== undefined && Number.isFinite(Number(value))
+        ? Math.max(0, Math.trunc(Number(value))) : runningConnections(telemetry).length
+    return { active, configured }
+}
+
 function assigned(id, segments, includeLastOwner = false) {
     if (id === null || id === undefined)
         return null
