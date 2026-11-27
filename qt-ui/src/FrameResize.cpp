@@ -4,6 +4,7 @@
 #include <QPointer>
 #include <QVariant>
 #include <QWindow>
+#include <utility>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -47,6 +48,21 @@ Qt::Edges nativeEdges(WPARAM hit)
     case HTTOPRIGHT: return Qt::TopEdge | Qt::RightEdge;
     case HTBOTTOMLEFT: return Qt::BottomEdge | Qt::LeftEdge;
     case HTBOTTOMRIGHT: return Qt::BottomEdge | Qt::RightEdge;
+    default: return {};
+    }
+}
+
+Qt::Edges sizingEdges(WPARAM side)
+{
+    switch (side) {
+    case WMSZ_LEFT: return Qt::LeftEdge;
+    case WMSZ_RIGHT: return Qt::RightEdge;
+    case WMSZ_TOP: return Qt::TopEdge;
+    case WMSZ_TOPLEFT: return Qt::TopEdge | Qt::LeftEdge;
+    case WMSZ_TOPRIGHT: return Qt::TopEdge | Qt::RightEdge;
+    case WMSZ_BOTTOM: return Qt::BottomEdge;
+    case WMSZ_BOTTOMLEFT: return Qt::BottomEdge | Qt::LeftEdge;
+    case WMSZ_BOTTOMRIGHT: return Qt::BottomEdge | Qt::RightEdge;
     default: return {};
     }
 }
@@ -376,6 +392,107 @@ private:
     QRect m_geometry;
     bool m_grabbed = false;
 };
+
+#ifdef Q_OS_WIN
+class NativeResizeObserver final : public QObject
+{
+public:
+    NativeResizeObserver(QWindow *window, std::function<void(const QSize &, const QSize &, int)> finished)
+        : QObject(window), m_window(window), m_finished(std::move(finished))
+    {
+        setObjectName(QStringLiteral("auralisNativeResizeObserver"));
+        queueAttach();
+    }
+
+    ~NativeResizeObserver() override { detach(); }
+
+private:
+    bool eventFilter(QObject *, QEvent *event) override
+    {
+        switch (event->type()) {
+        case QEvent::PlatformSurface:
+            if (static_cast<QPlatformSurfaceEvent *>(event)->surfaceEventType() == QPlatformSurfaceEvent::SurfaceAboutToBeDestroyed)
+                detach();
+            break;
+        case QEvent::Show:
+        case QEvent::Expose:
+            queueAttach();
+            break;
+        default:
+            break;
+        }
+        return false;
+    }
+
+    void queueAttach()
+    {
+        if (m_hwnd || m_attachQueued)
+            return;
+        m_attachQueued = true;
+        QMetaObject::invokeMethod(this, [this] {
+            m_attachQueued = false;
+            if (m_hwnd || !m_window->isExposed() || !m_window->handle())
+                return;
+            const auto hwnd = reinterpret_cast<HWND>(m_window->winId());
+            if (SetWindowSubclass(hwnd, procedure, 1, reinterpret_cast<DWORD_PTR>(this)))
+                m_hwnd = hwnd;
+        }, Qt::QueuedConnection);
+    }
+
+    void detach()
+    {
+        if (m_hwnd) {
+            RemoveWindowSubclass(m_hwnd, procedure, 1);
+            m_hwnd = nullptr;
+        }
+        m_startSize = {};
+        m_sizing = {};
+    }
+
+    static LRESULT CALLBACK procedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam,
+                                      UINT_PTR, DWORD_PTR reference)
+    {
+        auto *self = reinterpret_cast<NativeResizeObserver *>(reference);
+        switch (message) {
+        case WM_ENTERSIZEMOVE:
+            self->m_startSize = self->m_window->visibility() == QWindow::Windowed ? self->m_window->size() : QSize{};
+            self->m_sizing = {};
+            break;
+        case WM_SIZING:
+            if (self->m_startSize.isValid())
+                self->m_sizing |= sizingEdges(wParam);
+            break;
+        case WM_EXITSIZEMOVE: {
+            const auto previous = self->m_startSize;
+            const auto edges = self->m_sizing;
+            self->m_startSize = {};
+            self->m_sizing = {};
+            const QPointer<NativeResizeObserver> alive(self);
+            const auto result = DefSubclassProc(hwnd, message, wParam, lParam);
+            if (alive && edges && alive->m_window->visibility() == QWindow::Windowed) {
+                const auto current = alive->m_window->size();
+                if (current != previous)
+                    alive->m_finished(previous, current, edges.toInt());
+            }
+            return result;
+        }
+        case WM_NCDESTROY:
+            self->detach();
+            break;
+        default:
+            break;
+        }
+        return DefSubclassProc(hwnd, message, wParam, lParam);
+    }
+
+    QWindow *const m_window;
+    const std::function<void(const QSize &, const QSize &, int)> m_finished;
+    HWND m_hwnd = nullptr;
+    QSize m_startSize;
+    bool m_attachQueued = false;
+    Qt::Edges m_sizing;
+};
+#endif
 }
 
 void FrameResize::install(QWindow *window, int borderSize, int cornerSize)
@@ -383,4 +500,16 @@ void FrameResize::install(QWindow *window, int borderSize, int cornerSize)
     if (!window || window->findChild<QObject *>(QStringLiteral("auralisInteractiveResize"), Qt::FindDirectChildrenOnly))
         return;
     window->installEventFilter(new ResizeFilter(window, borderSize, cornerSize));
+}
+
+void FrameResize::observeNative(QWindow *window, std::function<void(const QSize &, const QSize &, int)> finished)
+{
+#ifdef Q_OS_WIN
+    if (!window || window->findChild<QObject *>(QStringLiteral("auralisNativeResizeObserver"), Qt::FindDirectChildrenOnly))
+        return;
+    window->installEventFilter(new NativeResizeObserver(window, std::move(finished)));
+#else
+    Q_UNUSED(window);
+    Q_UNUSED(finished);
+#endif
 }

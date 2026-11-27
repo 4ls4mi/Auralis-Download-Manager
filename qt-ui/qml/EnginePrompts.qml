@@ -208,6 +208,7 @@ QtObject {
 
     property DetachedDialogWindow question: DetachedDialogWindow {
         id: prompt
+        sizePreferenceKey: kind ? "engine-prompt/" + kind : ""
         hostWindow: root.hostWindow
         material: root.material
         property string kind: ""

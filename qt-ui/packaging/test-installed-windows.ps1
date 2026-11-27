@@ -64,9 +64,15 @@ function New-UpgradePreferencesFixture([string]$FixtureProfile) {
         throw 'The isolated Qt settings file was not created by the first smoke launch.'
     }
     $preferences = [ordered]@{
-        MainWindow = [ordered]@{ fullWidth = 910; fullHeight = 550; showSidebar = $false }
+        MainWindow = [ordered]@{
+            fullWidth = 910; fullHeight = 550; compactWidth = 580; compactHeight = 412; showSidebar = $false
+        }
         SettingsWindowLayout = [ordered]@{ initialWidth = 714; initialHeight = 548 }
-        TransferWindowLayout = [ordered]@{ initialCompactWidth = 547; initialCompactHeight = 308; compactView = $true }
+        TransferWindowLayout = [ordered]@{
+            initialExpandedWidth = 832; initialExpandedHeight = 641
+            initialCompactWidth = 547; initialCompactHeight = 308; compactView = $true
+        }
+        DetachedWindowLayout = [ordered]@{ 'addDownloadWindow/width' = 647; 'addDownloadWindow/height' = 566 }
         Typography = [ordered]@{ interfaceScalePercent = 110 }
         UpdateNotices = [ordered]@{ automaticChecks = $false }
     }
@@ -75,7 +81,8 @@ function New-UpgradePreferencesFixture([string]$FixtureProfile) {
         "[$($group.Key)]"
         foreach ($entry in $group.Value.GetEnumerator()) {
             $value = if ($entry.Value -is [bool]) { $entry.Value.ToString().ToLowerInvariant() } else { $entry.Value }
-            "$($entry.Key)=$value"
+            # QSettings encodes nested group paths with backslashes inside INI keys.
+            "$($entry.Key.Replace('/', '\'))=$value"
         }
         ''
     }
@@ -105,6 +112,26 @@ function Test-PublisherMetadata {
         }
     }
     Write-Host 'Verified Alsami publisher metadata on the application and installer.'
+}
+
+function Test-CandidatePayload {
+    Test-InstalledIcon
+    Test-PublisherMetadata
+    $approvalHelper = Join-Path $fixture 'auralis-chrome-approval.exe'
+    Run-Fixture $approvalHelper @('remove', 'invalid-account-sid', '0') -Timeout 10000 -ExpectedExitCode 2
+    if ($env:AURALIS_QT_RELEASE_FONTS -ne '1') { return }
+
+    $sourceFonts = Join-Path $env:AURALIS_QT_JOB 'payload/interface-fonts'
+    $installedFonts = Join-Path $fixture 'interface-fonts'
+    $expected = @(Get-ChildItem -LiteralPath $sourceFonts -File -Filter '*.font')
+    if ($expected.Count -ne 12) { throw 'Expected twelve staged interface fonts.' }
+    foreach ($font in $expected) {
+        $installedPath = Join-Path $installedFonts $font.Name
+        if ((Get-FileHash -LiteralPath $installedPath).Hash -ne (Get-FileHash -LiteralPath $font.FullName).Hash) {
+            throw "Installed font differs from the packaged copy: $($font.Name)"
+        }
+    }
+    Write-Host 'Verified all twelve embedded interface font files.'
 }
 
 Add-Type -TypeDefinition @'
@@ -171,27 +198,25 @@ public static class AuralisSmokeIcon {
 '@
 
 try {
+    $candidate = $env:AURALIS_QT_INSTALLER
+    $candidateVersion = [version][Diagnostics.FileVersionInfo]::GetVersionInfo($candidate).ProductVersion
+    $seedInstaller = $candidate
+    $seedVersion = $candidateVersion
+    # An earlier, release-verified installer can exercise an actual cross-version upgrade.
+    if ($env:AURALIS_QT_PRIOR_INSTALLER) {
+        $seedInstaller = (Resolve-Path -LiteralPath $env:AURALIS_QT_PRIOR_INSTALLER).Path
+        $seedVersion = [version][Diagnostics.FileVersionInfo]::GetVersionInfo($seedInstaller).ProductVersion
+        if ($seedVersion -ge $candidateVersion) {
+            throw "The earlier installer version $seedVersion is not below the candidate $candidateVersion."
+        }
+    }
     # NSIS requires the unquoted /D= argument to come last.
-    Run-Fixture $env:AURALIS_QT_INSTALLER @('/S', '/NOREG', "/D=$fixture")
+    Run-Fixture $seedInstaller @('/S', '/NOREG', "/D=$fixture")
     if (!(Test-Path $exe) -or !(Test-Path (Join-Path $fixture 'uninstall.exe'))) {
         throw 'The standalone Qt installation is incomplete.'
     }
-    Test-InstalledIcon
-    Test-PublisherMetadata
-    $approvalHelper = Join-Path $fixture 'auralis-chrome-approval.exe'
-    Run-Fixture $approvalHelper @('remove', 'invalid-account-sid', '0') -Timeout 10000 -ExpectedExitCode 2
-    if ($env:AURALIS_QT_RELEASE_FONTS -eq '1') {
-        $sourceFonts = Join-Path $env:AURALIS_QT_JOB 'payload/interface-fonts'
-        $installedFonts = Join-Path $fixture 'interface-fonts'
-        $expected = @(Get-ChildItem -LiteralPath $sourceFonts -File -Filter '*.font')
-        if ($expected.Count -ne 12) { throw 'Expected twelve staged interface fonts.' }
-        foreach ($font in $expected) {
-            $installedPath = Join-Path $installedFonts $font.Name
-            if ((Get-FileHash -LiteralPath $installedPath).Hash -ne (Get-FileHash -LiteralPath $font.FullName).Hash) {
-                throw "Installed font differs from the packaged copy: $($font.Name)"
-            }
-        }
-        Write-Host 'Verified all twelve embedded interface font files.'
+    if ([version][Diagnostics.FileVersionInfo]::GetVersionInfo($exe).ProductVersion -ne $seedVersion) {
+        throw "The fixture did not install the initial executable version $seedVersion."
     }
     Run-Fixture $exe @('--engine-smoke', '--device=software') 90000
     if (!(Test-Path $marker)) {
@@ -223,7 +248,7 @@ try {
             throw 'The rejected uninstall changed the installed application or its profile.'
         }
         Write-Host 'Verified uninstall refuses in-use files before removing the application.'
-        Run-Fixture $env:AURALIS_QT_INSTALLER $upgradeArgs 20000 5
+        Run-Fixture $candidate $upgradeArgs 20000 5
         $relaunch = Get-Process -Name 'auralis-download-manager' -ErrorAction SilentlyContinue |
             Where-Object { $_.Path -ieq $exe }
         if ($relaunch -or (Test-Path -LiteralPath $console) -or (Test-Path -LiteralPath $marker)) {
@@ -233,15 +258,21 @@ try {
     Write-Host 'Verified the in-use installer exits without relaunching.'
 
     Remove-Item -LiteralPath $marker, $console -Force -ErrorAction SilentlyContinue
-    Write-Host 'Testing passive upgrade and relaunch with saved window, scale, sidebar, and update preferences.'
+    Write-Host "Testing passive upgrade from $seedVersion to $candidateVersion with saved window, scale, sidebar, and update preferences."
     $env:AURALIS_TEST_UPGRADE_PREFERENCES = New-UpgradePreferencesFixture $data
     $upgradedAt = Get-Date
-    Run-Fixture $env:AURALIS_QT_INSTALLER $upgradeArgs
+    Run-Fixture $candidate $upgradeArgs
     $deadline = [DateTime]::UtcNow.AddSeconds(90)
     while (!(Test-Path $marker) -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 250 }
     if (!(Test-Path $marker)) {
         Write-FixtureDiagnostics $upgradedAt
         throw 'The passive update did not relaunch a working installed app.'
+    }
+    if ([version][Diagnostics.FileVersionInfo]::GetVersionInfo($exe).ProductVersion -ne $candidateVersion) {
+        throw "The fixture did not relaunch the candidate executable version $candidateVersion."
+    }
+    if (!(Select-String -LiteralPath $console -SimpleMatch 'Smoke: using Direct3D 11.' -Quiet)) {
+        throw 'The upgraded application did not select Direct3D 11 by default.'
     }
     if (!(Select-String -LiteralPath $console -SimpleMatch 'Smoke: non-default preferences survived the passive upgrade and relaunch.' -Quiet)) {
         throw 'The relaunched installed app did not verify its saved preferences.'
@@ -254,6 +285,7 @@ try {
 
     Get-Process -Name 'auralis-download-manager' -ErrorAction SilentlyContinue |
         Where-Object { $_.Path -ieq $exe } | Wait-Process -Timeout 10
+    Test-CandidatePayload
 
     # A silent uninstall keeps custom profiles, portable data and user-created files.
     $ownedByUser = Join-Path $fixture 'keep-after-uninstall.txt'

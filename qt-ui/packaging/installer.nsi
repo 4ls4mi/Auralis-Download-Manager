@@ -40,6 +40,7 @@ Var LaunchArguments
 Var DeleteAppData
 Var DeleteSharedProfile
 Var AppDataCheckbox
+Var RegisteredInstallation
 Var ShortcutOptionsChosen
 Var StartMenuShortcutCheckbox
 Var DesktopShortcutCheckbox
@@ -110,13 +111,20 @@ Function .onInit
         ${EndIf}
     ${EndIf}
 
-    # /D= takes precedence. Otherwise update the previous Tauri installation in place.
+    # Record earlier registration before the install section writes its own.
+    # This also covers a user running a downloaded installer without /UPDATE.
+    StrCpy $RegisteredInstallation 0
+    ReadRegStr $2 HKCU "${INSTALL_KEY}" ""
+    ${If} $2 != ""
+        StrCpy $RegisteredInstallation 1
+    ${EndIf}
+
+    # /D= takes precedence. Otherwise update the previous installation in place.
     ${If} $INSTDIR == "${DEFAULT_DIRECTORY}"
         StrCpy $INSTDIR "$LOCALAPPDATA\${PRODUCT}"
-        ReadRegStr $0 HKCU "${INSTALL_KEY}" ""
-        ${If} $0 != ""
-        ${AndIf} ${FileExists} "$0\${APP_EXE}"
-            StrCpy $INSTDIR $0
+        ${If} $RegisteredInstallation == 1
+        ${AndIf} ${FileExists} "$2\${APP_EXE}"
+            StrCpy $INSTDIR $2
         ${EndIf}
     ${EndIf}
     ${If} $Passive != 1
@@ -163,6 +171,24 @@ Function ShortcutOptionsPageCreate
     ${NSD_CreateCheckbox} 12u 124u 93% 13u "Start minimized to the system tray"
     Pop $StartupMinimizedCheckbox
     ${NSD_SetState} $StartupMinimizedCheckbox ${BST_CHECKED}
+    ${If} $RegisteredInstallation == 1
+        ${IfNot} ${FileExists} "$SMPROGRAMS\${PRODUCT}.lnk"
+            ${NSD_SetState} $StartMenuShortcutCheckbox ${BST_UNCHECKED}
+        ${EndIf}
+        ${IfNot} ${FileExists} "$DESKTOP\${PRODUCT}.lnk"
+            ${NSD_SetState} $DesktopShortcutCheckbox ${BST_UNCHECKED}
+        ${EndIf}
+        ReadRegStr $0 HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${PRODUCT}"
+        ${If} $0 != ""
+            ${NSD_SetState} $StartupCheckbox ${BST_CHECKED}
+            StrLen $1 "--auralis-startup-window"
+            IntOp $2 0 - $1
+            StrCpy $1 $0 $1 $2
+            ${If} $1 == "--auralis-startup-window"
+                ${NSD_SetState} $StartupMinimizedCheckbox ${BST_UNCHECKED}
+            ${EndIf}
+        ${EndIf}
+    ${EndIf}
     nsDialogs::Show
 FunctionEnd
 
@@ -272,8 +298,11 @@ Function .onInstSuccess
             ${Else}
                 Delete "$DESKTOP\${PRODUCT}.lnk"
             ${EndIf}
-        ${Else}
-            # Silent installs and upgrades keep the existing Start menu entry.
+        ${ElseIf} ${FileExists} "$SMPROGRAMS\${PRODUCT}.lnk"
+            # Update an existing shortcut's target and icon without restoring one the user removed.
+            CreateShortCut "$SMPROGRAMS\${PRODUCT}.lnk" "$INSTDIR\${APP_EXE}" "" "$INSTDIR\${SHORTCUT_ICON}" 0
+        ${ElseIf} $RegisteredInstallation != 1
+        ${AndIf} $Upgrade != 1
             CreateShortCut "$SMPROGRAMS\${PRODUCT}.lnk" "$INSTDIR\${APP_EXE}" "" "$INSTDIR\${SHORTCUT_ICON}" 0
         ${EndIf}
         # SHCNE_UPDATEITEM | SHCNF_PATHW | SHCNF_FLUSHNOWAIT.

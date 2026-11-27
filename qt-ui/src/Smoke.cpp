@@ -14,6 +14,7 @@
 #include <QQuickWindow>
 #include <QRegularExpression>
 #include <QSaveFile>
+#include <QScreen>
 #include <QSettings>
 #include <QTcpSocket>
 #include <QTimer>
@@ -37,6 +38,27 @@ QQuickWindow *visibleWindow(const QString &name)
             return qobject_cast<QQuickWindow *>(window);
     }
     return nullptr;
+}
+
+QJsonObject upgradePreferenceGroup(const QString &group)
+{
+    return QJsonDocument::fromJson(qgetenv("AURALIS_TEST_UPGRADE_PREFERENCES")).object().value(group).toObject();
+}
+
+QSize fittedWindowSize(const QWindow &window, const QSize &saved)
+{
+    const QSize workArea = window.screen() ? window.screen()->availableGeometry().size() : QSize();
+    return (workArea.isEmpty() ? saved : saved.boundedTo(workArea)).expandedTo(window.minimumSize());
+}
+
+bool hasExpectedWindowSize(QQuickWindow &window, const QJsonObject &group, const QString &widthKey,
+                           const QString &heightKey)
+{
+    const QSize expected(group.value(widthKey).toInt(), group.value(heightKey).toInt());
+    if (expected.isEmpty() || fittedWindowSize(window, expected) == window.size())
+        return true;
+    qCritical() << "Smoke: saved dimensions differ for" << window.objectName() << window.size() << "expected" << expected;
+    return false;
 }
 
 bool verifyUpgradePreferences(const QDir &profile)
@@ -90,11 +112,42 @@ bool verifyUpgradePreferences(const QDir &profile)
     const auto *typography = fontSettings.metaType() == QMetaType::fromType<QJSValue>()
         ? fontSettings.value<QJSValue>().toQObject() : fontSettings.value<QObject *>();
     const int startupScale = typography ? typography->property("activeInterfaceScalePercent").toInt() : 0;
-    if (window->size() != expectedSize || !sidebar.isValid() || sidebar.toBool() != expectedSidebar.toBool()
+    if (window->size() != fittedWindowSize(*window, expectedSize) || !sidebar.isValid() || sidebar.toBool() != expectedSidebar.toBool()
         || !qFuzzyCompare(interfaceScale.toDouble(), expectedScale / 100.0) || startupScale != expectedScale) {
         qCritical() << "Smoke: upgraded main window used incorrect dimensions, sidebar or scale:"
                     << window->size() << sidebar << interfaceScale << startupScale
                     << "expected" << expectedSize << expectedSidebar << expectedScale;
+        return false;
+    }
+
+    const auto *sidebarItem = window->findChild<QQuickItem *>(QStringLiteral("downloadsSidebar"));
+    const auto *recentItem = window->findChild<QQuickItem *>(QStringLiteral("recentDownloadsSidebar"));
+    if (!sidebarItem || !recentItem || (!expectedSidebar.toBool() && (sidebarItem->isVisible() || recentItem->isVisible()))) {
+        qCritical("Smoke: the saved hidden sidebar preference was not applied to the visible layout.");
+        return false;
+    }
+
+    const QSize expectedCompactSize(main.value(QStringLiteral("compactWidth")).toInt(),
+                                    main.value(QStringLiteral("compactHeight")).toInt());
+    if (!QMetaObject::invokeMethod(window, "toggleCompactView") || !window->property("compactView").toBool()
+        || (!expectedCompactSize.isEmpty() && window->size() != fittedWindowSize(*window, expectedCompactSize))
+        || !QMetaObject::invokeMethod(window, "toggleCompactView") || window->property("compactView").toBool()
+        || window->size() != fittedWindowSize(*window, expectedSize) || window->property("showSidebar").toBool() != expectedSidebar.toBool()) {
+        qCritical("Smoke: switching workspace modes did not restore their saved sizes and sidebar preference.");
+        return false;
+    }
+
+    const auto settingsWindow = groups.value(QStringLiteral("SettingsWindowLayout")).toObject();
+    const QSize expectedSettingsSize(settingsWindow.value(QStringLiteral("initialWidth")).toInt(),
+                                     settingsWindow.value(QStringLiteral("initialHeight")).toInt());
+    if (!QMetaObject::invokeMethod(window, "showSettings")) {
+        qCritical("Smoke: could not open Settings after the update.");
+        return false;
+    }
+    auto *openedSettings = visibleWindow(QStringLiteral("settingsWindow"));
+    if (!openedSettings || openedSettings->size() != fittedWindowSize(*openedSettings, expectedSettingsSize)
+        || !openedSettings->close()) {
+        qCritical("Smoke: Settings did not use its saved size after the update.");
         return false;
     }
 
@@ -205,6 +258,11 @@ void EngineSmoke::confirmDownload()
         return;
     if (!isIndependent(*prompt)) {
         fail(QStringLiteral("The download confirmation is owned by another window or is modal."));
+        return;
+    }
+    if (!hasExpectedWindowSize(*prompt, upgradePreferenceGroup(QStringLiteral("DetachedWindowLayout")),
+                               QStringLiteral("addDownloadWindow/width"), QStringLiteral("addDownloadWindow/height"))) {
+        fail(QStringLiteral("The download confirmation did not use its saved size after the update."));
         return;
     }
     auto *destination = prompt->findChild<QObject *>(QStringLiteral("downloadDestination"));
@@ -348,6 +406,18 @@ void EngineSmoke::observeTransferWindow(qulonglong id)
             if (!isIndependent(*progress)) {
                 fail(QStringLiteral("The download progress window is owned by another window or is modal."));
                 return;
+            }
+            const auto layout = upgradePreferenceGroup(QStringLiteral("TransferWindowLayout"));
+            const auto expectedCompact = layout.value(QStringLiteral("compactView"));
+            if (!m_resizeVerified && expectedCompact.isBool()) {
+                const bool compact = expectedCompact.toBool();
+                if (progress->property("compactView").toBool() != compact
+                    || !hasExpectedWindowSize(*progress, layout,
+                        compact ? QStringLiteral("initialCompactWidth") : QStringLiteral("initialExpandedWidth"),
+                        compact ? QStringLiteral("initialCompactHeight") : QStringLiteral("initialExpandedHeight"))) {
+                    fail(QStringLiteral("The current download did not use its saved mode and size after the update."));
+                    return;
+                }
             }
 #ifdef Q_OS_WIN
             // Exercise the translucent surface and Qt Quick 3D on the Windows renderer.

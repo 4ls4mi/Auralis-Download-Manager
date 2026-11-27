@@ -8,6 +8,7 @@
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QRegion>
+#include <QTransform>
 #include <QWindow>
 #include <QtMath>
 #include <qt_windows.h>
@@ -33,6 +34,23 @@ struct PanelShape {
     QPolygon polygon;
 
     bool operator==(const PanelShape &) const = default;
+};
+
+struct PanelGeometry {
+    const QQuickItem *item;
+    QRect clip;
+    QTransform toScene;
+    QVariant outline;
+
+    bool operator==(const PanelGeometry &other) const
+    {
+        if (item != other.item || clip != other.clip || toScene != other.toScene
+            || outline.metaType() != other.outline.metaType())
+            return false;
+        if (outline.metaType() == QMetaType::fromType<QJSValue>())
+            return outline.value<QJSValue>().strictlyEquals(other.outline.value<QJSValue>());
+        return outline == other.outline;
+    }
 };
 
 QRegion shadowMask(HRGN region)
@@ -92,12 +110,17 @@ public:
                          qRound(rect.right() * scale) - qRound(rect.left() * scale),
                          qRound(rect.bottom() * scale) - qRound(rect.top() * scale));
         };
-        QList<PanelShape> shapes;
+        QList<PanelGeometry> geometry;
+        geometry.reserve(panels.size());
         for (const QVariant &entry : panels) {
             auto *item = qobject_cast<QQuickItem *>(entry.value<QObject *>());
             if (!item || item->window() != m_window || !item->isVisible() || item->width() <= 0 || item->height() <= 0)
                 continue;
-            const QRect rect = pixelRect(item->mapRectToScene(item->boundingRect()));
+            bool mapped = false;
+            const QTransform toScene = item->itemTransform(nullptr, &mapped);
+            if (!mapped)
+                continue;
+            const QRect rect = pixelRect(toScene.mapRect(item->boundingRect()));
             QRect clip = windowBounds;
             for (auto *parent = item->parentItem(); parent; parent = parent->parentItem()) {
                 if (parent->clip())
@@ -105,7 +128,19 @@ public:
             }
             if (!clip.intersects(rect))
                 continue;
-            const QVariant data = item->property("panelVertices");
+            geometry.append({item, clip, toScene, item->property("panelVertices")});
+        }
+
+        const bool sameFrame = m_regionSet && m_scale == scale && m_framePixels == windowBounds.size();
+        // The QML panel publishes a fresh outline array whenever its shape changes.
+        // A transfer animation alone need not unpack, copy or transform those vertices.
+        if (sameFrame && m_geometry == geometry)
+            return true;
+
+        QList<PanelShape> shapes;
+        shapes.reserve(geometry.size());
+        for (const auto &panel : geometry) {
+            const auto &data = panel.outline;
             const QVariantList vertices = data.metaType() == QMetaType::fromType<QJSValue>()
                 ? data.value<QJSValue>().toVariant().toList() : data.toList();
             QPolygon polygon;
@@ -113,20 +148,22 @@ public:
             for (const auto &vertex : vertices) {
                 if (!vertex.canConvert<QPointF>())
                     continue;
-                const QPointF point = item->mapToScene(vertex.toPointF());
+                const QPointF point = panel.toScene.map(vertex.toPointF());
                 if (qIsFinite(point.x()) && qIsFinite(point.y()))
                     polygon.append(QPoint(qRound(point.x() * scale), qRound(point.y() * scale)));
             }
             if (polygon.size() >= 3)
-                shapes.append({clip, std::move(polygon)});
+                shapes.append({panel.clip, std::move(polygon)});
         }
 
         if (shapes.isEmpty()) {
             reset();
             return false;
         }
-        if (m_regionSet && m_scale == scale && m_framePixels == windowBounds.size() && m_shapes == shapes)
+        if (sameFrame && m_shapes == shapes) {
+            m_geometry = std::move(geometry);
             return true;
+        }
 
         const auto region = CreateRectRgn(0, 0, 0, 0);
         if (!region)
@@ -177,6 +214,7 @@ public:
         }
 
         WindowShadow::updatePanels(m_window, windowBounds.size(), mask, scale);
+        m_geometry = std::move(geometry);
         m_shapes = std::move(shapes);
         m_framePixels = windowBounds.size();
         m_scale = scale;
@@ -204,12 +242,14 @@ private:
         }
         m_hwnd = nullptr;
         m_regionSet = false;
+        m_geometry.clear();
         m_shapes.clear();
         m_framePixels = {};
     }
 
     QWindow *m_window;
     HWND m_hwnd = nullptr;
+    QList<PanelGeometry> m_geometry;
     QList<PanelShape> m_shapes;
     QSize m_framePixels;
     qreal m_scale = 0;

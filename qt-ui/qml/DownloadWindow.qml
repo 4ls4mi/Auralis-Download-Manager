@@ -8,6 +8,7 @@ import QtQuick.Window
 import QtCore
 import "TransferData.js" as Transfer
 import "MaterialGeometry.js" as Geometry
+import "WindowSize.js" as WindowSize
 
 AuralisWindow {
     id: root
@@ -93,21 +94,14 @@ AuralisWindow {
     property var details: ({})
     property int activeTab: 0
     property bool classicDetailsVisible: true
-    property real classicExpandedHeight: expandedWindowSize.height
-    property bool windowLayoutReady: false
     property bool applyingViewSize: false
-    property size savedExpandedSize: Qt.size(0, 0)
-    property size compactWindowSize: Qt.size(510, 290)
-    readonly property size expandedWindowSize: Qt.size(
-        savedExpandedSize.width || (classicPreset ? 546 : 790),
-        savedExpandedSize.height || (classicPreset ? 442 : 625))
 
     function connectionHasData(connection) {
         return connection.state === "Receiving" && connection.receiving_data !== false
     }
 
-    width: expandedWindowSize.width
-    height: expandedWindowSize.height
+    width: 790
+    height: 625
     minimumWidth: compactView ? 395 : 450
     // Reserve a scrollable row of details even when the footer actions wrap at a larger interface scale.
     minimumHeight: Math.max(compactView || (classicFullView && !classicDetailsVisible) ? 270 : 340,
@@ -133,65 +127,25 @@ AuralisWindow {
     Component.onCompleted: {
         const storedMode = String(transferWindowSettings.value("compactView", false)).toLowerCase()
         compactMode = storedMode === "true" || storedMode === "1"
-        compactWindowSize = Qt.size(
-            Number(transferWindowSettings.value("initialCompactWidth", 510)) || 510,
-            Number(transferWindowSettings.value("initialCompactHeight", 290)) || 290)
-        savedExpandedSize = Qt.size(
-            Number(transferWindowSettings.value("initialExpandedWidth", 0)) || 0,
-            Number(transferWindowSettings.value("initialExpandedHeight", 0)) || 0)
-        if (compactView)
-            applyViewSize(true)
-        windowLayoutReady = true
+        const size = preferredViewSize(compactView)
+        width = size.width
+        height = size.height
     }
 
-    onWidthChanged: queueWindowSizeSave()
-    onHeightChanged: queueWindowSizeSave()
-    onClosing: flushWindowSize()
-
-    Timer {
-        id: windowSizeSave
-        interval: 150
-        onTriggered: if (root.visibility === Window.Windowed && !root.applyingViewSize)
-            root.saveWindowSize()
+    function preferredViewSize(compact) {
+        const key = compact ? "initialCompact" : "initialExpanded"
+        const fallback = compact ? Qt.size(510, 290) : classicPreset ? Qt.size(546, 442) : Qt.size(790, 625)
+        const requested = WindowSize.read(transferWindowSettings, key + "Width", key + "Height", fallback)
+        return WindowSize.fit(requested, Qt.size(minimumWidth, minimumHeight), WindowSize.available(root, engine))
     }
 
-    Connections {
-        target: engine
-        function onQuittingChanged() {
-            if (engine.quitting)
-                root.flushWindowSize()
-        }
-    }
-
-    function queueWindowSizeSave() {
-        if (windowLayoutReady && !applyingViewSize && visibility === Window.Windowed)
-            windowSizeSave.restart()
-    }
-
-    function flushWindowSize() {
-        windowSizeSave.stop()
-        if (windowLayoutReady && visibility === Window.Windowed && !applyingViewSize)
-            saveWindowSize()
-    }
-
-    function saveWindowSize() {
-        if (compactView) {
-            if (compactWindowSize.width === width && compactWindowSize.height === height)
-                return
-            compactWindowSize = Qt.size(width, height)
-            transferWindowSettings.setValue("initialCompactWidth", width)
-            transferWindowSettings.setValue("initialCompactHeight", height)
-        } else {
-            // The collapsed classic window fits the visible content automatically.
-            // Keep its width, but keep the saved height of the expanded view.
-            const expandedHeight = classicFullView && !classicDetailsVisible ? expandedWindowSize.height : height
-            if (expandedWindowSize.width === width && expandedWindowSize.height === expandedHeight)
-                return
-            savedExpandedSize = Qt.size(width, expandedHeight)
-            transferWindowSettings.setValue("initialExpandedWidth", width)
-            transferWindowSettings.setValue("initialExpandedHeight", expandedHeight)
-        }
-        transferWindowSettings.sync()
+    function recordWindowSize(previousSize, currentSize, edges) {
+        if (applyingViewSize)
+            return
+        const key = compactView ? "initialCompact" : "initialExpanded"
+        // The collapsed classic view shares the expanded width only.
+        WindowSize.record(transferWindowSettings, key + "Width", key + "Height", previousSize, currentSize, edges,
+                          !classicFullView || classicDetailsVisible)
     }
 
     function applyViewSize(compact) {
@@ -200,7 +154,7 @@ AuralisWindow {
             if (root.compactView !== compact)
                 return
             if (root.visibility === Window.Windowed || root.visibility === Window.Hidden) {
-                const size = compact ? root.compactWindowSize : root.expandedWindowSize
+                const size = root.preferredViewSize(compact)
                 root.setGeometry(root.x, root.y, size.width, size.height)
             }
             root.applyingViewSize = false
@@ -210,7 +164,6 @@ AuralisWindow {
     function setCompactView(compact) {
         if (compact === compactView)
             return
-        flushWindowSize()
         applyingViewSize = true
         if (visibility === Window.Maximized)
             showNormal()
@@ -223,23 +176,19 @@ AuralisWindow {
     }
 
     function toggleClassicDetails() {
-        flushWindowSize()
         applyingViewSize = true
-        if (visibility === Window.Windowed && classicDetailsVisible)
-            classicExpandedHeight = height
         classicDetailsVisible = !classicDetailsVisible
         Qt.callLater(() => {
             if (root.classicFullView && root.visibility === Window.Windowed) {
                 const contentHeight = root.header.height + sections.implicitHeight + root.bodyBottomInset
                 root.height = Math.max(root.minimumHeight,
-                    root.classicDetailsVisible ? root.classicExpandedHeight : Math.ceil(contentHeight))
+                    root.classicDetailsVisible ? root.preferredViewSize(false).height : Math.ceil(contentHeight))
             }
             root.applyingViewSize = false
         })
     }
 
     function hideToTray() {
-        flushWindowSize()
         if (trayEnabled && downloadId !== null && !finished)
             hideToTrayRequested(downloadId)
         else
@@ -247,7 +196,6 @@ AuralisWindow {
     }
 
     function minimizeWindow() {
-        flushWindowSize()
         if (minimizeToTray && trayEnabled && downloadId !== null && !finished)
             hideToTray()
         else
@@ -255,7 +203,6 @@ AuralisWindow {
     }
 
     function toggleMaximized() {
-        flushWindowSize()
         if (visibility === Window.Maximized)
             showNormal()
         else
@@ -263,8 +210,6 @@ AuralisWindow {
     }
 
     onVisibilityChanged: {
-        if (visibility !== Window.Windowed && windowLayoutReady)
-            windowSizeSave.stop()
         if (root.visibility === Window.Minimized && root.minimizeToTray && root.trayEnabled && root.downloadId !== null && !root.finished) {
             Qt.callLater(() => {
                 if (root.visibility === Window.Minimized)
@@ -766,7 +711,7 @@ AuralisWindow {
     WindowResizeHandles {
         id: resizeHandles
         hostWindow: root
-        onResizingChanged: if (!resizing) root.flushWindowSize()
+        onResizeFinished: (previousSize, currentSize, edges) => root.recordWindowSize(previousSize, currentSize, edges)
         // The Quick grips own the pointer grab. A second Win32 capture path
         // would compete with the same drag on this transparent window.
         coalesceGeometry: true
@@ -1900,6 +1845,7 @@ AuralisWindow {
 
     DetachedConfirmation {
         id: stopConsent
+        sizePreferenceKey: "stop-download"
         hostWindow: root
         material: root.material
         title: qsTr("Stop this download?")
@@ -1909,6 +1855,7 @@ AuralisWindow {
     }
     DetachedConfirmation {
         id: restartConsent
+        sizePreferenceKey: "redownload-from-details"
         hostWindow: root
         material: root.material
         title: qsTr("Download from the beginning?")
@@ -1919,6 +1866,7 @@ AuralisWindow {
     }
     DetachedConfirmation {
         id: searchConsent
+        sizePreferenceKey: "search-recovery-torrents"
         hostWindow: root
         material: root.material
         title: qsTr("Search for a matching torrent?")
@@ -1928,6 +1876,7 @@ AuralisWindow {
     }
     DetachedConfirmation {
         id: linkConsent
+        sizePreferenceKey: "check-recovery-source"
         hostWindow: root
         material: root.material
         title: qsTr("Check this torrent source?")

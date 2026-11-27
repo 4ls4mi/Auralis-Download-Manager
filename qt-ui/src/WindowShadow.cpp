@@ -1,15 +1,19 @@
 #include "WindowShadow.h"
 #include "WindowOutline.h"
 
+#include <QFutureWatcher>
 #include <QImage>
 #include <QPainter>
 #include <QPlatformSurfaceEvent>
 #include <QRegion>
+#include <QThreadPool>
 #include <QTimer>
 #include <QWindow>
+#include <QtConcurrentRun>
 #include <QtMath>
 
 #include <cstring>
+#include <optional>
 #include <utility>
 #include <windows.h>
 #include <dwmapi.h>
@@ -22,6 +26,31 @@ constexpr int shadowPadding = 20;
 constexpr int resizeDelay = 75;
 constexpr qint64 maximumShadowPixels = 48'000'000;
 
+struct RasterKey {
+    QSize framePixels;
+    QSizeF reachPixels;
+    qreal scale;
+    int padding;
+    int corners;
+    quint64 panelRevision;
+
+    bool operator==(const RasterKey &) const = default;
+};
+
+struct ShadowRaster {
+    RasterKey key;
+    QImage image;
+};
+
+QThreadPool *rasterPool()
+{
+    struct RasterPool : QThreadPool {
+        RasterPool() { setMaxThreadCount(2); }
+    };
+    static RasterPool pool;
+    return &pool;
+}
+
 class Shadow final : public QObject
 {
 public:
@@ -31,6 +60,11 @@ public:
         m_resizeTimer.setSingleShot(true);
         m_resizeTimer.setInterval(resizeDelay);
         connect(&m_resizeTimer, &QTimer::timeout, this, [this] { refresh(false); });
+        connect(&m_rasterWatcher, &QFutureWatcherBase::finished, this, [this] {
+            m_rasterPending = false;
+            m_prepared = m_rasterWatcher.future().takeResult();
+            refresh(true);
+        });
         owner->installEventFilter(this);
     }
 
@@ -189,6 +223,7 @@ private:
     void hide()
     {
         m_resizeTimer.stop();
+        m_prepared.reset();
         if (m_shadow && IsWindowVisible(m_shadow))
             ShowWindow(m_shadow, SW_HIDE);
     }
@@ -205,7 +240,8 @@ private:
         if (m_shadow)
             DestroyWindow(m_shadow);
         m_shadow = nullptr;
-        m_framePixels = {};
+        m_displayed.reset();
+        m_prepared.reset();
     }
 
     static bool upload(HWND target, const QImage &image, const QPoint &origin)
@@ -280,30 +316,43 @@ private:
         }
 
         const QPoint origin(rect.left - padding, rect.top - padding);
-        const bool changed = m_framePixels != framePixels || m_renderedScale != scale || m_renderedPanels != panels
-            || (panels ? m_renderedPanelRevision != m_panelRevision
-                       : m_renderedReach != reachPixels || m_renderedCorners != m_corners);
-        if (changed && debounce && m_shadow && m_framePixels.isValid()) {
+        const RasterKey key{framePixels, panels ? QSizeF() : reachPixels, scale, padding,
+                            panels ? 0 : m_corners, panels ? m_panelRevision : 0};
+        const bool changed = !m_displayed || *m_displayed != key;
+        const bool ready = m_prepared && m_prepared->key == key;
+        if (m_prepared && !ready)
+            m_prepared.reset();
+        if (changed && debounce && m_shadow && m_displayed && !ready) {
             // The old image no longer matches the transparent interior of the owner.
             hide();
             m_resizeTimer.start();
             return;
         }
         if (!m_shadow || changed) {
+            if (!ready) {
+                if (!m_rasterPending) {
+                    // At most one raster per window may be in flight. The worker
+                    // only owns snapshots and the GUI discards obsolete results.
+                    m_rasterPending = true;
+                    m_rasterWatcher.setFuture(QtConcurrent::run(rasterPool(), [key, mask = m_panels] {
+                        QImage image = mask.isEmpty()
+                            ? WindowOutline::shadowImage(key.framePixels, key.reachPixels, key.corners,
+                                                         key.scale, key.padding)
+                            : panelImage(key, mask);
+                        return ShadowRaster{key, std::move(image)};
+                    }));
+                }
+                return;
+            }
+            const QImage image = std::move(m_prepared->image);
+            m_prepared.reset();
             if (!createShadow(nativeOwner))
                 return;
-            const auto image = panels ? panelImage(imageSize, scale, padding)
-                                      : WindowOutline::shadowImage(framePixels, reachPixels, m_corners, scale, padding);
             if (!upload(m_shadow, image, origin)) {
                 hide();
                 return;
             }
-            m_framePixels = framePixels;
-            m_renderedReach = reachPixels;
-            m_renderedScale = scale;
-            m_renderedCorners = m_corners;
-            m_renderedPanels = panels;
-            m_renderedPanelRevision = m_panelRevision;
+            m_displayed = key;
             m_origin = origin;
         }
 
@@ -315,8 +364,11 @@ private:
         }
     }
 
-    QImage panelImage(const QSize &size, qreal scale, int padding) const
+    static QImage panelImage(const RasterKey &key, const QRegion &panels)
     {
+        const auto padding = key.padding;
+        const auto scale = key.scale;
+        const QSize size = key.framePixels + QSize(2 * padding, 2 * padding);
         QImage mask(size, QImage::Format_ARGB32_Premultiplied);
         if (mask.isNull())
             return mask;
@@ -324,8 +376,8 @@ private:
         {
             QPainter painter(&mask);
             painter.translate(padding, padding);
-            painter.setClipRegion(m_panels);
-            painter.fillRect(QRect(QPoint(), m_panelFrame), Qt::white);
+            painter.setClipRegion(panels);
+            painter.fillRect(QRect(QPoint(), key.framePixels), Qt::white);
         }
         const QPoint cast(qRound(2.5 * scale), qRound(6.5 * scale));
         return WindowOutline::blurShadowMask(std::move(mask), scale, padding, cast, 120);
@@ -344,12 +396,10 @@ private:
     QSize m_panelFrame;
     qreal m_panelScale = 0;
     quint64 m_panelRevision = 0;
-    QSize m_framePixels;
-    QSizeF m_renderedReach;
-    qreal m_renderedScale = 0;
-    int m_renderedCorners = 0;
-    bool m_renderedPanels = false;
-    quint64 m_renderedPanelRevision = 0;
+    QFutureWatcher<ShadowRaster> m_rasterWatcher;
+    bool m_rasterPending = false;
+    std::optional<ShadowRaster> m_prepared;
+    std::optional<RasterKey> m_displayed;
     QPoint m_origin;
 };
 

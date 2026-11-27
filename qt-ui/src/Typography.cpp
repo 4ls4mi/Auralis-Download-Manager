@@ -322,7 +322,6 @@ Typography::Typography(int activeInterfaceScalePercent, QObject *parent)
       m_fontSizePercent(DefaultPercent),
       m_defaultWeight(QFont::Normal),
       m_interfaceScalePercent(DefaultPercent),
-      m_savedInterfaceScalePercent(DefaultPercent),
       m_activeInterfaceScalePercent(activeInterfaceScalePercent)
 {
     const auto bundled = QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("interface-fonts"));
@@ -347,7 +346,6 @@ Typography::Typography(int activeInterfaceScalePercent, QObject *parent)
     m_defaultWeight = savedWeight >= QFont::Thin && savedWeight <= QFont::Black
         ? savedWeight : QFont::Normal;
     m_interfaceScalePercent = savedPercent(settings.value(InterfaceScaleKey), MaximumInterfacePercent);
-    m_savedInterfaceScalePercent = m_interfaceScalePercent;
     applyInterfaceFont();
 }
 
@@ -603,29 +601,13 @@ bool Typography::setInterfaceScalePercent(int percent)
 {
     if (percent < MinimumPercent || percent > MaximumInterfacePercent)
         return false;
-    if (!savePreference(InterfaceScaleKey, percent)) {
-        if (m_interfaceScalePercent != m_savedInterfaceScalePercent) {
-            m_interfaceScalePercent = m_savedInterfaceScalePercent;
-            emit interfaceScaleChanged();
-        }
+    if (m_interfaceScalePercent == percent)
+        return true;
+    if (!savePreference(InterfaceScaleKey, percent))
         return false;
-    }
-    m_savedInterfaceScalePercent = percent;
-    if (m_interfaceScalePercent != percent) {
-        m_interfaceScalePercent = percent;
-        emit interfaceScaleChanged();
-    }
-    return true;
-}
 
-bool Typography::previewInterfaceScalePercent(int percent)
-{
-    if (percent < MinimumPercent || percent > MaximumInterfacePercent)
-        return false;
-    if (m_interfaceScalePercent != percent) {
-        m_interfaceScalePercent = percent;
-        emit interfaceScaleChanged();
-    }
+    m_interfaceScalePercent = percent;
+    emit interfaceScaleChanged();
     return true;
 }
 

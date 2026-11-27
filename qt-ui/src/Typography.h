@@ -44,7 +44,6 @@ public:
 
     Q_INVOKABLE bool applyFontPreferences(const QString &englishFamily, const QString &arabicFamily, int sizePercent);
     Q_INVOKABLE bool setInterfaceScalePercent(int percent);
-    Q_INVOKABLE bool previewInterfaceScalePercent(int percent);
     Q_INVOKABLE QFont fontForText(const QString &text) const;
     Q_INVOKABLE QFont previewFont(const QString &family) const;
     Q_INVOKABLE QString numeralMarkup(const QString &text, const QString &family) const;
@@ -78,6 +77,5 @@ private:
     int m_fontSizePercent;
     int m_defaultWeight;
     int m_interfaceScalePercent;
-    int m_savedInterfaceScalePercent;
     const int m_activeInterfaceScalePercent;
 };

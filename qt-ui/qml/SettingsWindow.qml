@@ -7,6 +7,7 @@ import QtQuick.Controls.Basic as Basic
 import QtQuick.Layouts
 import QtQuick.Window
 import "LanguageCatalog.js" as LanguageCatalog
+import "WindowSize.js" as WindowSize
 
 AuralisWindow {
     id: root
@@ -74,8 +75,6 @@ AuralisWindow {
     property bool remotePairing: false
     property string remoteProblem: ""
     property int preferredVisibility: Window.Windowed
-    property bool windowLayoutReady: false
-    property int pendingInterfaceScalePercent: 100
     property var availableUpdate: null
     property alias donationAction: donatePatreon
     signal updateCheckRequested()
@@ -385,8 +384,11 @@ AuralisWindow {
                 showMaximized()
             else if (preferredVisibility === Window.FullScreen)
                 showFullScreen()
-            else
+            else {
+                if (!visible)
+                    restoreWindowSize()
                 show()
+            }
         }
         raise()
         requestActivate()
@@ -400,63 +402,28 @@ AuralisWindow {
         present()
     }
 
-    function queueWindowSizeSave() {
-        if (windowLayoutReady && visibility === Window.Windowed)
-            windowSizeSave.restart()
-    }
-
-    function flushWindowSize() {
-        windowSizeSave.stop()
-        if (windowLayoutReady && visibility === Window.Windowed)
-            saveWindowSize()
-    }
-
-    function saveWindowSize() {
-        if (Number(windowLayout.value("initialWidth")) === width
-            && Number(windowLayout.value("initialHeight")) === height)
-            return
-        windowLayout.setValue("initialWidth", width)
-        windowLayout.setValue("initialHeight", height)
-        windowLayout.sync()
+    function restoreWindowSize() {
+        const requested = WindowSize.read(windowLayout, "initialWidth", "initialHeight", Qt.size(675, 520))
+        const size = WindowSize.fit(requested, Qt.size(minimumWidth, minimumHeight), WindowSize.available(root, engine))
+        width = size.width
+        height = size.height
     }
 
     function toggleMaximize() {
-        flushWindowSize()
         if (visibility === Window.Maximized) showNormal()
         else showMaximized()
     }
 
-    Component.onCompleted: {
-        width = Math.max(minimumWidth, Number(windowLayout.value("initialWidth", width)) || width)
-        height = Math.max(minimumHeight, Number(windowLayout.value("initialHeight", height)) || height)
-        windowLayoutReady = true
-    }
-    onWidthChanged: queueWindowSizeSave()
-    onHeightChanged: queueWindowSizeSave()
-    onClosing: flushWindowSize()
+    Component.onCompleted: restoreWindowSize()
     onVisibleChanged: if (visible) load()
     onVisibilityChanged: {
-        if (visibility !== Window.Windowed && windowLayoutReady)
-            windowSizeSave.stop()
         if (visibility === Window.Windowed || visibility === Window.Maximized || visibility === Window.FullScreen)
             preferredVisibility = visibility
     }
 
-    Timer {
-        id: windowSizeSave
-        interval: 150
-        onTriggered: if (root.visibility === Window.Windowed) root.saveWindowSize()
-    }
     onShowingNetworkAdapterChanged: if (showingNetworkAdapter) Qt.callLater(loadNetworkAdapters)
     onCategoryChanged: if (category === "Scheduler" && engine.ready && !scheduler.queues.length) scheduler.load()
     onTermChanged: if (scrollViewport) scrollViewport.contentY = 0
-
-    Timer {
-        id: interfaceScalePreview
-        interval: 16
-        repeat: false
-        onTriggered: root.fontSettings.previewInterfaceScalePercent(root.pendingInterfaceScalePercent)
-    }
 
     Connections {
         target: engine
@@ -1025,10 +992,13 @@ AuralisWindow {
                             onSettingsRestored: root.load()
                         }
 
-                        SettingsAppearance {
+                        Loader {
+                            property bool opened: false
                             Layout.fillWidth: true
                             visible: !root.term && root.category === "Appearance"
-                            backdrop: settingsBackdrop
+                            active: visible || opened
+                            onLoaded: opened = true
+                            sourceComponent: SettingsAppearance { backdrop: settingsBackdrop }
                         }
 
                         Loader {
@@ -1068,21 +1038,27 @@ AuralisWindow {
                                                 Accessible.name: qsTr("Interface size")
 
                                                 function saveSelection() {
-                                                    interfaceScalePreview.stop()
                                                     const percent = Math.round(value)
-                                                    root.pendingInterfaceScalePercent = percent
-                                                    root.fontSettings.previewInterfaceScalePercent(percent)
+                                                    if (percent === root.fontSettings.interfaceScalePercent && !saveFailed)
+                                                        return
                                                     saveFailed = !root.fontSettings.setInterfaceScalePercent(percent)
                                                     if (saveFailed)
                                                         value = Qt.binding(() => root.fontSettings.interfaceScalePercent)
                                                 }
-                                                onMoved: {
-                                                    root.pendingInterfaceScalePercent = Math.round(value)
-                                                    if (pressed && !interfaceScalePreview.running)
-                                                        interfaceScalePreview.start()
-                                                    if (!pressed) saveSelection()
+
+                                                Timer {
+                                                    id: keyboardScaleCommit
+                                                    interval: 100
+                                                    onTriggered: interfaceSize.saveSelection()
                                                 }
-                                                onPressedChanged: if (!pressed) saveSelection()
+
+                                                onMoved: if (!pressed) keyboardScaleCommit.restart()
+                                                onPressedChanged: {
+                                                    if (pressed)
+                                                        keyboardScaleCommit.stop()
+                                                    else
+                                                        Qt.callLater(saveSelection)
+                                                }
                                             }
 
                                             NumeralLabel {
@@ -1091,7 +1067,7 @@ AuralisWindow {
                                             }
                                         }
 
-                                        PaneCopy { text: qsTr("Resizes controls, text, and spacing throughout Auralis as you move the slider.") }
+                                        PaneCopy { text: qsTr("Resizes controls, text, and spacing throughout Auralis when you release the slider.") }
 
                                         PaneCopy {
                                             visible: interfaceSize.saveFailed
@@ -1245,6 +1221,7 @@ AuralisWindow {
         anchors.topMargin: root.acrylicMode ? 12 - borderSize : 0
         showGrip: !root.acrylicMode
         gripColor: root.colors.muted
-        onResizingChanged: if (!resizing) root.flushWindowSize()
+        onResizeFinished: (previousSize, currentSize, edges) =>
+            WindowSize.record(windowLayout, "initialWidth", "initialHeight", previousSize, currentSize, edges)
     }
 }

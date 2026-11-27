@@ -1,9 +1,11 @@
 pragma ComponentBehavior: Bound
 
+import QtCore
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Window
+import "WindowSize.js" as WindowSize
 
 AuralisWindow {
     id: root
@@ -24,8 +26,9 @@ AuralisWindow {
     readonly property int preferredHeight: Math.ceil(Math.max(minimumHeight,
         Math.min(650, body.implicitHeight + header.implicitHeight
                  + (footer && footer.visible ? footer.implicitHeight : 0) + 2 * innerPadding)))
+    property string sizePreferenceKey: objectName
     property size fittedSize
-    property bool userResized: false
+    property int initialDialogWidth: 0
 
     signal opened()
     signal dismissed()
@@ -52,15 +55,46 @@ AuralisWindow {
     palette.highlight: colors.accent
     palette.placeholderText: colors.muted
 
+    Settings {
+        id: dialogSizes
+        category: "DetachedWindowLayout"
+    }
+
+    function savedDialogSize() {
+        return sizePreferenceKey
+            ? WindowSize.read(dialogSizes, sizePreferenceKey + "/width", sizePreferenceKey + "/height", Qt.size(0, 0))
+            : Qt.size(0, 0)
+    }
+
     function fitInitialHeight() {
-        if (userResized)
+        if (initialDialogWidth === 0)
+            initialDialogWidth = width
+        const saved = savedDialogSize()
+        const available = WindowSize.available(transientParent ?? root, typeof engine === "undefined" ? null : engine)
+        const minimum = Qt.size(minimumWidth, minimumHeight)
+        width = WindowSize.fit(Qt.size(saved.width || initialDialogWidth, height), minimum, available).width
+        height = WindowSize.fit(Qt.size(width, saved.height || preferredHeight), minimum, available).height
+        fittedSize = Qt.size(width, height)
+    }
+
+    function fitContentHeight() {
+        // A width change can reflow the body while a native frame drag is in progress.
+        if (visibility !== Window.Windowed || resizeHandles.resizing
+            || fittedSize.width !== width || fittedSize.height !== height)
             return
-        if (fittedSize.width > 0 && (width !== fittedSize.width || height !== fittedSize.height)) {
-            userResized = true
-            return
+        if (!savedDialogSize().height) {
+            height = WindowSize.fit(Qt.size(width, preferredHeight), Qt.size(minimumWidth, minimumHeight),
+                                    WindowSize.available(root, typeof engine === "undefined" ? null : engine)).height
+            fittedSize = Qt.size(width, height)
         }
-        fittedSize = Qt.size(width, preferredHeight)
-        height = fittedSize.height
+    }
+
+    function recordDialogSize(previousSize, currentSize, edges) {
+        if (sizePreferenceKey)
+            WindowSize.record(dialogSizes, sizePreferenceKey + "/width", sizePreferenceKey + "/height",
+                              previousSize, currentSize, edges)
+        fittedSize = currentSize
+        Qt.callLater(fitContentHeight)
     }
 
     function open() {
@@ -87,7 +121,7 @@ AuralisWindow {
             showMaximized()
     }
 
-    onPreferredHeightChanged: if (visible) Qt.callLater(fitInitialHeight)
+    onPreferredHeightChanged: if (visible) Qt.callLater(fitContentHeight)
     onVisibleChanged: {
         if (visible)
             opened()
@@ -257,6 +291,7 @@ AuralisWindow {
     }
 
     WindowResizeHandles {
+        id: resizeHandles
         hostWindow: root
         coalesceGeometry: true
         borderSize: root.acrylicMode ? Math.ceil(root.frameChromeInset * root.interfaceScale) + 7 : 7
@@ -264,6 +299,7 @@ AuralisWindow {
         anchors.topMargin: root.acrylicMode ? 12 - borderSize : 0
         showGrip: root.customFrame && !root.acrylicMode
         gripColor: root.colors.muted
+        onResizeFinished: (previousSize, currentSize, edges) => root.recordDialogSize(previousSize, currentSize, edges)
     }
 
     Shortcut {

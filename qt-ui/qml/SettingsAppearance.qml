@@ -385,16 +385,18 @@ GridLayout {
     }
 
     TabPage {
+        id: materialsPage
         visible: root.activeTab === 0
 
         ColumnLayout {
-            width: parent.width
+            width: materialsPage.availableWidth
             spacing: 12
             Heading { text: qsTr("Appearance preset") }
 
             GridLayout {
                 Layout.fillWidth: true
-                columns: Math.max(1, Math.min(4, Math.floor(width / 160)))
+                Layout.minimumWidth: 0
+                columns: Math.max(1, Math.min(4, Math.floor(parent.width / 160)))
                 columnSpacing: 8
                 rowSpacing: 8
 
@@ -453,7 +455,7 @@ GridLayout {
             }
             GridLayout {
                 Layout.fillWidth: true
-                columns: width >= 480 ? 2 : 1
+                columns: parent.width >= 480 ? 2 : 1
                 columnSpacing: 10
                 rowSpacing: 10
 
@@ -499,7 +501,7 @@ GridLayout {
             GridLayout {
                 visible: WindowAppearance.buttonPalette(MaterialTheme.current) === "custom"
                 Layout.fillWidth: true
-                columns: width >= 480 ? 2 : 1
+                columns: parent.width >= 480 ? 2 : 1
                 columnSpacing: 10
                 rowSpacing: 10
 
@@ -753,7 +755,7 @@ GridLayout {
             }
             GridLayout {
                 Layout.fillWidth: true
-                columns: width >= 320 ? 2 : 1
+                columns: parent.width >= 320 ? 2 : 1
                 IndicatorChoice {
                     enabled: indicatorsPage.customFill
                     label: qsTr("Fill layout")
@@ -815,7 +817,7 @@ GridLayout {
             }
             GridLayout {
                 Layout.fillWidth: true
-                columns: width >= 320 ? 2 : 1
+                columns: parent.width >= 320 ? 2 : 1
 
                 IndicatorChoice {
                     label: qsTr("Track finish")
@@ -855,7 +857,7 @@ GridLayout {
             GridLayout {
                 visible: !MaterialTheme.mdmAppearance
                 Layout.fillWidth: true
-                columns: !root.sideTabs || width >= 320 ? 2 : 1
+                columns: !root.sideTabs || parent.width >= 320 ? 2 : 1
                 IndicatorChoice {
                     label: qsTr("Connection shape")
                     model: root.shapeChoices
@@ -931,7 +933,7 @@ GridLayout {
             GridLayout {
                 visible: !MaterialTheme.mdmAppearance || WindowAppearance.graphMaterial !== "default"
                 Layout.fillWidth: true
-                columns: !root.sideTabs || width >= 320 ? 2 : 1
+                columns: !root.sideTabs || parent.width >= 320 ? 2 : 1
                 IndicatorChoice {
                     label: qsTr("Graph style")
                     model: [{label: qsTr("Area"), value: "area"}, {label: qsTr("Line"), value: "line"}, {label: qsTr("Bars"), value: "bars"}]
@@ -1001,6 +1003,7 @@ GridLayout {
 
     DetachedConfirmation {
         id: resetDialog
+        sizePreferenceKey: "reset-appearance"
         hostWindow: root.Window.window
         title: qsTr("Reset appearance?")
         message: qsTr("Restore the default material, colors, indicator styles and sizes, and backgrounds. Imported materials remain available.")

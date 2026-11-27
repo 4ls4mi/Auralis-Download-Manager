@@ -4,6 +4,7 @@
 #include <QFutureWatcher>
 #include <QJSValue>
 #include <QLibrary>
+#include <QSize>
 #include <QThreadPool>
 #include <QTimer>
 #include <QUrl>
@@ -85,6 +86,8 @@ public:
     Q_INVOKABLE bool applyPanelBackdrop(QWindow *window, const QVariantList &panels, bool enabled) const;
     Q_INVOKABLE void setWindowCornerRadius(QWindow *window, int radius) const;
     Q_INVOKABLE void installInteractiveResize(QWindow *window, int borderSize, int cornerSize) const;
+    Q_INVOKABLE QSize windowWorkAreaSize(QWindow *window) const;
+    Q_INVOKABLE void observeNativeResize(QWindow *window);
 
 signals:
     void dashboardChanged();
@@ -100,6 +103,7 @@ signals:
     void releaseUpdateHint(const QString &version);
     void quittingChanged();
     void restartFailed(const QString &message);
+    void windowResizeFinished(QWindow *window, const QSize &previousSize, const QSize &currentSize, int edges);
 
 private:
     using Run = char *(*)();

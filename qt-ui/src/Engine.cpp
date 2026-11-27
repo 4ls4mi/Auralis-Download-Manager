@@ -21,6 +21,7 @@
 #include <QProcess>
 #include <QQmlEngine>
 #include <QRegion>
+#include <QScreen>
 #include <QSettings>
 #include <QSystemTrayIcon>
 #include <QTranslator>
@@ -990,4 +991,23 @@ void Engine::setWindowCornerRadius(QWindow *window, int radius) const
 void Engine::installInteractiveResize(QWindow *window, int borderSize, int cornerSize) const
 {
     FrameResize::install(window, borderSize, cornerSize);
+}
+
+QSize Engine::windowWorkAreaSize(QWindow *window) const
+{
+    const auto *screen = window ? window->screen() : nullptr;
+    return screen ? screen->availableSize() : QSize{};
+}
+
+void Engine::observeNativeResize(QWindow *window)
+{
+#ifdef Q_OS_WIN
+    const QPointer<Engine> alive(this);
+    FrameResize::observeNative(window, [alive, window](const QSize &previous, const QSize &current, int edges) {
+        if (alive)
+            emit alive->windowResizeFinished(window, previous, current, edges);
+    });
+#else
+    Q_UNUSED(window);
+#endif
 }

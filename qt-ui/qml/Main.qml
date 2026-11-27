@@ -7,13 +7,14 @@ import QtQuick.Effects
 import QtQuick.Window
 import QtCore
 import "TransferData.js" as TransferData
+import "WindowSize.js" as WindowSize
 
 AuralisWindow {
     id: root
     objectName: "mainWindow"
     title: qsTr("Auralis Download Manager")
-    width: compactView ? windowPreferences.compactWidth : windowPreferences.fullWidth
-    height: compactView ? windowPreferences.compactHeight : windowPreferences.fullHeight
+    width: compactView ? 540 : 810
+    height: compactView ? 390 : 525
     minimumWidth: compactView ? 500 : 680
     minimumHeight: compactView ? 320 : 450
     visible: !engine.startHidden || !engine.trayAvailable
@@ -131,8 +132,7 @@ AuralisWindow {
     property alias classicCategoriesExpanded: windowPreferences.classicCategoriesExpanded
     property alias classicUnfinishedExpanded: windowPreferences.classicUnfinishedExpanded
     property alias classicQueuesExpanded: windowPreferences.classicQueuesExpanded
-    property bool windowGeometryReady: false
-    property bool restoringWindowGeometry: false
+    property bool windowPreferencesReady: false
     property bool classicSearchOpen: false
     readonly property int classicRowHeight: TypographyScale.pixels(colors.mdmListRow || 19)
     readonly property int classicHeaderHeight: TypographyScale.pixels(colors.mdmListHeader || 24)
@@ -506,8 +506,6 @@ AuralisWindow {
     }
 
     function hideMainToTray() {
-        windowSizeSave.stop()
-        saveWindowSize()
         if (engine.trayAvailable)
             hide()
         else
@@ -585,10 +583,6 @@ AuralisWindow {
         category: "MainWindow"
         property bool classicAppearanceHintDismissed: false
         property bool compactView: false
-        property int fullWidth: 810
-        property int fullHeight: 525
-        property int compactWidth: 540
-        property int compactHeight: 390
         property int sortOrder: 0
         property bool showSidebar: true
         property bool classicCategoriesExpanded: true
@@ -596,68 +590,49 @@ AuralisWindow {
         property bool classicQueuesExpanded: false
     }
 
-    function scheduleWindowSizeSave() {
-        if (windowGeometryReady && !restoringWindowGeometry && visibility === Window.Windowed)
-            windowSizeSave.restart()
+    function recordWindowSize(previousSize, currentSize, edges) {
+        if (visibility !== Window.Windowed)
+            return
+        WindowSize.record(windowPreferences, compactView ? "compactWidth" : "fullWidth",
+                          compactView ? "compactHeight" : "fullHeight", previousSize, currentSize, edges)
     }
 
-    function saveWindowSize() {
-        if (!windowGeometryReady || restoringWindowGeometry || visibility !== Window.Windowed
-            || width < minimumWidth || height < minimumHeight)
-            return
-        const widthKey = compactView ? "compactWidth" : "fullWidth"
-        const heightKey = compactView ? "compactHeight" : "fullHeight"
-        if (windowPreferences[widthKey] === width && windowPreferences[heightKey] === height)
-            return
-        windowPreferences[widthKey] = width
-        windowPreferences[heightKey] = height
-        windowPreferences.setValue(widthKey, width)
-        windowPreferences.setValue(heightKey, height)
-        windowPreferences.sync()
+    function restoreWindowSize() {
+        const minimum = Qt.size(minimumWidth, minimumHeight)
+        const fallback = compactView ? Qt.size(540, 390) : Qt.size(810, 525)
+        const saved = WindowSize.read(windowPreferences, compactView ? "compactWidth" : "fullWidth",
+                                      compactView ? "compactHeight" : "fullHeight", fallback)
+        const fitted = WindowSize.fit(saved, minimum, WindowSize.available(root, engine))
+        width = fitted.width
+        height = fitted.height
     }
 
     function saveWorkspacePreference(key, value) {
-        if (!windowGeometryReady)
+        if (!windowPreferencesReady)
             return
         windowPreferences.setValue(key, value)
         windowPreferences.sync()
     }
 
-    Timer {
-        id: windowSizeSave
-        interval: 180
-        onTriggered: root.saveWindowSize()
-    }
-
-    onWidthChanged: scheduleWindowSizeSave()
-    onHeightChanged: scheduleWindowSizeSave()
     onShowSidebarChanged: saveWorkspacePreference("showSidebar", showSidebar)
     onClassicCategoriesExpandedChanged: saveWorkspacePreference("classicCategoriesExpanded", classicCategoriesExpanded)
     onClassicUnfinishedExpandedChanged: saveWorkspacePreference("classicUnfinishedExpanded", classicUnfinishedExpanded)
     onClassicQueuesExpandedChanged: saveWorkspacePreference("classicQueuesExpanded", classicQueuesExpanded)
 
     function toggleCompactView() {
-        windowSizeSave.stop()
-        saveWindowSize()
-        restoringWindowGeometry = true
         if (visibility === Window.Maximized)
             showNormal()
         windowPreferences.compactView = !compactView
-        width = compactView ? windowPreferences.compactWidth : windowPreferences.fullWidth
-        height = compactView ? windowPreferences.compactHeight : windowPreferences.fullHeight
+        restoreWindowSize()
         saveWorkspacePreference("compactView", compactView)
-        Qt.callLater(() => { restoringWindowGeometry = false })
         synchronizeRows()
     }
 
     function toggleMaximized() {
-        if (visibility === Window.Maximized) {
+        if (visibility === Window.Maximized)
             showNormal()
-        } else {
-            windowSizeSave.stop()
-            saveWindowSize()
+        else
             showMaximized()
-        }
     }
 
     onClosing: function(event) {
@@ -668,8 +643,6 @@ AuralisWindow {
             engine.requestQuit()
     }
     onVisibilityChanged: {
-        if (visibility !== Window.Windowed)
-            windowSizeSave.stop()
         if (root.visibility === Window.Minimized && root.minimizeToTray && engine.trayAvailable) {
             Qt.callLater(() => {
                 if (root.visibility === Window.Minimized)
@@ -684,7 +657,8 @@ AuralisWindow {
     }
     onVioletRailChanged: synchronizeRows()
     Component.onCompleted: {
-        Qt.callLater(() => { windowGeometryReady = true })
+        restoreWindowSize()
+        windowPreferencesReady = true
         synchronizeRows()
         engine.refresh()
         if (engine.startHidden && !engine.trayAvailable)
@@ -695,12 +669,6 @@ AuralisWindow {
         target: engine
         function onOperationFailed(message) {
             root.actionError = message
-        }
-        function onQuittingChanged() {
-            if (engine.quitting) {
-                windowSizeSave.stop()
-                root.saveWindowSize()
-            }
         }
         function onDashboardChanged() {
             root.graphValues = root.graphValues.slice(-64).concat([Number(engine.dashboard.speed || 0)])
@@ -914,6 +882,7 @@ AuralisWindow {
 
     DetachedConfirmation {
         id: removeDialog
+        sizePreferenceKey: "remove-downloads"
         hostWindow: root
         title: qsTr("Remove downloads")
         property var entries: []
@@ -933,6 +902,7 @@ AuralisWindow {
 
     DetachedConfirmation {
         id: restartDialog
+        sizePreferenceKey: "redownload"
         hostWindow: root
         property var entry: null
         title: qsTr("Redownload from the start")
@@ -2021,6 +1991,7 @@ AuralisWindow {
 
             Frame {
                 id: librarySidebar
+                objectName: "downloadsSidebar"
                 visible: root.showSidebar && !root.compactView
                 Layout.preferredWidth: root.classicLayout ? 149 : root.compact ? 151 : 184
                 Layout.fillHeight: true
@@ -2714,6 +2685,7 @@ AuralisWindow {
             }
             Loader {
                 id: recentRail
+                objectName: "recentDownloadsSidebar"
                 visible: root.fracturedLayout && root.showSidebar && !root.compactView && workspace.width >= 1030
                 active: visible
                 Layout.preferredWidth: 183
@@ -3074,11 +3046,6 @@ AuralisWindow {
         windowMouseEvents: false
         borderSize: root.fracturedLayout ? Math.ceil(16 * root.interfaceScale) : 11
         cornerSize: root.fracturedLayout ? Math.ceil(22 * root.interfaceScale) : 19
-        onResizingChanged: {
-            if (!resizing) {
-                windowSizeSave.stop()
-                root.saveWindowSize()
-            }
-        }
+        onResizeFinished: (previousSize, currentSize, edges) => root.recordWindowSize(previousSize, currentSize, edges)
     }
 }

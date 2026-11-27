@@ -621,7 +621,9 @@ fn install(version: &str, background: bool) -> Result<(), String> {
     let manifest = staged_manifest_path(&c)?;
     let system = system_directory()?;
     // Paths and integrity data travel as environment variables, never as PowerShell source.
-    std::process::Command::new(system.join("WindowsPowerShell/v1.0/powershell.exe"))
+    let mut command =
+        std::process::Command::new(system.join("WindowsPowerShell/v1.0/powershell.exe"));
+    command
         .args([
             "-NoProfile",
             "-NonInteractive",
@@ -642,7 +644,14 @@ fn install(version: &str, background: bool) -> Result<(), String> {
             "AURALIS_UPDATE_BACKGROUND",
             if background { "1" } else { "0" },
         )
-        .creation_flags(0x08000000)
+        .creation_flags(0x08000000);
+    // The installer and fallback launch do not inherit the original working directory.
+    if std::env::var_os("MDM_DATA_DIR").is_some_and(|dir| std::path::Path::new(&dir).is_relative())
+    {
+        let profile = mdm_ipc::data_dir().ok_or("The active download profile is unavailable")?;
+        command.env("MDM_DATA_DIR", profile);
+    }
+    command
         .spawn()
         .map_err(|e| format!("Could not start the installer: {e}"))?;
     Ok(())
