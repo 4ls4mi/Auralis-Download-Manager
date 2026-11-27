@@ -2,6 +2,7 @@ pragma Singleton
 
 import QtQuick
 import QtCore
+import "ProgressStyles.js" as ProgressStyles
 
 QtObject {
     id: root
@@ -13,7 +14,7 @@ QtObject {
     readonly property string progressShape: preferences.progressShape
     readonly property string progressLayout: preferences.progressLayout
     readonly property int progressThickness: preferences.progressThickness
-    readonly property string progressAnimation: preferences.progressAnimation
+    readonly property string progressAnimation: ProgressStyles.normalize(progressLayout, preferences.progressAnimations?.[progressLayout] ?? preferences.progressAnimation)
     readonly property string progressLighting: preferences.progressLighting
     readonly property bool customProgressFill: preferences.customProgressFill
     readonly property string progressTrackFinish: preferences.progressTrackFinish
@@ -41,13 +42,8 @@ QtObject {
     readonly property var materialColorRoles: ["header", "footer", "sidebar", "content", "menu", "text"]
     readonly property var buttonColorRoles: ["accent", "secondary", "positive", "caution", "destructive"]
     readonly property var buttonPaletteIds: ["material", "cool", "warm", "custom"]
-    readonly property var progressLayoutChoices: [
-        {label: qsTr("Classic"), value: "classic"},
-        {label: qsTr("Status track"), value: "status-track"},
-        {label: qsTr("Pill segments"), value: "pill-segments"},
-        {label: qsTr("Thin line"), value: "thin-line"},
-        {label: qsTr("Striped fill"), value: "striped-fill"}
-    ]
+    readonly property var progressLayoutChoices: ProgressStyles.layouts().map(option =>
+        ({value:option.value,label:qsTranslate("WindowAppearance",option.label)}))
     readonly property var progressTrackFinishChoices: [
         {label: qsTr("Material default"), value: "default"},
         {label: qsTr("Clear glass"), value: "clear"},
@@ -70,14 +66,8 @@ QtObject {
         {label: qsTr("Gushing water"), value: "water"},
         {label: qsTr("Jelly"), value: "jelly"}
     ]
-    readonly property var progressAnimationChoices: animationChoices.concat([
-        {label: qsTr("Traveling sheen"), value: "sheen"},
-        {label: qsTr("Soft heartbeat"), value: "heartbeat"},
-        {label: qsTr("Rolling tide"), value: "tide"},
-        {label: qsTr("Elastic gloss"), value: "elastic"},
-        {label: qsTr("Prism glints"), value: "glints"},
-        {label: qsTr("Current flow"), value: "current"}
-    ])
+    readonly property var progressAnimationChoices: ProgressStyles.choices(progressLayout).map(option =>
+        ({value:option.value,label:qsTranslate("WindowAppearance",option.label)}))
     readonly property var lightingChoices: [
         {label: qsTr("Polished glass"), value: "polished"},
         {label: qsTr("Deep shading"), value: "depth"},
@@ -140,13 +130,22 @@ QtObject {
             mainColor: "", detailsColor: "", progressShape: "material", progressLayout: "classic",
             materialCustomizations: {}, progressThickness: 100, connectionBlockSize: 100,
             customProgressFill: false, progressTrackFinish: "default", progressTrackColor: "material",
-            progressAnimation: "classic", progressLighting: "polished", connectionShape: "material",
+            progressAnimations: {}, progressAnimation: "classic", progressLighting: "polished", connectionShape: "material",
             connectionAnimation: "classic", connectionLighting: "polished",
             graphMaterial: "default", graphShape: "area", graphAnimation: "classic", graphLighting: "polished"
         }
     }
 
     function set(key, value) {
+        if (key === "progressLayout" || key === "progressAnimation") {
+            const layout = key === "progressLayout" ? ProgressStyles.layout(value) : progressLayout
+            const saved = Object.assign({}, ProgressStyles.remembered(preferences.progressAnimations), {[progressLayout]:progressAnimation})
+            const animation = key === "progressAnimation" ? ProgressStyles.normalize(layout,value,progressAnimation)
+                : ProgressStyles.normalize(layout,saved[layout])
+            saved[layout] = animation
+            preferences = Object.assign({}, preferences, {progressLayout:layout,progressAnimation:animation,progressAnimations:saved})
+            return
+        }
         if (key === "progressThickness" || key === "connectionBlockSize")
             value = indicatorSize(value, preferences[key])
         else if (key === "progressTrackFinish")
@@ -319,7 +318,7 @@ QtObject {
     }
 
     function indicatorAnimation(value, fallback) {
-        return progressAnimationChoices.some(choice => choice.value === value) ? value : fallback
+        return ["classic","none","water","jelly","sheen","heartbeat","tide","elastic","glints","current"].includes(value) ? value : fallback
     }
 
     function indicatorLayout(value, fallback) {
@@ -470,7 +469,8 @@ QtObject {
             progressThickness: indicatorSize(saved.progressThickness, original.progressThickness),
             connectionBlockSize: indicatorSize(saved.connectionBlockSize, original.connectionBlockSize),
             materialCustomizations: validMaterialCustomizations(saved.materialCustomizations, original.materialCustomizations),
-            progressAnimation: indicatorAnimation(saved.progressAnimation, original.progressAnimation),
+            progressAnimations: ProgressStyles.remembered(saved.progressAnimations ?? original.progressAnimations),
+            progressAnimation: ProgressStyles.normalize(indicatorLayout(saved.progressLayout,original.progressLayout), saved.progressAnimation ?? original.progressAnimation),
             progressLighting: indicatorLighting(saved.progressLighting, original.progressLighting),
             customProgressFill: typeof saved.customProgressFill === "boolean" ? saved.customProgressFill : original.customProgressFill,
             progressTrackFinish: trackFinishFor(saved.progressTrackFinish ?? data["mh-glass-track-finish"], original.progressTrackFinish),
@@ -515,7 +515,7 @@ QtObject {
                 mdmMode: MaterialTheme.mdmMode,
                 progressLayout: progressLayout, progressThickness: progressThickness,
                 connectionBlockSize: connectionBlockSize, materialCustomization: materialCustomization(material),
-                progressAnimation: progressAnimation, progressLighting: progressLighting,
+                progressAnimation: progressAnimation, progressAnimations: ProgressStyles.remembered(preferences.progressAnimations), progressLighting: progressLighting,
                 customProgressFill: customProgressFill,
                 progressTrackFinish: progressTrackFinish, progressTrackColor: progressTrackColor,
                 connectionShape: connectionShape, connectionAnimation: connectionAnimation, connectionLighting: connectionLighting,
@@ -565,7 +565,8 @@ QtObject {
             progressLayout: indicatorLayout(value.qt?.progressLayout, progressLayout),
             progressThickness: indicatorSize(value.qt?.progressThickness, progressThickness),
             connectionBlockSize: indicatorSize(value.qt?.connectionBlockSize, connectionBlockSize),
-            progressAnimation: indicatorAnimation(value.qt?.progressAnimation, progressAnimation),
+            progressAnimations: ProgressStyles.remembered(value.qt?.progressAnimations ?? preferences.progressAnimations),
+            progressAnimation: ProgressStyles.normalize(indicatorLayout(value.qt?.progressLayout,progressLayout),value.qt?.progressAnimation ?? progressAnimation),
             progressLighting: indicatorLighting(value.qt?.progressLighting, progressLighting),
             customProgressFill: typeof value.qt?.customProgressFill === "boolean" ? value.qt.customProgressFill : customProgressFill,
             // Older Qt exports used placeholder values for the legacy backdrop fields.

@@ -1,17 +1,8 @@
 .pragma library
 .import "MaterialGeometry.js" as Geometry
+.import "ProgressStyles.js" as Styles
 
-function style(name) {
-    switch (name) {
-    case "status-track":
-    case "pill-segments":
-    case "thin-line":
-    case "striped-fill":
-        return name
-    default:
-        return "classic"
-    }
-}
+function style(name) { return Styles.layout(name) }
 
 function trackHeight(available, layout, scale = 1) {
     switch (layout) {

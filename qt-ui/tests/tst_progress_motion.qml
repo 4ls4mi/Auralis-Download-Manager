@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import "../qml" as App
+import "../qml/ProgressStyles.js" as Styles
 
 TestCase {
     id: test
@@ -12,11 +13,15 @@ TestCase {
     Rectangle { id: backdrop; anchors.fill: parent; color: "#1f4a61" }
     Component { id: renderer; App.ProgressMotion { width: 360; height: 32 } }
     function test_transparency_data() {
-        return ["sheen", "heartbeat", "tide", "elastic", "glints", "current"].map(style => ({tag:style,style:style}))
+        const rows=[]
+        for (const layout of ["status-track","pill-segments","thin-line"])
+            for (const motion of Styles.choices(layout).filter(option=>option.value!=="none"))
+                rows.push({tag:motion.value,style:motion.value,layout:layout})
+        return rows
     }
     function test_transparency(data) {
         backdrop.color = "#1f4a61"
-        const item = createTemporaryObject(renderer, test, {amount:.42, animationStyle:data.style, phase:1.2,
+        const item = createTemporaryObject(renderer, test, {amount:.42, animationStyle:data.style, layoutStyle:data.layout, phase:1.2,
             fillMask:"M 0 0 H 151 V 32 H 0 Z"})
         verify(item !== null)
         tryCompare(item, "available", true)

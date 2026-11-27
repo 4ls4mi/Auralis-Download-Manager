@@ -5,6 +5,7 @@ import QtQuick.Shapes
 import "MaterialGeometry.js" as Geometry
 import "IndicatorLighting.js" as Lighting
 import "ProgressLayoutGeometry.js" as LayoutGeometry
+import "ProgressStyles.js" as ProgressStyles
 
 Item {
     id: progress
@@ -33,6 +34,8 @@ Item {
         WindowAppearance.progressTrackColors)
     readonly property var finish: Lighting.style(lightingStyle)
     readonly property string layoutKind: LayoutGeometry.style(layoutStyle)
+    readonly property bool artisticLayout: ProgressStyles.artistic(layoutKind)
+    readonly property string selectedAnimation: ProgressStyles.normalize(layoutKind,animationStyle)
     readonly property bool classicLayout: layoutKind === "classic"
     readonly property bool labelAtEnd: showLabel && (usesMaterialProgress || layoutKind === "thin-line")
     readonly property string transferStatus: transferState.toLowerCase()
@@ -47,8 +50,8 @@ Item {
         : ["square", "plain"].includes(shape) ? 3 : 0
     readonly property bool renderWithShader: !usesMaterialProgress && classicLayout && width >= 12 && height >= 7
         && GraphicsInfo.api !== GraphicsInfo.Software && GraphicsInfo.api !== GraphicsInfo.Unknown
-    readonly property int motionKind: animationStyle === "water" ? 1 : animationStyle === "jelly" ? 2 : 0
-    readonly property bool canAnimate: !usesMaterialProgress && animationStyle !== "none" && animated && visible
+    readonly property int motionKind: selectedAnimation === "water" ? 1 : selectedAnimation === "jelly" ? 2 : 0
+    readonly property bool canAnimate: !usesMaterialProgress && selectedAnimation !== "none" && animated && visible
         && width >= 12 && height >= 7 && !MaterialTheme.reducedMotion
     readonly property bool liquidMoving: canAnimate && amount > 0 && amount < 1
     readonly property real amount: Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0
@@ -100,7 +103,7 @@ Item {
         to: Math.PI * 2
         duration: progress.motionKind === 1 ? 1480 : progress.motionKind === 2 ? 3700 : 2450
         loops: Animation.Infinite
-        running: progress.liquidMoving && progress.externalPhase < 0
+        running: !progress.artisticLayout && progress.liquidMoving && progress.externalPhase < 0
     }
 
     Loader {
@@ -163,31 +166,31 @@ Item {
         sourceComponent: Item {
             id: vessel
 
-            readonly property var trackSpans: progress.classicLayout ? []
+            readonly property var trackSpans: (progress.classicLayout || progress.artisticLayout) ? []
                 : LayoutGeometry.spans(width, height, progress.layoutKind, 1)
-            readonly property var fillSpans: progress.classicLayout ? []
+            readonly property var fillSpans: (progress.classicLayout || progress.artisticLayout) ? []
                 : LayoutGeometry.spans(width, height, progress.layoutKind, progress.shownAmount)
-            readonly property string trackPath: progress.classicLayout
+            readonly property string trackPath: (progress.classicLayout || progress.artisticLayout)
                 ? Geometry.barContour(width, height, progress.shape, 1, 0)
                 : LayoutGeometry.path(trackSpans, height, progress.layoutKind, progress.shape)
-            readonly property string fillPath: progress.classicLayout
+            readonly property string fillPath: (progress.classicLayout || progress.artisticLayout)
                 ? Geometry.barContour(width, height, progress.shape, progress.shownAmount,
                     progress.liquidMoving ? progress.wavePhase * (progress.motionKind === 1 ? 2 : 1) : 0)
                 : LayoutGeometry.path(fillSpans, height, progress.layoutKind, progress.shape)
             readonly property real front: {
-                if (progress.classicLayout)
+                if ((progress.classicLayout || progress.artisticLayout))
                     return width * progress.shownAmount
                 const last = fillSpans[fillSpans.length - 1]
                 return last ? last.x + last.width : 0
             }
             readonly property real remainder: Math.max(0, width - front)
             readonly property bool striped: progress.layoutKind === "striped-fill"
-            readonly property real glowSize: progress.classicLayout ? progress.glowMargin
+            readonly property real glowSize: (progress.classicLayout || progress.artisticLayout) ? progress.glowMargin
                 : Math.min(progress.glowMargin, height * .23,
                     progress.layoutKind === "pill-segments"
                         ? LayoutGeometry.gap(width, height, progress.layoutKind) * .22 : height)
             readonly property color trackBody: {
-                if (progress.classicLayout)
+                if ((progress.classicLayout || progress.artisticLayout))
                     return MaterialTheme.rgba(progress.trackColor, .08 + .1 * progress.finish.depth)
                 const base = MaterialTheme.mix(progress.trackColor, progress.profile.ink,
                     progress.profile.light ? .12 : .20, .75)
@@ -246,17 +249,17 @@ Item {
                 if (!progress.finish.caustic || height < 7)
                     return ""
                 const drift = progress.liquidMoving ? progress.wavePhase * (progress.motionKind === 1 ? 2 : 1) : 0
-                const spans = progress.classicLayout ? [{x: 0, width: front}] : fillSpans
+                const spans = (progress.classicLayout || progress.artisticLayout) ? [{x: 0, width: front}] : fillSpans
                 let path = ""
                 for (const span of spans) {
-                    const start = span.x + Math.min(height * .3, progress.classicLayout ? width * .06 : span.width * .25)
+                    const start = span.x + Math.min(height * .3, (progress.classicLayout || progress.artisticLayout) ? width * .06 : span.width * .25)
                     const end = span.x + span.width - height * .2
                     if (end <= start)
                         continue
                     const segments = Math.ceil(Math.min(48, (end - start) / 3))
                     for (let i = 0; i <= segments; ++i) {
                         const x = start + (end - start) * i / segments
-                        const radius = progress.classicLayout
+                        const radius = (progress.classicLayout || progress.artisticLayout)
                             ? height * .5 - Geometry.barEdge(x, width, height, progress.shape) : height * .42
                         const longitudinal = x / Math.max(6, height * .74)
                         const wave = second ? .17 - .44 * Math.cos(longitudinal * .79 + drift)
@@ -268,7 +271,7 @@ Item {
             }
 
             function highlights(lower) {
-                if (progress.classicLayout)
+                if ((progress.classicLayout || progress.artisticLayout))
                     return width >= 25 ? Geometry.barHighlights(width, height, progress.shape, lower) : ""
                 return LayoutGeometry.highlights(trackSpans, height, lower)
             }
@@ -342,6 +345,7 @@ Item {
             }
 
             Shape {
+                visible: !progress.artisticLayout
                 anchors.fill: parent
                 preferredRendererType: Shape.CurveRenderer
 
@@ -406,7 +410,7 @@ Item {
                         GradientStop { position: .67; color: MaterialTheme.rgba(progress.lastTone.glow, .29) }
                         GradientStop { position: 1; color: "transparent" }
                     }
-                    PathSvg { path: progress.liquidMoving ? vessel.fillPath : "" }
+                    PathSvg { path: progress.classicLayout && progress.liquidMoving ? vessel.fillPath : "" }
                 }
 
                 ShapePath {
@@ -451,10 +455,10 @@ Item {
 
             Loader {
                 anchors.fill: parent
-                active: vessel.spraying || (progress.visible && (vessel.striped || progress.finish.optic >= 5)
-                    && progress.shownAmount > 0)
+                active: !progress.artisticLayout && (vessel.spraying || (progress.visible && (vessel.striped || progress.finish.optic >= 5)
+                    && progress.shownAmount > 0))
                 sourceComponent: Canvas {
-                    readonly property real phase: spraying ? progress.wavePhase : 0
+                    readonly property real phase: spraying || (striped && progress.liquidMoving) ? progress.wavePhase : 0
                     readonly property real front: vessel.front
                     readonly property string outline: vessel.trackPath
                     readonly property string filledPath: vessel.fillPath
@@ -486,7 +490,7 @@ Item {
                     }
 
                     function positionY(x, chamberY) {
-                        if (!progress.classicLayout)
+                        if (!(progress.classicLayout || progress.artisticLayout))
                             return height * (.5 + chamberY * .44)
                         const edge = Geometry.barEdge(Math.max(0, Math.min(width, x)), width, height, progress.shape)
                         return height * .5 + chamberY * (height * .5 - edge)
@@ -680,7 +684,11 @@ Item {
                         ctx.path = filledPath
                         ctx.clip()
                         ctx.beginPath()
-                        for (let x = -slant; x < front; x += band * 2.1) {
+                        const offset = progress.liquidMoving && progress.selectedAnimation !== "stripe-pulse"
+                            ? band*2.1*(phase/(Math.PI*2))*(progress.selectedAnimation === "stripe-reverse" ? -1 : 1) : 0
+                        if (progress.selectedAnimation === "stripe-pulse" && progress.liquidMoving)
+                            ctx.globalAlpha = .4+.6*(.5+.5*Math.sin(phase))
+                        for (let x = -slant-band*2.1+offset; x < front+band*2.1; x += band * 2.1) {
                             ctx.moveTo(x, height)
                             ctx.lineTo(x + slant, 0)
                         }
@@ -711,17 +719,46 @@ Item {
     Loader {
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.rightMargin: progress.labelAtEnd ? amountLabel.width + 8 : 0
-        height: progress.height
-        active: !progress.usesMaterialProgress && progress.liquidMoving
-            && ["sheen", "heartbeat", "tide", "elastic", "glints", "current"].includes(progress.animationStyle)
+        anchors.leftMargin: 1.5
+        anchors.rightMargin: progress.labelAtEnd ? amountLabel.width + 8 : 1.5
+        anchors.verticalCenter: parent.verticalCenter
+        height: LayoutGeometry.trackHeight(Math.max(0,progress.height-3),progress.layoutKind,progress.thicknessScale)
+        active: !progress.artisticLayout && !progress.classicLayout && progress.layoutKind !== "striped-fill" && !progress.usesMaterialProgress && progress.liquidMoving
         sourceComponent: ProgressMotion {
+            clipFront: {
+                const spans = LayoutGeometry.spans(width,height,progress.layoutKind,progress.shownAmount)
+                const last = spans[spans.length-1]
+                return last ? last.x+last.width : 0
+            }
             fillMask: progress.classicLayout
                 ? Geometry.barContour(width,height,progress.shape,progress.shownAmount,0)
                 : LayoutGeometry.path(LayoutGeometry.spans(width,height,progress.layoutKind,progress.shownAmount),height,progress.layoutKind,progress.shape)
-            amount: progress.amount
-            animationStyle: progress.animationStyle
+            amount: progress.shownAmount
+            animationStyle: progress.selectedAnimation
+            layoutStyle: progress.layoutKind
+            startColor: progress.startColor
+            endColor: progress.endColor
             phase: progress.wavePhase
+        }
+    }
+
+    Loader {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.leftMargin: 1.5
+        anchors.rightMargin: progress.labelAtEnd ? amountLabel.width + 8 : 1.5
+        anchors.verticalCenter: parent.verticalCenter
+        height: Math.max(0,progress.height-3)
+        active: progress.artisticLayout && !progress.usesMaterialProgress
+        sourceComponent: ArtisticProgress {
+            amount: progress.shownAmount
+            layoutStyle: progress.layoutKind
+            animationStyle: progress.selectedAnimation
+            shape: progress.shape
+            startColor: progress.startColor
+            endColor: progress.endColor
+            lightingStyle: progress.lightingStyle
+            moving: progress.liquidMoving
         }
     }
 

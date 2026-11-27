@@ -1,0 +1,3 @@
+singleton MaterialTheme 1.0 MaterialTheme.qml
+singleton TypographyScale 1.0 TypographyScale.qml
+singleton WindowAppearance 1.0 WindowAppearance.qml

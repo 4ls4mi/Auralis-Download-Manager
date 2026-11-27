@@ -91,7 +91,7 @@ jobs:
       - name: Validate progress motion QML types
         shell: pwsh
         run: |
-          & (Join-Path $env:AURALIS_QT_ROOT 'bin/qmllint.exe') --ignore-settings qt-ui/qml/ProgressMotion.qml
+          & (Join-Path $env:AURALIS_QT_ROOT 'bin/qmllint.exe') --ignore-settings qt-ui/qml/ProgressMotion.qml qt-ui/qml/ArtisticProgress.qml
           if ($LASTEXITCODE -ne 0) { throw 'Progress motion QML type validation failed.' }
 
       - name: Render transparent progress motion

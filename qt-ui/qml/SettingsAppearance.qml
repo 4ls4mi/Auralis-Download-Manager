@@ -767,7 +767,7 @@ GridLayout {
                 }
                 IndicatorChoice {
                     enabled: indicatorsPage.customFill
-                    label: qsTr("Fill animation")
+                    label: qsTr("Layout animation")
                     model: WindowAppearance.progressAnimationChoices
                     selection: WindowAppearance.progressAnimation
                     onChosen: value => WindowAppearance.set("progressAnimation", value)

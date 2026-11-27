@@ -61,30 +61,57 @@ test("bar materials preserve the measured height of every sample", () => {
   }
 });
 
-test("motion clears the previous frame and never paints without an explicit fill mask", () => {
-  const code = method(progress, "motion") + method(progress, "drawProgress") + ";drawProgress(ctx);";
-  for (const animationStyle of ["none", "sheen", "heartbeat", "tide", "elastic", "glints", "current"]) {
-    for (const width of [0, 2, 300]) for (const fraction of [0, .01, .42, 1]) for (const fillMask of ["", "M 0 0 H 126 V 24 H 0 Z"]) {
-      const ctx = canvas();
-      vm.runInNewContext(code, {ctx, width, height:24, fraction, animationStyle, fillMask, phase:1.2});
-      assert.equal(ctx.calls[0][0], "reset");
-      assert.equal(ctx.calls[1][0], "clearRect");
-      if (!width || !fraction || !fillMask || animationStyle === "none") {
-        assert.ok(!ctx.calls.some(([name]) => ["fill", "fillRect", "stroke"].includes(name)));
-      } else {
-        assert.deepEqual(ctx.calls.find(([name]) => name === "rect"), ["rect",0,0,width*fraction,24]);
-        assert.equal(ctx.path, fillMask);
+function library(name, imports = {}) {
+  const context = {...imports};
+  vm.runInNewContext(readFileSync(new URL(name, qml), "utf8").replace(/^\.(?:pragma|import).*$/gm, ""), context);
+  return context;
+}
+const styles = library("ProgressStyles.js");
+const geometry = library("MaterialGeometry.js");
+const artwork = library("ProgressArtwork.js", {Styles:styles, Geometry:geometry});
+
+test("each layout has three own motions and a static option; old settings migrate safely", () => {
+  const seen = new Set();
+  for (const {value:layout} of styles.layouts()) {
+    const choices=styles.choices(layout);
+    assert.equal(choices.length,4);
+    assert.equal(choices.at(-1).value,"none");
+    for (const choice of choices.slice(0,-1)) { assert.ok(!seen.has(choice.value)); seen.add(choice.value); }
+    for (const legacy of [undefined,"bogus","classic","water","jelly","sheen","heartbeat","tide","elastic","glints","current"])
+      assert.ok(choices.some(option=>option.value===styles.normalize(layout,legacy)));
+    assert.equal(styles.normalize(layout,"none"),"none");
+  }
+  assert.equal(styles.layouts().length,11);
+  assert.equal(seen.size,33);
+  assert.equal(styles.layout("liquid-capsule"),"classic");
+  assert.deepEqual(JSON.parse(JSON.stringify(styles.remembered({"elastic-gel":"gel-spring",invalid:"bad"}))),{"elastic-gel":"gel-spring"});
+});
+
+test("new artwork stays clipped to progress at normal, compact, tiny and empty sizes", () => {
+  for(const {value:layout} of styles.layouts().filter(option=>styles.artistic(option.value))) {
+    for(const {value:animation} of styles.choices(layout)) for(const width of [0,2,320]) for(const height of [3,14,32]) for(const amount of [0,.01,.42,1]) {
+      const ctx=canvas();
+      ctx.bezierCurveTo=(...args)=>assert.ok(args.every(Number.isFinite));
+      artwork.draw(ctx,{width,height,amount,layout,animation,phase:1.25,shape:"round",startColor:"#9069f8",endColor:"#ba98ff",finish:{reflection:.7,depth:.4,optic:6}});
+      if(!width||!amount) assert.equal(ctx.calls.length,0);
+      else {
+        assert.ok(ctx.calls.filter(([name])=>name==="clip").length>=2);
+        assert.ok(ctx.calls.some(([name,x,y,w,h])=>name==="rect"&&x===0&&y===0&&w===width*amount&&h===height));
+        assert.equal(ctx.globalCompositeOperation,"source-atop");
       }
     }
   }
 });
 
-test("retired layouts safely fall back to Classic while older layouts remain available", () => {
-  const source = readFileSync(new URL("ProgressLayoutGeometry.js", qml), "utf8");
-  const context = {};
-  vm.runInNewContext(source.replace(/^\.(?:pragma|import).*$/gm, ""), context);
-  for (const name of ["liquid-capsule", "jelly-beads", "braided-ribbon", "prism-segments", "molten-glass", "orbit-marker", "glass-tiles", "checkpoints", "tidal-ribbon", "frosted-cells", "filament-core", "twin-rails"])
-    assert.equal(context.style(name), "classic");
-  for (const name of ["classic", "status-track", "pill-segments", "thin-line", "striped-fill"])
-    assert.equal(context.style(name), name);
+test("legacy overlay uses the exact masked front rather than painting an unfilled track", () => {
+  const code=method(progress,"drawProgress")+";drawProgress(ctx);";
+  for(const layoutStyle of ["status-track","pill-segments","thin-line"]) for(const {value:animationStyle} of styles.choices(layoutStyle)) {
+    for(const fraction of [0,.42,1]) for(const fillMask of ["","M 0 0 H 125 V 24 H 0 Z"]) {
+      const ctx=canvas();
+      vm.runInNewContext(code,{ctx,width:300,height:24,fraction,clipFront:125,layoutStyle,animationStyle,fillMask,phase:1.25,startColor:"#9069f8",endColor:"#ba98ff",Styles:styles,Artwork:artwork});
+      assert.equal(ctx.calls[0][0],"reset");assert.equal(ctx.calls[1][0],"clearRect");
+      if(!fraction||!fillMask||animationStyle==="none") assert.equal(ctx.calls.length,2);
+      else assert.ok(ctx.calls.some(([name,x,y,w])=>name==="rect"&&w===125));
+    }
+  }
 });
