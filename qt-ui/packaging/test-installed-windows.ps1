@@ -56,6 +56,16 @@ function Run-Fixture([string]$Process, [string[]]$Arguments, [int]$Timeout = 180
     }
 }
 
+function Get-ProductVersion([string]$Path) {
+    # NSIS and the app use different display strings for the same fixed PE version.
+    $info = [Diagnostics.FileVersionInfo]::GetVersionInfo($Path)
+    $version = [version]::new($info.ProductMajorPart, $info.ProductMinorPart, $info.ProductBuildPart, $info.ProductPrivatePart)
+    if ($version -eq [version]::new(0, 0, 0, 0)) {
+        throw "Missing product version metadata in $Path."
+    }
+    return $version
+}
+
 function New-UpgradePreferencesFixture([string]$FixtureProfile) {
     # Match the QSettings INI UserScope path configured by --engine-smoke. The
     # preceding smoke launch must have created it without using the user's registry.
@@ -199,13 +209,13 @@ public static class AuralisSmokeIcon {
 
 try {
     $candidate = $env:AURALIS_QT_INSTALLER
-    $candidateVersion = [version][Diagnostics.FileVersionInfo]::GetVersionInfo($candidate).ProductVersion
+    $candidateVersion = Get-ProductVersion $candidate
     $seedInstaller = $candidate
     $seedVersion = $candidateVersion
     # An earlier, release-verified installer can exercise an actual cross-version upgrade.
     if ($env:AURALIS_QT_PRIOR_INSTALLER) {
         $seedInstaller = (Resolve-Path -LiteralPath $env:AURALIS_QT_PRIOR_INSTALLER).Path
-        $seedVersion = [version][Diagnostics.FileVersionInfo]::GetVersionInfo($seedInstaller).ProductVersion
+        $seedVersion = Get-ProductVersion $seedInstaller
         if ($seedVersion -ge $candidateVersion) {
             throw "The earlier installer version $seedVersion is not below the candidate $candidateVersion."
         }
@@ -215,8 +225,9 @@ try {
     if (!(Test-Path $exe) -or !(Test-Path (Join-Path $fixture 'uninstall.exe'))) {
         throw 'The standalone Qt installation is incomplete.'
     }
-    if ([version][Diagnostics.FileVersionInfo]::GetVersionInfo($exe).ProductVersion -ne $seedVersion) {
-        throw "The fixture did not install the initial executable version $seedVersion."
+    $installedVersion = Get-ProductVersion $exe
+    if ($installedVersion -ne $seedVersion) {
+        throw "The fixture installed $installedVersion. Expected the initial executable version $seedVersion."
     }
     Run-Fixture $exe @('--engine-smoke', '--device=software') 90000
     if (!(Test-Path $marker)) {
@@ -268,8 +279,9 @@ try {
         Write-FixtureDiagnostics $upgradedAt
         throw 'The passive update did not relaunch a working installed app.'
     }
-    if ([version][Diagnostics.FileVersionInfo]::GetVersionInfo($exe).ProductVersion -ne $candidateVersion) {
-        throw "The fixture did not relaunch the candidate executable version $candidateVersion."
+    $installedVersion = Get-ProductVersion $exe
+    if ($installedVersion -ne $candidateVersion) {
+        throw "The fixture relaunched $installedVersion. Expected the candidate executable version $candidateVersion."
     }
     if (!(Select-String -LiteralPath $console -SimpleMatch 'Smoke: using Direct3D 11.' -Quiet)) {
         throw 'The upgraded application did not select Direct3D 11 by default.'
