@@ -4,6 +4,10 @@ $fixture = Join-Path $env:AURALIS_QT_JOB 'smoke-install'
 $data = Join-Path $env:AURALIS_QT_JOB 'smoke-data'
 $exe = Join-Path $fixture 'auralis-download-manager.exe'
 $marker = Join-Path $data 'qt-engine-smoke.ok'
+$suiteStartedAt = Get-Date
+$diagnosticsRoot = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { $env:TEMP }
+$diagnostics = Join-Path $diagnosticsRoot "auralis-qt-diagnostics-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+if ($env:GITHUB_ENV) { "AURALIS_QT_DIAGNOSTICS=$diagnostics" >> $env:GITHUB_ENV }
 $previousData = $env:MDM_DATA_DIR
 $previousDownloads = $env:MDM_DOWNLOADS
 $previousSkipHost = $env:AURALIS_TEST_SKIP_HOST
@@ -159,7 +163,9 @@ try {
         Write-Host 'Verified all twelve embedded interface font files.'
     }
     Run-Fixture $exe @('--engine-smoke', '--device=software') 90000
-    if (!(Test-Path $marker)) { throw 'The installed application did not verify start, pause, resume, and transfer integrity.' }
+    if (!(Test-Path $marker)) {
+        throw 'The installed application exited without its transfer-integrity success marker. See the smoke diagnostics below.'
+    }
     Get-Content -LiteralPath $marker | ForEach-Object { Write-Host $_ }
     $console = Join-Path $data 'qt-smoke-console.log'
     if (!(Test-Path -LiteralPath $console) -or
@@ -223,6 +229,24 @@ try {
         throw 'The uninstaller did not remove only the packaged application files.'
     }
     Write-Host 'Verified silent install, native icons, Direct3D 11 rendering during start and resume, passive upgrade relaunch, and scoped uninstallation.'
+} catch {
+    # A zero exit code without a marker is also a failure. Print diagnostics for
+    # all assertion failures before cleanup removes the isolated test profile.
+    $verificationFailure = $_
+    try {
+        Write-FixtureDiagnostics $suiteStartedAt
+        New-Item -ItemType Directory -Force -Path $diagnostics | Out-Null
+        $console = Join-Path $data 'qt-smoke-console.log'
+        if (Test-Path -LiteralPath $console) {
+            Copy-Item -LiteralPath $console -Destination (Join-Path $diagnostics 'qt-smoke-console.log')
+        }
+        @("Verification failure: $($verificationFailure.Exception.Message)",
+          "Expected marker: $marker", "Installed executable: $exe") |
+            Set-Content -LiteralPath (Join-Path $diagnostics 'verification-failure.txt') -Encoding utf8
+    } catch {
+        Write-Warning "Could not preserve all smoke diagnostics: $($_.Exception.Message)"
+    }
+    throw $verificationFailure
 } finally {
     Get-Process -Name 'auralis-download-manager' -ErrorAction SilentlyContinue |
         Where-Object { $_.Path -ieq $exe } | Stop-Process -Force -ErrorAction SilentlyContinue

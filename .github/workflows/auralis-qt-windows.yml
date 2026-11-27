@@ -116,6 +116,15 @@ jobs:
         shell: pwsh
         run: ./qt-ui/packaging/test-installed-windows.ps1
 
+      - name: Preserve failed installed-app diagnostics
+        if: failure() && env.AURALIS_QT_DIAGNOSTICS != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: auralis-installed-app-diagnostics-${{ github.run_attempt }}
+          path: ${{ env.AURALIS_QT_DIAGNOSTICS }}
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Test the Rust engine bridge, recovery, and backup
         if: github.event_name == 'workflow_dispatch' && inputs.full_tests
         shell: pwsh
