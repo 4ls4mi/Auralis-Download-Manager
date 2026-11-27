@@ -11,6 +11,7 @@ ColumnLayout {
     id: root
 
     required property var field
+    required property real editorWidth
     property bool busy: false
     property var cells: []
     property var regional: ({})
@@ -108,7 +109,7 @@ ColumnLayout {
 
         Loader {
             visible: !root.browserCapture
-            Layout.preferredWidth: root.kind === "boolean" ? 56 : Math.min(root.width * 0.48, 300)
+            Layout.preferredWidth: root.kind === "boolean" ? 56 : root.editorWidth
             Layout.minimumWidth: root.kind === "boolean" ? 48 : 125
             active: !root.browserCapture && !root.unavailable && !root.browserProfile
             sourceComponent: root.complex ? expandButton : root.kind === "boolean" ? boolControl

@@ -274,50 +274,26 @@ Item {
 
     Loader {
         anchors.fill: parent
-        active: panel.appearance.grain > 0
-        sourceComponent: Canvas {
-            id: grainCanvas
+        active: panel.appearance.grain > 0 && GraphicsInfo.api !== GraphicsInfo.Software
+        sourceComponent: ShaderEffect {
+            property real grainStrength: panel.appearance.grain
+            property vector2d surfaceSize: Qt.vector2d(width, height)
+            property Item silhouetteMask: mask
+            fragmentShader: "qrc:/auralis/shaders/fractured-grain.frag.qsb"
 
-            opacity: panel.appearance.grain
-            antialiasing: true
-            property var grainPattern: null
-            readonly property var vertices: panel.panelVertices
+            Shape {
+                id: mask
+                anchors.fill: parent
+                visible: false
+                layer.enabled: true
+                layer.smooth: true
+                preferredRendererType: Shape.CurveRenderer
 
-            onVerticesChanged: requestPaint()
-            onAvailableChanged: {
-                grainPattern = null
-                if (available)
-                    requestPaint()
-            }
-
-            onPaint: {
-                const painter = getContext("2d")
-                painter.clearRect(0, 0, width, height)
-                if (vertices.length < 3)
-                    return
-
-                if (!grainPattern) {
-                    const tile = painter.createImageData(128, 128)
-                    const pixels = tile.data
-                    let seed = 0x2a9d5613
-                    for (let offset = 0; offset < pixels.length; offset += 4) {
-                        seed = (Math.imul(seed, 1664525) + 1013904223) | 0
-                        const value = seed >>> 31 ? 255 : 0
-                        pixels[offset] = value
-                        pixels[offset + 1] = value
-                        pixels[offset + 2] = value
-                        pixels[offset + 3] = (seed >>> 23) % 100
-                    }
-                    grainPattern = painter.createPattern(tile, "repeat")
+                ShapePath {
+                    strokeWidth: -1
+                    fillColor: "white"
+                    PathSvg { path: panel.silhouette.path }
                 }
-
-                painter.beginPath()
-                painter.moveTo(vertices[0].x, vertices[0].y)
-                for (let index = 1; index < vertices.length; ++index)
-                    painter.lineTo(vertices[index].x, vertices[index].y)
-                painter.closePath()
-                painter.fillStyle = grainPattern
-                painter.fill()
             }
         }
     }

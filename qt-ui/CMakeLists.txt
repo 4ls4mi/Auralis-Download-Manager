@@ -102,6 +102,7 @@ qt_add_shaders(auralis-download-manager "glass_effects"
     PREFIX "/auralis"
     FILES
         shaders/bubble.frag
+        shaders/fractured-grain.frag
         shaders/window-outline.vert
         shaders/window-outline.frag
 )

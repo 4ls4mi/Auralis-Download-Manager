@@ -427,10 +427,6 @@ AuralisWindow {
 
     Connections {
         target: engine
-        function onQuittingChanged() {
-            if (engine.quitting)
-                root.flushWindowSize()
-        }
         function onReadyChanged() {
             if (root.visible && engine.ready) {
                 root.load()
@@ -974,6 +970,7 @@ AuralisWindow {
                                     delegate: SettingsField {
                                         required property var modelData
                                         Layout.fillWidth: true
+                                        editorWidth: Math.min(scrollViewport.columnWidth * 0.48, 300)
                                         spacing: root.classicLayout ? 3 : 8
                                         field: modelData
                                         cookieBrowser: root.cookieBrowser

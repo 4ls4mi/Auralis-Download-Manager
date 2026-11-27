@@ -24,10 +24,9 @@ AuralisWindow {
     readonly property int captionInset: Math.max(innerPadding, framelessCaption ? frameChromeInset + 8 : 0)
     property alias bodyContent: body.data
     readonly property int preferredHeight: Math.ceil(Math.max(minimumHeight,
-        Math.min(650, body.implicitHeight + header.implicitHeight
-                 + (footer && footer.visible ? footer.implicitHeight : 0) + 2 * innerPadding)))
+        Math.min(650, (body.implicitHeight + 2 * innerPadding) * interfaceScale + header.implicitHeight
+                 + (footer && footer.visible ? footer.implicitHeight : 0))))
     property string sizePreferenceKey: objectName
-    property size fittedSize
     property int initialDialogWidth: 0
 
     signal opened()
@@ -74,32 +73,18 @@ AuralisWindow {
         const minimum = Qt.size(minimumWidth, minimumHeight)
         width = WindowSize.fit(Qt.size(saved.width || initialDialogWidth, height), minimum, available).width
         height = WindowSize.fit(Qt.size(width, saved.height || preferredHeight), minimum, available).height
-        fittedSize = Qt.size(width, height)
-    }
-
-    function fitContentHeight() {
-        // A width change can reflow the body while a native frame drag is in progress.
-        if (visibility !== Window.Windowed || resizeHandles.resizing
-            || fittedSize.width !== width || fittedSize.height !== height)
-            return
-        if (!savedDialogSize().height) {
-            height = WindowSize.fit(Qt.size(width, preferredHeight), Qt.size(minimumWidth, minimumHeight),
-                                    WindowSize.available(root, typeof engine === "undefined" ? null : engine)).height
-            fittedSize = Qt.size(width, height)
-        }
     }
 
     function recordDialogSize(previousSize, currentSize, edges) {
         if (sizePreferenceKey)
             WindowSize.record(dialogSizes, sizePreferenceKey + "/width", sizePreferenceKey + "/height",
                               previousSize, currentSize, edges)
-        fittedSize = currentSize
-        Qt.callLater(fitContentHeight)
     }
 
     function open() {
         if (customFrame && visibility === Window.Minimized)
             showNormal()
+        // Fit before showing. Later content changes flow inside the scroll view.
         if (!visible)
             fitInitialHeight()
         if (!visible && !positioned) {
@@ -121,7 +106,6 @@ AuralisWindow {
             showMaximized()
     }
 
-    onPreferredHeightChanged: if (visible) Qt.callLater(fitContentHeight)
     onVisibleChanged: {
         if (visible)
             opened()
