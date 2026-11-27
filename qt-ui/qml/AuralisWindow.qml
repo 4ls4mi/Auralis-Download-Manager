@@ -22,13 +22,15 @@ ApplicationWindow {
     palette.highlight: interfaceColors.accent
     property bool frameShapingEnabled: true
     property bool acrylicMode: false
+    property bool fracturedDialogFooter: false
+    readonly property string acrylicFinish: Qt.styleHints.accessibility.contrastPreference === Qt.HighContrast
+        || MaterialTheme.opacityFor(MaterialTheme.current) >= .99 ? "solid" : MaterialTheme.fracturedFinish
     property bool acrylicApplied: false
     property var acrylicPanels: []
     readonly property bool acrylicRequested: acrylicMode && visible && visibility !== Window.Minimized
-        && !(Overlay.overlay?.visible ?? false) && MaterialTheme.opacityFor(MaterialTheme.current) < .99
-        && Qt.styleHints.accessibility.contrastPreference !== Qt.HighContrast
+        && !(Overlay.overlay?.visible ?? false)
     readonly property int frameCornerMask: {
-        if (!frameShapingEnabled || visibility !== Window.Windowed)
+        if (acrylicMode || !frameShapingEnabled || visibility !== Window.Windowed)
             return 0
         return ({square: 0, top: 3, bottom: 12, all: 15})[WindowAppearance.cornerPlacement]
     }
@@ -62,12 +64,17 @@ ApplicationWindow {
     function refreshAcrylic() {
         if (typeof engine === "undefined" || !engine.applyPanelBackdrop)
             return
-        const applied = engine.applyPanelBackdrop(window, acrylicPanels, acrylicRequested)
+        const applied = engine.applyPanelBackdrop(window, acrylicPanels, acrylicRequested, acrylicFinish)
         if (applied !== acrylicApplied)
             acrylicApplied = applied
     }
 
     onAcrylicRequestedChanged: if (!acrylicRequested) refreshAcrylic()
+    onAcrylicFinishChanged: if (acrylicRequested) refreshAcrylic()
+    onAcrylicModeChanged: {
+        refreshFrameShape()
+        scheduleFrameShapeRefresh()
+    }
     onAfterAnimating: if (acrylicRequested) refreshAcrylic()
 
     function scheduleFrameShapeRefresh() {
@@ -77,7 +84,6 @@ ApplicationWindow {
     Component.onCompleted: scheduleFrameShapeRefresh()
     onFrameCornerMaskChanged: scheduleFrameShapeRefresh()
     onFrameCornerRadiusChanged: scheduleFrameShapeRefresh()
-    onAcrylicModeChanged: scheduleFrameShapeRefresh()
 
     Timer {
         id: frameShapeRefresh
@@ -116,7 +122,7 @@ ApplicationWindow {
         width: window.width
         height: window.height
         z: 100000
-        visible: window.frameShapingEnabled && window.visibility === Window.Windowed
+        visible: !window.acrylicMode && window.frameShapingEnabled && window.visibility === Window.Windowed
         Rectangle {
             anchors.fill: parent
             radius: window.frameCornerRadius

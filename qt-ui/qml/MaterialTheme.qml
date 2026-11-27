@@ -82,6 +82,21 @@ QtObject {
         });
     }
     readonly property bool wideSweepEnabled: current === "violet-rail-wide-sweep"
+    readonly property string defaultFracturedFinish: "frosted"
+    property string fracturedFinish: defaultFracturedFinish
+    readonly property var fracturedFinishChoices: [
+        {label: qsTr("Acrylic"), value: "acrylic"},
+        {label: qsTr("Mica"), value: "mica"},
+        {label: qsTr("Tinted"), value: "tinted"},
+        {label: qsTr("Blurred"), value: "blurred"},
+        {label: qsTr("Translucent"), value: "translucent"},
+        {label: qsTr("Frosted Glass"), value: "frosted"}
+    ]
+
+    function fracturedFinishFor(value, fallback) {
+        return fracturedFinishChoices.some(choice => choice.value === value) ? value : fallback
+    }
+
     property real translucency: -1
     property color tintColor: "#7298bc"
     property real tintStrength: 0

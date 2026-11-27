@@ -111,6 +111,7 @@ AuralisWindow {
     minimumWidth: compactView ? 395 : 450
     minimumHeight: compactView || (classicFullView && !classicDetailsVisible) ? 270 : 340
     color: "transparent"
+    acrylicMode: interfaceColors.layout === "fracturedPearl"
     flags: Qt.Window | Qt.FramelessWindowHint
     transientParent: null
     palette.windowText: colors.text
@@ -523,7 +524,7 @@ AuralisWindow {
     }
 
     header: ColumnLayout {
-        spacing: 3
+        spacing: root.acrylicMode ? 7 : 3
         ToolBar {
             Layout.fillWidth: true
             padding: 0
@@ -535,7 +536,13 @@ AuralisWindow {
             rightInset: leftInset
             topInset: topPadding
             bottomInset: 2
-            background: GlassSurface { material: root.material; role: "title"; roundedPanel: !root.classicFullView; backdropAvailable: root.backdropAvailable }
+            background: GlassSurface {
+                material: root.material
+                role: "title"
+                fracturedEdge: root.acrylicMode ? "header" : ""
+                roundedPanel: !root.classicFullView
+                backdropAvailable: root.backdropAvailable
+            }
             contentItem: RowLayout {
                 spacing: 7
                 Item {
@@ -635,7 +642,13 @@ AuralisWindow {
             bottomPadding: 7
             leftInset: root.panelInset
             rightInset: root.panelInset
-            background: GlassSurface { material: root.material; role: "toolbar"; roundedPanel: true; backdropAvailable: root.backdropAvailable }
+            background: GlassSurface {
+                material: root.material
+                role: "toolbar"
+                fracturedEdge: root.acrylicMode ? "menu" : ""
+                roundedPanel: true
+                backdropAvailable: root.backdropAvailable
+            }
             contentItem: Flow {
                 id: transferCommandFlow
                 spacing: 7
@@ -721,7 +734,13 @@ AuralisWindow {
             rightPadding: root.panelInset + 8
             leftInset: root.panelInset
             rightInset: root.panelInset
-            background: GlassSurface { material: root.material; role: "toolbar"; roundedPanel: true; backdropAvailable: root.backdropAvailable }
+            background: GlassSurface {
+                material: root.material
+                role: "toolbar"
+                fracturedEdge: root.acrylicMode ? "menu" : ""
+                roundedPanel: true
+                backdropAvailable: root.backdropAvailable
+            }
             contentItem: Flow {
                 spacing: root.compactWidth ? 5 : 7
                 Repeater {
@@ -747,9 +766,10 @@ AuralisWindow {
         // The Quick grips own the pointer grab. A second Win32 capture path
         // would compete with the same drag on this transparent window.
         coalesceGeometry: true
-        borderSize: 11
-        cornerSize: 19
-        showGrip: true
+        borderSize: root.acrylicMode ? Math.ceil(root.resizeInset * root.interfaceScale) + 5 : 11
+        cornerSize: root.acrylicMode ? borderSize + 5 : 19
+        anchors.topMargin: root.acrylicMode ? 12 - borderSize : 0
+        showGrip: !root.acrylicMode
         gripColor: root.colors.muted
     }
 
@@ -803,6 +823,7 @@ AuralisWindow {
         background: GlassSurface {
             material: root.material
             role: "sidebar"
+            fracturedEdge: root.acrylicMode ? "rail" : ""
             roundedPanel: true
             backdropAvailable: root.backdropAvailable
         }
@@ -854,7 +875,8 @@ AuralisWindow {
         padding: root.compactView ? 4 : 6
         background: GlassSurface {
             material: root.material
-            role: root.colors.footerOverride ? "footer" : "toolbar"
+            role: root.acrylicMode || root.colors.footerOverride ? "footer" : "toolbar"
+            fracturedEdge: root.acrylicMode ? "footer" : ""
             roundedPanel: true
             backdropAvailable: root.backdropAvailable
         }
@@ -989,6 +1011,26 @@ AuralisWindow {
         }
     }
 
+    component TransferMessage: Pane {
+        id: messagePane
+        required property string message
+        property color ink: root.colors.muted
+        Layout.fillWidth: true
+        padding: root.acrylicMode ? 11 : 0
+        background: GlassSurface {
+            visible: root.acrylicMode
+            material: root.material
+            role: "card"
+            fracturedEdge: root.acrylicMode ? "banner" : ""
+        }
+        contentItem: Label {
+            text: messagePane.message
+            textFormat: Text.PlainText
+            color: messagePane.ink
+            wrapMode: Text.WordWrap
+        }
+    }
+
     ScrollView {
         id: view
         objectName: "downloadDetailsScroll"
@@ -1008,15 +1050,20 @@ AuralisWindow {
         ScrollBar.vertical: ScrollBar {
             id: detailsScrollBar
             policy: ScrollBar.AsNeeded
-            implicitWidth: 7
-            padding: 1
+            implicitWidth: root.acrylicMode ? 14 : 7
+            padding: root.acrylicMode ? 3 : 1
             contentItem: Rectangle {
                 implicitWidth: 5
                 radius: 2.5
                 color: root.colors.secondary
                 opacity: detailsScrollBar.active ? .86 : .60
             }
-            background: Item {}
+            background: GlassSurface {
+                visible: root.acrylicMode && detailsScrollBar.size < 1
+                material: root.material
+                role: "sidebar"
+                fracturedEdge: root.acrylicMode ? "rail" : ""
+            }
         }
         Item {
             id: scrollContent
@@ -1030,12 +1077,12 @@ AuralisWindow {
                 anchors.right: parent.right
                 anchors.top: parent.top
                 height: implicitHeight
-                spacing: root.classicFullView ? 5 : root.compactView ? 4 : root.compactWidth || root.compactHeight ? 6 : 8
+                spacing: root.acrylicMode ? (root.compactView ? 8 : 10)
+                    : root.classicFullView ? 5 : root.compactView ? 4 : root.compactWidth || root.compactHeight ? 6 : 8
 
-                Label {
+                TransferMessage {
                     visible: !root.item
-                    text: qsTr("Waiting for download information…")
-                    color: root.colors.muted
+                    message: qsTr("Waiting for download information…")
                 }
 
                 Pane {
@@ -1056,6 +1103,7 @@ AuralisWindow {
                             visible: !root.classicFullView
                             material: root.material
                             role: root.sideTabs ? "summary" : "card"
+                            fracturedEdge: root.acrylicMode ? "content" : ""
                             backdropAvailable: root.backdropAvailable
                         }
                         TransferTubes {
@@ -1274,8 +1322,8 @@ AuralisWindow {
                     Layout.minimumWidth: 0
                     columns: root.classicFullView ? 1 : root.compactView ? (connectionPane.visible && width >= 345 ? 2 : 1)
                         : root.transferLayout !== "coralSlate" && width >= (root.railTabs ? 560 : 585) ? 2 : 1
-                    columnSpacing: root.compactView ? 5 : 8
-                    rowSpacing: root.compactView ? 4 : root.compactWidth || root.compactHeight ? 6 : 8
+                    columnSpacing: root.acrylicMode ? 11 : root.compactView ? 5 : 8
+                    rowSpacing: root.acrylicMode ? 10 : root.compactView ? 4 : root.compactWidth || root.compactHeight ? 6 : 8
                     Pane {
                         id: connectionPane
                         objectName: "downloadConnectionPane"
@@ -1292,6 +1340,7 @@ AuralisWindow {
                                 anchors.fill: parent
                                 material: root.material
                                 role: root.sideTabs ? "connections" : "card"
+                                fracturedEdge: root.acrylicMode ? "activity" : ""
                                 backdropAvailable: root.backdropAvailable
                             }
                             TransferTubes {
@@ -1517,7 +1566,12 @@ AuralisWindow {
                         Layout.preferredHeight: Math.max(implicitHeight, transferOverview.cardHeight)
                         Layout.alignment: Qt.AlignTop
                         padding: root.compactView ? 5 : root.compactWidth || root.compactHeight ? 8 : 11
-                        background: GlassSurface { material: root.material; role: "card"; backdropAvailable: root.backdropAvailable }
+                        background: GlassSurface {
+                            material: root.material
+                            role: "card"
+                            fracturedEdge: root.acrylicMode ? "footer" : ""
+                            backdropAvailable: root.backdropAvailable
+                        }
                         contentItem: ColumnLayout {
                             spacing: root.compactView ? 4 : 8
                             RowLayout {
@@ -1564,7 +1618,12 @@ AuralisWindow {
                     visible: root.activeTab === root.recoveryTab && root.recoveryAvailable
                     Layout.fillWidth: true
                     padding: 14
-                    background: GlassSurface { material: root.material; role: "card"; backdropAvailable: root.backdropAvailable }
+                    background: GlassSurface {
+                        material: root.material
+                        role: "card"
+                        fracturedEdge: root.acrylicMode ? "content" : ""
+                        backdropAvailable: root.backdropAvailable
+                    }
                     contentItem: ColumnLayout {
                         spacing: 10
                         Label {
@@ -1725,6 +1784,7 @@ AuralisWindow {
                             visible: !root.classicFullView
                             material: root.material
                             role: "card"
+                            fracturedEdge: root.acrylicMode ? "content" : ""
                             backdropAvailable: root.backdropAvailable
                         }
                     }
@@ -1764,6 +1824,7 @@ AuralisWindow {
                             visible: !root.classicFullView
                             material: root.material
                             role: "card"
+                            fracturedEdge: root.acrylicMode ? "content" : ""
                             backdropAvailable: root.backdropAvailable
                         }
                     }
@@ -1784,13 +1845,10 @@ AuralisWindow {
                     }
                 }
 
-                Label {
+                TransferMessage {
                     visible: root.message !== "" && root.activeTab !== root.recoveryTab
-                    Layout.fillWidth: true
-                    text: root.message
-                    textFormat: Text.PlainText
-                    color: root.error ? root.colors.destructive : root.colors.text
-                    wrapMode: Text.WordWrap
+                    message: root.message
+                    ink: root.error ? root.colors.destructive : root.colors.text
                 }
             }
 
@@ -1802,7 +1860,7 @@ AuralisWindow {
                 anchors.top: parent.top
                 anchors.bottom: parent.bottom
                 width: root.pipeInset - 2
-                visible: root.displayFlow
+                visible: root.displayFlow && !root.acrylicMode
                 mainTrunk: true
                 sourceItem: root.compactView ? transferName : transferSource
                 progressItem: downloadProgress

@@ -11,7 +11,8 @@ Item {
 
     property string material: MaterialTheme.current
     property string role: "content"
-    property string fracturedEdge: ""
+    property string fracturedEdge: role === "footer" && (Window.window as AuralisWindow)?.fracturedDialogFooter
+        ? "footer" : ""
     property bool backdropAvailable: MaterialTheme.backdropAvailable
     property color accent: profile.accent
     property real emphasis: 0

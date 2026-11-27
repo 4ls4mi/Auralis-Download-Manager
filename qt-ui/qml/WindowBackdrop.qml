@@ -7,7 +7,7 @@ Item {
 
     required property AuralisWindow hostWindow
     property string target: "details"
-    property bool separatedPanels: false
+    property bool separatedPanels: hostWindow.acrylicMode
     readonly property var selection: WindowAppearance.background(target)
     readonly property bool customColor: selection.mode === "solid"
     readonly property real backgroundOpacity: MaterialTheme.opacityFor(MaterialTheme.current)
@@ -23,7 +23,7 @@ Item {
 
     function refresh() {
         if (!hostWindow.visible) return
-        if (!separatedPanels || !hostWindow.acrylicApplied)
+        if (!separatedPanels)
             engine.applyBackdrop(hostWindow, desktopGlass, !MaterialTheme.palette.light)
     }
 
@@ -32,7 +32,12 @@ Item {
         Qt.callLater(refresh)
     }
     onSelectionChanged: Qt.callLater(refresh)
-    onSeparatedPanelsChanged: Qt.callLater(refresh)
+    onSeparatedPanelsChanged: {
+        if (separatedPanels && hostWindow.visible)
+            engine.applyBackdrop(hostWindow, false, !MaterialTheme.palette.light)
+        else
+            Qt.callLater(refresh)
+    }
     onDesktopGlassChanged: Qt.callLater(refresh)
     onBackdropAvailableChanged: {
         if (target === "main") MaterialTheme.backdropAvailable = backdropAvailable

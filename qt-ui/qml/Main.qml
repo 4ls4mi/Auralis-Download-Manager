@@ -3,6 +3,7 @@ import QtQuick.Controls
 import QtQuick.Controls.Basic as Basic
 import QtQuick.Layouts
 import QtQuick.Dialogs
+import QtQuick.Effects
 import QtQuick.Window
 import QtCore
 import "TransferData.js" as TransferData
@@ -19,7 +20,7 @@ AuralisWindow {
     color: "transparent"
     flags: Qt.Window | Qt.FramelessWindowHint
     frameShapingEnabled: !fracturedLayout
-    acrylicMode: fracturedLayout && !wideSweepVisible && !compactView && visibility === Window.Windowed
+    acrylicMode: fracturedLayout && !wideSweepVisible
 
     readonly property var colors: MaterialTheme.palette
     readonly property bool classicLayout: MaterialTheme.mdmAppearance && !compactView
@@ -37,8 +38,16 @@ AuralisWindow {
     readonly property bool coralSlate: materialLayout === "coralSlate"
     readonly property bool fracturedLayout: materialLayout === "fracturedPearl"
     readonly property bool workspaceToolbar: !compactView && (materialDashboard || fracturedLayout)
-    readonly property bool tightFracturedLayout: fracturedLayout && height / interfaceScale < 340
-    readonly property int seamWidth: tightFracturedLayout ? 2 : 5
+    readonly property bool tightFracturedLayout: fracturedLayout && height / interfaceScale < 350
+    readonly property bool roomyFracturedLayout: fracturedLayout && !compactView && !tightFracturedLayout
+    readonly property bool mirroredLayout: Qt.application.layoutDirection === Qt.RightToLeft
+    readonly property int seamWidth: roomyFracturedLayout ? 11 : tightFracturedLayout ? 2 : 5
+
+    function orientFractureCuts(cuts, width) {
+        if (!mirroredLayout)
+            return cuts
+        return cuts.slice().reverse().map(cut => ({x: width - cut.x, slant: -cut.slant, gap: cut.gap}))
+    }
     readonly property bool materialDashboard: fogSlate || violetRail || coralSlate
     readonly property bool compactView: windowPreferences.compactView
     readonly property bool sideMenus: materialDashboard && showSidebar && !compactView
@@ -90,7 +99,7 @@ AuralisWindow {
         return queues.length ? queues[0] : null
     }
     readonly property bool compact: width < 920
-    readonly property int layoutInset: visibility === Window.Maximized ? 0 : fracturedLayout ? (tightFracturedLayout ? 4 : 7) : compactView || classicLayout ? 5 : 8
+    readonly property int layoutInset: visibility === Window.Maximized ? 0 : fracturedLayout ? (tightFracturedLayout ? 4 : roomyFracturedLayout ? 10 : 7) : compactView || classicLayout ? 5 : 8
     readonly property int frameBleed: frameCornerRadius > 0 ? layoutInset : 0
     readonly property bool online: engine.ready
     readonly property string filterTitle: filterType === "category"
@@ -1178,7 +1187,7 @@ AuralisWindow {
             id: wideSweep
             objectName: "mainWideSweep"
             anchors.fill: parent
-            visible: MaterialTheme.wideSweepEnabled && root.visible && root.visibility !== Window.Minimized
+            visible: MaterialTheme.wideSweepEnabled && !root.fracturedLayout && root.visible && root.visibility !== Window.Minimized
                 && !root.compactView && librarySidebar.visible
             sidebar: librarySidebar
             pane: downloadsPane
@@ -1389,9 +1398,49 @@ AuralisWindow {
         spacing: root.fracturedLayout ? root.seamWidth : root.classicLayout ? 2 : root.compactView ? 4 : 7
 
         Item {
+            id: titleShell
             Layout.fillWidth: true
             Layout.preferredHeight: root.classicLayout ? 28 : root.compactView ? 36 : 43
+
+            // Allow the right-hand controls to stay intact as translations and window scale change.
+            readonly property real toolsLaneWidth: Math.max(captionButtons.implicitWidth + titleRow.anchors.rightMargin + 20,
+                recentRail.visible ? recentRail.width + root.seamWidth / 2 : 0)
+            readonly property bool separateTools: root.roomyFracturedLayout && width >= 710
+                && width - toolsLaneWidth >= 460 + compactButton.implicitWidth
+            readonly property real toolsCut: width - toolsLaneWidth
+            readonly property real toolsSpacer: Math.max(0, toolsLaneWidth - titleRow.anchors.rightMargin
+                - captionButtons.implicitWidth + 21 - 2 * titleActions.spacing)
+            readonly property real trailingContentStart: width - titleRow.anchors.rightMargin - titleActions.implicitWidth
+                - (connectionLabel.visible ? connectionLabel.implicitWidth + titleRow.spacing : 0)
+                - (connectionDot.visible ? connectionDot.Layout.preferredWidth + titleRow.spacing : 0)
+            readonly property real leadingContentEnd: titleRow.anchors.leftMargin + titleMark.Layout.preferredWidth
+                + titleRow.spacing + Math.max(titleBrandName.implicitWidth, titleBrandDescription.implicitWidth)
+            readonly property real mainCut: Math.min(width * .49, trailingContentStart - 41)
+            readonly property bool splitCenter: root.roomyFracturedLayout && width >= 680 && mainCut > leadingContentEnd + 41
+            readonly property var fractureCuts: {
+                const cuts = []
+                if (splitCenter)
+                    cuts.push({x: mainCut, slant: -39, gap: 13})
+                if (separateTools)
+                    cuts.push({x: toolsCut, slant: -6, gap: 14})
+                return root.orientFractureCuts(cuts, width)
+            }
+
+            Loader {
+                id: titleBand
+                anchors.fill: parent
+                active: titleShell.fractureCuts.length > 0
+                sourceComponent: FracturedBand {
+                    edge: "header"
+                    cuts: titleShell.fractureCuts
+                    face: root.colors.roleFaces?.title || root.colors.background
+                    ink: root.captionInk
+                    mutedInk: root.colors.titleMuted || root.colors.muted
+                    forceOpaque: Boolean(root.colors.titleOverride || root.colors.textOverride)
+                }
+            }
             GlassSurface {
+                visible: !titleBand.active
                 anchors.fill: parent
                 anchors.leftMargin: -root.frameBleed
                 anchors.rightMargin: -root.frameBleed
@@ -1416,6 +1465,7 @@ AuralisWindow {
                 anchors.rightMargin: Math.max(6, root.frameSafeInset - root.layoutInset)
                 spacing: 8
                 BrandMark {
+                    id: titleMark
                     visible: !root.classicLayout || !["adwaita", "aqua"].includes(root.colors.mdmCaptionStyle)
                     Layout.preferredWidth: root.classicLayout ? 16 : root.compactView ? 24 : 29
                     Layout.preferredHeight: root.classicLayout ? 16 : root.compactView ? 24 : 29
@@ -1424,6 +1474,7 @@ AuralisWindow {
                     Layout.fillWidth: true
                     spacing: 0
                     Label {
+                        id: titleBrandName
                         Layout.fillWidth: true
                         visible: !root.centeredCaption
                         text: root.classicLayout ? root.title : qsTr("Auralis")
@@ -1433,6 +1484,7 @@ AuralisWindow {
                         elide: Text.ElideRight
                     }
                     Label {
+                        id: titleBrandDescription
                         visible: !root.compactView && !root.classicLayout
                         Layout.fillWidth: true
                         text: qsTr("Download Manager")
@@ -1442,6 +1494,7 @@ AuralisWindow {
                     }
                 }
                 Rectangle {
+                    id: connectionDot
                     visible: !root.classicLayout
                     Layout.preferredWidth: 7
                     Layout.preferredHeight: 7
@@ -1449,6 +1502,7 @@ AuralisWindow {
                     color: root.online ? root.colors.positive : root.colors.caution
                 }
                 Label {
+                    id: connectionLabel
                     visible: !root.compactView && !root.classicLayout
                     text: root.online ? qsTr("Connected") : qsTr("Offline")
                     color: root.colors.titleMuted || root.colors.muted
@@ -1532,7 +1586,12 @@ AuralisWindow {
                         ToolTip.delay: 420
                         onClicked: root.toggleCompactView()
                     }
+                    Item {
+                        visible: titleShell.separateTools
+                        Layout.preferredWidth: titleShell.toolsSpacer
+                    }
                     CaptionControls {
+                        id: captionButtons
                         trayEnabled: Boolean(engine.trayAvailable)
                         maximized: root.visibility === Window.Maximized
                         minimizeLabel: root.minimizeToTray && engine.trayAvailable ? qsTr("Minimize to system tray") : qsTr("Minimize")
@@ -1568,13 +1627,26 @@ AuralisWindow {
                 parent: !root.sideMenus ? topMenuDock : root.violetRail ? violetMenuDock : sideMenuDock
                 anchors.fill: parent
 
+                readonly property real commandsEnd: 6 + 4 * 2 + taskMenuButton.implicitWidth + fileMenuButton.implicitWidth
+                    + downloadMenuButton.implicitWidth + viewMenuButton.implicitWidth + helpMenuButton.implicitWidth
+                readonly property real mainCut: titleShell.mainCut - 37
+                readonly property bool splitCenter: titleShell.splitCenter && mainCut > commandsEnd + 27
+
                 Loader {
-                    anchors.fill: parent
+                    id: fracturedMenu
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    width: titleShell.separateTools ? Math.max(0, parent.width - titleShell.toolsLaneWidth - 4) : parent.width
+                    x: root.mirroredLayout ? parent.width - width : 0
                     active: root.fracturedLayout
-                    sourceComponent: FracturedPanel {
+                    sourceComponent: FracturedBand {
                         edge: "menu"
+                        cuts: menuPanel.splitCenter ? root.orientFractureCuts([
+                            {x: menuPanel.mainCut, slant: -16, gap: 13}
+                        ], width) : []
                         face: MaterialTheme.menuColors.surface
                         ink: MaterialTheme.menuColors.ink
+                        mutedInk: MaterialTheme.menuColors.muted
                         forceOpaque: Boolean(root.colors.menuOverride || root.colors.textOverride)
                     }
                 }
@@ -2641,6 +2713,7 @@ AuralisWindow {
                 }
             }
             Loader {
+                id: recentRail
                 visible: root.fracturedLayout && root.showSidebar && !root.compactView && workspace.width >= 1030
                 active: visible
                 Layout.preferredWidth: 183
@@ -2807,15 +2880,52 @@ AuralisWindow {
             id: footerRow
             Layout.fillWidth: true
             Layout.preferredHeight: root.classicLayout ? 22 : root.compactView ? 36 : 55
+            readonly property bool splitGroups: root.roomyFracturedLayout && width >= 680
+            readonly property bool splitGraph: splitGroups && footerGraphSlot.width >= 260
+                && GraphicsInfo.api !== GraphicsInfo.Software
+
+            function leading(item) {
+                const x = footerContent.x + item.x
+                return root.mirroredLayout ? width - x - item.width : x
+            }
+
+            readonly property var fractureCuts: {
+                if (!splitGroups)
+                    return []
+                const graphStart = leading(footerGraphSlot)
+                const graphEnd = graphStart + footerGraphSlot.width
+                const left = (leading(footerMetrics) + footerMetrics.width + graphStart) / 2
+                const right = (graphEnd + leading(footerTrailing)) / 2
+                const cuts = [{x: left, slant: 5, gap: 12}]
+                if (splitGraph)
+                    cuts.push({x: (graphStart + graphEnd) / 2, slant: Math.min(132, footerGraphSlot.width * .37), gap: 12})
+                cuts.push({x: right, slant: -6, gap: 12})
+                return root.orientFractureCuts(cuts, width)
+            }
+
             Item {
                 id: footerSurface
                 anchors.fill: parent
                 anchors.leftMargin: -root.frameBleed
                 anchors.rightMargin: -root.frameBleed
                 anchors.bottomMargin: -root.frameBleed
+                Loader {
+                    id: footerBand
+                    anchors.fill: parent
+                    active: footerRow.splitGroups
+                    sourceComponent: FracturedBand {
+                        edge: "footer"
+                        cuts: footerRow.fractureCuts
+                        face: root.colors.roleFaces?.footer || root.colors.background
+                        ink: root.colors.footerInk || root.colors.ink
+                        mutedInk: root.colors.footerMuted || root.colors.muted
+                        forceOpaque: Boolean(root.colors.footerOverride || root.colors.textOverride)
+                        maskEnabled: footerRow.splitGraph
+                    }
+                }
                 GlassSurface {
                     anchors.fill: parent
-                    visible: !root.wideSweepVisible || Boolean(root.colors.footerOverride)
+                    visible: !footerBand.active && (!root.wideSweepVisible || Boolean(root.colors.footerOverride))
                     role: "footer"
                     fracturedEdge: root.fracturedLayout ? "footer" : ""
                     roundedPanel: root.frameCornerRadius === 0
@@ -2843,36 +2953,109 @@ AuralisWindow {
                 }
             }
             RowLayout {
+                id: footerContent
                 visible: !root.classicLayout
                 anchors.fill: parent
                 anchors.leftMargin: Math.max(11, root.frameSafeInset - root.layoutInset)
                 anchors.rightMargin: Math.max(9, root.frameSafeInset - root.layoutInset)
-                spacing: root.compactView ? 8 : 13
-                Repeater {
-                    model: [
-                        {title: qsTr("Total speed"), value: TransferData.rate(engine.dashboard.speed || 0)},
-                        {title: qsTr("Active"), value: String(root.counts.downloading)}
-                    ].concat(root.compactView ? [] : [
-                        {title: qsTr("Completed"), value: String(root.counts.finished)}
-                    ])
-                    delegate: Item {
-                        required property var modelData
-                        Layout.preferredWidth: footerMetric.implicitWidth + (root.fogSlate && !root.compactView ? 20 : 0)
-                        Layout.preferredHeight: footerMetric.implicitHeight + (root.fogSlate && !root.compactView ? 12 : 0)
-                        GlassSurface { anchors.fill: parent; visible: root.fogSlate && !root.compactView && !root.colors.footerOverride; role: "card" }
-                        ColumnLayout {
-                            id: footerMetric
-                            anchors.centerIn: parent
-                            spacing: 2
-                            Label { text: modelData.title; color: root.colors.footerMuted || root.colors.muted; font.pixelSize: TypographyScale.pixels(11) }
-                            NumeralLabel { valueText: modelData.value; color: root.colors.footerInk || root.colors.ink; font.weight: Font.DemiBold }
+                spacing: footerRow.splitGroups ? 24 : root.compactView ? 8 : 13
+
+                RowLayout {
+                    id: footerMetrics
+                    spacing: root.compactView ? 8 : 13
+                    Layout.preferredWidth: footerRow.splitGroups && librarySidebar.visible
+                        ? Math.max(implicitWidth, librarySidebar.width - footerContent.anchors.leftMargin
+                            + (root.seamWidth - footerContent.spacing) / 2) : implicitWidth
+                    Repeater {
+                        model: [
+                            {title: qsTr("Total speed"), value: TransferData.rate(engine.dashboard.speed || 0)},
+                            {title: qsTr("Active"), value: String(root.counts.downloading)}
+                        ].concat(root.compactView ? [] : [
+                            {title: qsTr("Completed"), value: String(root.counts.finished)}
+                        ])
+                        delegate: Item {
+                            required property var modelData
+                            Layout.preferredWidth: footerMetric.implicitWidth + (root.fogSlate && !root.compactView ? 20 : 0)
+                            Layout.preferredHeight: footerMetric.implicitHeight + (root.fogSlate && !root.compactView ? 12 : 0)
+                            GlassSurface { anchors.fill: parent; visible: root.fogSlate && !root.compactView && !root.colors.footerOverride; role: "card" }
+                            ColumnLayout {
+                                id: footerMetric
+                                anchors.centerIn: parent
+                                spacing: 2
+                                Label { text: modelData.title; color: root.colors.footerMuted || root.colors.muted; font.pixelSize: TypographyScale.pixels(11) }
+                                NumeralLabel { valueText: modelData.value; color: root.colors.footerInk || root.colors.ink; font.weight: Font.DemiBold }
+                            }
                         }
                     }
                 }
-                TransferGraph {
+                Item {
+                    id: footerGraphSlot
                     Layout.fillWidth: true
                     Layout.minimumWidth: 85
                     Layout.preferredHeight: root.compactView ? 24 : 35
+                }
+                RowLayout {
+                    id: footerTrailing
+                    spacing: footerRow.splitGroups ? 8 : footerContent.spacing
+                    GlassComboBox {
+                        id: footerLanguage
+                        objectName: "mainLanguageSelector"
+                        property bool saving: false
+                        Layout.preferredWidth: root.compactView ? 96 : footerRow.splitGroups && recentRail.visible ? 96 : 110
+                        Layout.alignment: Qt.AlignVCenter
+                        model: settingsWindow.common.language.options
+                        textRole: "label"
+                        valueRole: "value"
+                        currentIndex: Math.max(0, model.findIndex(language => language.value === engine.interfaceLanguage))
+                        font.family: root.fontFamilyForText(displayText)
+                        font.pixelSize: TypographyScale.pixels(11)
+                        enabled: engine.ready && !saving
+                        Accessible.name: qsTranslate("SettingsWindow", "Interface language")
+                        onActivated: {
+                            saving = true
+                            engine.request({action: "glass-setting", category: "language", queue: currentValue},
+                                function(reply, error) {
+                                    footerLanguage.saving = false
+                                    if (error || reply?.saved !== true)
+                                        root.actionError = qsTranslate("SettingsWindow", "Could not change the interface language.")
+                                    footerLanguage.currentIndex = Qt.binding(() => Math.max(0,
+                                        footerLanguage.model.findIndex(language => language.value === engine.interfaceLanguage)))
+                                })
+                        }
+                    }
+                    NumeralLabel {
+                        id: statusMessage
+                        visible: !root.compactView || Boolean(root.actionError)
+                        Layout.preferredWidth: Math.min(root.compactView ? 134 : 240, Math.ceil(implicitWidth))
+                        valueText: root.actionError || (root.online ? qsTr("Auralis %1").arg(engine.version) : engine.status || qsTr("Offline"))
+                        color: root.actionError ? root.colors.footerDestructive || root.colors.destructive : root.colors.footerMuted || root.colors.muted
+                        elide: Text.ElideRight
+                        font.pixelSize: TypographyScale.pixels(11)
+                        PlainTextToolTip {
+                            visible: statusHover.hovered && statusMessage.valueText.length > 20
+                            text: statusMessage.valueText
+                        }
+                        HoverHandler { id: statusHover }
+                    }
+                }
+            }
+
+            // Plot the same live history in each shard. The effect clips only the graph;
+            // language, version and download counts remain regular accessible controls.
+            Item {
+                anchors.fill: parent
+                visible: footerContent.visible
+                layer.enabled: footerRow.splitGraph && Boolean(footerBand.item?.maskSource)
+                layer.effect: MultiEffect {
+                    autoPaddingEnabled: false
+                    maskEnabled: true
+                    maskSource: footerBand.item?.maskSource ?? null
+                }
+                TransferGraph {
+                    x: footerContent.x + footerGraphSlot.x
+                    y: footerContent.y + footerGraphSlot.y
+                    width: footerGraphSlot.width
+                    height: footerGraphSlot.height
                     samples: root.graphValues
                     animationStyle: WindowAppearance.graphAnimation
                     flowActive: root.animateThroughput
@@ -2880,46 +3063,6 @@ AuralisWindow {
                     endpointColor: MaterialTheme.graphColors[1]
                     gridColor: root.colors.divider
                     Accessible.name: qsTr("Recent total transfer speed")
-                }
-                GlassComboBox {
-                    id: footerLanguage
-                    objectName: "mainLanguageSelector"
-                    property bool saving: false
-                    Layout.preferredWidth: root.compactView ? 96 : 110
-                    Layout.alignment: Qt.AlignVCenter
-                    model: settingsWindow.common.language.options
-                    textRole: "label"
-                    valueRole: "value"
-                    currentIndex: Math.max(0, model.findIndex(language => language.value === engine.interfaceLanguage))
-                    font.family: root.fontFamilyForText(displayText)
-                    font.pixelSize: TypographyScale.pixels(11)
-                    enabled: engine.ready && !saving
-                    Accessible.name: qsTranslate("SettingsWindow", "Interface language")
-                    onActivated: {
-                        saving = true
-                        engine.request({action: "glass-setting", category: "language", queue: currentValue},
-                            function(reply, error) {
-                                footerLanguage.saving = false
-                                if (error || reply?.saved !== true)
-                                    root.actionError = qsTranslate("SettingsWindow", "Could not change the interface language.")
-                                footerLanguage.currentIndex = Qt.binding(() => Math.max(0,
-                                    footerLanguage.model.findIndex(language => language.value === engine.interfaceLanguage)))
-                            })
-                    }
-                }
-                NumeralLabel {
-                    id: statusMessage
-                    visible: !root.compactView || Boolean(root.actionError)
-                    Layout.preferredWidth: Math.min(root.compactView ? 134 : 240, Math.ceil(implicitWidth))
-                    valueText: root.actionError || (root.online ? qsTr("Auralis %1").arg(engine.version) : engine.status || qsTr("Offline"))
-                    color: root.actionError ? root.colors.footerDestructive || root.colors.destructive : root.colors.footerMuted || root.colors.muted
-                    elide: Text.ElideRight
-                    font.pixelSize: TypographyScale.pixels(11)
-                    PlainTextToolTip {
-                        visible: statusHover.hovered && statusMessage.valueText.length > 20
-                        text: statusMessage.valueText
-                    }
-                    HoverHandler { id: statusHover }
                 }
             }
         }

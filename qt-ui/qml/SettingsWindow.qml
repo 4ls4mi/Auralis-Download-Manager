@@ -18,6 +18,7 @@ AuralisWindow {
     minimumHeight: 440
     visible: false
     color: "transparent"
+    acrylicMode: interfaceColors.layout === "fracturedPearl"
     flags: Qt.Window | Qt.FramelessWindowHint
     palette.windowText: colors.text
     palette.text: colors.text
@@ -481,7 +482,8 @@ AuralisWindow {
             id: wideSweep
             objectName: "settingsWideSweep"
             anchors.fill: parent
-            visible: !root.classicLayout && MaterialTheme.wideSweepEnabled && root.visible && root.visibility !== Window.Minimized
+            visible: !root.acrylicMode && !root.classicLayout && MaterialTheme.wideSweepEnabled
+                && root.visible && root.visibility !== Window.Minimized
             sidebar: navigationSidebar
             pane: settingsPane
             viewport: navigation
@@ -569,7 +571,7 @@ AuralisWindow {
 
     header: ColumnLayout {
         id: headerStack
-        spacing: 0
+        spacing: root.acrylicMode ? 5 : 0
         ToolBar {
             Layout.fillWidth: true
             padding: 0
@@ -579,6 +581,7 @@ AuralisWindow {
             bottomInset: root.classicLayout || root.roundedFrame ? 0 : 2
             background: GlassSurface {
                 role: "title"
+                fracturedEdge: root.acrylicMode ? "header" : ""
                 roundedPanel: !root.classicLayout && !root.roundedFrame
                 radius: roundedPanel ? Math.max(12, profile.radius) : 0
                 backdropAvailable: settingsBackdrop.backdropAvailable
@@ -670,6 +673,7 @@ AuralisWindow {
             bottomInset: root.roundedFrame ? 0 : 1
             background: GlassSurface {
                 role: root.classicLayout ? "footer" : "toolbar"
+                fracturedEdge: root.acrylicMode ? "menu" : ""
                 roundedPanel: !root.classicLayout && !root.roundedFrame
                 radius: roundedPanel ? Math.max(12, profile.radius) : 0
                 backdropAvailable: settingsBackdrop.backdropAvailable
@@ -727,7 +731,7 @@ AuralisWindow {
         anchors.rightMargin: root.classicLayout ? 7 : root.resizeInset
         anchors.bottomMargin: root.classicLayout ? 4 : Math.max(root.resizeInset, root.frameSafeInset)
         columns: 2
-        columnSpacing: 12
+        columnSpacing: root.acrylicMode ? 14 : 12
         rowSpacing: 0
 
         GridLayout {
@@ -838,6 +842,7 @@ AuralisWindow {
             background: GlassSurface {
                 visible: !root.wideSweepVisible
                 role: "sidebar"
+                fracturedEdge: root.acrylicMode ? "rail" : ""
                 roundedPanel: true
                 backdropAvailable: settingsBackdrop.backdropAvailable
             }
@@ -911,6 +916,7 @@ AuralisWindow {
                     anchors.fill: parent
                     visible: !root.classicLayout && !root.wideSweepVisible
                     role: "content"
+                    fracturedEdge: root.acrylicMode ? "content" : ""
                     roundedPanel: true
                     backdropAvailable: settingsBackdrop.backdropAvailable
                 }
@@ -1234,9 +1240,10 @@ AuralisWindow {
         hostWindow: root
         coalesceGeometry: true
         windowMouseEvents: false
-        borderSize: 11
-        cornerSize: 19
-        showGrip: true
+        borderSize: root.acrylicMode ? Math.ceil(root.resizeInset * root.interfaceScale) + 5 : 11
+        cornerSize: root.acrylicMode ? borderSize + 5 : 19
+        anchors.topMargin: root.acrylicMode ? 12 - borderSize : 0
+        showGrip: !root.acrylicMode
         gripColor: root.colors.muted
         onResizingChanged: if (!resizing) root.flushWindowSize()
     }

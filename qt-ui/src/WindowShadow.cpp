@@ -328,7 +328,7 @@ private:
             painter.fillRect(QRect(QPoint(), m_panelFrame), Qt::white);
         }
         const QPoint cast(qRound(2.5 * scale), qRound(6.5 * scale));
-        return WindowOutline::blurShadowMask(std::move(mask), scale, padding, cast, 192);
+        return WindowOutline::blurShadowMask(std::move(mask), scale, padding, cast, 120);
     }
 
     QWindow *m_owner;

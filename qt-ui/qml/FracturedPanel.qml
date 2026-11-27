@@ -17,12 +17,26 @@ Item {
 
     readonly property AuralisWindow panelWindow: Window.window as AuralisWindow
     readonly property bool nativeAcrylic: panelWindow?.acrylicApplied === true
-    readonly property var silhouette: makeOutline(0, true)
+    property var outlineOverride: null
+    readonly property var silhouette: outlineOverride || makeOutline(0, true)
     readonly property var panelVertices: silhouette.vertices
-    readonly property string bevelPath: silhouette.path + " " + makeOutline(1.15, false).path
-    readonly property color upperFace: forceOpaque ? face : MaterialTheme.mix(face, "#d8c5ef", .10, 1)
-    readonly property color lowerFace: forceOpaque ? face : MaterialTheme.mix(face, "#251631", .09, 1)
-    readonly property real faceOpacity: forceOpaque || !nativeAcrylic ? 1 : readableOpacity()
+    readonly property string bevelPath: outlineOverride?.bevel || silhouette.path + " " + makeOutline(1.15, false).path
+    readonly property string finish: panelWindow?.acrylicFinish || MaterialTheme.fracturedFinish
+    readonly property var appearances: ({
+        acrylic: {light: "#c5b5e3", glow: .085, shade: .13, opacity: .92},
+        mica: {light: "#adb2d7", glow: .075, shade: .035, opacity: .82},
+        tinted: {light: face, glow: 0, shade: .11, opacity: 1.24},
+        blurred: {light: "#aba8c9", glow: .055, shade: .045, opacity: .76},
+        translucent: {light: face, glow: 0, shade: .015, opacity: .66},
+        frosted: {light: "#e3d4f5", glow: .15, shade: .075, opacity: 1.02}
+    })
+    readonly property var appearance: appearances[finish] || appearances.frosted
+    readonly property color upperFace: forceOpaque ? face : MaterialTheme.mix(face, appearance.light, appearance.glow, 1)
+    readonly property color lowerFace: forceOpaque ? face : MaterialTheme.mix(face, "#251631", appearance.shade, 1)
+    readonly property real finishOpacity: MaterialTheme.translucency >= 0 ? requestedOpacity
+        : Math.min(1, requestedOpacity * appearance.opacity)
+    readonly property real faceOpacity: forceOpaque || finish === "solid" || (finish === "mica" && !nativeAcrylic)
+        ? 1 : readableOpacity()
     property AuralisWindow registeredWindow: null
 
     // Each pair is the distance along an edge and its inward depth. Shared
@@ -92,9 +106,9 @@ Item {
             return MaterialTheme.contrastRatio(ink, color) >= 4.5
                 && MaterialTheme.contrastRatio(mutedInk, color) >= 4.5
         }
-        if (readable(requestedOpacity))
-            return requestedOpacity
-        let low = requestedOpacity
+        if (readable(finishOpacity))
+            return finishOpacity
+        let low = finishOpacity
         let high = 1
         for (let step = 0; step < 7; ++step) {
             const middle = (low + high) / 2
@@ -115,7 +129,8 @@ Item {
             return {path: "", vertices: []}
 
         const radius = Math.min(Math.max(1, cornerRadius - inset), (r - l) / 4, (b - t) / 4)
-        const depth = Math.min(5.8, (r - l) / 7, (b - t) / 7)
+        const maximumDepth = edge === "rail" || edge === "activity" || edge === "content" ? 9 : 6
+        const depth = Math.min(maximumDepth, (r - l) / 7, (b - t) / 7)
         const profile = cuts[edge] || cuts.content
         const first = Qt.point(l + radius, t)
         const vertices = sample ? [first] : []

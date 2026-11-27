@@ -804,14 +804,15 @@ bool Engine::applyBackdrop(QWindow *window, bool enabled, bool dark) const
 #endif
 }
 
-bool Engine::applyPanelBackdrop(QWindow *window, const QVariantList &panels, bool enabled) const
+bool Engine::applyPanelBackdrop(QWindow *window, const QVariantList &panels, bool enabled, const QString &finish) const
 {
 #ifdef Q_OS_WIN
-    return !m_smoke && PanelBackdrop::update(window, panels, enabled);
+    return !m_smoke && PanelBackdrop::update(window, panels, enabled, finish);
 #else
     Q_UNUSED(window);
     Q_UNUSED(panels);
     Q_UNUSED(enabled);
+    Q_UNUSED(finish);
     return false;
 #endif
 }

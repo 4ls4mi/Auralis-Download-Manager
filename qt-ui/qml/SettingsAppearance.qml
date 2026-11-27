@@ -435,6 +435,15 @@ GridLayout {
                 onActivated: MaterialTheme.mdmMode = currentValue
             }
 
+            IndicatorChoice {
+                objectName: "fracturedPanelFinish"
+                visible: root.colors.layout === "fracturedPearl"
+                label: qsTr("Panel finish")
+                model: MaterialTheme.fracturedFinishChoices
+                selection: MaterialTheme.fracturedFinish
+                onChosen: value => MaterialTheme.fracturedFinish = value
+            }
+
             Heading { text: qsTr("Layer and text colors") }
             Label {
                 Layout.fillWidth: true

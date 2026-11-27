@@ -22,10 +22,23 @@ constexpr auto observerName = "auralisPanelBackdrop";
 constexpr DWORD darkMode = 20;
 constexpr DWORD backdropType = 38;
 constexpr DWORD borderColor = 34;
+constexpr DWORD cornerPreference = 33;
 constexpr int noBackdrop = 1;
+constexpr int mica = 2;
 constexpr int desktopAcrylic = 3;
+constexpr int doNotRound = 1;
 constexpr COLORREF noBorder = 0xfffffffe;
 constexpr COLORREF defaultBorder = 0xffffffff;
+
+int materialFor(const QString &finish)
+{
+    if (finish == QLatin1String("mica"))
+        return mica;
+    if (finish == QLatin1String("acrylic") || finish == QLatin1String("blurred")
+        || finish == QLatin1String("frosted"))
+        return desktopAcrylic;
+    return noBackdrop;
+}
 
 struct PanelShape {
     QRect clip;
@@ -69,7 +82,7 @@ public:
         window->installEventFilter(this);
     }
 
-    bool update(const QVariantList &panels, bool enabled)
+    bool update(const QVariantList &panels, bool enabled, int material)
     {
         if (!enabled || !m_window->handle() || !m_window->isVisible()
             || m_window->windowStates().testFlag(Qt::WindowMinimized)) {
@@ -81,9 +94,6 @@ public:
             reset();
             m_hwnd = hwnd;
         }
-        if (m_configured && !m_active)
-            return false;
-
         const qreal scale = m_window->devicePixelRatio();
         RECT frame{};
         if (!GetWindowRect(hwnd, &frame))
@@ -127,8 +137,10 @@ public:
             reset();
             return false;
         }
-        if (m_configured && m_scale == scale && m_framePixels == windowBounds.size() && m_shapes == shapes)
+        if (m_regionSet && m_scale == scale && m_framePixels == windowBounds.size() && m_shapes == shapes) {
+            updateMaterial(material);
             return m_active;
+        }
 
         const auto region = CreateRectRgn(0, 0, 0, 0);
         if (!region)
@@ -158,32 +170,25 @@ public:
 
         // Read the final mask before SetWindowRgn transfers its ownership to Windows.
         const QRegion mask = shadowMask(region);
-        if (!m_active && !m_configured) {
-            const BOOL dark = TRUE;
-            const MARGINS margins{-1, -1, -1, -1};
-            DwmGetWindowAttribute(hwnd, darkMode, &m_previousDarkMode, sizeof(m_previousDarkMode));
-            DwmSetWindowAttribute(hwnd, darkMode, &dark, sizeof(dark));
-            m_configured = true;
-            if (SetWindowRgn(hwnd, region, TRUE)) {
-                m_regionSet = true; // Windows owns the region after SetWindowRgn succeeds.
-                DwmSetWindowAttribute(hwnd, borderColor, &noBorder, sizeof(noBorder));
-                m_active = SUCCEEDED(DwmExtendFrameIntoClientArea(hwnd, &margins))
-                    && SUCCEEDED(DwmSetWindowAttribute(hwnd, backdropType, &desktopAcrylic, sizeof(desktopAcrylic)));
-                if (!m_active)
-                    clearEffect();
-            } else {
-                DeleteObject(region);
-            }
-        } else if (m_active && SetWindowRgn(hwnd, region, TRUE)) {
-            m_regionSet = true;
-        } else {
+        if (!SetWindowRgn(hwnd, region, TRUE)) {
             DeleteObject(region);
-            if (m_active)
-                clearEffect();
+            reset();
+            return false;
+        }
+        if (!m_regionSet) {
+            DwmGetWindowAttribute(hwnd, darkMode, &m_previousDarkMode, sizeof(m_previousDarkMode));
+            DwmGetWindowAttribute(hwnd, borderColor, &m_previousBorder, sizeof(m_previousBorder));
+            DwmGetWindowAttribute(hwnd, cornerPreference, &m_previousCorners, sizeof(m_previousCorners));
+            const BOOL dark = TRUE;
+            DwmSetWindowAttribute(hwnd, darkMode, &dark, sizeof(dark));
+            DwmSetWindowAttribute(hwnd, borderColor, &noBorder, sizeof(noBorder));
+            DwmSetWindowAttribute(hwnd, cornerPreference, &doNotRound, sizeof(doNotRound));
+            m_regionSet = true; // Windows owns the region after SetWindowRgn succeeds.
         }
 
-        if (m_active)
-            WindowShadow::updatePanels(m_window, windowBounds.size(), mask, scale);
+        // Keep the cutout even when this finish has no DWM blur or the OS rejects it.
+        updateMaterial(material);
+        WindowShadow::updatePanels(m_window, windowBounds.size(), mask, scale);
         m_shapes = std::move(shapes);
         m_framePixels = windowBounds.size();
         m_scale = scale;
@@ -200,28 +205,38 @@ protected:
     }
 
 private:
-    void clearEffect()
+    void updateMaterial(int material)
     {
-        WindowShadow::clearPanels(m_window);
-        if (!m_hwnd)
+        if (material == m_requestedMaterial)
             return;
+        m_requestedMaterial = material;
+        if (material != noBackdrop) {
+            const MARGINS margins{-1, -1, -1, -1};
+            m_active = SUCCEEDED(DwmExtendFrameIntoClientArea(m_hwnd, &margins))
+                && SUCCEEDED(DwmSetWindowAttribute(m_hwnd, backdropType, &material, sizeof(material)));
+            if (m_active)
+                return;
+        }
         const MARGINS margins{0, 0, 0, 0};
         DwmSetWindowAttribute(m_hwnd, backdropType, &noBackdrop, sizeof(noBackdrop));
-        DwmSetWindowAttribute(m_hwnd, borderColor, &defaultBorder, sizeof(defaultBorder));
-        DwmSetWindowAttribute(m_hwnd, darkMode, &m_previousDarkMode, sizeof(m_previousDarkMode));
         DwmExtendFrameIntoClientArea(m_hwnd, &margins);
-        if (m_regionSet)
-            SetWindowRgn(m_hwnd, nullptr, TRUE);
         m_active = false;
-        m_regionSet = false;
     }
 
     void reset()
     {
-        if (m_configured)
-            clearEffect();
+        if (m_regionSet) {
+            WindowShadow::clearPanels(m_window);
+            updateMaterial(noBackdrop);
+            DwmSetWindowAttribute(m_hwnd, borderColor, &m_previousBorder, sizeof(m_previousBorder));
+            DwmSetWindowAttribute(m_hwnd, cornerPreference, &m_previousCorners, sizeof(m_previousCorners));
+            DwmSetWindowAttribute(m_hwnd, darkMode, &m_previousDarkMode, sizeof(m_previousDarkMode));
+            SetWindowRgn(m_hwnd, nullptr, TRUE);
+        }
         m_hwnd = nullptr;
-        m_configured = false;
+        m_regionSet = false;
+        m_active = false;
+        m_requestedMaterial = 0;
         m_shapes.clear();
         m_framePixels = {};
     }
@@ -232,13 +247,15 @@ private:
     QSize m_framePixels;
     qreal m_scale = 0;
     BOOL m_previousDarkMode = FALSE;
-    bool m_configured = false;
+    COLORREF m_previousBorder = defaultBorder;
+    int m_previousCorners = 0;
+    int m_requestedMaterial = 0;
     bool m_regionSet = false;
     bool m_active = false;
 };
 }
 
-bool PanelBackdrop::update(QWindow *window, const QVariantList &panels, bool enabled)
+bool PanelBackdrop::update(QWindow *window, const QVariantList &panels, bool enabled, const QString &finish)
 {
     if (!window)
         return false;
@@ -246,5 +263,5 @@ bool PanelBackdrop::update(QWindow *window, const QVariantList &panels, bool ena
                                                                           Qt::FindDirectChildrenOnly));
     if (!backdrop && enabled)
         backdrop = new Backdrop(window);
-    return backdrop && backdrop->update(panels, enabled);
+    return backdrop && backdrop->update(panels, enabled, materialFor(finish));
 }

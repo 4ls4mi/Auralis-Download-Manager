@@ -95,6 +95,7 @@ QtObject {
     property Connections materialPersistence: Connections {
         target: MaterialTheme
         function onCurrentChanged() { root.store() }
+        function onFracturedFinishChanged() { root.store() }
         function onMdmModeChanged() { root.store() }
         function onTranslucencyChanged() { root.store() }
         function onTintColorChanged() { root.store() }
@@ -399,6 +400,7 @@ QtObject {
             "mh-glass-qt-appearance": JSON.stringify(Object.assign({}, preferences, {
                 tint: colorText(MaterialTheme.tintColor),
                 colorTheme: MaterialTheme.colorTheme,
+                fracturedFinish: MaterialTheme.fracturedFinish,
                 mdmMode: MaterialTheme.mdmMode,
                 forcedAccent: MaterialTheme.forcedAccent,
                 reducedMotion: MaterialTheme.reducedMotion,
@@ -445,6 +447,8 @@ QtObject {
         MaterialTheme.forcedAccent = optionalColor(saved.forcedAccent, complete ? "" : MaterialTheme.forcedAccent)
         MaterialTheme.mdmMode = validChoice(saved.mdmMode, ["system", "light", "dark"],
             complete ? "system" : MaterialTheme.mdmMode)
+        MaterialTheme.fracturedFinish = MaterialTheme.fracturedFinishFor(saved.fracturedFinish,
+            complete ? MaterialTheme.defaultFracturedFinish : MaterialTheme.fracturedFinish)
         MaterialTheme.progressPalette = paletteFor(saved.progressPalette,
             paletteFor(data["mh-glass-indicator"], complete ? "material" : MaterialTheme.progressPalette))
         MaterialTheme.connectionPalette = paletteFor(saved.connectionPalette,
@@ -512,6 +516,7 @@ QtObject {
             },
             qt: {
                 material: material, tint: colorText(MaterialTheme.tintColor), progressShape: progressShape,
+                fracturedFinish: material === "fractured-pearl" ? MaterialTheme.fracturedFinish : undefined,
                 mdmMode: MaterialTheme.mdmMode,
                 progressLayout: progressLayout, progressThickness: progressThickness,
                 connectionBlockSize: connectionBlockSize, materialCustomization: materialCustomization(material),
@@ -546,6 +551,8 @@ QtObject {
         }
         if (!MaterialTheme.hasMaterial(material)) return false
         MaterialTheme.current = material
+        if (material === "fractured-pearl")
+            MaterialTheme.fracturedFinish = MaterialTheme.fracturedFinishFor(value.qt?.fracturedFinish, MaterialTheme.fracturedFinish)
         MaterialTheme.mdmMode = validChoice(value.qt?.mdmMode, ["system", "light", "dark"], MaterialTheme.mdmMode)
         MaterialTheme.colorTheme = value.qt?.colorTheme === null ? null
             : validPalette(value.qt?.colorTheme) ? value.qt.colorTheme : value.palette

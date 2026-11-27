@@ -35,7 +35,9 @@ DetachedDialogWindow {
     title: qsTr("Auralis Update")
     width: 550
     minimumHeight: 245
-    flags: Qt.Window | Qt.WindowTitleHint | Qt.WindowSystemMenuHint | Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint
+    flags: Qt.Window | (acrylicMode ? Qt.FramelessWindowHint : Qt.WindowTitleHint)
+        | Qt.WindowSystemMenuHint | Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint
+    framelessMinimizeButton: true
     modality: Qt.NonModal
     transientParent: null
     busy: ["rechecking", "downloading", "waiting", "installing", "closing"].includes(stage)
