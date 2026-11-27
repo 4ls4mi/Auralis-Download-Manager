@@ -46,19 +46,7 @@ QtObject {
         {label: qsTr("Status track"), value: "status-track"},
         {label: qsTr("Pill segments"), value: "pill-segments"},
         {label: qsTr("Thin line"), value: "thin-line"},
-        {label: qsTr("Striped fill"), value: "striped-fill"},
-        {label: qsTr("Liquid capsule"), value: "liquid-capsule"},
-        {label: qsTr("Jelly beads"), value: "jelly-beads"},
-        {label: qsTr("Braided ribbon"), value: "braided-ribbon"},
-        {label: qsTr("Prism segments"), value: "prism-segments"},
-        {label: qsTr("Molten glass"), value: "molten-glass"},
-        {label: qsTr("Orbit marker"), value: "orbit-marker"},
-        {label: qsTr("Stacked glass tiles"), value: "glass-tiles"},
-        {label: qsTr("Pulse checkpoints"), value: "checkpoints"},
-        {label: qsTr("Tidal ribbon"), value: "tidal-ribbon"},
-        {label: qsTr("Frosted cells"), value: "frosted-cells"},
-        {label: qsTr("Filament core"), value: "filament-core"},
-        {label: qsTr("Twin rails"), value: "twin-rails"}
+        {label: qsTr("Striped fill"), value: "striped-fill"}
     ]
     readonly property var progressTrackFinishChoices: [
         {label: qsTr("Material default"), value: "default"},

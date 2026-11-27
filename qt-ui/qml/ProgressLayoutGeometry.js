@@ -3,18 +3,6 @@
 
 function style(name) {
     switch (name) {
-    case "glass-tiles":
-    case "checkpoints":
-    case "tidal-ribbon":
-    case "frosted-cells":
-    case "filament-core":
-    case "twin-rails":
-    case "liquid-capsule":
-    case "jelly-beads":
-    case "braided-ribbon":
-    case "prism-segments":
-    case "molten-glass":
-    case "orbit-marker":
     case "status-track":
     case "pill-segments":
     case "thin-line":

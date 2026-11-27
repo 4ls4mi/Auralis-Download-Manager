@@ -33,10 +33,8 @@ Item {
         WindowAppearance.progressTrackColors)
     readonly property var finish: Lighting.style(lightingStyle)
     readonly property string layoutKind: LayoutGeometry.style(layoutStyle)
-    readonly property bool creativeLayout: !usesMaterialProgress && ["liquid-capsule", "jelly-beads",
-        "braided-ribbon", "prism-segments", "molten-glass", "orbit-marker", "glass-tiles", "checkpoints", "tidal-ribbon", "frosted-cells", "filament-core", "twin-rails"].includes(layoutKind)
     readonly property bool classicLayout: layoutKind === "classic"
-    readonly property bool labelAtEnd: showLabel && (usesMaterialProgress || creativeLayout || layoutKind === "thin-line")
+    readonly property bool labelAtEnd: showLabel && (usesMaterialProgress || layoutKind === "thin-line")
     readonly property string transferStatus: transferState.toLowerCase()
     readonly property color statusTrackTint: layoutKind !== "status-track" ? "transparent"
         : transferStatus === "paused" || transferStatus === "stopped" ? profile.caution
@@ -160,7 +158,7 @@ Item {
         anchors.rightMargin: progress.labelAtEnd ? amountLabel.width + 8 : 1.5
         anchors.verticalCenter: parent.verticalCenter
         height: LayoutGeometry.trackHeight(Math.max(0, progress.height - 3), progress.layoutKind, progress.thicknessScale)
-        active: !progress.usesMaterialProgress && !progress.renderWithShader && !progress.creativeLayout
+        active: !progress.usesMaterialProgress && !progress.renderWithShader
 
         sourceComponent: Item {
             id: vessel
@@ -713,43 +711,17 @@ Item {
     Loader {
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.rightMargin: progress.showLabel ? amountLabel.width + 8 : 0
-        anchors.verticalCenter: parent.verticalCenter
-        height: progress.height
-        active: progress.creativeLayout
-        sourceComponent: CreativeProgress {
-            amount: progress.amount
-            layoutStyle: progress.layoutKind
-            shape: progress.shape
-            lightingStyle: progress.lightingStyle
-            animationStyle: progress.animationStyle
-            startColor: progress.startColor
-            endColor: progress.endColor
-            trackColor: progress.trackColor
-            phase: progress.liquidMoving ? progress.wavePhase : 0
-            light: progress.profile.light
-        }
-    }
-
-    Loader {
-        anchors.left: parent.left
-        anchors.right: parent.right
         anchors.rightMargin: progress.labelAtEnd ? amountLabel.width + 8 : 0
         height: progress.height
-        active: !progress.creativeLayout && !progress.usesMaterialProgress && progress.liquidMoving
+        active: !progress.usesMaterialProgress && progress.liquidMoving
             && ["sheen", "heartbeat", "tide", "elastic", "glints", "current"].includes(progress.animationStyle)
-        sourceComponent: CreativeProgress {
-            overlayOnly: true
+        sourceComponent: ProgressMotion {
             fillMask: progress.classicLayout
                 ? Geometry.barContour(width,height,progress.shape,progress.shownAmount,0)
                 : LayoutGeometry.path(LayoutGeometry.spans(width,height,progress.layoutKind,progress.shownAmount),height,progress.layoutKind,progress.shape)
             amount: progress.amount
-            shape: progress.shape
-            layoutStyle: progress.layoutKind
             animationStyle: progress.animationStyle
             phase: progress.wavePhase
-            startColor: progress.startColor
-            endColor: progress.endColor
         }
     }
 
