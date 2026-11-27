@@ -22,8 +22,10 @@ jobs:
             throw 'The release files are unavailable to the runner profile.'
           }
           if ((Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash -ine '082E8569584C1FB77C11F45094015BD354EDA24942AA4ECEDEAABE27771F7544' -or
-              (Get-FileHash -LiteralPath $verifier -Algorithm SHA256).Hash -ine 'E6A535D586181712FC1DE589CB869B9D05DD5FC04D76DAA9FA60F0A59BC7D46C') {
+              (Get-FileHash -LiteralPath $verifier -Algorithm SHA256).Hash -ine '8D8634F839617FFE2901FA674E647FDB163235F74D57E1DC6C418CEA2E387A21') {
             throw 'The installer or test script did not match its expected SHA-256.'
           }
-          & $verifier -InstallerPath $installer -TempBase $env:RUNNER_TEMP -SkipScreenshot
+          $testBase = Join-Path $root 'work\github\runner-tests'
+          New-Item -ItemType Directory -Path $testBase -Force | Out-Null
+          & $verifier -InstallerPath $installer -TempBase $testBase -SkipScreenshot
 
