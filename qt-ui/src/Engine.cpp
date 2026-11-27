@@ -33,7 +33,10 @@
 #include "PanelBackdrop.h"
 #include <QJsonObject>
 #include <QRandomGenerator>
+#include <QStringConverter>
+#include <QTemporaryDir>
 #include <QVersionNumber>
+#include <memory>
 #include <windows.h>
 #include <dwmapi.h>
 #endif
@@ -48,6 +51,55 @@ QVariantMap result(const QVariant &value)
 {
     return {{QStringLiteral("result"), value}};
 }
+
+#ifdef Q_OS_WIN
+QString installedFylrPicker()
+{
+    const auto localAppData = qEnvironmentVariable("LOCALAPPDATA");
+    if (!QDir::isAbsolutePath(localAppData))
+        return {};
+    const auto executable = QDir::toNativeSeparators(
+        QDir(localAppData).filePath(QStringLiteral("Programs/Fylr/bin/Fylr.exe")));
+    const auto path = reinterpret_cast<LPCWSTR>(executable.utf16());
+    DWORD legacyHandle = 0;
+    const auto size = GetFileVersionInfoSizeW(path, &legacyHandle);
+    if (!size || size > 1024 * 1024)
+        return {};
+    QByteArray version(size, Qt::Uninitialized);
+    if (!GetFileVersionInfoW(path, 0, size, version.data()))
+        return {};
+
+    void *value = nullptr;
+    UINT length = 0;
+    if (!VerQueryValueW(version.data(), L"\\", &value, &length) || !value || length < sizeof(VS_FIXEDFILEINFO))
+        return {};
+    const auto *fixed = static_cast<const VS_FIXEDFILEINFO *>(value);
+    const QVersionNumber fileVersion(HIWORD(fixed->dwFileVersionMS), LOWORD(fixed->dwFileVersionMS),
+                                     HIWORD(fixed->dwFileVersionLS));
+    return fixed->dwSignature == VS_FFI_SIGNATURE && fileVersion >= QVersionNumber(0, 2, 7)
+        ? executable : QString();
+}
+
+QString readFylrDestination(const QString &resultPath)
+{
+    QFile result(resultPath);
+    constexpr qint64 maximumBytes = 64 * 1024;
+    if (!QFileInfo(result).isFile() || !result.open(QIODevice::ReadOnly))
+        return {};
+    const auto contents = result.read(maximumBytes + 1);
+    if (result.error() != QFileDevice::NoError || contents.isEmpty() || contents.size() > maximumBytes)
+        return {};
+    QStringDecoder decoder(QStringConverter::Utf8, QStringConverter::Flag::Stateless);
+    const QString decoded = decoder.decode(contents);
+    const auto path = QDir::fromNativeSeparators(decoded);
+    const QFileInfo file(path);
+    // This runs on the GUI thread. Validate the path syntax without probing a possibly remote volume.
+    if (decoder.hasError() || path.contains(QChar::Null) || path.contains(u'\r') || path.contains(u'\n')
+        || path.startsWith(u':') || !file.isAbsolute() || file.fileName().isEmpty() || QDir::cleanPath(path) != path)
+        return {};
+    return QDir::toNativeSeparators(path);
+}
+#endif
 
 QVariantMap startupSettings()
 {
@@ -159,6 +211,7 @@ Engine::Engine(QJSEngine *scriptEngine, bool startHidden, bool smoke, QObject *p
 
 Engine::~Engine()
 {
+    cancelDownloadDestinationPick();
     setReleaseUpdateHintsEnabled(false);
     // Worker lambdas borrow the engine and profile. Wait while they still exist.
     m_commands.waitForDone();
@@ -692,6 +745,73 @@ QUrl Engine::localFileUrl(const QString &path) const
         ? info.absoluteFilePath()
         : QDir::home().absoluteFilePath(nativePath);
     return QUrl::fromLocalFile(QDir::cleanPath(absolutePath));
+}
+
+void Engine::pickDownloadDestination(const QString &path, const QJSValue &callback)
+{
+    if (!callback.isCallable())
+        return;
+    // A null result opens the native dialog. An empty string is a deliberate cancel.
+    const QJSValue fallback(QJSValue::NullValue);
+#ifdef Q_OS_WIN
+    cancelDownloadDestinationPick();
+    const auto executable = m_smoke ? QString() : installedFylrPicker();
+    if (!executable.isEmpty()) {
+        const auto temporary = std::make_shared<QTemporaryDir>();
+        if (temporary->isValid()) {
+            const auto resultPath = temporary->filePath(QStringLiteral("destination.txt"));
+            const QFileInfo suggested(localFileUrl(path).toLocalFile());
+            const auto directory = suggested.fileName().isEmpty() ? QString() : suggested.absolutePath();
+            auto *process = new QProcess(this);
+            m_downloadDestinationPicker = process;
+            process->setProgram(executable);
+            process->setWorkingDirectory(QFileInfo(executable).absolutePath());
+            process->setArguments({QStringLiteral("--pick-save-path"), suggested.fileName(),
+                                   QDir::toNativeSeparators(directory), QDir::toNativeSeparators(resultPath)});
+            const auto complete = [this, process, callback](const QJSValue &reply) {
+                process->deleteLater();
+                if (m_downloadDestinationPicker != process)
+                    return;
+                m_downloadDestinationPicker.clear();
+                callback.call({reply});
+            };
+            connect(process, &QProcess::errorOccurred, this, [complete, fallback](QProcess::ProcessError error) {
+                if (error == QProcess::FailedToStart)
+                    complete(fallback);
+            });
+            connect(process, &QProcess::finished, this, [complete, fallback, temporary, resultPath](
+                        int code, QProcess::ExitStatus status) {
+                if (status == QProcess::NormalExit && code == 1) {
+                    complete(QJSValue(QString()));
+                    return;
+                }
+                const auto chosen = status == QProcess::NormalExit && code == 0
+                    ? readFylrDestination(resultPath) : QString();
+                complete(chosen.isEmpty() ? fallback : QJSValue(chosen));
+            });
+            process->start();
+            return;
+        }
+    }
+#else
+    Q_UNUSED(path);
+#endif
+    callback.call({fallback});
+}
+
+void Engine::cancelDownloadDestinationPick()
+{
+#ifdef Q_OS_WIN
+    auto *process = m_downloadDestinationPicker.data();
+    if (!process)
+        return;
+    m_downloadDestinationPicker.clear();
+    process->terminate();
+    QTimer::singleShot(750, process, [process] {
+        if (process->state() != QProcess::NotRunning)
+            process->kill();
+    });
+#endif
 }
 
 void Engine::dragCompletedFile(QWindow *window, quint64 id, const QJSValue &callback)

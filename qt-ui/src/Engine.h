@@ -11,10 +11,12 @@
 #include <memory>
 
 #ifdef Q_OS_WIN
+#include <QPointer>
 #include <QtWebSockets/QWebSocket>
 #endif
 
 class QJSEngine;
+class QProcess;
 class QTranslator;
 class QWindow;
 
@@ -71,6 +73,8 @@ public:
     Q_INVOKABLE QString localPath(const QUrl &url) const;
     Q_INVOKABLE QUrl localMediaUrl(const QUrl &url) const;
     Q_INVOKABLE QUrl localFileUrl(const QString &path) const;
+    Q_INVOKABLE void pickDownloadDestination(const QString &path, const QJSValue &callback);
+    Q_INVOKABLE void cancelDownloadDestinationPick();
     Q_INVOKABLE void dragCompletedFile(QWindow *window, quint64 id, const QJSValue &callback);
     Q_INVOKABLE bool openPath(const QString &path) const;
     Q_INVOKABLE bool openFolder(const QString &path) const;
@@ -129,6 +133,7 @@ private:
 #ifdef Q_OS_WIN
     QTimer m_releaseSocketTimer;
     QWebSocket m_releaseSocket;
+    QPointer<QProcess> m_downloadDestinationPicker;
     int m_releaseReconnectDelay = 2000;
     bool m_releaseHintsEnabled = false;
 #endif

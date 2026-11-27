@@ -16,6 +16,8 @@ DetachedDialogWindow {
     readonly property bool browserCredentialsUnavailable: confirming && requestInfo.info.browser_credentials_unavailable === true
     property string errorMessage: ""
     property bool destinationEdited: false
+    property bool pickingDestination: false
+    property int destinationPickRevision: 0
     property bool descriptionEdited: false
     property var categoryOptions: []
     property int clipboardRead: 0
@@ -102,6 +104,7 @@ DetachedDialogWindow {
         requestInfo = reply
         categoryOptions = reply.categories || []
         if (changed) {
+            invalidateDestinationPicker()
             destinationEdited = false
             descriptionEdited = false
             errorMessage = ""
@@ -136,8 +139,44 @@ DetachedDialogWindow {
         })
     }
 
+    function invalidateDestinationPicker() {
+        ++destinationPickRevision
+        if (pickingDestination) {
+            pickingDestination = false
+            engine.cancelDownloadDestinationPick()
+        }
+        if (savePicker.visible)
+            savePicker.close()
+    }
+
+    function applyDownloadDestination(path) {
+        if (!path)
+            return
+        destination.text = path
+        destinationEdited = true
+    }
+
+    function browseDestination() {
+        if (!confirming || busy || waitingForMetadata || pickingDestination)
+            return
+        const revision = ++destinationPickRevision
+        pickingDestination = true
+        engine.pickDownloadDestination(destination.text.trim(), function (path) {
+            if (!visible || !confirming || revision !== destinationPickRevision)
+                return
+            pickingDestination = false
+            if (path === null) {
+                savePicker.destinationRevision = revision
+                savePicker.selectedFile = engine.localFileUrl(destination.text.trim())
+                savePicker.open()
+            } else {
+                applyDownloadDestination(path)
+            }
+        })
+    }
+
     function submit(later) {
-        if (busy)
+        if (busy || pickingDestination)
             return
         if (confirming) {
             const path = destination.text.trim()
@@ -164,6 +203,7 @@ DetachedDialogWindow {
     function cancel() {
         if (busy)
             return
+        invalidateDestinationPicker()
         if (confirming)
             send({action: "glass-file-info", category: "cancel", ids: [requestInfo.id]}, true)
         else
@@ -179,6 +219,7 @@ DetachedDialogWindow {
     onDismissRequested: cancel()
     onDismissed: {
         ++clipboardRead
+        invalidateDestinationPicker()
         requestInfo = null
         address.clear()
         destination.clear()
@@ -280,9 +321,10 @@ DetachedDialogWindow {
             Layout.fillWidth: true
             TextField {
                 id: destination
-            objectName: "downloadDestination"
+                objectName: "downloadDestination"
                 Layout.fillWidth: true
                 placeholderText: qsTr("Destination file name")
+                readOnly: root.pickingDestination
                 onTextEdited: root.destinationEdited = true
                 color: root.colors.text
                 font.family: root.fontFamilyForText(text)
@@ -291,13 +333,11 @@ DetachedDialogWindow {
                 Accessible.name: qsTr("Save as")
             }
             GlassButton {
+                objectName: "browseDownloadDestination"
                 material: root.material
                 text: qsTr("Browse…")
-                enabled: !root.busy && !root.waitingForMetadata
-                onClicked: {
-                    savePicker.selectedFile = engine.localFileUrl(destination.text.trim())
-                    savePicker.open()
-                }
+                enabled: !root.busy && !root.waitingForMetadata && !root.pickingDestination
+                onClicked: root.browseDestination()
             }
         },
         NumeralLabel {
@@ -387,7 +427,7 @@ DetachedDialogWindow {
                 material: root.material
                 text: qsTr("Download later")
                 visible: root.confirming
-                enabled: !root.busy && !root.waitingForMetadata
+                enabled: !root.busy && !root.waitingForMetadata && !root.pickingDestination
                 onClicked: root.submit(true)
             }
             GlassButton {
@@ -395,7 +435,7 @@ DetachedDialogWindow {
                 accent: root.colors.positive
                 objectName: "confirmStartDownload"
                 text: root.busy ? qsTr("Working…") : root.browserWarning ? qsTr("Download anyway") : root.confirming || root.torrentMode ? qsTr("Start download") : qsTr("Continue")
-                enabled: !root.busy && !root.waitingForMetadata
+                enabled: !root.busy && !root.waitingForMetadata && !root.pickingDestination
                 onClicked: root.submit(false)
             }
         }
@@ -403,9 +443,13 @@ DetachedDialogWindow {
 
     FileDialog {
         id: savePicker
+        property int destinationRevision: 0
         title: qsTr("Save download as")
         fileMode: FileDialog.SaveFile
-        onAccepted: { destination.text = engine.localPath(selectedFile); root.destinationEdited = true }
+        onAccepted: {
+            if (root.visible && root.confirming && destinationRevision === root.destinationPickRevision)
+                root.applyDownloadDestination(engine.localPath(selectedFile))
+        }
     }
     FileDialog {
         id: torrentPicker
