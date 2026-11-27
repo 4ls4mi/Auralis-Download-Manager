@@ -66,6 +66,12 @@ Item {
         || profile.background
     readonly property bool customLayer: role === "sidebar" ? Boolean(profile.sidebarOverride)
         : Boolean(profile.contentOverride) && ["content", "card", "field", "summary", "connections"].includes(role)
+    readonly property color fractureInk: role === "title" ? profile.titleInk || profile.ink
+        : role === "sidebar" ? profile.sidebarInk || profile.ink
+        : role === "footer" ? profile.footerInk || profile.ink : profile.ink
+    readonly property color fractureMuted: role === "title" ? profile.titleMuted || profile.muted
+        : role === "sidebar" ? profile.sidebarMuted || profile.muted
+        : role === "footer" ? profile.footerMuted || profile.muted : profile.muted
     readonly property bool plainMaterialAlpha: backdropAvailable && profile.opaque && MaterialTheme.translucency > 0
     readonly property real foregroundBacking: role === "field" ? .94 : role === "sidebar" ? .88 : .78
     readonly property real flatFaceOpacity: backdropAvailable && MaterialTheme.translucency >= 0
@@ -272,6 +278,10 @@ Item {
         sourceComponent: FracturedPanel {
             edge: surface.fracturedEdge
             face: surface.flatFace
+            ink: surface.fractureInk
+            mutedInk: surface.fractureMuted
+            forceOpaque: surface.customChrome || surface.customLayer || Boolean(surface.profile.textOverride)
+            requestedOpacity: MaterialTheme.opacityFor(surface.material)
             cornerRadius: Math.max(2, Math.min(12, WindowAppearance.cornerRadius * .48))
         }
     }

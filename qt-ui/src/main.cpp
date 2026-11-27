@@ -502,22 +502,6 @@ void addBundledTools()
         qputenv("PATH", QDir::toNativeSeparators(dir).toUtf8() + QDir::listSeparator().toLatin1() + qgetenv("PATH"));
 }
 
-void applyReferenceWindowSizes()
-{
-    QSettings settings;
-    if (settings.value(QStringLiteral("WindowLayout/referenceSizesVersion")).toInt() >= 1
-        || settings.status() != QSettings::NoError)
-        return;
-    settings.setValue(QStringLiteral("MainWindow/fullWidth"), 810);
-    settings.setValue(QStringLiteral("MainWindow/fullHeight"), 525);
-    settings.setValue(QStringLiteral("SettingsWindowLayout/initialWidth"), 675);
-    settings.setValue(QStringLiteral("SettingsWindowLayout/initialHeight"), 520);
-    settings.setValue(QStringLiteral("TransferWindowLayout/initialCompactWidth"), 510);
-    settings.setValue(QStringLiteral("TransferWindowLayout/initialCompactHeight"), 290);
-    settings.setValue(QStringLiteral("WindowLayout/referenceSizesVersion"), 1);
-    settings.sync();
-}
-
 int runDesktop(QApplication &app, int activeInterfaceScale, bool startHidden, bool exitRequest, bool smoke,
                QString &restartError);
 }
@@ -548,8 +532,18 @@ int main(int argc, char **argv)
     }
     QCoreApplication::setApplicationName(QStringLiteral("Auralis Download Manager"));
     QCoreApplication::setOrganizationName(QStringLiteral("Auralis"));
+    if (smoke) {
+        const QString profile = qEnvironmentVariable("MDM_DATA_DIR");
+        if (profile.isEmpty() || !QDir::isAbsolutePath(profile)) {
+            qCritical("Set an isolated, absolute MDM_DATA_DIR before running the engine smoke test.");
+            return 2;
+        }
+        QSettings::setDefaultFormat(QSettings::IniFormat);
+        QSettings::setPath(QSettings::IniFormat, QSettings::UserScope,
+                           QDir(profile).filePath(QStringLiteral("qt-settings")));
+    }
     const QByteArray inheritedScale = qgetenv("QT_SCALE_FACTOR");
-    const int activeInterfaceScale = smoke ? 100 : Typography::applyStartupInterfaceScale();
+    const int activeInterfaceScale = Typography::applyStartupInterfaceScale();
     QApplication app(argc, argv);
     // Qt caches the factor during startup. Restore the environment for child processes.
     if (activeInterfaceScale != 100) {
@@ -566,17 +560,8 @@ int main(int argc, char **argv)
     app.setQuitOnLastWindowClosed(false);
 
     const QStringList arguments = app.arguments();
-    if (smoke) {
+    if (smoke)
         qInfo("Smoke: Qt platform initialized.");
-        const QString profile = qEnvironmentVariable("MDM_DATA_DIR");
-        if (profile.isEmpty() || !QDir::isAbsolutePath(profile)) {
-            qCritical("Set an isolated, absolute MDM_DATA_DIR before running the engine smoke test.");
-            return 2;
-        }
-        QSettings::setDefaultFormat(QSettings::IniFormat);
-        QSettings::setPath(QSettings::IniFormat, QSettings::UserScope,
-                           QDir(profile).filePath(QStringLiteral("qt-settings")));
-    }
     const bool exitRequest = arguments.contains(QStringLiteral("--exit")) || arguments.contains(QStringLiteral("/exit"));
     bool startHidden = arguments.contains(QStringLiteral("--auralis-startup-minimized"));
 #ifdef AURALIS_STORE_EDITION
@@ -734,7 +719,6 @@ int runDesktop(QApplication &app, int activeInterfaceScale, bool startHidden, bo
 #endif
 
     seedFreshProfile(engine.dataDirectory());
-    applyReferenceWindowSizes();
     Typography &typography = typographyLifetime.emplace(activeInterfaceScale);
     if (smoke && qEnvironmentVariableIntValue("AURALIS_QT_RELEASE_FONTS") == 1) {
         for (const auto &options : {typography.englishFontOptions(), typography.arabicFontOptions()}) {

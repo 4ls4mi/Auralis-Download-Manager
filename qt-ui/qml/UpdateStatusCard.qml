@@ -17,6 +17,7 @@ Frame {
     property string problem
     property string actionLabel
     property bool announceChanges: false
+    property bool fractured: false
     readonly property var colors: MaterialTheme.palette
     readonly property bool hasProgress: downloadedBytes >= 0 && installerBytes > 0
     readonly property real completion: hasProgress ? Math.min(1, downloadedBytes / installerBytes) : 0
@@ -87,15 +88,28 @@ Frame {
         easing.type: Easing.OutCubic
     }
 
-    background: Rectangle {
-        radius: 9
-        color: card.face
-        border.width: 1
-        border.color: MaterialTheme.mix(card.colors.edge, card.accent, .76, 1)
+    background: Item {
+        Loader {
+            anchors.fill: parent
+            active: card.fractured
+            sourceComponent: FracturedPanel {
+                edge: "banner"
+                face: card.face
+                forceOpaque: true
+            }
+        }
+        Rectangle {
+            anchors.fill: parent
+            visible: !card.fractured
+            radius: 9
+            color: card.face
+            border.width: 1
+            border.color: MaterialTheme.mix(card.colors.edge, card.accent, .76, 1)
+        }
 
         Item {
             anchors.fill: parent
-            anchors.margins: 2
+            anchors.margins: card.fractured ? 5 : 2
             clip: true
             Rectangle {
                 visible: accentSweep.running && !MaterialTheme.reducedMotion

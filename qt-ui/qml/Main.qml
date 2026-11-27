@@ -11,15 +11,15 @@ AuralisWindow {
     id: root
     objectName: "mainWindow"
     title: qsTr("Auralis Download Manager")
-    width: windowPreferences.fullWidth
-    height: windowPreferences.fullHeight
+    width: compactView ? windowPreferences.compactWidth : windowPreferences.fullWidth
+    height: compactView ? windowPreferences.compactHeight : windowPreferences.fullHeight
     minimumWidth: compactView ? 500 : 680
     minimumHeight: compactView ? 320 : 450
     visible: !engine.startHidden || !engine.trayAvailable
     color: "transparent"
     flags: Qt.Window | Qt.FramelessWindowHint
     frameShapingEnabled: !fracturedLayout
-    acrylicMode: tracedOverview
+    acrylicMode: fracturedLayout && !wideSweepVisible && !compactView && visibility === Window.Windowed
 
     readonly property var colors: MaterialTheme.palette
     readonly property bool classicLayout: MaterialTheme.mdmAppearance && !compactView
@@ -36,29 +36,9 @@ AuralisWindow {
     readonly property bool fogSlate: materialLayout === "fogSlate"
     readonly property bool coralSlate: materialLayout === "coralSlate"
     readonly property bool fracturedLayout: materialLayout === "fracturedPearl"
-    property bool acrylicOverviewRequested: true
-    property string acrylicDownloadId: ""
-    readonly property bool tracedOverview: fracturedLayout && acrylicOverviewRequested && !compactView
-        && width / interfaceScale >= 740 && height / interfaceScale >= 465
-    readonly property var acrylicDownload: {
-        if (!tracedOverview)
-            return null
-        const selected = TransferData.find(downloads, acrylicDownloadId)
-        if (selected)
-            return selected
-        let newest = null
-        let activeTransfer = null
-        for (const transfer of downloads) {
-            if (!newest || Number(transfer.id) > Number(newest.id))
-                newest = transfer
-            if (transfer.status === "Downloading" && (!activeTransfer || Number(transfer.id) > Number(activeTransfer.id)))
-                activeTransfer = transfer
-        }
-        return activeTransfer || newest
-    }
-    onFracturedLayoutChanged: if (fracturedLayout) acrylicOverviewRequested = true
     readonly property bool workspaceToolbar: !compactView && (materialDashboard || fracturedLayout)
-    readonly property int seamWidth: 2
+    readonly property bool tightFracturedLayout: fracturedLayout && height / interfaceScale < 340
+    readonly property int seamWidth: tightFracturedLayout ? 2 : 5
     readonly property bool materialDashboard: fogSlate || violetRail || coralSlate
     readonly property bool compactView: windowPreferences.compactView
     readonly property bool sideMenus: materialDashboard && showSidebar && !compactView
@@ -110,7 +90,7 @@ AuralisWindow {
         return queues.length ? queues[0] : null
     }
     readonly property bool compact: width < 920
-    readonly property int layoutInset: visibility === Window.Maximized ? 0 : fracturedLayout ? 4 : compactView || classicLayout ? 5 : 8
+    readonly property int layoutInset: visibility === Window.Maximized ? 0 : fracturedLayout ? (tightFracturedLayout ? 4 : 7) : compactView || classicLayout ? 5 : 8
     readonly property int frameBleed: frameCornerRadius > 0 ? layoutInset : 0
     readonly property bool online: engine.ready
     readonly property string filterTitle: filterType === "category"
@@ -136,12 +116,14 @@ AuralisWindow {
     property string filterType: "status"
     property string filterKey: "all"
     property string searchTerm: ""
-    property int sortOrder: 0
+    property alias sortOrder: windowPreferences.sortOrder
     readonly property var downloadSortLabels: [qsTr("Newest first"), qsTr("Oldest first"), qsTr("Name"), qsTr("Size"), qsTr("Status")]
-    property bool showSidebar: true
-    property bool classicCategoriesExpanded: true
-    property bool classicUnfinishedExpanded: false
-    property bool classicQueuesExpanded: false
+    property alias showSidebar: windowPreferences.showSidebar
+    property alias classicCategoriesExpanded: windowPreferences.classicCategoriesExpanded
+    property alias classicUnfinishedExpanded: windowPreferences.classicUnfinishedExpanded
+    property alias classicQueuesExpanded: windowPreferences.classicQueuesExpanded
+    property bool windowGeometryReady: false
+    property bool restoringWindowGeometry: false
     property bool classicSearchOpen: false
     readonly property int classicRowHeight: TypographyScale.pixels(colors.mdmListRow || 19)
     readonly property int classicHeaderHeight: TypographyScale.pixels(colors.mdmListHeader || 24)
@@ -515,6 +497,8 @@ AuralisWindow {
     }
 
     function hideMainToTray() {
+        windowSizeSave.stop()
+        saveWindowSize()
         if (engine.trayAvailable)
             hide()
         else
@@ -594,26 +578,77 @@ AuralisWindow {
         property bool compactView: false
         property int fullWidth: 810
         property int fullHeight: 525
+        property int compactWidth: 540
+        property int compactHeight: 390
+        property int sortOrder: 0
+        property bool showSidebar: true
+        property bool classicCategoriesExpanded: true
+        property bool classicUnfinishedExpanded: false
+        property bool classicQueuesExpanded: false
     }
 
+    function scheduleWindowSizeSave() {
+        if (windowGeometryReady && !restoringWindowGeometry && visibility === Window.Windowed)
+            windowSizeSave.restart()
+    }
+
+    function saveWindowSize() {
+        if (!windowGeometryReady || restoringWindowGeometry || visibility !== Window.Windowed
+            || width < minimumWidth || height < minimumHeight)
+            return
+        const widthKey = compactView ? "compactWidth" : "fullWidth"
+        const heightKey = compactView ? "compactHeight" : "fullHeight"
+        if (windowPreferences[widthKey] === width && windowPreferences[heightKey] === height)
+            return
+        windowPreferences[widthKey] = width
+        windowPreferences[heightKey] = height
+        windowPreferences.setValue(widthKey, width)
+        windowPreferences.setValue(heightKey, height)
+        windowPreferences.sync()
+    }
+
+    function saveWorkspacePreference(key, value) {
+        if (!windowGeometryReady)
+            return
+        windowPreferences.setValue(key, value)
+        windowPreferences.sync()
+    }
+
+    Timer {
+        id: windowSizeSave
+        interval: 180
+        onTriggered: root.saveWindowSize()
+    }
+
+    onWidthChanged: scheduleWindowSizeSave()
+    onHeightChanged: scheduleWindowSizeSave()
+    onShowSidebarChanged: saveWorkspacePreference("showSidebar", showSidebar)
+    onClassicCategoriesExpandedChanged: saveWorkspacePreference("classicCategoriesExpanded", classicCategoriesExpanded)
+    onClassicUnfinishedExpandedChanged: saveWorkspacePreference("classicUnfinishedExpanded", classicUnfinishedExpanded)
+    onClassicQueuesExpandedChanged: saveWorkspacePreference("classicQueuesExpanded", classicQueuesExpanded)
+
     function toggleCompactView() {
-        if (!compactView && visibility === Window.Windowed) {
-            windowPreferences.fullWidth = width
-            windowPreferences.fullHeight = height
-        }
+        windowSizeSave.stop()
+        saveWindowSize()
+        restoringWindowGeometry = true
         if (visibility === Window.Maximized)
             showNormal()
         windowPreferences.compactView = !compactView
-        width = compactView ? 540 : windowPreferences.fullWidth
-        height = compactView ? 390 : windowPreferences.fullHeight
+        width = compactView ? windowPreferences.compactWidth : windowPreferences.fullWidth
+        height = compactView ? windowPreferences.compactHeight : windowPreferences.fullHeight
+        saveWorkspacePreference("compactView", compactView)
+        Qt.callLater(() => { restoringWindowGeometry = false })
         synchronizeRows()
     }
 
     function toggleMaximized() {
-        if (visibility === Window.Maximized)
+        if (visibility === Window.Maximized) {
             showNormal()
-        else
+        } else {
+            windowSizeSave.stop()
+            saveWindowSize()
             showMaximized()
+        }
     }
 
     onClosing: function(event) {
@@ -624,6 +659,8 @@ AuralisWindow {
             engine.requestQuit()
     }
     onVisibilityChanged: {
+        if (visibility !== Window.Windowed)
+            windowSizeSave.stop()
         if (root.visibility === Window.Minimized && root.minimizeToTray && engine.trayAvailable) {
             Qt.callLater(() => {
                 if (root.visibility === Window.Minimized)
@@ -632,13 +669,13 @@ AuralisWindow {
         }
     }
     onSearchTermChanged: synchronizeRows()
-    onSortOrderChanged: synchronizeRows()
+    onSortOrderChanged: {
+        saveWorkspacePreference("sortOrder", sortOrder)
+        synchronizeRows()
+    }
     onVioletRailChanged: synchronizeRows()
     Component.onCompleted: {
-        if (compactView) {
-            width = 540
-            height = 390
-        }
+        Qt.callLater(() => { windowGeometryReady = true })
         synchronizeRows()
         engine.refresh()
         if (engine.startHidden && !engine.trayAvailable)
@@ -649,6 +686,12 @@ AuralisWindow {
         target: engine
         function onOperationFailed(message) {
             root.actionError = message
+        }
+        function onQuittingChanged() {
+            if (engine.quitting) {
+                windowSizeSave.stop()
+                root.saveWindowSize()
+            }
         }
         function onDashboardChanged() {
             root.graphValues = root.graphValues.slice(-64).concat([Number(engine.dashboard.speed || 0)])
@@ -689,7 +732,7 @@ AuralisWindow {
         automaticChecks: settingsWindow.automaticUpdateChecks && !startupSetup.blockingAnnouncements
         automaticInstall: settingsWindow.automaticUpdateInstall
         automaticInstallReady: root.online && !root.busy && root.counts.downloading === 0
-            && !addDialog.visible && !galleryDialog.visible && !batchDialog.visible
+            && !settingsWindow.visible && !addDialog.visible && !galleryDialog.visible && !batchDialog.visible
             && !enginePrompts.fileInfo.visible && !enginePrompts.question.visible
             && !enginePrompts.video.visible && !enginePrompts.links.visible
             && !removeDialog.visible && !restartDialog.visible && !moveDialog.visible
@@ -850,12 +893,7 @@ AuralisWindow {
         onTriggered: {
             if (root.classicLayout)
                 root.classicSearchOpen = true
-            if (root.tracedOverview) {
-                root.acrylicOverviewRequested = false
-                Qt.callLater(() => searchField.forceActiveFocus())
-            } else {
-                searchField.forceActiveFocus()
-            }
+            searchField.forceActiveFocus()
         }
     }
     Action {
@@ -1346,7 +1384,6 @@ AuralisWindow {
     }
 
     ColumnLayout {
-        visible: !root.tracedOverview
         anchors.fill: parent
         anchors.margins: root.layoutInset
         spacing: root.fracturedLayout ? root.seamWidth : root.classicLayout ? 2 : root.compactView ? 4 : 7
@@ -1531,21 +1568,14 @@ AuralisWindow {
                 parent: !root.sideMenus ? topMenuDock : root.violetRail ? violetMenuDock : sideMenuDock
                 anchors.fill: parent
 
-                Rectangle {
-                    visible: root.fracturedLayout
-                    x: parent.width * .42 - width / 2
-                    y: -root.seamWidth - 2
-                    width: 16
-                    height: root.seamWidth + 5
-                    radius: 1
-                    color: MaterialTheme.menuColors.surface
-                }
                 Loader {
                     anchors.fill: parent
                     active: root.fracturedLayout
                     sourceComponent: FracturedPanel {
                         edge: "menu"
                         face: MaterialTheme.menuColors.surface
+                        ink: MaterialTheme.menuColors.ink
+                        forceOpaque: Boolean(root.colors.menuOverride || root.colors.textOverride)
                     }
                 }
                 Rectangle {
@@ -1627,6 +1657,7 @@ AuralisWindow {
                     }
                     CommandMenuButton {
                         id: viewMenuButton
+                        objectName: "mainViewMenuButton"
                         symbol: "details"
                         text: qsTr("&View")
                         menuOpen: viewMenu.visible
@@ -1640,12 +1671,6 @@ AuralisWindow {
                             AppMenuItem { symbol: "search"; action: findAction }
                             AppMenuItem { visible: !root.compactView; text: root.showSidebar ? qsTr("Hide sidebar") : qsTr("Show sidebar"); onTriggered: root.showSidebar = !root.showSidebar }
                             AppMenuItem { text: compactButton.viewLabel; onTriggered: root.toggleCompactView() }
-                            AppMenuItem {
-                                text: qsTr("Fractured Acrylic overview")
-                                visible: root.fracturedLayout && !root.compactView
-                                enabled: root.width / root.interfaceScale >= 740 && root.height / root.interfaceScale >= 465
-                                onTriggered: root.acrylicOverviewRequested = true
-                            }
                             MenuRule {}
                             AppMenuItem { symbol: "settings"; text: qsTr("Appearance"); onTriggered: settingsWindow.showCategory("Appearance") }
                             AppMenuItem { symbol: "settings"; text: qsTr("Display & fonts"); onTriggered: settingsWindow.showCategory("Display") }
@@ -1852,6 +1877,7 @@ AuralisWindow {
 
         UpdateStatusCard {
             objectName: "mainUpdateBanner"
+            fractured: root.fracturedLayout
             Layout.fillWidth: true
             visible: Boolean(updateNotice.statusStage)
             stage: updateNotice.statusStage
@@ -1870,7 +1896,11 @@ AuralisWindow {
             visible: root.recoveryNotice !== null
             Layout.fillWidth: true
             padding: 6
-            background: GlassSurface { role: "card"; roundedPanel: true }
+            background: GlassSurface {
+                role: "card"
+                roundedPanel: true
+                fracturedEdge: root.fracturedLayout ? "banner" : ""
+            }
             RowLayout {
                 anchors.fill: parent
                 Label {
@@ -1901,7 +1931,7 @@ AuralisWindow {
         RowLayout {
             id: workspace
             Layout.fillHeight: true
-            Layout.minimumHeight: root.compactView ? 95 : 155
+            Layout.minimumHeight: root.compactView ? 95 : root.tightFracturedLayout ? 140 : 155
             Layout.fillWidth: true
             spacing: root.fracturedLayout ? root.seamWidth : 7
 
@@ -2611,7 +2641,7 @@ AuralisWindow {
                 }
             }
             Loader {
-                visible: root.fracturedLayout && !root.compactView && workspace.width >= 1030
+                visible: root.fracturedLayout && root.showSidebar && !root.compactView && workspace.width >= 1030
                 active: visible
                 Layout.preferredWidth: 183
                 Layout.fillHeight: true
@@ -2647,7 +2677,10 @@ AuralisWindow {
                 })
             }
 
-            background: GlassSurface { role: "card" }
+            background: GlassSurface {
+                role: "card"
+                fracturedEdge: root.fracturedLayout ? "banner" : ""
+            }
             contentItem: RowLayout {
                 spacing: 8
 
@@ -2774,15 +2807,6 @@ AuralisWindow {
             id: footerRow
             Layout.fillWidth: true
             Layout.preferredHeight: root.classicLayout ? 22 : root.compactView ? 36 : 55
-            Rectangle {
-                visible: root.fracturedLayout && footerRow.y - workspace.y - workspace.height <= root.seamWidth + 1
-                x: downloadsPane.x + downloadsPane.width * .39
-                y: -root.seamWidth - 2
-                width: 15
-                height: root.seamWidth + 5
-                radius: 1
-                color: root.colors.roleFaces?.footer || root.colors.background
-            }
             Item {
                 id: footerSurface
                 anchors.fill: parent
@@ -2901,50 +2925,17 @@ AuralisWindow {
         }
     }
 
-    Loader {
-        anchors.fill: parent
-        active: root.tracedOverview
-        objectName: "fracturedAcrylicOverview"
-        sourceComponent: FracturedAcrylicWorkspace {
-            download: root.acrylicDownload
-            downloads: root.downloads
-            telemetry: root.acrylicDownload ? root.visualById[root.acrylicDownload.id] : null
-            samples: root.graphValues
-            speed: Number(engine.dashboard.speed || 0)
-            addAction: addUrl
-            online: root.online
-            busy: root.busy
-            statusMessage: root.actionError
-            trayEnabled: engine.trayAvailable
-            minimizeLabel: root.minimizeToTray && engine.trayAvailable ? qsTr("Minimize to system tray") : qsTr("Minimize")
-            closeLabel: root.closeToTray ? qsTr("Keep Auralis running") : qsTr("Exit Auralis")
-            updatesSupported: updateNotice.updateSupported
-            automaticUpdateInstall: settingsWindow.automaticUpdateInstall
-            onSelected: downloadId => root.acrylicDownloadId = downloadId
-            onTransferRequested: (operation, download) => root.transferAction(operation, [download])
-            onDetailsRequested: downloadId => root.showDownload(downloadId)
-            onQueueRequested: {
-                root.acrylicOverviewRequested = false
-                if (root.currentQueue)
-                    root.chooseFilter("queue", root.currentQueue.name)
-                else
-                    root.chooseFilter("status", "all")
-            }
-            onSettingsRequested: category => settingsWindow.showCategory(category)
-            onUpdateCheckRequested: updateNotice.manualCheck()
-            onAutomaticUpdateInstallRequested: enabled => settingsWindow.setAutomaticUpdateInstall(enabled)
-            onHideRequested: root.hideMainToTray()
-            onMinimizeRequested: root.minimizeMain()
-            onMaximizeRequested: root.toggleMaximized()
-            onCloseRequested: root.close()
-        }
-    }
-
     WindowResizeHandles {
         hostWindow: root
         coalesceGeometry: true
         windowMouseEvents: false
-        borderSize: 11
-        cornerSize: 19
+        borderSize: root.fracturedLayout ? Math.ceil(16 * root.interfaceScale) : 11
+        cornerSize: root.fracturedLayout ? Math.ceil(22 * root.interfaceScale) : 19
+        onResizingChanged: {
+            if (!resizing) {
+                windowSizeSave.stop()
+                root.saveWindowSize()
+            }
+        }
     }
 }

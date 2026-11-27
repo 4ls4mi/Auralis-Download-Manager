@@ -6,10 +6,15 @@
 #include <QFile>
 #include <QGuiApplication>
 #include <QImage>
+#include <QJSValue>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QQuickItem>
 #include <QMouseEvent>
 #include <QQuickWindow>
 #include <QRegularExpression>
 #include <QSaveFile>
+#include <QSettings>
 #include <QTcpSocket>
 #include <QTimer>
 #include <QUuid>
@@ -32,6 +37,89 @@ QQuickWindow *visibleWindow(const QString &name)
             return qobject_cast<QQuickWindow *>(window);
     }
     return nullptr;
+}
+
+bool verifyUpgradePreferences(const QDir &profile)
+{
+    const QByteArray expectation = qgetenv("AURALIS_TEST_UPGRADE_PREFERENCES");
+    if (expectation.isEmpty())
+        return true;
+
+    const QJsonObject groups = QJsonDocument::fromJson(expectation).object();
+    const auto main = groups.value(QStringLiteral("MainWindow")).toObject();
+    const QSize expectedSize(main.value(QStringLiteral("fullWidth")).toInt(),
+                             main.value(QStringLiteral("fullHeight")).toInt());
+    const auto expectedSidebar = main.value(QStringLiteral("showSidebar"));
+    const int expectedScale = groups.value(QStringLiteral("Typography")).toObject()
+        .value(QStringLiteral("interfaceScalePercent")).toInt();
+    if (!expectedSize.isValid() || !expectedSidebar.isBool() || expectedScale <= 0) {
+        qCritical("Smoke: invalid upgrade preference fixture.");
+        return false;
+    }
+
+    // Check the loaded values before the transfer smoke test resizes any windows.
+    QSettings settings;
+    settings.sync();
+    const QString path = profile.relativeFilePath(settings.fileName());
+    if (settings.format() != QSettings::IniFormat || !path.startsWith(QStringLiteral("qt-settings/"))
+        || settings.status() != QSettings::NoError) {
+        qCritical("Smoke: upgrade settings are outside the isolated fixture profile.");
+        return false;
+    }
+    for (auto group = groups.constBegin(); group != groups.constEnd(); ++group) {
+        const QJsonObject values = group.value().toObject();
+        for (auto preference = values.constBegin(); preference != values.constEnd(); ++preference) {
+            const auto key = group.key() + QLatin1Char('/') + preference.key();
+            const QVariant actual = settings.value(key);
+            if (!actual.isValid() || actual.toString() != preference.value().toVariant().toString()) {
+                qCritical() << "Smoke: a saved preference changed during upgrade:" << key << actual
+                            << "expected" << preference.value();
+                return false;
+            }
+        }
+    }
+
+    auto *window = visibleWindow(QStringLiteral("mainWindow"));
+    if (!window) {
+        qCritical("Smoke: the main window did not open after upgrade.");
+        return false;
+    }
+    const auto sidebar = window->property("showSidebar");
+    const auto interfaceScale = window->property("interfaceScale");
+    const auto fontSettings = window->property("fontSettings");
+    const auto *typography = fontSettings.metaType() == QMetaType::fromType<QJSValue>()
+        ? fontSettings.value<QJSValue>().toQObject() : fontSettings.value<QObject *>();
+    const int startupScale = typography ? typography->property("activeInterfaceScalePercent").toInt() : 0;
+    if (window->size() != expectedSize || !sidebar.isValid() || sidebar.toBool() != expectedSidebar.toBool()
+        || !qFuzzyCompare(interfaceScale.toDouble(), expectedScale / 100.0) || startupScale != expectedScale) {
+        qCritical() << "Smoke: upgraded main window used incorrect dimensions, sidebar or scale:"
+                    << window->size() << sidebar << interfaceScale << startupScale
+                    << "expected" << expectedSize << expectedSidebar << expectedScale;
+        return false;
+    }
+
+    const QJsonObject appearance = QJsonDocument::fromJson(settings.value(QStringLiteral("WindowAppearance/saved"))
+        .toString().toUtf8()).object();
+    const auto material = appearance.value(QStringLiteral("mh-glass-material")).toString();
+    if (material != QStringLiteral("fractured-pearl") || !window->property("fracturedLayout").toBool()) {
+        qCritical("Smoke: the saved Fractured Acrylic material was not restored.");
+        return false;
+    }
+    const auto control = [window](const auto &name) -> QQuickItem * {
+        auto *item = window->findChild<QQuickItem *>(name);
+        return item && item->isVisible() && item->isEnabled() && item->width() > 0 && item->height() > 0 ? item : nullptr;
+    };
+    auto *viewButton = control(QStringLiteral("mainViewMenuButton"));
+    auto *viewMenu = window->findChild<QObject *>(QStringLiteral("mainViewMenu"));
+    if (!control(QStringLiteral("titleDragArea")) || !control(QStringLiteral("downloadList")) || !viewButton
+        || !viewMenu || !QMetaObject::invokeMethod(viewButton, "clicked") || !viewMenu->property("visible").toBool()
+        || !QMetaObject::invokeMethod(viewMenu, "close")) {
+        qCritical("Smoke: Fractured Acrylic hid the normal title bar, download list or View menu.");
+        return false;
+    }
+    qInfo("Smoke: non-default preferences survived the passive upgrade and relaunch.");
+    qInfo("Smoke: the normal title bar, download list and View menu are available with Fractured Acrylic.");
+    return true;
 }
 
 bool isIndependent(QWindow &window)
@@ -97,6 +185,10 @@ void EngineSmoke::startDownload()
     if (m_started || !m_engine.ready())
         return;
     m_started = true;
+    if (!verifyUpgradePreferences(QDir(m_engine.dataDirectory()))) {
+        fail(QStringLiteral("The Qt preferences did not survive the passive upgrade."));
+        return;
+    }
     qInfo("Smoke: Rust service connected. Requesting the local download confirmation.");
     if (!m_server.listen(QHostAddress::LocalHost, 0)) {
         fail(m_server.errorString());

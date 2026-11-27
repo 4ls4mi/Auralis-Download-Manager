@@ -26,7 +26,8 @@ AuralisWindow {
     readonly property bool sideTabs: ["fogSlate", "violetRail", "coralSlate"].includes(transferLayout)
     readonly property bool compactWidth: width < 670
     readonly property bool compactHeight: height < 470
-    readonly property bool compactView: transferWindowSettings.compactView
+    readonly property bool compactView: compactMode
+    property bool compactMode: false
     readonly property bool classicPreset: MaterialTheme.isMdmPreset(material)
     readonly property bool classicFullView: classicPreset && !compactView
     readonly property color classicPageFace: colors.contentOverride || colors.mdm?.tabPage
@@ -92,10 +93,14 @@ AuralisWindow {
     property var details: ({})
     property int activeTab: 0
     property bool classicDetailsVisible: true
-    property real classicExpandedHeight: 442
-    property size expandedWindowSize: classicPreset ? Qt.size(546, 442) : Qt.size(790, 625)
-    property size compactWindowSize: Qt.size(transferWindowSettings.initialCompactWidth,
-                                             transferWindowSettings.initialCompactHeight)
+    property real classicExpandedHeight: expandedWindowSize.height
+    property bool windowLayoutReady: false
+    property bool applyingViewSize: false
+    property size savedExpandedSize: Qt.size(0, 0)
+    property size compactWindowSize: Qt.size(510, 290)
+    readonly property size expandedWindowSize: Qt.size(
+        savedExpandedSize.width || (classicPreset ? 546 : 790),
+        savedExpandedSize.height || (classicPreset ? 442 : 625))
 
     function connectionHasData(connection) {
         return connection.state === "Receiving" && connection.receiving_data !== false
@@ -118,44 +123,103 @@ AuralisWindow {
     Settings {
         id: transferWindowSettings
         category: "TransferWindowLayout"
-        property bool compactView: false
-        property int initialCompactWidth: 510
-        property int initialCompactHeight: 290
     }
 
     Component.onCompleted: {
+        const storedMode = String(transferWindowSettings.value("compactView", false)).toLowerCase()
+        compactMode = storedMode === "true" || storedMode === "1"
+        compactWindowSize = Qt.size(
+            Number(transferWindowSettings.value("initialCompactWidth", 510)) || 510,
+            Number(transferWindowSettings.value("initialCompactHeight", 290)) || 290)
+        savedExpandedSize = Qt.size(
+            Number(transferWindowSettings.value("initialExpandedWidth", 0)) || 0,
+            Number(transferWindowSettings.value("initialExpandedHeight", 0)) || 0)
         if (compactView)
             applyViewSize(true)
+        windowLayoutReady = true
+    }
+
+    onWidthChanged: queueWindowSizeSave()
+    onHeightChanged: queueWindowSizeSave()
+    onClosing: flushWindowSize()
+
+    Timer {
+        id: windowSizeSave
+        interval: 150
+        onTriggered: if (root.visibility === Window.Windowed && !root.applyingViewSize)
+            root.saveWindowSize()
+    }
+
+    Connections {
+        target: engine
+        function onQuittingChanged() {
+            if (engine.quitting)
+                root.flushWindowSize()
+        }
+    }
+
+    function queueWindowSizeSave() {
+        if (windowLayoutReady && !applyingViewSize && visibility === Window.Windowed)
+            windowSizeSave.restart()
+    }
+
+    function flushWindowSize() {
+        windowSizeSave.stop()
+        if (windowLayoutReady && visibility === Window.Windowed && !applyingViewSize)
+            saveWindowSize()
+    }
+
+    function saveWindowSize() {
+        if (compactView) {
+            if (compactWindowSize.width === width && compactWindowSize.height === height)
+                return
+            compactWindowSize = Qt.size(width, height)
+            transferWindowSettings.setValue("initialCompactWidth", width)
+            transferWindowSettings.setValue("initialCompactHeight", height)
+        } else {
+            // The collapsed classic window fits the visible content automatically.
+            // Keep its width, but keep the saved height of the expanded view.
+            const expandedHeight = classicFullView && !classicDetailsVisible ? expandedWindowSize.height : height
+            if (expandedWindowSize.width === width && expandedWindowSize.height === expandedHeight)
+                return
+            savedExpandedSize = Qt.size(width, expandedHeight)
+            transferWindowSettings.setValue("initialExpandedWidth", width)
+            transferWindowSettings.setValue("initialExpandedHeight", expandedHeight)
+        }
+        transferWindowSettings.sync()
     }
 
     function applyViewSize(compact) {
+        applyingViewSize = true
         Qt.callLater(() => {
-            if (root.compactView !== compact || (root.visibility !== Window.Windowed && root.visibility !== Window.Hidden))
+            if (root.compactView !== compact)
                 return
-            const size = compact ? root.compactWindowSize : root.expandedWindowSize
-            root.setGeometry(root.x, root.y, size.width, size.height)
+            if (root.visibility === Window.Windowed || root.visibility === Window.Hidden) {
+                const size = compact ? root.compactWindowSize : root.expandedWindowSize
+                root.setGeometry(root.x, root.y, size.width, size.height)
+            }
+            root.applyingViewSize = false
         })
     }
 
     function setCompactView(compact) {
         if (compact === compactView)
             return
-        if (visibility === Window.Windowed) {
-            const size = Qt.size(width, height)
-            if (compactView)
-                compactWindowSize = size
-            else
-                expandedWindowSize = size
-        }
+        flushWindowSize()
+        applyingViewSize = true
         if (visibility === Window.Maximized)
             showNormal()
         if (compact)
             activeTab = 0
-        transferWindowSettings.compactView = compact
+        compactMode = compact
+        transferWindowSettings.setValue("compactView", compact)
+        transferWindowSettings.sync()
         applyViewSize(compact)
     }
 
     function toggleClassicDetails() {
+        flushWindowSize()
+        applyingViewSize = true
         if (visibility === Window.Windowed && classicDetailsVisible)
             classicExpandedHeight = height
         classicDetailsVisible = !classicDetailsVisible
@@ -165,10 +229,12 @@ AuralisWindow {
                 root.height = Math.max(root.minimumHeight,
                     root.classicDetailsVisible ? root.classicExpandedHeight : Math.ceil(contentHeight))
             }
+            root.applyingViewSize = false
         })
     }
 
     function hideToTray() {
+        flushWindowSize()
         if (trayEnabled && downloadId !== null && !finished)
             hideToTrayRequested(downloadId)
         else
@@ -176,6 +242,7 @@ AuralisWindow {
     }
 
     function minimizeWindow() {
+        flushWindowSize()
         if (minimizeToTray && trayEnabled && downloadId !== null && !finished)
             hideToTray()
         else
@@ -183,6 +250,7 @@ AuralisWindow {
     }
 
     function toggleMaximized() {
+        flushWindowSize()
         if (visibility === Window.Maximized)
             showNormal()
         else
@@ -190,6 +258,8 @@ AuralisWindow {
     }
 
     onVisibilityChanged: {
+        if (visibility !== Window.Windowed && windowLayoutReady)
+            windowSizeSave.stop()
         if (root.visibility === Window.Minimized && root.minimizeToTray && root.trayEnabled && root.downloadId !== null && !root.finished) {
             Qt.callLater(() => {
                 if (root.visibility === Window.Minimized)
@@ -673,6 +743,7 @@ AuralisWindow {
     WindowResizeHandles {
         id: resizeHandles
         hostWindow: root
+        onResizingChanged: if (!resizing) root.flushWindowSize()
         // The Quick grips own the pointer grab. A second Win32 capture path
         // would compete with the same drag on this transparent window.
         coalesceGeometry: true

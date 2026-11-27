@@ -12,8 +12,8 @@ AuralisWindow {
     id: root
 
     title: qsTr("Settings — Auralis Download Manager")
-    width: windowLayout.initialWidth
-    height: windowLayout.initialHeight
+    width: 675
+    height: 520
     minimumWidth: 650
     minimumHeight: 440
     visible: false
@@ -73,6 +73,7 @@ AuralisWindow {
     property bool remotePairing: false
     property string remoteProblem: ""
     property int preferredVisibility: Window.Windowed
+    property bool windowLayoutReady: false
     property int pendingInterfaceScalePercent: 100
     property var availableUpdate: null
     property alias donationAction: donatePatreon
@@ -184,8 +185,6 @@ AuralisWindow {
     Settings {
         id: windowLayout
         category: "SettingsWindowLayout"
-        property int initialWidth: 675
-        property int initialHeight: 520
     }
 
     Settings {
@@ -400,15 +399,52 @@ AuralisWindow {
         present()
     }
 
+    function queueWindowSizeSave() {
+        if (windowLayoutReady && visibility === Window.Windowed)
+            windowSizeSave.restart()
+    }
+
+    function flushWindowSize() {
+        windowSizeSave.stop()
+        if (windowLayoutReady && visibility === Window.Windowed)
+            saveWindowSize()
+    }
+
+    function saveWindowSize() {
+        if (Number(windowLayout.value("initialWidth")) === width
+            && Number(windowLayout.value("initialHeight")) === height)
+            return
+        windowLayout.setValue("initialWidth", width)
+        windowLayout.setValue("initialHeight", height)
+        windowLayout.sync()
+    }
+
     function toggleMaximize() {
+        flushWindowSize()
         if (visibility === Window.Maximized) showNormal()
         else showMaximized()
     }
 
+    Component.onCompleted: {
+        width = Math.max(minimumWidth, Number(windowLayout.value("initialWidth", width)) || width)
+        height = Math.max(minimumHeight, Number(windowLayout.value("initialHeight", height)) || height)
+        windowLayoutReady = true
+    }
+    onWidthChanged: queueWindowSizeSave()
+    onHeightChanged: queueWindowSizeSave()
+    onClosing: flushWindowSize()
     onVisibleChanged: if (visible) load()
     onVisibilityChanged: {
+        if (visibility !== Window.Windowed && windowLayoutReady)
+            windowSizeSave.stop()
         if (visibility === Window.Windowed || visibility === Window.Maximized || visibility === Window.FullScreen)
             preferredVisibility = visibility
+    }
+
+    Timer {
+        id: windowSizeSave
+        interval: 150
+        onTriggered: if (root.visibility === Window.Windowed) root.saveWindowSize()
     }
     onShowingNetworkAdapterChanged: if (showingNetworkAdapter) Qt.callLater(loadNetworkAdapters)
     onCategoryChanged: if (category === "Scheduler" && engine.ready && !scheduler.queues.length) scheduler.load()
@@ -423,6 +459,10 @@ AuralisWindow {
 
     Connections {
         target: engine
+        function onQuittingChanged() {
+            if (engine.quitting)
+                root.flushWindowSize()
+        }
         function onReadyChanged() {
             if (root.visible && engine.ready) {
                 root.load()
@@ -1198,5 +1238,6 @@ AuralisWindow {
         cornerSize: 19
         showGrip: true
         gripColor: root.colors.muted
+        onResizingChanged: if (!resizing) root.flushWindowSize()
     }
 }

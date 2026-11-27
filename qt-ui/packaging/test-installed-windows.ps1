@@ -11,12 +11,14 @@ if ($env:GITHUB_ENV) { "AURALIS_QT_DIAGNOSTICS=$diagnostics" >> $env:GITHUB_ENV 
 $previousData = $env:MDM_DATA_DIR
 $previousDownloads = $env:MDM_DOWNLOADS
 $previousSkipHost = $env:AURALIS_TEST_SKIP_HOST
+$previousUpgradePreferences = $env:AURALIS_TEST_UPGRADE_PREFERENCES
 $previousRenderer = $env:QSG_RHI_BACKEND
 $previousQuickBackend = $env:QT_QUICK_BACKEND
 $previousGraphicsInfo = $env:QSG_INFO
 $env:MDM_DATA_DIR = $data
 $env:MDM_DOWNLOADS = Join-Path $data 'downloads'
 $env:AURALIS_TEST_SKIP_HOST = '1'
+$env:AURALIS_TEST_UPGRADE_PREFERENCES = $null
 $env:QSG_INFO = '1'
 # Exercise the default renderer with the legacy software option present.
 $env:QSG_RHI_BACKEND = $null
@@ -52,6 +54,35 @@ function Run-Fixture([string]$Process, [string[]]$Arguments, [int]$Timeout = 180
         Write-FixtureDiagnostics $startedAt
         throw "$Process exited with code $($child.ExitCode). Expected $ExpectedExitCode."
     }
+}
+
+function New-UpgradePreferencesFixture([string]$FixtureProfile) {
+    # Match the QSettings INI UserScope path configured by --engine-smoke. The
+    # preceding smoke launch must have created it without using the user's registry.
+    $ini = Join-Path $FixtureProfile 'qt-settings/Auralis/Auralis Download Manager.ini'
+    if (!(Test-Path -LiteralPath $ini -PathType Leaf)) {
+        throw 'The isolated Qt settings file was not created by the first smoke launch.'
+    }
+    $preferences = [ordered]@{
+        MainWindow = [ordered]@{ fullWidth = 910; fullHeight = 550; showSidebar = $false }
+        SettingsWindowLayout = [ordered]@{ initialWidth = 714; initialHeight = 548 }
+        TransferWindowLayout = [ordered]@{ initialCompactWidth = 547; initialCompactHeight = 308; compactView = $true }
+        Typography = [ordered]@{ interfaceScalePercent = 110 }
+        UpdateNotices = [ordered]@{ automaticChecks = $false }
+    }
+    # An older profile has these saved preferences and no reference-size migration marker.
+    $lines = foreach ($group in $preferences.GetEnumerator()) {
+        "[$($group.Key)]"
+        foreach ($entry in $group.Value.GetEnumerator()) {
+            $value = if ($entry.Value -is [bool]) { $entry.Value.ToString().ToLowerInvariant() } else { $entry.Value }
+            "$($entry.Key)=$value"
+        }
+        ''
+    }
+    # QSettings uses quotes and escaping for the JSON appearance string.
+    $lines += '[WindowAppearance]', 'saved="{\"mh-glass-material\":\"fractured-pearl\"}"'
+    $lines | Set-Content -LiteralPath $ini -Encoding utf8NoBOM
+    return ConvertTo-Json -InputObject $preferences -Depth 3 -Compress
 }
 
 function Test-InstalledIcon {
@@ -202,7 +233,8 @@ try {
     Write-Host 'Verified the in-use installer exits without relaunching.'
 
     Remove-Item -LiteralPath $marker, $console -Force -ErrorAction SilentlyContinue
-    Write-Host 'Testing passive upgrade and relaunch after releasing the executable.'
+    Write-Host 'Testing passive upgrade and relaunch with saved window, scale, sidebar, and update preferences.'
+    $env:AURALIS_TEST_UPGRADE_PREFERENCES = New-UpgradePreferencesFixture $data
     $upgradedAt = Get-Date
     Run-Fixture $env:AURALIS_QT_INSTALLER $upgradeArgs
     $deadline = [DateTime]::UtcNow.AddSeconds(90)
@@ -211,6 +243,14 @@ try {
         Write-FixtureDiagnostics $upgradedAt
         throw 'The passive update did not relaunch a working installed app.'
     }
+    if (!(Select-String -LiteralPath $console -SimpleMatch 'Smoke: non-default preferences survived the passive upgrade and relaunch.' -Quiet)) {
+        throw 'The relaunched installed app did not verify its saved preferences.'
+    }
+    if (!(Select-String -LiteralPath $console -SimpleMatch 'Smoke: the normal title bar, download list and View menu are available with Fractured Acrylic.' -Quiet)) {
+        throw 'The relaunched app did not verify the normal interface with Fractured Acrylic.'
+    }
+    Write-Host 'Verified saved preferences and the normal Fractured Acrylic interface after relaunch.'
+    $env:AURALIS_TEST_UPGRADE_PREFERENCES = $null
 
     Get-Process -Name 'auralis-download-manager' -ErrorAction SilentlyContinue |
         Where-Object { $_.Path -ieq $exe } | Wait-Process -Timeout 10
@@ -264,6 +304,7 @@ try {
     $env:MDM_DATA_DIR = $previousData
     $env:MDM_DOWNLOADS = $previousDownloads
     $env:AURALIS_TEST_SKIP_HOST = $previousSkipHost
+    $env:AURALIS_TEST_UPGRADE_PREFERENCES = $previousUpgradePreferences
     $env:QSG_RHI_BACKEND = $previousRenderer
     $env:QT_QUICK_BACKEND = $previousQuickBackend
     $env:QSG_INFO = $previousGraphicsInfo
