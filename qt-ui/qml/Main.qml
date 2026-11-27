@@ -34,6 +34,11 @@ AuralisWindow {
     readonly property bool fogSlate: materialLayout === "fogSlate"
     readonly property bool coralSlate: materialLayout === "coralSlate"
     readonly property bool materialDashboard: fogSlate || violetRail || coralSlate
+    readonly property bool glassDashboard: ["mintDeck", "darkStudio"].includes(materialLayout)
+    property bool dashboardOverview: true
+    readonly property bool glassOverviewVisible: glassDashboard && !compactView && dashboardOverview
+        && filterType === "status" && filterKey === "all" && !searchTerm.trim()
+    onMaterialLayoutChanged: if (glassDashboard) dashboardOverview = true
     readonly property bool compactView: windowPreferences.compactView
     readonly property bool sideMenus: materialDashboard && showSidebar && !compactView
     readonly property bool wideSweepVisible: wideSweep.visible && wideSweep.available
@@ -90,6 +95,7 @@ AuralisWindow {
     readonly property string filterTitle: filterType === "category"
         ? ((categories.find(category => category.key === filterKey) || {}).name || filterKey)
         : filterType === "queue" ? filterKey
+        : filterKey === "queued" ? qsTr("Queued")
         : ((statusFilters.find(filter => filter.key === filterKey) || {}).label || qsTr("All Downloads"))
     readonly property var statusFilters: [
         {key: "all", label: qsTr("All Downloads"), icon: "downloads"},
@@ -237,6 +243,7 @@ AuralisWindow {
             switch (filterKey) {
             case "downloading": if (item.status !== "Downloading") return false; break
             case "stopped": if (item.status !== "Stopped") return false; break
+            case "queued": if (item.status !== "Queued") return false; break
             case "unfinished": if (item.status === "Complete") return false; break
             case "finished": if (item.status !== "Complete") return false; break
             }
@@ -306,12 +313,33 @@ AuralisWindow {
     }
 
     function chooseFilter(type, key) {
+        if (glassDashboard)
+            dashboardOverview = false
         filterType = type
         filterKey = key
         clearSelection()
         focusedTransferId = ""
         synchronizeRows()
         list.positionViewAtBeginning()
+    }
+
+    function showDashboardOverview() {
+        const previous = focusedTransferId
+        searchField.clear()
+        chooseFilter("status", "all")
+        if (previous)
+            selectDashboardTransfer(previous)
+        dashboardOverview = true
+    }
+
+    function selectDashboardTransfer(id) {
+        const index = rowIndex(id)
+        if (index < 0)
+            return
+        focusedTransferId = id
+        selectionAnchor = id
+        chosenIds = [id]
+        list.currentIndex = index
     }
 
     function rowIndex(id) {
@@ -1581,6 +1609,12 @@ AuralisWindow {
                             y: root.sideMenus ? 0 : viewMenuButton.height
                             AppMenuItem { symbol: "refresh"; action: refreshAction }
                             AppMenuItem { symbol: "search"; action: findAction }
+                            AppMenuItem {
+                                visible: root.glassDashboard && !root.compactView
+                                text: root.glassOverviewVisible ? qsTr("Show downloads list") : qsTr("Show dashboard overview")
+                                onTriggered: root.glassOverviewVisible
+                                    ? root.chooseFilter("status", "all") : root.showDashboardOverview()
+                            }
                             AppMenuItem { visible: !root.compactView; text: root.showSidebar ? qsTr("Hide sidebar") : qsTr("Show sidebar"); onTriggered: root.showSidebar = !root.showSidebar }
                             AppMenuItem { text: compactButton.viewLabel; onTriggered: root.toggleCompactView() }
                             MenuRule {}
@@ -1859,6 +1893,16 @@ AuralisWindow {
                         id: libraryRows
                         width: libraryScroll.availableWidth
                         spacing: root.classicLayout ? 0 : 3
+                        LibraryButton {
+                            visible: root.glassDashboard
+                            width: parent.width
+                            height: visible ? 36 : 0
+                            text: qsTr("Overview")
+                            symbol: "activity"
+                            accent: root.colors.accent
+                            checked: root.glassOverviewVisible
+                            onClicked: root.showDashboardOverview()
+                        }
                         Repeater {
                             model: root.classicLayout ? [] : root.statusFilters
                             delegate: LibraryButton {
@@ -1868,7 +1912,7 @@ AuralisWindow {
                                 text: modelData.label
                                 symbol: modelData.icon
                                 count: String(root.counts[modelData.key])
-                                checked: root.filterType === "status" && root.filterKey === modelData.key
+                                checked: !root.glassOverviewVisible && root.filterType === "status" && root.filterKey === modelData.key
                                 accent: MaterialTheme.actionColor(modelData.icon, root.fogSlate || root.colors.light)
                                 onClicked: root.chooseFilter("status", modelData.key)
                             }
@@ -2076,7 +2120,7 @@ AuralisWindow {
                             spacing: 1
                             Label {
                                 Layout.fillWidth: true
-                                text: root.filterTitle
+                                text: root.glassOverviewVisible ? qsTr("Overview") : root.filterTitle
                                 color: root.colors.ink
                                 font.pixelSize: TypographyScale.pixels(root.compactView ? 15
                                     : root.studioChrome ? (root.compact ? 20 : 24) : (root.compact ? 17 : 22))
@@ -2098,7 +2142,7 @@ AuralisWindow {
                         }
                         GlassComboBox {
                             id: sortSelector
-                            visible: !root.compactView && !root.classicLayout
+                            visible: !root.compactView && !root.classicLayout && !root.glassOverviewVisible
                             Layout.preferredWidth: root.compact ? 115 : 132
                             model: root.downloadSortLabels
                             currentIndex: root.sortOrder
@@ -2126,7 +2170,7 @@ AuralisWindow {
                     }
                     RowLayout {
                         Layout.fillWidth: true
-                        visible: !root.classicLayout && !root.compactView && root.chosenIds.length > 0
+                        visible: !root.classicLayout && !root.compactView && !root.glassOverviewVisible && root.chosenIds.length > 0
                         NumeralLabel {
                             valueText: qsTr("%1 selected").arg(root.chosenItems.length)
                             color: root.colors.ink
@@ -2244,8 +2288,31 @@ AuralisWindow {
                             }
                         }
                     }
+                    Loader {
+                        visible: root.glassOverviewVisible
+                        active: root.glassOverviewVisible
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        Layout.minimumHeight: 0
+                        sourceComponent: GlassDashboard {
+                            mint: root.materialLayout === "mintDeck"
+                            downloads: root.downloads
+                            visuals: root.visualById
+                            histories: root.transferSpeedHistory
+                            totalSamples: root.graphValues
+                            totalSpeed: Number(engine.dashboard.speed || 0)
+                            selectedId: root.focusedTransferId
+                            commandsAvailable: root.online && !root.busy
+                            animate: root.animateThroughput
+                            onTransferSelected: id => root.selectDashboardTransfer(id)
+                            onTransferOpened: id => root.showDownload(id)
+                            onTransferRequested: (operation, item) => root.transferAction(operation, [item])
+                            onListRequested: key => root.chooseFilter("status", key)
+                            onAddRequested: root.addDownload()
+                        }
+                    }
                     Item {
-                        visible: !root.classicLayout
+                        visible: !root.classicLayout && !root.glassOverviewVisible
                         Layout.preferredHeight: root.compactView ? 25 : 30
                         Layout.fillWidth: true
                         GlassSurface { anchors.fill: parent; role: "field"; roundedPanel: true }
@@ -2303,6 +2370,7 @@ AuralisWindow {
                     ListView {
                         id: list
                         objectName: "downloadList"
+                        visible: !root.glassOverviewVisible
                         Layout.fillHeight: true
                         Layout.fillWidth: true
                         clip: true
