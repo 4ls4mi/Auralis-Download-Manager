@@ -15,6 +15,7 @@
 #include <cmath>
 #include <cstring>
 #include <numbers>
+#include <utility>
 
 namespace {
 class OutlineShader final : public QSGMaterialShader
@@ -258,6 +259,17 @@ QImage WindowOutline::shadowImage(const QSize &framePixels, const QSizeF &reachP
         painter.drawPolygon(framePolygon(QRectF(QPointF(padding, padding), framePixels), reachPixels, corners));
     }
 
+    return blurShadowMask(std::move(image), scale, padding, {}, 178);
+}
+
+QImage WindowOutline::blurShadowMask(QImage image, qreal scale, int padding, const QPoint &offset, int strength)
+{
+    const QSize size = image.size();
+    if (image.isNull() || image.format() != QImage::Format_ARGB32_Premultiplied
+        || padding <= 0 || scale <= 0 || strength < 0 || strength > 255
+        || qint64(size.width()) * size.height() > 32 * 1024 * 1024)
+        return {};
+
     const int width = size.width();
     const int height = size.height();
     const qsizetype pixelCount = qsizetype(width) * height;
@@ -276,19 +288,18 @@ QImage WindowOutline::shadowImage(const QSize &framePixels, const QSizeF &reachP
         boxBlur(scratch, blurred, size, radius, false);
     }
 
-    // Center the shadow around all edges. Erase the original silhouette so
-    // the layered popup cannot darken the owner's translucent interior.
-    constexpr int offsetX = 0;
-    constexpr int offsetY = 0;
-    constexpr int shadowStrength = 178;
+    // Keep the unshifted silhouettes clear so the layered popup never darkens
+    // the faces while the offset shadow falls onto the gaps and desktop.
     for (int y = 0; y < height; ++y) {
         auto *row = reinterpret_cast<QRgb *>(image.scanLine(y));
-        const auto *shadow = y >= offsetY
-            ? reinterpret_cast<const uchar *>(blurred.constData() + qsizetype(y - offsetY) * width) : nullptr;
+        const int sampleY = y - offset.y();
+        const auto *shadow = sampleY >= 0 && sampleY < height
+            ? reinterpret_cast<const uchar *>(blurred.constData() + qsizetype(sampleY) * width) : nullptr;
         for (int x = 0; x < width; ++x) {
             const int outside = 255 - qAlpha(row[x]);
-            const int alpha = shadow && x >= offsetX
-                ? (outside * shadow[x - offsetX] * shadowStrength + 32512) / 65025 : 0;
+            const int sampleX = x - offset.x();
+            const int alpha = shadow && sampleX >= 0 && sampleX < width
+                ? (outside * shadow[sampleX] * strength + 32512) / 65025 : 0;
             row[x] = qRgba(0, 0, 0, alpha);
         }
     }

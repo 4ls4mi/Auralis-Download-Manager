@@ -21,6 +21,12 @@ ApplicationWindow {
     palette.buttonText: interfaceColors.text
     palette.highlight: interfaceColors.accent
     property bool frameShapingEnabled: true
+    property bool acrylicMode: false
+    property bool acrylicApplied: false
+    property var acrylicPanels: []
+    readonly property bool acrylicRequested: acrylicMode && visible && visibility !== Window.Minimized
+        && !(Overlay.overlay?.visible ?? false) && MaterialTheme.opacityFor(MaterialTheme.current) < .99
+        && Qt.styleHints.accessibility.contrastPreference !== Qt.HighContrast
     readonly property int frameCornerMask: {
         if (!frameShapingEnabled || visibility !== Window.Windowed)
             return 0
@@ -42,6 +48,28 @@ ApplicationWindow {
             engine.setWindowCornerRadius?.(window, frameCornerRadius)
     }
 
+    function registerAcrylicPanel(panel) {
+        if (!acrylicPanels.includes(panel))
+            acrylicPanels.push(panel)
+    }
+
+    function unregisterAcrylicPanel(panel) {
+        const index = acrylicPanels.indexOf(panel)
+        if (index >= 0)
+            acrylicPanels.splice(index, 1)
+    }
+
+    function refreshAcrylic() {
+        if (typeof engine === "undefined" || !engine.applyPanelBackdrop)
+            return
+        const applied = engine.applyPanelBackdrop(window, acrylicPanels, acrylicRequested)
+        if (applied !== acrylicApplied)
+            acrylicApplied = applied
+    }
+
+    onAcrylicRequestedChanged: if (!acrylicRequested) refreshAcrylic()
+    onAfterAnimating: if (acrylicRequested) refreshAcrylic()
+
     function scheduleFrameShapeRefresh() {
         frameShapeRefresh.restart()
     }
@@ -49,6 +77,7 @@ ApplicationWindow {
     Component.onCompleted: scheduleFrameShapeRefresh()
     onFrameCornerMaskChanged: scheduleFrameShapeRefresh()
     onFrameCornerRadiusChanged: scheduleFrameShapeRefresh()
+    onAcrylicModeChanged: scheduleFrameShapeRefresh()
 
     Timer {
         id: frameShapeRefresh

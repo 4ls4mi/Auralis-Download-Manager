@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(AuralisQt VERSION 0.3.103 LANGUAGES CXX)
+project(AuralisQt VERSION 0.3.104 LANGUAGES CXX)
 option(AURALIS_STORE_EDITION "Build the MSIX edition with Store-managed updates" OFF)
 if(AURALIS_STORE_EDITION AND NOT WIN32)
     message(FATAL_ERROR "The Microsoft Store edition requires Windows")
@@ -43,7 +43,10 @@ target_link_libraries(auralis-download-manager PRIVATE
 )
 
 if(WIN32)
-    target_sources(auralis-download-manager PRIVATE src/WindowShadow.cpp src/WindowShadow.h)
+    target_sources(auralis-download-manager PRIVATE
+        src/PanelBackdrop.cpp src/PanelBackdrop.h
+        src/WindowShadow.cpp src/WindowShadow.h
+    )
     find_package(Qt6 6.8 REQUIRED COMPONENTS WebSockets)
     enable_language(RC)
     set(auralis_icon "${CMAKE_CURRENT_SOURCE_DIR}/assets/auralis.ico")

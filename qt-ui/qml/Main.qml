@@ -19,6 +19,7 @@ AuralisWindow {
     color: "transparent"
     flags: Qt.Window | Qt.FramelessWindowHint
     frameShapingEnabled: !fracturedLayout
+    acrylicMode: tracedOverview
 
     readonly property var colors: MaterialTheme.palette
     readonly property bool classicLayout: MaterialTheme.mdmAppearance && !compactView
@@ -35,6 +36,27 @@ AuralisWindow {
     readonly property bool fogSlate: materialLayout === "fogSlate"
     readonly property bool coralSlate: materialLayout === "coralSlate"
     readonly property bool fracturedLayout: materialLayout === "fracturedPearl"
+    property bool acrylicOverviewRequested: true
+    property string acrylicDownloadId: ""
+    readonly property bool tracedOverview: fracturedLayout && acrylicOverviewRequested && !compactView
+        && width / interfaceScale >= 740 && height / interfaceScale >= 465
+    readonly property var acrylicDownload: {
+        if (!tracedOverview)
+            return null
+        const selected = TransferData.find(downloads, acrylicDownloadId)
+        if (selected)
+            return selected
+        let newest = null
+        let activeTransfer = null
+        for (const transfer of downloads) {
+            if (!newest || Number(transfer.id) > Number(newest.id))
+                newest = transfer
+            if (transfer.status === "Downloading" && (!activeTransfer || Number(transfer.id) > Number(activeTransfer.id)))
+                activeTransfer = transfer
+        }
+        return activeTransfer || newest
+    }
+    onFracturedLayoutChanged: if (fracturedLayout) acrylicOverviewRequested = true
     readonly property bool workspaceToolbar: !compactView && (materialDashboard || fracturedLayout)
     readonly property int seamWidth: 2
     readonly property bool materialDashboard: fogSlate || violetRail || coralSlate
@@ -828,7 +850,12 @@ AuralisWindow {
         onTriggered: {
             if (root.classicLayout)
                 root.classicSearchOpen = true
-            searchField.forceActiveFocus()
+            if (root.tracedOverview) {
+                root.acrylicOverviewRequested = false
+                Qt.callLater(() => searchField.forceActiveFocus())
+            } else {
+                searchField.forceActiveFocus()
+            }
         }
     }
     Action {
@@ -1319,6 +1346,7 @@ AuralisWindow {
     }
 
     ColumnLayout {
+        visible: !root.tracedOverview
         anchors.fill: parent
         anchors.margins: root.layoutInset
         spacing: root.fracturedLayout ? root.seamWidth : root.classicLayout ? 2 : root.compactView ? 4 : 7
@@ -1612,6 +1640,12 @@ AuralisWindow {
                             AppMenuItem { symbol: "search"; action: findAction }
                             AppMenuItem { visible: !root.compactView; text: root.showSidebar ? qsTr("Hide sidebar") : qsTr("Show sidebar"); onTriggered: root.showSidebar = !root.showSidebar }
                             AppMenuItem { text: compactButton.viewLabel; onTriggered: root.toggleCompactView() }
+                            AppMenuItem {
+                                text: qsTr("Fractured Acrylic overview")
+                                visible: root.fracturedLayout && !root.compactView
+                                enabled: root.width / root.interfaceScale >= 740 && root.height / root.interfaceScale >= 465
+                                onTriggered: root.acrylicOverviewRequested = true
+                            }
                             MenuRule {}
                             AppMenuItem { symbol: "settings"; text: qsTr("Appearance"); onTriggered: settingsWindow.showCategory("Appearance") }
                             AppMenuItem { symbol: "settings"; text: qsTr("Display & fonts"); onTriggered: settingsWindow.showCategory("Display") }
@@ -2864,6 +2898,45 @@ AuralisWindow {
                     HoverHandler { id: statusHover }
                 }
             }
+        }
+    }
+
+    Loader {
+        anchors.fill: parent
+        active: root.tracedOverview
+        objectName: "fracturedAcrylicOverview"
+        sourceComponent: FracturedAcrylicWorkspace {
+            download: root.acrylicDownload
+            downloads: root.downloads
+            telemetry: root.acrylicDownload ? root.visualById[root.acrylicDownload.id] : null
+            samples: root.graphValues
+            speed: Number(engine.dashboard.speed || 0)
+            addAction: addUrl
+            online: root.online
+            busy: root.busy
+            statusMessage: root.actionError
+            trayEnabled: engine.trayAvailable
+            minimizeLabel: root.minimizeToTray && engine.trayAvailable ? qsTr("Minimize to system tray") : qsTr("Minimize")
+            closeLabel: root.closeToTray ? qsTr("Keep Auralis running") : qsTr("Exit Auralis")
+            updatesSupported: updateNotice.updateSupported
+            automaticUpdateInstall: settingsWindow.automaticUpdateInstall
+            onSelected: downloadId => root.acrylicDownloadId = downloadId
+            onTransferRequested: (operation, download) => root.transferAction(operation, [download])
+            onDetailsRequested: downloadId => root.showDownload(downloadId)
+            onQueueRequested: {
+                root.acrylicOverviewRequested = false
+                if (root.currentQueue)
+                    root.chooseFilter("queue", root.currentQueue.name)
+                else
+                    root.chooseFilter("status", "all")
+            }
+            onSettingsRequested: category => settingsWindow.showCategory(category)
+            onUpdateCheckRequested: updateNotice.manualCheck()
+            onAutomaticUpdateInstallRequested: enabled => settingsWindow.setAutomaticUpdateInstall(enabled)
+            onHideRequested: root.hideMainToTray()
+            onMinimizeRequested: root.minimizeMain()
+            onMaximizeRequested: root.toggleMaximized()
+            onCloseRequested: root.close()
         }
     }
 

@@ -214,22 +214,22 @@ QtObject {
                         footer: "#2d3141", field: "#272b3b", card: "#252837", connections: "#252837"}
         }),
         "fractured-pearl": preset({
-            name: qsTr("Fractured Pearl"), finish: "satin", shape: "round", opaque: true, cleanStudio: true,
-            layout: "fracturedPearl", light: true, background: "#f4f2ec", edge: "#b4b2a6", shade: "#b7b2a5", upper: "#fffefa",
-            accent: "#c75636", secondary: "#a54d32", ink: "#292a27", muted: "#555953",
-            divider: "#d2cfc5", positive: "#2d775e", caution: "#8e591c", destructive: "#a33d33",
-            buttonFace: "#f2e8df", surfaceLine: "#d8d3c7",
-            sidebarInk: "#fcfcf4", sidebarMuted: "#e1e2d8", navigationFill: "#e6e8df", navigationInk: "#292d28",
-            rowSelectionFill: "#f3e0d5", rowSelectionInk: "#35281f", summaryFill: "#f5e3d7", summaryInk: "#392820",
-            menuSurface: "#f3eee6", menuHighlight: "#e9c1ad", menuRail: "#ab4c31",
-            translucency: 0, gloss: .32, radius: 12, bevel: 1.4, panelRadius: 12,
+            name: qsTr("Fractured Acrylic"), finish: "frosted", shape: "round", cleanStudio: true,
+            layout: "fracturedPearl", light: false, background: "#453453", edge: "#d2addf", shade: "#24152e", upper: "#efe3ff",
+            accent: "#8ffbd0", secondary: "#a3b9e3", ink: "#fff7ff", muted: "#e2d4ec",
+            divider: "#795f8d", positive: "#8ffbd0", caution: "#f5cb98", destructive: "#ff9cac",
+            buttonFace: "#4b385e", surfaceLine: "#745d86",
+            sidebarInk: "#fff7ff", sidebarMuted: "#e2d4ec", navigationFill: "#4a3a59", navigationInk: "#fff7ff",
+            rowSelectionFill: "#543e63", rowSelectionInk: "#fff7ff", summaryFill: "#483559", summaryInk: "#fff7ff",
+            menuSurface: "#382a4b", menuHighlight: "#5b496e", menuRail: "#8ffbd0",
+            translucency: .39, gloss: .29, radius: 11, bevel: 1.4, panelRadius: 11,
             indicatorDefaults: {
-                progress: {palette: "tangerine", colors: ["#bd5034", "#e69971"]},
-                connections: {palette: "emerald", colors: ["#347e6c", "#6db79d"]},
-                graph: {palette: "tangerine", colors: ["#b84c32", "#d68655"]}
+                progress: {palette: "emerald", colors: ["#8ffbd0", "#a5ffe2"]},
+                connections: {palette: "emerald", colors: ["#8ffbd0", "#7bdac3"]},
+                graph: {palette: "emerald", colors: ["#8ffbd0", "#bbffe9"]}
             },
-            roleFaces: {title: "#f4e7dc", toolbar: "#eee9df", sidebar: "#3d423e", content: "#f5f3ed",
-                        footer: "#efeee7", field: "#ebe9e0", card: "#f4eee5", connections: "#eeebe1"}
+            roleFaces: {title: "#49385d", toolbar: "#4b3a5f", sidebar: "#443552", content: "#453653",
+                        footer: "#49365b", field: "#342644", card: "#413252", connections: "#483758"}
         }),
         "black-ceramic": preset({
             name: qsTr("Black Ceramic"), finish: "matte", shape: "round", opaque: true, cleanStudio: true,
@@ -411,6 +411,14 @@ QtObject {
             ? Qt.rgba(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255, 1) : light ? "#e8f1fa" : "#172135";
         const ground = rgba(surface, 1);
         const tone = rgba(colorTheme.accent, 1);
+        if (id === "fractured-pearl") {
+            const faces = Object.assign({}, result.roleFaces);
+            for (const role of Object.keys(faces))
+                faces[role] = mix(faces[role], ground, .18, 1);
+            return applyMaterialColors(withAccent(Object.assign({}, result, {
+                roleFaces: faces, accent: colorTheme.accent, secondary: colorTheme.secondary
+            })), id);
+        }
         return applyMaterialColors(withAccent(Object.assign({}, result, {
             light: light, text: contrast.text, ink: contrast.ink, muted: contrast.muted,
             divider: contrast.divider, positive: contrast.positive, caution: contrast.caution,
@@ -768,7 +776,7 @@ QtObject {
             return 1;
         const style = profile(id);
         const amount = translucency >= 0 ? translucency : style.opaque ? 0 : style.translucency;
-        return Math.max(0, Math.min(1, 1 - amount));
+        return Math.max(style.layout === "fracturedPearl" ? .32 : 0, Math.min(1, 1 - amount));
     }
 
     function rgba(value, alpha) {

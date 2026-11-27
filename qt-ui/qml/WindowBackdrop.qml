@@ -23,7 +23,8 @@ Item {
 
     function refresh() {
         if (!hostWindow.visible) return
-        engine.applyBackdrop(hostWindow, desktopGlass, !MaterialTheme.palette.light)
+        if (!separatedPanels || !hostWindow.acrylicApplied)
+            engine.applyBackdrop(hostWindow, desktopGlass, !MaterialTheme.palette.light)
     }
 
     Component.onCompleted: {

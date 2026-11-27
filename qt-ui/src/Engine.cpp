@@ -30,6 +30,7 @@
 
 
 #ifdef Q_OS_WIN
+#include "PanelBackdrop.h"
 #include <QJsonObject>
 #include <QRandomGenerator>
 #include <QVersionNumber>
@@ -803,6 +804,18 @@ bool Engine::applyBackdrop(QWindow *window, bool enabled, bool dark) const
 #endif
 }
 
+bool Engine::applyPanelBackdrop(QWindow *window, const QVariantList &panels, bool enabled) const
+{
+#ifdef Q_OS_WIN
+    return !m_smoke && PanelBackdrop::update(window, panels, enabled);
+#else
+    Q_UNUSED(window);
+    Q_UNUSED(panels);
+    Q_UNUSED(enabled);
+    return false;
+#endif
+}
+
 void Engine::setWindowCornerRadius(QWindow *window, int radius) const
 {
     if (!window)
@@ -828,7 +841,10 @@ void Engine::setWindowCornerRadius(QWindow *window, int radius) const
         if (!window->mask().isEmpty())
             window->setMask({});
 #ifdef Q_OS_WIN
-        WindowShadow::update(window, QSizeF(0, 0), 0);
+        if (window->property("acrylicMode").toBool())
+            WindowShadow::clearFrame(window);
+        else
+            WindowShadow::update(window, QSizeF(0, 0), 0);
 #endif
         return;
     }

@@ -5,9 +5,13 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Window
+import "FracturedAcrylicGeometry.js" as AcrylicGeometry
 
-Window {
+AuralisWindow {
     id: popup
+
+    frameShapingEnabled: false
+    acrylicMode: colors.layout === "fracturedPearl"
 
     LayoutMirroring.enabled: Qt.application.layoutDirection === Qt.RightToLeft
     LayoutMirroring.childrenInherit: true
@@ -305,10 +309,27 @@ Window {
         }
     }
 
-    GlassSurface { anchors.fill: parent; role: "modal"; backdropAvailable: false }
+    background: Item {
+        GlassSurface { anchors.fill: parent; visible: !popup.acrylicMode; role: "modal"; backdropAvailable: false }
+        Loader {
+            active: popup.acrylicMode
+            sourceComponent: FracturedAcrylicShape {
+                id: trace
+                shard: "toast"
+                face: popup.colors.roleFaces?.card || popup.colors.background
+                width: AcrylicGeometry.bounds.toast.width
+                height: AcrylicGeometry.bounds.toast.height
+                transform: Scale {
+                    xScale: popup.width / trace.width
+                    yScale: popup.height / trace.height
+                }
+            }
+        }
+    }
 
     ColumnLayout {
         id: body
+        parent: popup.contentItem
         anchors.fill: parent
         anchors.margins: 14
         spacing: 8
