@@ -1,0 +1,29 @@
+name: Verify the Super Booster 2.0.0 installer
+
+on:
+  push:
+    branches: [codex/super-booster-installer-2.0.0]
+    paths: [.github/workflows/verify-super-booster.yml]
+
+permissions: {}
+
+jobs:
+  verify:
+    runs-on: [self-hosted, Windows, X64, auralis]
+    timeout-minutes: 8
+    steps:
+      - name: Verify the exact Windows installer
+        shell: pwsh
+        run: |
+          $root = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'Codex\2026-11-27\c'
+          $installer = Join-Path $root 'outputs\SuperBooster-2.0.0-windows-x64-setup.exe'
+          $verifier = Join-Path $root 'work\github\Verify-WindowsInstaller.ps1'
+          if (!(Test-Path -LiteralPath $installer -PathType Leaf) -or !(Test-Path -LiteralPath $verifier -PathType Leaf)) {
+            throw 'The release files are unavailable to the runner profile.'
+          }
+          if ((Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash -ine '082E8569584C1FB77C11F45094015BD354EDA24942AA4ECEDEAABE27771F7544' -or
+              (Get-FileHash -LiteralPath $verifier -Algorithm SHA256).Hash -ine 'E6A535D586181712FC1DE589CB869B9D05DD5FC04D76DAA9FA60F0A59BC7D46C') {
+            throw 'The installer or test script did not match its expected SHA-256.'
+          }
+          & $verifier -InstallerPath $installer -TempBase $env:RUNNER_TEMP -SkipScreenshot
+
