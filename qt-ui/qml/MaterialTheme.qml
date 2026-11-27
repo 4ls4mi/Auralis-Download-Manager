@@ -213,6 +213,24 @@ QtObject {
             roleFaces: {title: "#2d3141", toolbar: "#303344", sidebar: "#303344", content: "#303344",
                         footer: "#2d3141", field: "#272b3b", card: "#252837", connections: "#252837"}
         }),
+        "fractured-pearl": preset({
+            name: qsTr("Fractured Pearl"), finish: "satin", shape: "round", opaque: true, cleanStudio: true,
+            layout: "fracturedPearl", light: true, background: "#f4f2ec", edge: "#b4b2a6", shade: "#b7b2a5", upper: "#fffefa",
+            accent: "#c75636", secondary: "#a54d32", ink: "#292a27", muted: "#555953",
+            divider: "#d2cfc5", positive: "#2d775e", caution: "#8e591c", destructive: "#a33d33",
+            buttonFace: "#f2e8df", surfaceLine: "#d8d3c7",
+            sidebarInk: "#fcfcf4", sidebarMuted: "#e1e2d8", navigationFill: "#e6e8df", navigationInk: "#292d28",
+            rowSelectionFill: "#f3e0d5", rowSelectionInk: "#35281f", summaryFill: "#f5e3d7", summaryInk: "#392820",
+            menuSurface: "#f3eee6", menuHighlight: "#e9c1ad", menuRail: "#ab4c31",
+            translucency: 0, gloss: .32, radius: 12, bevel: 1.4, panelRadius: 12,
+            indicatorDefaults: {
+                progress: {palette: "tangerine", colors: ["#bd5034", "#e69971"]},
+                connections: {palette: "emerald", colors: ["#347e6c", "#6db79d"]},
+                graph: {palette: "tangerine", colors: ["#b84c32", "#d68655"]}
+            },
+            roleFaces: {title: "#f4e7dc", toolbar: "#eee9df", sidebar: "#3d423e", content: "#f5f3ed",
+                        footer: "#efeee7", field: "#ebe9e0", card: "#f4eee5", connections: "#eeebe1"}
+        }),
         "black-ceramic": preset({
             name: qsTr("Black Ceramic"), finish: "matte", shape: "round", opaque: true, cleanStudio: true,
             background: "#161312", edge: "#3d302a", shade: "#0d0b0b", upper: "#e4c4b4",

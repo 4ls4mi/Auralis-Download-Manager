@@ -81,6 +81,7 @@ AuralisWindow {
     signal updateDetailsRequested()
     readonly property string updatePresentation: updatePrefs.presentation
     readonly property bool automaticUpdateChecks: updatePrefs.automaticChecks
+    readonly property bool automaticUpdateInstall: updatePrefs.automaticInstall
     readonly property string cookieBrowser: String(advancedFields.find(field => field.key === "video_cookies")?.value ?? "")
     readonly property string term: search.text.trim().toLowerCase()
     readonly property var sections: [
@@ -191,7 +192,15 @@ AuralisWindow {
         id: updatePrefs
         category: "UpdateNotices"
         property bool automaticChecks: true
+        property bool automaticInstall: false
         property string presentation: "toast"
+    }
+
+    function setAutomaticUpdateInstall(enabled) {
+        if (enabled)
+            updatePrefs.automaticChecks = true
+        updatePrefs.automaticInstall = enabled
+        updatePrefs.sync()
     }
 
     function load() {
@@ -1158,8 +1167,13 @@ AuralisWindow {
                             backdropAvailable: settingsBackdrop.backdropAvailable
                             updatePresentation: root.updatePresentation
                             automaticChecks: root.automaticUpdateChecks
+                            automaticInstall: root.automaticUpdateInstall
                             onUpdatePresentationRequested: value => updatePrefs.presentation = value
-                            onAutomaticChecksRequested: value => updatePrefs.automaticChecks = value
+                            onAutomaticChecksRequested: value => {
+                                if (!value) updatePrefs.automaticInstall = false
+                                updatePrefs.automaticChecks = value
+                            }
+                            onAutomaticInstallRequested: value => root.setAutomaticUpdateInstall(value)
                             release: root.availableUpdate
                             onUpdateCheckRequested: root.updateCheckRequested()
                             onUpdateDetailsRequested: root.updateDetailsRequested()

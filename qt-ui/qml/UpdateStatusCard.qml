@@ -27,6 +27,7 @@ Frame {
         case "connecting": return qsTr("Connecting to download Auralis %1…").arg(targetVersion)
         case "downloading": return qsTr("Downloading Auralis %1…").arg(targetVersion)
         case "verifying": return qsTr("Verifying the Auralis %1 installer…").arg(targetVersion)
+        case "waiting": return qsTr("Auralis %1 is ready and will install when downloads are idle").arg(targetVersion)
         case "installing": return qsTr("Starting the Auralis %1 installer…").arg(targetVersion)
         case "closing": return qsTr("Closing Auralis to install %1…").arg(targetVersion)
         case "latest": return qsTr("Auralis is up to date")

@@ -602,7 +602,7 @@ fn system_directory() -> Result<PathBuf, String> {
 }
 
 #[cfg(windows)]
-fn install(version: &str) -> Result<(), String> {
+fn install(version: &str, background: bool) -> Result<(), String> {
     use std::os::windows::process::CommandExt;
     let c = selected_candidate(version)?;
     let installer = c.staged.as_ref().ok_or("Download the update first")?;
@@ -638,6 +638,10 @@ fn install(version: &str) -> Result<(), String> {
         .env("AURALIS_UPDATE_MANIFEST", manifest)
         .env("AURALIS_UPDATE_SHA256", &c.sha256)
         .env("AURALIS_UPDATE_SIZE", c.size.to_string())
+        .env(
+            "AURALIS_UPDATE_BACKGROUND",
+            if background { "1" } else { "0" },
+        )
         .creation_flags(0x08000000)
         .spawn()
         .map_err(|e| format!("Could not start the installer: {e}"))?;
@@ -679,7 +683,13 @@ pub(super) fn dispatch(
         "update-download" => {
             download(version()?).map(|size| serde_json::json!({ "ok": true, "size": size }))
         }
-        "update-install" => install(version()?).map(|()| serde_json::json!({ "ok": true })),
+        "update-install" => {
+            let background = request
+                .get("background")
+                .and_then(serde_json::Value::as_bool)
+                == Some(true);
+            install(version()?, background).map(|()| serde_json::json!({ "ok": true }))
+        }
         _ => Err("Unsupported release update operation".into()),
     }
 }

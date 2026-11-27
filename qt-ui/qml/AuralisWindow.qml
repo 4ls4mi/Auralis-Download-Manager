@@ -87,7 +87,7 @@ ApplicationWindow {
         width: window.width
         height: window.height
         z: 100000
-        visible: window.visibility === Window.Windowed
+        visible: window.frameShapingEnabled && window.visibility === Window.Windowed
         Rectangle {
             anchors.fill: parent
             radius: window.frameCornerRadius

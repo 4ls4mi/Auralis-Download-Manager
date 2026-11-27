@@ -15,6 +15,8 @@ Window {
     required property var backend
     required property Window anchorWindow
     property bool automaticChecks: true
+    property bool automaticInstall: false
+    property bool automaticInstallReady: false
     property bool minimizeToTray: false
     property string presentation: "toast"
     property var availableUpdate: null
@@ -27,7 +29,7 @@ Window {
     readonly property bool working: stage !== ""
     readonly property bool updateInProgress: updateWindow.requestInProgress
     readonly property string statusProblem: updateWindow.problem
-    readonly property string statusStage: updateInProgress ? updateWindow.statusStage
+    readonly property string statusStage: automaticInstall ? "" : updateInProgress ? updateWindow.statusStage
         : statusProblem ? "error" : availableUpdate ? "available" : ""
     readonly property var statusRelease: updateInProgress || statusProblem ? updateWindow.release : availableUpdate
     readonly property double statusInstallerBytes: updateWindow.stage === "downloading"
@@ -62,6 +64,7 @@ Window {
         property string dismissedVersion: ""
         property string reminderVersion: ""
         property double remindAfter: 0
+        property string lastBackgroundAttemptVersion: ""
     }
 
     function offer(update, reminder) {
@@ -70,6 +73,12 @@ Window {
         availableUpdate = update;
         const version = String(update.version);
         clearVerifiedHint(version);
+        if (automaticInstall) {
+            visible = false;
+            if (canCheck && preferences.lastBackgroundAttemptVersion !== version)
+                updateWindow.startBackgroundUpdate(update);
+            return;
+        }
         if (presentation === "quiet")
             return;
         if (preferences.dismissedVersion === version)
@@ -142,6 +151,12 @@ Window {
 
     onCanCheckChanged: configureReleaseHints()
     Component.onCompleted: configureReleaseHints()
+    onAutomaticInstallChanged: {
+        if (automaticInstall) {
+            visible = false;
+            Qt.callLater(() => checkForUpdate(false));
+        }
+    }
     onPresentationChanged: {
         if (presentation === "quiet")
             visible = false;
@@ -231,6 +246,14 @@ Window {
         hostWindow: popup.anchorWindow
         backend: popup.backend
         minimizeToTray: popup.minimizeToTray
+        backgroundInstallEnabled: popup.canCheck && popup.automaticInstall
+        backgroundInstallReady: popup.automaticInstallReady
+        onBackgroundInstallStarting: version => {
+            // A failed handoff may reopen the old app. Leave that release for manual
+            // review so the same installer cannot put Auralis in a restart loop.
+            preferences.lastBackgroundAttemptVersion = version;
+            preferences.sync();
+        }
         onShowMainRequested: {
             const mainWindow = popup.anchorWindow
             if (!mainWindow.visible || mainWindow.visibility === Window.Minimized)

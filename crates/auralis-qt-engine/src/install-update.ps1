@@ -1,4 +1,5 @@
 $ErrorActionPreference = 'Stop'
+$script:background = $env:AURALIS_UPDATE_BACKGROUND -eq '1'
 $script:logPath = $env:AURALIS_UPDATE_LOG
 if (!$script:logPath -and $env:LOCALAPPDATA) {
     $script:logPath = Join-Path $env:LOCALAPPDATA 'Auralis Download Manager Updates/update.log'
@@ -17,6 +18,7 @@ function Start-Application([string]$path) {
     $start = [Diagnostics.ProcessStartInfo]::new($path)
     $start.WorkingDirectory = [Environment]::SystemDirectory
     $start.UseShellExecute = $false
+    if ($script:background) { $start.Arguments = '--auralis-startup-minimized' }
     [Diagnostics.Process]::Start($start).Dispose()
 }
 
@@ -84,7 +86,11 @@ try {
         $start.WorkingDirectory = [Environment]::SystemDirectory
         $start.UseShellExecute = $false
         # NSIS requires the unquoted /D= path as the last argument, including spaces.
-        $start.Arguments = '/P /UPDATE /R /D=' + $appDirectory
+        if ($script:background) {
+            $start.Arguments = '/S /P /UPDATE /D=' + $appDirectory
+        } else {
+            $start.Arguments = '/P /UPDATE /R /D=' + $appDirectory
+        }
         $process = [Diagnostics.Process]::Start($start)
         try {
             $process.WaitForExit()
@@ -94,19 +100,19 @@ try {
         } finally { $process.Dispose() }
     } finally { $file.Dispose() }
 
-    if (Wait-ForAuralis $appPath 15) {
-        Remove-Item -LiteralPath $manifest -Force -ErrorAction SilentlyContinue
-        Remove-Item -LiteralPath $installer -Force -ErrorAction SilentlyContinue
-        Write-UpdateLog 'Setup relaunched Auralis successfully.'
-        exit 0
+    if ($script:background) {
+        Write-UpdateLog 'Setup succeeded; restarting Auralis in the system tray.'
+        if (!(Get-AuralisProcess $appPath)) { Start-Application $appPath }
+        if (!(Wait-ForAuralis $appPath 20)) { throw 'Auralis setup succeeded, but the app did not start.' }
+    } elseif (!(Wait-ForAuralis $appPath 15)) {
+        Write-UpdateLog 'Setup succeeded but did not relaunch Auralis; starting it directly.'
+        Start-Application $appPath
+        if (!(Wait-ForAuralis $appPath 20)) { throw 'Auralis setup succeeded, but the app did not start.' }
     }
 
-    Write-UpdateLog 'Setup succeeded but did not relaunch Auralis; starting it directly.'
-    Start-Application $appPath
-    if (!(Wait-ForAuralis $appPath 20)) { throw 'Auralis setup succeeded, but the app did not start.' }
     Remove-Item -LiteralPath $manifest -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $installer -Force -ErrorAction SilentlyContinue
-    Write-UpdateLog 'Auralis started successfully after the setup fallback.'
+    Write-UpdateLog 'Auralis started successfully after setup.'
     exit 0
 } catch {
     $message = $_.Exception.Message

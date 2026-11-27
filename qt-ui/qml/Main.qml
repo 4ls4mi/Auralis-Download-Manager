@@ -18,6 +18,7 @@ AuralisWindow {
     visible: !engine.startHidden || !engine.trayAvailable
     color: "transparent"
     flags: Qt.Window | Qt.FramelessWindowHint
+    frameShapingEnabled: !fracturedLayout
 
     readonly property var colors: MaterialTheme.palette
     readonly property bool classicLayout: MaterialTheme.mdmAppearance && !compactView
@@ -33,6 +34,9 @@ AuralisWindow {
     readonly property bool violetRail: materialLayout === "violetRail"
     readonly property bool fogSlate: materialLayout === "fogSlate"
     readonly property bool coralSlate: materialLayout === "coralSlate"
+    readonly property bool fracturedLayout: materialLayout === "fracturedPearl"
+    readonly property bool workspaceToolbar: !compactView && (materialDashboard || fracturedLayout)
+    readonly property int seamWidth: 2
     readonly property bool materialDashboard: fogSlate || violetRail || coralSlate
     readonly property bool compactView: windowPreferences.compactView
     readonly property bool sideMenus: materialDashboard && showSidebar && !compactView
@@ -84,7 +88,7 @@ AuralisWindow {
         return queues.length ? queues[0] : null
     }
     readonly property bool compact: width < 920
-    readonly property int layoutInset: visibility === Window.Maximized ? 0 : compactView || classicLayout ? 5 : 8
+    readonly property int layoutInset: visibility === Window.Maximized ? 0 : fracturedLayout ? 4 : compactView || classicLayout ? 5 : 8
     readonly property int frameBleed: frameCornerRadius > 0 ? layoutInset : 0
     readonly property bool online: engine.ready
     readonly property string filterTitle: filterType === "category"
@@ -661,6 +665,12 @@ AuralisWindow {
         backend: engine
         anchorWindow: root
         automaticChecks: settingsWindow.automaticUpdateChecks && !startupSetup.blockingAnnouncements
+        automaticInstall: settingsWindow.automaticUpdateInstall
+        automaticInstallReady: root.online && !root.busy && root.counts.downloading === 0
+            && !addDialog.visible && !galleryDialog.visible && !batchDialog.visible
+            && !enginePrompts.fileInfo.visible && !enginePrompts.question.visible
+            && !enginePrompts.video.visible && !enginePrompts.links.visible
+            && !removeDialog.visible && !restartDialog.visible && !moveDialog.visible
         minimizeToTray: root.minimizeToTray
         presentation: settingsWindow.updatePresentation
     }
@@ -1097,6 +1107,7 @@ AuralisWindow {
         id: mainBackdrop
         hostWindow: root
         target: "main"
+        separatedPanels: root.fracturedLayout
 
         WideSweep {
             id: wideSweep
@@ -1310,7 +1321,7 @@ AuralisWindow {
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: root.layoutInset
-        spacing: root.classicLayout ? 2 : root.compactView ? 4 : 7
+        spacing: root.fracturedLayout ? root.seamWidth : root.classicLayout ? 2 : root.compactView ? 4 : 7
 
         Item {
             Layout.fillWidth: true
@@ -1321,6 +1332,7 @@ AuralisWindow {
                 anchors.rightMargin: -root.frameBleed
                 anchors.topMargin: -root.frameBleed
                 role: "title"
+                fracturedEdge: root.fracturedLayout ? "header" : ""
                 roundedPanel: root.frameCornerRadius === 0
                 radius: roundedPanel ? Math.max(12, profile.radius) : 0
             }
@@ -1492,9 +1504,26 @@ AuralisWindow {
                 anchors.fill: parent
 
                 Rectangle {
+                    visible: root.fracturedLayout
+                    x: parent.width * .42 - width / 2
+                    y: -root.seamWidth - 2
+                    width: 16
+                    height: root.seamWidth + 5
+                    radius: 1
+                    color: MaterialTheme.menuColors.surface
+                }
+                Loader {
+                    anchors.fill: parent
+                    active: root.fracturedLayout
+                    sourceComponent: FracturedPanel {
+                        edge: "menu"
+                        face: MaterialTheme.menuColors.surface
+                    }
+                }
+                Rectangle {
                     anchors.fill: parent
                     radius: root.classicLayout ? 0 : 10
-                    visible: !root.sideMenus
+                    visible: !root.sideMenus && !root.fracturedLayout
                     color: root.classicLayout && !root.colors.menuOverride
                         ? root.colors.mdm?.menubar || MaterialTheme.menuColors.surface
                         : MaterialTheme.menuColors.surface
@@ -1609,6 +1638,15 @@ AuralisWindow {
                             AppMenuItem { symbol: "keys"; text: qsTr("Keyboard shortcuts"); onTriggered: shortcutsDialog.open() }
                             AppMenuItem { symbol: "web"; text: qsTr("Browser integration"); onTriggered: settingsWindow.showCategory("Browser Integration") }
                             AppMenuItem { symbol: "refresh"; text: qsTr("Check for updates"); enabled: updateNotice.updateSupported; onTriggered: updateNotice.manualCheck() }
+                            AppMenuItem {
+                                objectName: "menuAutomaticUpdateInstall"
+                                symbol: "refresh"
+                                text: qsTr("Install updates in the background")
+                                visible: updateNotice.updateSupported
+                                checkable: true
+                                checked: settingsWindow.automaticUpdateInstall
+                                onTriggered: settingsWindow.setAutomaticUpdateInstall(checked)
+                            }
                             AppMenuItem { symbol: "details"; text: qsTr("Updates & about"); onTriggered: settingsWindow.showCategory("Updates") }
                             AppMenuItem { symbol: "details"; text: qsTr("Project guide"); onTriggered: Qt.openUrlExternally("https://github.com/4ls4mi/Auralis-Download-Manager#guides-and-recovery") }
                             AppMenuItem { visible: root.compactView; symbol: "support"; action: settingsWindow.donationAction }
@@ -1621,22 +1659,27 @@ AuralisWindow {
 
         Item {
             id: topActionDock
-            visible: !root.materialDashboard || root.compactView
+            visible: !root.workspaceToolbar
             Layout.fillWidth: true
             Layout.preferredHeight: root.classicLayout ? 64 : root.compactView ? 37 : 51
             Item {
                 id: actionPanel
-                parent: root.materialDashboard && !root.compactView ? workspaceActionDock : topActionDock
+                parent: root.workspaceToolbar ? workspaceActionDock : topActionDock
                 anchors.fill: parent
 
-                GlassSurface { anchors.fill: parent; role: "toolbar"; roundedPanel: !root.classicLayout }
+                GlassSurface {
+                    anchors.fill: parent
+                    role: "toolbar"
+                    roundedPanel: !root.classicLayout
+                    fracturedEdge: root.fracturedLayout && !root.workspaceToolbar ? "menu" : ""
+                }
                 RowLayout {
                     id: actionControls
                     visible: !root.classicLayout
                     anchors.fill: parent
                     anchors.leftMargin: 7
                     anchors.rightMargin: 7
-                    spacing: root.materialDashboard || root.compact ? 4 : 7
+                    spacing: root.workspaceToolbar || root.compact ? 4 : 7
                     Repeater {
                         model: [
                             {command: addUrl, icon: "add"},
@@ -1661,19 +1704,19 @@ AuralisWindow {
                             readonly property string label: fogResume ? qsTr("Resume") : qsTr("Pause")
                             readonly property bool showLabel: !root.compactView && (fogResume || fogPause) && actionControls.width >= 730
                             visible: !root.compactView || !modelData.secondary
-                            Layout.preferredWidth: root.compactView ? 36 : root.materialDashboard
+                            Layout.preferredWidth: root.compactView ? 36 : root.workspaceToolbar
                                 ? (showLabel ? Math.max(102, buttonLabel.implicitWidth + 40)
                                     : Math.min(43, Math.floor((actionControls.width - 48) / 11)))
                                 : root.compact ? 41 : 54
                             Layout.preferredHeight: root.compactView ? 30 : root.fogSlate ? 39 : 36
                             action: modelData.command
-                            filled: (root.materialDashboard && primaryCommand) || fogResume
+                            filled: (root.workspaceToolbar && primaryCommand) || fogResume
                             leftPadding: showLabel ? 13 : 4
                             rightPadding: leftPadding
                             topPadding: 4
                             bottomPadding: 5
                             accent: fogResume ? root.colors.positive
-                                : root.materialDashboard && primaryCommand ? root.colors.accent
+                                : root.workspaceToolbar && primaryCommand ? root.colors.accent
                                 : MaterialTheme.actionColor(modelData.accentKey || modelData.icon, root.colors.light)
                             contentItem: RowLayout {
                                 spacing: 5
@@ -1826,7 +1869,7 @@ AuralisWindow {
             Layout.fillHeight: true
             Layout.minimumHeight: root.compactView ? 95 : 155
             Layout.fillWidth: true
-            spacing: 7
+            spacing: root.fracturedLayout ? root.seamWidth : 7
 
             Item {
                 id: violetMenuDock
@@ -1846,7 +1889,12 @@ AuralisWindow {
                 Layout.preferredWidth: root.classicLayout ? 149 : root.compact ? 151 : 184
                 Layout.fillHeight: true
                 padding: root.classicLayout ? 2 : 6
-                background: GlassSurface { visible: !root.wideSweepVisible; role: "sidebar"; roundedPanel: !root.classicLayout }
+                background: GlassSurface {
+                    visible: !root.wideSweepVisible
+                    role: "sidebar"
+                    roundedPanel: !root.classicLayout
+                    fracturedEdge: root.fracturedLayout ? "rail" : ""
+                }
                 ScrollView {
                     id: libraryScroll
                     anchors.fill: parent
@@ -2056,13 +2104,18 @@ AuralisWindow {
                 Layout.fillWidth: true
                 Layout.minimumWidth: 0
                 padding: root.classicLayout ? 1 : root.compactView ? 5 : 9
-                background: GlassSurface { visible: !root.wideSweepVisible; role: "content"; roundedPanel: !root.classicLayout }
+                background: GlassSurface {
+                    visible: !root.wideSweepVisible
+                    role: "content"
+                    roundedPanel: !root.classicLayout
+                    fracturedEdge: root.fracturedLayout ? "content" : ""
+                }
                 ColumnLayout {
                     anchors.fill: parent
                     spacing: root.classicLayout ? 0 : root.compactView ? 3 : root.materialDashboard ? 8 : 5
                     Item {
                         id: workspaceActionDock
-                        visible: root.materialDashboard && !root.compactView
+                        visible: root.workspaceToolbar
                         Layout.fillWidth: true
                         Layout.preferredHeight: 44
                     }
@@ -2138,7 +2191,8 @@ AuralisWindow {
                         Item { Layout.fillWidth: true }
                     }
                     RowLayout {
-                        visible: !root.compactView && root.coralSlate && root.height >= 580
+                        visible: !root.compactView && (root.coralSlate || root.fracturedLayout)
+                            && root.height / root.interfaceScale >= 580
                         Layout.fillWidth: true
                         Layout.minimumHeight: 76
                         Layout.maximumHeight: 76
@@ -2522,6 +2576,17 @@ AuralisWindow {
                     }
                 }
             }
+            Loader {
+                visible: root.fracturedLayout && !root.compactView && workspace.width >= 1030
+                active: visible
+                Layout.preferredWidth: 183
+                Layout.fillHeight: true
+                sourceComponent: RecentTransfers {
+                    objectName: "pearlRecentDownloads"
+                    downloads: root.downloads
+                    onDetailsRequested: downloadId => root.showDownload(downloadId)
+                }
+            }
         }
 
         Frame {
@@ -2672,8 +2737,18 @@ AuralisWindow {
         }
 
         Item {
+            id: footerRow
             Layout.fillWidth: true
             Layout.preferredHeight: root.classicLayout ? 22 : root.compactView ? 36 : 55
+            Rectangle {
+                visible: root.fracturedLayout && footerRow.y - workspace.y - workspace.height <= root.seamWidth + 1
+                x: downloadsPane.x + downloadsPane.width * .39
+                y: -root.seamWidth - 2
+                width: 15
+                height: root.seamWidth + 5
+                radius: 1
+                color: root.colors.roleFaces?.footer || root.colors.background
+            }
             Item {
                 id: footerSurface
                 anchors.fill: parent
@@ -2684,6 +2759,7 @@ AuralisWindow {
                     anchors.fill: parent
                     visible: !root.wideSweepVisible || Boolean(root.colors.footerOverride)
                     role: "footer"
+                    fracturedEdge: root.fracturedLayout ? "footer" : ""
                     roundedPanel: root.frameCornerRadius === 0
                     radius: roundedPanel ? Math.max(12, profile.radius) : 0
                 }

@@ -11,6 +11,7 @@ Item {
 
     property string material: MaterialTheme.current
     property string role: "content"
+    property string fracturedEdge: ""
     property bool backdropAvailable: MaterialTheme.backdropAvailable
     property color accent: profile.accent
     property real emphasis: 0
@@ -97,7 +98,7 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        visible: surface.flatStudio
+        visible: !surface.fracturedEdge && surface.flatStudio
         radius: surface.profile.mdm ? surface.role === "field" ? surface.profile.radius : 0
             : !surface.shell && (surface.roundedPanel || surface.role === "field" || surface.studioPanel)
                 ? surface.radius : 0
@@ -126,7 +127,7 @@ Item {
 
     Shape {
         anchors.fill: parent
-        visible: !surface.flatStudio
+        visible: !surface.fracturedEdge && !surface.flatStudio
         preferredRendererType: Shape.CurveRenderer
 
         ShapePath {
@@ -266,7 +267,17 @@ Item {
     }
 
     Loader {
-        active: surface.showReflection && surface.visible && surface.width > 280 && surface.height >= 30
+        anchors.fill: parent
+        active: Boolean(surface.fracturedEdge)
+        sourceComponent: FracturedPanel {
+            edge: surface.fracturedEdge
+            face: surface.flatFace
+            cornerRadius: Math.max(2, Math.min(12, WindowAppearance.cornerRadius * .48))
+        }
+    }
+
+    Loader {
+        active: !surface.fracturedEdge && surface.showReflection && surface.visible && surface.width > 280 && surface.height >= 30
             && GraphicsInfo.api !== GraphicsInfo.Software
         anchors.right: parent.right
         anchors.rightMargin: 14

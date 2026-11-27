@@ -7,15 +7,16 @@ Item {
 
     required property AuralisWindow hostWindow
     property string target: "details"
+    property bool separatedPanels: false
     readonly property var selection: WindowAppearance.background(target)
     readonly property bool customColor: selection.mode === "solid"
     readonly property real backgroundOpacity: MaterialTheme.opacityFor(MaterialTheme.current)
-    readonly property bool transparentBackground: backgroundOpacity < 1
+    readonly property bool transparentBackground: !separatedPanels && backgroundOpacity < 1
         && (selection.mode === "desktop" || (customColor && MaterialTheme.translucency >= 0))
     readonly property bool desktopGlass: transparentBackground && selection.mode === "desktop"
         && !MaterialTheme.palette.opaque
     readonly property bool backdropAvailable: transparentBackground || pictureReady || movieReady
-    readonly property string media: selection.mode === "wallpaper" ? WindowAppearance.fileUrl(selection.media) : ""
+    readonly property string media: !separatedPanels && selection.mode === "wallpaper" ? WindowAppearance.fileUrl(selection.media) : ""
     readonly property bool video: /\.(mp4|webm|mov|m4v)(?:$|[?#])/i.test(media)
     readonly property bool pictureReady: !video && image.status === Image.Ready && Boolean(media)
     readonly property bool movieReady: video && player.hasVideo && player.error === MediaPlayer.NoError
@@ -30,6 +31,7 @@ Item {
         Qt.callLater(refresh)
     }
     onSelectionChanged: Qt.callLater(refresh)
+    onSeparatedPanelsChanged: Qt.callLater(refresh)
     onDesktopGlassChanged: Qt.callLater(refresh)
     onBackdropAvailableChanged: {
         if (target === "main") MaterialTheme.backdropAvailable = backdropAvailable
@@ -79,6 +81,7 @@ Item {
 
     GlassSurface {
         anchors.fill: parent
+        visible: !root.separatedPanels
         role: "window"
         radius: 0
         solidColor: root.customColor && root.selection.color ?

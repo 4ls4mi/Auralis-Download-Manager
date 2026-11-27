@@ -11,11 +11,13 @@ ColumnLayout {
 
     property string updatePresentation: "toast"
     property bool automaticChecks: true
+    property bool automaticInstall: false
     property var release: null
     property bool backdropAvailable: false
     required property Action donationAction
     signal updatePresentationRequested(string value)
     signal automaticChecksRequested(bool value)
+    signal automaticInstallRequested(bool value)
     signal updateCheckRequested()
     signal updateDetailsRequested()
 
@@ -165,6 +167,18 @@ ColumnLayout {
                 onToggled: root.automaticChecksRequested(checked)
             }
 
+            Switch {
+                objectName: "settingsAutomaticUpdateInstall"
+                visible: root.supportsUpdates
+                text: qsTr("Install updates in the background")
+                checked: root.automaticInstall
+                onToggled: root.automaticInstallRequested(checked)
+            }
+            Copy {
+                visible: root.supportsUpdates && root.automaticInstall
+                text: qsTr("Auralis installs verified updates when downloads are idle and restarts in the system tray.")
+            }
+
             RowLayout {
                 Layout.fillWidth: true
                 visible: root.supportsUpdates
@@ -176,7 +190,7 @@ ColumnLayout {
                     textRole: "label"
                     valueRole: "value"
                     currentIndex: Math.max(0, root.presentationOptions.findIndex(choice => choice.value === root.updatePresentation))
-                    enabled: root.automaticChecks
+                    enabled: root.automaticChecks && !root.automaticInstall
                     Accessible.name: qsTr("Update notification")
                     onActivated: root.updatePresentationRequested(currentValue)
                 }

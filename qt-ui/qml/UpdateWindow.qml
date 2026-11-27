@@ -16,6 +16,9 @@ DetachedDialogWindow {
     property string problem: ""
     property bool waitingForAutomaticCheck: false
     property bool minimizeToTray: false
+    property bool backgroundInstallEnabled: false
+    property bool backgroundInstallReady: false
+    property bool backgroundRun: false
     readonly property bool trayAvailable: backend.trayAvailable === true
     readonly property bool checking: stage === "checking" || stage === "rechecking"
     readonly property bool requestInProgress: checking || busy
@@ -26,6 +29,7 @@ DetachedDialogWindow {
 
     signal checked(var result)
     signal showMainRequested()
+    signal backgroundInstallStarting(string version)
 
     objectName: "updateWindow"
     title: qsTr("Auralis Update")
@@ -34,8 +38,14 @@ DetachedDialogWindow {
     flags: Qt.Window | Qt.WindowTitleHint | Qt.WindowSystemMenuHint | Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint
     modality: Qt.NonModal
     transientParent: null
-    busy: ["rechecking", "downloading", "installing", "closing"].includes(stage)
+    busy: ["rechecking", "downloading", "waiting", "installing", "closing"].includes(stage)
     onDismissRequested: hide()
+    onBackgroundInstallEnabledChanged: {
+        if (!backgroundInstallEnabled && stage === "waiting") {
+            backgroundRun = false
+            stage = "available"
+        }
+    }
     onVisibleChanged: if (!visible) closeWhenCurrent.stop()
     onClosing: if (requestInProgress) hide()
     onVisibilityChanged: {
@@ -73,6 +83,7 @@ DetachedDialogWindow {
         }
         if (requestInProgress) { present(); return }
         closeWhenCurrent.stop()
+        backgroundRun = false
         stage = "checking"
         problem = ""
         release = null
@@ -103,6 +114,7 @@ DetachedDialogWindow {
             return
         }
         closeWhenCurrent.stop()
+        backgroundRun = false
         release = result
         transfer = null
         problem = ""
@@ -110,8 +122,17 @@ DetachedDialogWindow {
         present()
     }
 
+    function startBackgroundUpdate(result) {
+        if (!backgroundInstallEnabled || visible || requestInProgress || !result?.version) return
+        closeWhenCurrent.stop()
+        release = result
+        backgroundRun = true
+        downloadVerified(String(result.version))
+    }
+
     function downloadAndInstall() {
         if (requestInProgress || !release) return
+        backgroundRun = false
         const version = String(release.version)
         stage = "rechecking"
         problem = ""
@@ -130,28 +151,46 @@ DetachedDialogWindow {
                 problem = qsTr("A newer release is available. Review it before installing.")
                 return
             }
-            stage = "downloading"
-            backend.request({shellAction: "update-download", expectedVersion: version}, function(receipt, downloadError) {
-                if (downloadError || !receipt || !receipt.ok) {
-                    stage = "available"
-                    problem = downloadError || qsTr("Could not download and verify the installer.")
-                    return
-                }
-                transfer = {version: version, total: Number(receipt.size || release.size), downloaded: Number(receipt.size || release.size)}
+            downloadVerified(version)
+        })
+    }
+
+    function downloadVerified(version) {
+        stage = "downloading"
+        problem = ""
+        transfer = null
+        backend.request({shellAction: "update-download", expectedVersion: version}, function(receipt, error) {
+            if (error || !receipt?.ok) {
+                backgroundRun = false
+                stage = "available"
+                problem = error || qsTr("Could not download and verify the installer.")
+                return
+            }
+            const size = Number(receipt.size || release.size)
+            transfer = {version: version, total: size, downloaded: size}
+            if (!backgroundRun) {
                 installVerified(version)
-            })
+            } else if (backgroundInstallEnabled) {
+                stage = "waiting"
+            } else {
+                backgroundRun = false
+                stage = "available"
+            }
         })
     }
 
     function installVerified(version) {
         stage = "installing"
         problem = ""
-        backend.request({shellAction: "update-install", expectedVersion: version}, function(result, error) {
+        backend.request({shellAction: "update-install", expectedVersion: version, background: backgroundRun}, function(result, error) {
             if (error || !result || !result.ok) {
+                backgroundRun = false
                 stage = "available"
                 problem = error || qsTr("Could not start the verified installer.")
                 return
             }
+            if (backgroundRun)
+                backgroundInstallStarting(version)
             stage = "closing"
         })
     }
@@ -166,6 +205,12 @@ DetachedDialogWindow {
     }
 
     Timer {
+        interval: 2000
+        running: update.stage === "waiting" && update.backgroundInstallReady && update.backgroundInstallEnabled
+        onTriggered: update.installVerified(String(update.release.version))
+    }
+
+    Timer {
         id: closeWhenCurrent
         interval: 2200
         onTriggered: if (update.stage === "latest") update.hide()
@@ -174,7 +219,7 @@ DetachedDialogWindow {
     Timer {
         interval: 160
         repeat: true
-        running: update.stage === "downloading"
+        running: update.stage === "downloading" && (!update.backgroundRun || update.visible)
         triggeredOnStart: true
         onTriggered: update.pollTransfer()
     }
